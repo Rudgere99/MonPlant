@@ -23,7 +23,6 @@ function isoTodayLocal(): string {
 }
 
 function isRetroDay(dayISO: string): boolean {
-  // Comparação ISO funciona lexicograficamente
   return dayISO < isoTodayLocal();
 }
 
@@ -44,6 +43,7 @@ function parseBRNumber(v: any): number | null {
   s = s.replace("%", "").trim();
   s = s.replace(/\s/g, "");
 
+  // "1.234,5" -> "1234.5"
   if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
   else if (s.includes(",")) s = s.replace(",", ".");
 
@@ -174,7 +174,6 @@ export default function PlantProduction() {
   const retro = isRetroDay(day);
 
   function normalizeRows(rows: PlantHourRow[]): PlantHourRow[] {
-    // garante 24 faixas sempre
     const map: Record<string, PlantHourRow> = {};
     for (const r of rows || []) map[r.period] = r;
 
@@ -257,7 +256,6 @@ export default function PlantProduction() {
       }
 
       setInfo("Salvo com sucesso.");
-      // recarrega para pegar updated_at
       await loadDay(day);
     } catch (e: any) {
       setErr(e?.message || "Erro ao salvar");
@@ -296,19 +294,28 @@ export default function PlantProduction() {
   const [yy, mm, dd] = day.split("-");
   const dayBR = `${dd}/${mm}/${yy}`;
 
+  const chunks = useMemo(() => {
+    return [
+      payload.rows.slice(0, 8),
+      payload.rows.slice(8, 16),
+      payload.rows.slice(16, 24),
+    ];
+  }, [payload.rows]);
+
   return (
     <div className="mp-container">
       <div className="mp-page-title">Produção do dia</div>
       <div className="mp-page-sub">Evolução horária • {dayBR}</div>
 
-      {/* topo: data + status + save */}
       <div className="mp-card" style={{ marginTop: 12 }}>
+        {/* header */}
         <div
           className="mp-card-h"
           style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}
         >
           <div style={{ flex: 1, minWidth: 260 }}>
             <b>Produção por hora (Ton/H + Frequência)</b>
+
             <div className="mp-help">
               {loading
                 ? "Carregando..."
@@ -320,6 +327,7 @@ export default function PlantProduction() {
                 ? `Atualizado: ${payload.updated_at}`
                 : "—"}
             </div>
+
             <div className="mp-help" style={{ marginTop: 6 }}>
               Total do dia (soma Ton/H): <b>{fmtBR(totalTon)}</b>
               {retro ? (
@@ -351,6 +359,7 @@ export default function PlantProduction() {
           </button>
         </div>
 
+        {/* body */}
         <div className="mp-card-b">
           {/* gráfico */}
           <div style={{ height: 440, width: "100%" }}>
@@ -443,79 +452,107 @@ export default function PlantProduction() {
             </ResponsiveContainer>
           </div>
 
-          {/* edição */}
-          <div style={{ marginTop: 14, display: "grid", gap: 12, gridTemplateColumns: "1fr" }}>
+          {/* ✅ Observação (de volta "onde estava antes": abaixo do gráfico) */}
+          <div style={{ marginTop: 14 }}>
+            <div className="mp-label">Observação do dia</div>
+            <textarea
+              className="mp-textarea"
+              value={payload.obs ?? ""}
+              disabled={retro}
+              onChange={(e) => setPayload((p) => ({ ...p, obs: e.target.value }))}
+              placeholder="Ex.: chuva, manutenção, falta de energia, etc."
+              style={{ minHeight: 90 }}
+            />
+          </div>
+
+          {/* ✅ edição em 3 colunas (8 horas cada) */}
+          <div style={{ marginTop: 14 }}>
             <div className="mp-help">
               Edite Ton/H e Frequência (%) e clique em <b>Salvar</b>. Valores vazios ficam como <b>sem dado</b>.
             </div>
 
-            <div style={{ overflowX: "auto" }}>
-              <table className="mp-table" style={{ width: "100%", minWidth: 760 }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: 140 }}>Faixa</th>
-                    <th style={{ width: 220 }}>Ton/H</th>
-                    <th style={{ width: 220 }}>Frequência (%)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payload.rows.map((r, idx) => (
-                    <tr key={r.period}>
-                      <td style={{ color: "rgba(255,255,255,0.85)", fontWeight: 800 }}>
-                        {periodShort(r.period)}
-                      </td>
+            <div
+              style={{
+                marginTop: 10,
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(260px, 1fr))",
+                gap: 12,
+                overflowX: "auto",
+                paddingBottom: 2,
+              }}
+            >
+              {chunks.map((rows8, colIdx) => (
+                <div key={colIdx} className="mp-card" style={{ margin: 0 }}>
+                  <div className="mp-card-h" style={{ padding: "10px 12px" }}>
+                    <b>{colIdx === 0 ? "00–08" : colIdx === 1 ? "08–16" : "16–24"}</b>
+                    <div className="mp-help">8 faixas horárias</div>
+                  </div>
 
-                      <td>
-                        <input
-                          className="mp-input"
-                          value={r.ton ?? ""}
-                          disabled={retro}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setPayload((p) => {
-                              const rows = [...p.rows];
-                              rows[idx] = { ...rows[idx], ton: v };
-                              return { ...p, rows };
-                            });
-                          }}
-                          placeholder="ex: 320"
-                        />
-                      </td>
+                  <div className="mp-card-b" style={{ padding: 12 }}>
+                    <table className="mp-table" style={{ width: "100%", minWidth: 0 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ width: 84 }}>Hora</th>
+                          <th style={{ width: 110 }}>Ton/H</th>
+                          <th style={{ width: 130 }}>Freq (%)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows8.map((r) => {
+                          const globalIdx = payload.rows.findIndex((x) => x.period === r.period);
 
-                      <td>
-                        <input
-                          className="mp-input"
-                          value={r.freq ?? ""}
-                          disabled={retro}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setPayload((p) => {
-                              const rows = [...p.rows];
-                              rows[idx] = { ...rows[idx], freq: v };
-                              return { ...p, rows };
-                            });
-                          }}
-                          placeholder="ex: 85"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          return (
+                            <tr key={r.period}>
+                              <td style={{ color: "rgba(255,255,255,0.85)", fontWeight: 800 }}>
+                                {periodShort(r.period)}
+                              </td>
 
-            <div>
-              <div className="mp-label">Observação do dia</div>
-              <textarea
-                className="mp-textarea"
-                value={payload.obs ?? ""}
-                disabled={retro}
-                onChange={(e) => setPayload((p) => ({ ...p, obs: e.target.value }))}
-                placeholder="Ex.: chuva, manutenção, falta de energia, etc."
-                style={{ minHeight: 90 }}
-              />
+                              <td>
+                                <input
+                                  className="mp-input"
+                                  value={r.ton ?? ""}
+                                  disabled={retro}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setPayload((p) => {
+                                      const rows = [...p.rows];
+                                      rows[globalIdx] = { ...rows[globalIdx], ton: v };
+                                      return { ...p, rows };
+                                    });
+                                  }}
+                                  placeholder="ex: 320"
+                                />
+                              </td>
+
+                              <td>
+                                <input
+                                  className="mp-input"
+                                  value={r.freq ?? ""}
+                                  disabled={retro}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setPayload((p) => {
+                                      const rows = [...p.rows];
+                                      rows[globalIdx] = { ...rows[globalIdx], freq: v };
+                                      return { ...p, rows };
+                                    });
+                                  }}
+                                  placeholder="ex: 85"
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
+
+          {/* espaço final */}
+          <div style={{ height: 8 }} />
         </div>
       </div>
     </div>
