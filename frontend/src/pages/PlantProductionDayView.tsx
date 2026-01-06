@@ -34,12 +34,8 @@ function isoTodayLocal(): string {
 }
 
 function makePeriods(): string[] {
-  // MESMA ORDEM DO SEU PlantProduction
   const res: string[] = [];
-  const hours = [
-    7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
-    19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6,
-  ];
+  const hours = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5,6];
   for (let i = 0; i < hours.length; i++) {
     const h1 = hours[i];
     const h2 = hours[(i + 1) % hours.length];
@@ -50,7 +46,6 @@ function makePeriods(): string[] {
   return res;
 }
 
-// 201,6 | 201.6 | 1.234,56 | 1,234.56 | "82%"
 function parseBRNumber(v: any): number | null {
   if (v === null || v === undefined) return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -74,21 +69,23 @@ function fmtBR2(n: number): string {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(n);
 }
 
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
+
+function authHeaders(): HeadersInit {
+  const keys = ["mp_token", "token", "access_token", "auth_token"];
+  for (const k of keys) {
+    const v = (localStorage.getItem(k) || "").trim();
+    if (v) return { Authorization: `Bearer ${v}` };
+  }
+  return {};
+}
+
 export default function PlantProductionDayView() {
   const periods = useMemo(() => makePeriods(), []);
   const [day, setDay] = useState<string>(isoTodayLocal());
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [payload, setPayload] = useState<PlantDayPayload | null>(null);
-
-  // ✅ igual ao seu PlantProduction.tsx
-  const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
-
-  // ✅ TIPADO como HeadersInit (evita union estranho em build)
-function authHeaders(): HeadersInit {
-  const t = (localStorage.getItem("mp_token") || "").trim();
-  return t ? { Authorization: `Bearer ${t}` } : {};
-}
 
   async function loadDay(d: string) {
     setLoading(true);
@@ -127,7 +124,6 @@ function authHeaders(): HeadersInit {
   }, [day]);
 
   const chartData = useMemo(() => {
-    // normaliza para ter sempre 24 faixas
     const map: Record<string, { ton: number | null; freq: number | null }> = {};
     for (const p of periods) map[p] = { ton: null, freq: null };
 
@@ -153,15 +149,7 @@ function authHeaders(): HeadersInit {
     const label = `${ha}-${hb}`;
     return (
       <g transform={`translate(${x},${y})`}>
-        <text
-          x={0}
-          y={0}
-          dy={14}
-          textAnchor="middle"
-          fill="rgba(255,255,255,0.75)"
-          fontSize={12}
-          fontWeight={700}
-        >
+        <text x={0} y={0} dy={14} textAnchor="middle" fill="rgba(255,255,255,0.75)" fontSize={12} fontWeight={700}>
           {label}
         </text>
       </g>
@@ -218,10 +206,7 @@ function authHeaders(): HeadersInit {
       <div className="mp-page-sub">Evolução horária • {dayBR}</div>
 
       <div className="mp-card" style={{ marginTop: 12 }}>
-        <div
-          className="mp-card-h"
-          style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}
-        >
+        <div className="mp-card-h" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 260 }}>
             <b>Produção por hora (Ton/H + Frequência)</b>
             <div className="mp-help">
@@ -237,12 +222,7 @@ function authHeaders(): HeadersInit {
 
           <div>
             <div className="mp-label">Data</div>
-            <input
-              className="mp-input"
-              type="date"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-            />
+            <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
           </div>
         </div>
 
@@ -312,14 +292,7 @@ function authHeaders(): HeadersInit {
                   dot={(p: any) => {
                     if (p?.payload?.freq === null || p?.payload?.freq === undefined) return null;
                     return (
-                      <circle
-                        cx={p.cx}
-                        cy={p.cy}
-                        r={4}
-                        fill="#f59e0b"
-                        stroke="rgba(0,0,0,.6)"
-                        strokeWidth={2}
-                      />
+                      <circle cx={p.cx} cy={p.cy} r={4} fill="#f59e0b" stroke="rgba(0,0,0,.6)" strokeWidth={2} />
                     );
                   }}
                   activeDot={{ r: 6 }}
@@ -332,7 +305,7 @@ function authHeaders(): HeadersInit {
 
           {!loading && !err && chartData.every((d) => d.ton === null && d.freq === null) ? (
             <div className="mp-help" style={{ marginTop: 10 }}>
-              Sem dados para este dia (backend retornou vazio/404).
+              Sem dados para este dia.
             </div>
           ) : null}
         </div>
