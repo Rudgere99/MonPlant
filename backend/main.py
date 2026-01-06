@@ -1,109 +1,104 @@
-from __future__ import annotations
-
-from datetime import date
-from typing import Optional, List
-
-from fastapi import FastAPI, HTTPException, Depends, Header, Query, Request, Response, Path
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from datetime import date, datetime
+from typing import Optional, List, Dict, Any
 
 from db import get_conn
+from auth_dep import require_owner_id
 
 
-# ============================================================
-# APP + CORS (Vercel + Previews + Localhost)
-# ============================================================
-app = FastAPI()
+app = FastAPI(title="MonPlant API", version="1.0.0")
 
+
+# =========================
+# CORS (resolve OPTIONS 400)
+# =========================
+ALLOWED_ORIGINS = [
+    "*",  # depois, se quiser travar, eu te passo como deixar só sua URL do Vercel
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https:\/\/monplant\.vercel\.app$|^https:\/\/.*\.vercel\.app$|^http:\/\/localhost:5173$|^http:\/\/127\.0\.0\.1:5173$",
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ✅ Fallback global para qualquer preflight OPTIONS (evita 400)
-@app.options("/{rest_of_path:path}")
-def preflight(rest_of_path: str, request: Request):
-    return Response(status_code=200)
 
-
-# ============================================================
-# AUTH DEP
-# ============================================================
-def require_owner_id(authorization: Optional[str] = Header(default=None)) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token")
-
-    token = authorization.split(" ", 1)[1].strip()
-    if not token:
-        raise HTTPException(status_code=401, detail="Invalid bearer token")
-
-    # ✅ hoje: owner_id = token (temporário)
-    return token
-
-
-# ============================================================
-# HELPERS
-# ============================================================
+# =========================
+# Helpers
+# =========================
 def today_local() -> date:
     return date.today()
 
-def block_retro(d: date) -> None:
+
+def block_retro(d: date):
+    # não pode editar retroativo
     if d < today_local():
-        raise HTTPException(status_code=403, detail="Retroativo não pode ser editado")
+        raise HTTPException(status_code=403, detail="Dia retroativo não pode ser editado.")
 
 
-# ============================================================
-# SCHEMAS
-# ============================================================
+def parse_float(v):
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except Exception:
+        return None
+
+
+# =========================
+# Schemas
+# =========================
 class PlantRow(BaseModel):
     period: str
     ton: Optional[float] = None
     freq: Optional[float] = None
 
+
 class PlantDayUpsert(BaseModel):
     obs: Optional[str] = ""
-    rows: List[PlantRow]
+    rows: List[PlantRow] = Field(default_factory=list)
+
 
 class StopIn(BaseModel):
     day: date
-    turno: int
-    data_inicio: date
-    hora_inicio: str  # "HH:MM"
-    data_fim: date
+    data_inicio: str
+    hora_inicio: str
+    data_fim: str
     hora_fim: str
     equipamento: str
     tipo_parada: str
     atividade: str
-    descricao: Optional[str] = ""
+    descricao: str
     tempo_parada_h: float
 
-# ✅ HORÍMETRO (INI/FIM)
-class HoriIn(BaseModel):
+
+class HorimetroIn(BaseModel):
     day: date
-    turno: int
+    turno: int  # 1|2
     equipamento: str
     horimetro_ini: float
     horimetro_fim: float
     obs: Optional[str] = None
 
 
-# ============================================================
-# HEALTH
-# ============================================================
+# =========================
+# Health
+# =========================
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "ts": datetime.utcnow().isoformat()}
 
 
-# ============================================================
-# PLANT PRODUCTION
-# ============================================================
+# =========================
+# Plant Production
+# =========================
 @app.get("/api/plant-production/{day}")
 def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
+        # daily
         cur.execute(
             """
             select obs, updated_at
@@ -114,6 +109,7 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
         )
         daily = cur.fetchone()
 
+        # rows
         cur.execute(
             """
             select period, ton, freq
@@ -123,66 +119,101 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
             """,
             (owner_id, day),
         )
-        rows = [{"period": r[0], "ton": r[1], "freq": r[2]} for r in cur.fetchall()]
+        rows = cur.fetchall() or []
 
-        if not daily and not rows:
-            raise HTTPException(status_code=404, detail="Not found")
+    if not daily and not rows:
+        raise HTTPException(status_code=404, detail="Not found")
 
-        obs = daily[0] if daily else ""
-        updated_at = daily[1].isoformat() if daily and daily[1] else None
+    obs = (daily["obs"] if daily else "") or ""
+    updated_at = daily["updated_at"].isoformat() if (daily and daily["updated_at"]) else None
 
-        return {"day": str(day), "obs": obs or "", "rows": rows, "updated_at": updated_at}
+    return {
+        "day": str(day),
+        "obs": obs,
+        "rows": [{"period": r["period"], "ton": r["ton"], "freq": r["freq"]} for r in rows],
+        "updated_at": updated_at,
+    }
+
 
 @app.put("/api/plant-production/{day}")
 def put_plant_day(day: date, body: PlantDayUpsert, owner_id: str = Depends(require_owner_id)):
     block_retro(day)
 
     with get_conn() as conn, conn.cursor() as cur:
+        # upsert daily
         cur.execute(
             """
-            insert into public.bv_plant_production_daily(owner_id, day, obs)
-            values (%s, %s, %s)
+            insert into public.bv_plant_production_daily(owner_id, day, obs, updated_at)
+            values (%s,%s,%s, now())
             on conflict (owner_id, day)
-            do update set obs=excluded.obs, updated_at=now()
+            do update set obs = excluded.obs, updated_at = now()
             """,
             (owner_id, day, body.obs or ""),
         )
 
-        for r in body.rows:
+        # replace rows
+        cur.execute(
+            "delete from public.bv_plant_production_rows where owner_id=%s and day=%s",
+            (owner_id, day),
+        )
+
+        for r in body.rows or []:
             cur.execute(
                 """
                 insert into public.bv_plant_production_rows(owner_id, day, period, ton, freq)
-                values (%s, %s, %s, %s, %s)
-                on conflict (owner_id, day, period)
-                do update set ton=excluded.ton, freq=excluded.freq, updated_at=now()
+                values (%s,%s,%s,%s,%s)
                 """,
                 (owner_id, day, r.period, r.ton, r.freq),
             )
 
-        return {"ok": True}
+        conn.commit()
+
+    return {"ok": True, "day": str(day)}
+
 
 @app.get("/api/plant-production/last7days")
-def last7days(owner_id: str = Depends(require_owner_id)):
+def plant_last7(owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select d.day, coalesce(sum(r.ton),0) as total_ton
-            from public.bv_plant_production_daily d
-            left join public.bv_plant_production_rows r
-              on r.owner_id=d.owner_id and r.day=d.day
-            where d.owner_id=%s
-              and d.day >= (current_date - interval '6 days')
-            group by d.day
-            order by d.day
+            select day, coalesce(sum(coalesce(ton,0)),0) as total_ton
+            from public.bv_plant_production_rows
+            where owner_id=%s
+            group by day
+            order by day desc
+            limit 7
             """,
             (owner_id,),
         )
-        return [{"day": str(x[0]), "total_ton": float(x[1] or 0)} for x in cur.fetchall()]
+        rows = cur.fetchall() or []
+
+    # devolve do mais antigo -> mais novo
+    rows = list(reversed(rows))
+    return [{"day": str(r["day"]), "total_ton": float(r["total_ton"] or 0)} for r in rows]
 
 
-# ============================================================
-# STOPS
-# ============================================================
+# =========================
+# Stops
+# =========================
+@app.get("/api/stops")
+def list_stops(
+    day: date = Query(...),
+    owner_id: str = Depends(require_owner_id),
+):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select *
+            from public.bv_stops
+            where owner_id=%s and day=%s
+            order by created_at desc
+            """,
+            (owner_id, day),
+        )
+        rows = cur.fetchall() or []
+    return rows
+
+
 @app.post("/api/stops")
 def create_stop(body: StopIn, owner_id: str = Depends(require_owner_id)):
     block_retro(body.day)
@@ -191,151 +222,104 @@ def create_stop(body: StopIn, owner_id: str = Depends(require_owner_id)):
         cur.execute(
             """
             insert into public.bv_stops(
-              owner_id, day, turno, data_inicio, hora_inicio, data_fim, hora_fim,
+              owner_id, day, data_inicio, hora_inicio, data_fim, hora_fim,
               equipamento, tipo_parada, atividade, descricao, tempo_parada_h
             )
-            values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             returning id
             """,
             (
-                owner_id, body.day, body.turno, body.data_inicio, body.hora_inicio,
-                body.data_fim, body.hora_fim, body.equipamento, body.tipo_parada,
-                body.atividade, body.descricao or "", body.tempo_parada_h
+                owner_id,
+                body.day,
+                body.data_inicio,
+                body.hora_inicio,
+                body.data_fim,
+                body.hora_fim,
+                body.equipamento,
+                body.tipo_parada,
+                body.atividade,
+                body.descricao,
+                body.tempo_parada_h,
             ),
         )
-        new_id = cur.fetchone()[0]
-        return {"id": new_id}
-
-@app.get("/api/stops")
-def list_stops(day: date, owner_id: str = Depends(require_owner_id)):
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            select id, day, turno, data_inicio, hora_inicio, data_fim, hora_fim,
-                   equipamento, tipo_parada, atividade, descricao, tempo_parada_h, created_at
-            from public.bv_stops
-            where owner_id=%s and day=%s
-            order by created_at desc
-            """,
-            (owner_id, day),
-        )
-        cols = [d.name for d in cur.description]
-        return [dict(zip(cols, row)) for row in cur.fetchall()]
-
-@app.get("/api/stops/last")
-def last_stop(day: date, owner_id: str = Depends(require_owner_id)):
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            select id, equipamento, tipo_parada, atividade, tempo_parada_h, created_at
-            from public.bv_stops
-            where owner_id=%s and day=%s
-            order by created_at desc
-            limit 1
-            """,
-            (owner_id, day),
-        )
-        r = cur.fetchone()
-        if not r:
-            return None
-        return {
-            "id": r[0],
-            "equipamento": r[1],
-            "tipo_parada": r[2],
-            "atividade": r[3],
-            "tempo_parada_h": float(r[4]),
-            "created_at": r[5].isoformat() if r[5] else None,
-        }
-
-@app.get("/api/stops/total")
-def total_stops(day: date, owner_id: str = Depends(require_owner_id)):
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            select coalesce(sum(tempo_parada_h),0)
-            from public.bv_stops
-            where owner_id=%s and day=%s
-            """,
-            (owner_id, day),
-        )
-        v = cur.fetchone()[0]
-        return {"day": str(day), "total_h": float(v or 0)}
+        new_id = cur.fetchone()["id"]
+        conn.commit()
+    return {"ok": True, "id": new_id}
 
 
-# ============================================================
-# HORIMETROS (INI/FIM)
-# ============================================================
+# =========================
+# Horimetros (INI/FIM)
+# =========================
 @app.post("/api/horimetros")
-def create_hori(body: HoriIn, owner_id: str = Depends(require_owner_id)):
+def create_horimetro(body: HorimetroIn, owner_id: str = Depends(require_owner_id)):
     block_retro(body.day)
 
     if body.horimetro_fim < body.horimetro_ini:
-        raise HTTPException(status_code=400, detail="horimetro_fim não pode ser menor que horimetro_ini")
+        raise HTTPException(status_code=400, detail="horimetro_fim deve ser >= horimetro_ini")
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            insert into public.bv_horimetros(owner_id, day, turno, equipamento, horimetro_ini, horimetro_fim, obs)
+            insert into public.bv_horimetros(
+              owner_id, day, turno, equipamento, horimetro_ini, horimetro_fim, obs
+            )
             values (%s,%s,%s,%s,%s,%s,%s)
             returning id
             """,
-            (owner_id, body.day, body.turno, body.equipamento, body.horimetro_ini, body.horimetro_fim, body.obs),
+            (
+                owner_id,
+                body.day,
+                int(body.turno),
+                body.equipamento,
+                body.horimetro_ini,
+                body.horimetro_fim,
+                body.obs,
+            ),
         )
-        return {"id": cur.fetchone()[0]}
+        new_id = cur.fetchone()["id"]
+        conn.commit()
 
-@app.delete("/api/horimetros/{id}")
-def delete_hori(
-    id: int = Path(..., ge=1),
-    owner_id: str = Depends(require_owner_id),
-):
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            delete from public.bv_horimetros
-            where id=%s and owner_id=%s
-            """,
-            (id, owner_id),
-        )
-        if cur.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Not found")
-        return {"ok": True}
+    return {"ok": True, "id": new_id}
+
 
 @app.get("/api/horimetros")
-def list_hori(
-    day: Optional[date] = None,
-    turno: Optional[int] = None,
+def list_horimetros(
     equipamento: Optional[str] = None,
-    limit: int = Query(default=200, ge=1, le=2000),
+    limit: int = Query(200, ge=1, le=2000),
     owner_id: str = Depends(require_owner_id),
 ):
-    where = ["owner_id=%s"]
-    params = [owner_id]
-
-    if day:
-        where.append("day=%s")
-        params.append(day)
-    if turno:
-        where.append("turno=%s")
-        params.append(turno)
-    if equipamento:
-        where.append("equipamento=%s")
-        params.append(equipamento)
-
-    sql = f"""
-      select id, day, turno, equipamento, horimetro_ini, horimetro_fim, obs, created_at
-      from public.bv_horimetros
-      where {" and ".join(where)}
-      order by created_at desc
-      limit {limit}
-    """
-
     with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(sql, tuple(params))
-        cols = [d.name for d in cur.description]
-        return [dict(zip(cols, row)) for row in cur.fetchall()]
+        if equipamento:
+            cur.execute(
+                """
+                select *
+                from public.bv_horimetros
+                where owner_id=%s and equipamento=%s
+                order by created_at desc
+                limit %s
+                """,
+                (owner_id, equipamento, limit),
+            )
+        else:
+            cur.execute(
+                """
+                select *
+                from public.bv_horimetros
+                where owner_id=%s
+                order by created_at desc
+                limit %s
+                """,
+                (owner_id, limit),
+            )
+        rows = cur.fetchall() or []
+    return rows
+
 
 @app.get("/api/horimetros/last-by-eq")
 def last_by_eq(owner_id: str = Depends(require_owner_id)):
+    """
+    Retorna 1 registro por equipamento (o mais recente).
+    """
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -347,70 +331,18 @@ def last_by_eq(owner_id: str = Depends(require_owner_id)):
             """,
             (owner_id,),
         )
-        return [
+        rows = cur.fetchall() or []
+
+    out = []
+    for r in rows:
+        out.append(
             {
-                "equipamento": r[0],
-                "horimetro_ini": float(r[1]),
-                "horimetro_fim": float(r[2]),
-                "day": str(r[3]),
-                "turno": r[4],
-                "created_at": r[5].isoformat() if r[5] else None,
+                "equipamento": r["equipamento"],
+                "horimetro_ini": parse_float(r["horimetro_ini"]),
+                "horimetro_fim": parse_float(r["horimetro_fim"]),
+                "day": str(r["day"]),
+                "turno": int(r["turno"]),
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             }
-            for r in cur.fetchall()
-        ]
-
-
-# ============================================================
-# DASHBOARD (mantive como estava)
-# ============================================================
-@app.get("/api/dashboard/today")
-def dashboard_today(owner_id: str = Depends(require_owner_id)):
-    d = today_local()
-
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            select coalesce(sum(r.ton),0)
-            from public.bv_plant_production_rows r
-            where r.owner_id=%s and r.day=%s
-            """,
-            (owner_id, d),
         )
-        prod_total = float(cur.fetchone()[0] or 0)
-
-        cur.execute(
-            """
-            select id, equipamento, tipo_parada, atividade, tempo_parada_h, created_at
-            from public.bv_stops
-            where owner_id=%s and day=%s
-            order by created_at desc
-            limit 1
-            """,
-            (owner_id, d),
-        )
-        ls = cur.fetchone()
-        last_stop = None if not ls else {
-            "id": ls[0],
-            "equipamento": ls[1],
-            "tipo_parada": ls[2],
-            "atividade": ls[3],
-            "tempo_parada_h": float(ls[4]),
-            "created_at": ls[5].isoformat() if ls[5] else None,
-        }
-
-        cur.execute(
-            """
-            select coalesce(sum(tempo_parada_h),0)
-            from public.bv_stops
-            where owner_id=%s and day=%s
-            """,
-            (owner_id, d),
-        )
-        total_stops_h = float(cur.fetchone()[0] or 0)
-
-    return {
-        "day": str(d),
-        "plant_total_ton": prod_total,
-        "last_stop": last_stop,
-        "total_stops_h": total_stops_h,
-    }
+    return out
