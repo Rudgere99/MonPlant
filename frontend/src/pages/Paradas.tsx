@@ -1,37 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 
 /* ===================== tipos ===================== */
-
 type Turno = 1 | 2;
 
 type StopRow = {
-  id: string;
-
+  id: number;
+  owner_id?: string;
+  day: string;          // YYYY-MM-DD (dia referência)
   turno: Turno;
 
-  // datas no formato yyyy-mm-dd
-  dataInicio: string;
-  dataFim: string;
-
-  // horas no formato HH:MM
-  horaInicio: string;
-  horaFim: string;
+  data_inicio: string;  // YYYY-MM-DD
+  hora_inicio: string;  // HH:MM
+  data_fim: string;     // YYYY-MM-DD
+  hora_fim: string;     // HH:MM
 
   equipamento: string;
-  tipoParada: string;
+  tipo_parada: string;
   atividade: string;
-
   descricao: string;
 
-  // calculado
-  tempoParadaH: number;
-
-  createdAtISO: string;
+  tempo_parada_h: number;
+  created_at?: string | null;
 };
 
 /* ===================== constantes (combos) ===================== */
-
-// ✅ Ajuste como quiser
 const EQUIPAMENTOS = ["BT-01", "BT-02", "PN-01", "PN-02"] as const;
 
 const TIPOS_PARADA = [
@@ -59,17 +51,12 @@ const ATIVIDADES = [
 ] as const;
 
 /* ===================== helpers ===================== */
-
 function isoTodayLocal() {
   const d = new Date();
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
-}
-
-function uid() {
-  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 function parseDateTimeLocal(dateISO: string, timeHHMM: string): Date | null {
@@ -90,7 +77,6 @@ function clamp(n: number, min: number, max: number) {
 }
 
 function fmtH(n: number) {
-  // 1 casa decimal, pt-BR
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
 }
 
@@ -108,28 +94,6 @@ function safeCSV(v: any) {
   return s;
 }
 
-/* ===================== storage ===================== */
-
-const LS_KEY = "monplant:paradas:v1";
-
-function loadAll(): StopRow[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    return arr as StopRow[];
-  } catch {
-    return [];
-  }
-}
-
-function saveAll(rows: StopRow[]) {
-  localStorage.setItem(LS_KEY, JSON.stringify(rows));
-}
-
-/* ===================== cálculo do tempo ===================== */
-
 function calcTempoParadaH(
   dataInicio: string,
   horaInicio: string,
@@ -142,20 +106,63 @@ function calcTempoParadaH(
 
   let h = diffHours(s, e);
 
-  // se usuário colocou fim "antes" do início por engano, tenta corrigir adicionando 1 dia
+  // se fim "antes", tenta +1 dia
   if (h < 0) {
     const e2 = new Date(e.getTime() + 24 * 60 * 60 * 1000);
     h = diffHours(s, e2);
   }
 
   if (!Number.isFinite(h)) return 0;
-  return clamp(h, 0, 72); // limite de segurança
+  return clamp(h, 0, 72);
+}
+
+/* ===================== API ===================== */
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
+
+function authHeaders(): HeadersInit {
+  const keys = ["mp_token", "token", "access_token", "auth_token"];
+  for (const k of keys) {
+    const v = (localStorage.getItem(k) || "").trim();
+    if (v) return { Authorization: `Bearer ${v}` };
+  }
+  return {};
+}
+
+async function apiGet<T>(path: string): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(t || `HTTP ${r.status}`);
+  }
+  return (await r.json()) as T;
+}
+
+async function apiPost<T>(path: string, body: any): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(t || `HTTP ${r.status}`);
+  }
+  return (await r.json()) as T;
+}
+
+async function apiDelete(path: string): Promise<void> {
+  const r = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(t || `HTTP ${r.status}`);
+  }
 }
 
 /* ===================== componente ===================== */
-
 export default function Paradas() {
-  // filtro por dia (pra visualizar “do dia”)
   const [diaRef, setDiaRef] = useState<string>(isoTodayLocal());
 
   const [turno, setTurno] = useState<Turno>(1);
@@ -170,38 +177,45 @@ export default function Paradas() {
   const [descricao, setDescricao] = useState<string>("");
 
   const [rows, setRows] = useState<StopRow[]>([]);
+  const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // carrega storage
-  useEffect(() => {
-    setRows(loadAll());
-  }, []);
+  async function loadDay(d: string) {
+    setLoading(true);
+    setErr(null);
+    try {
+      const data = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(d)}`);
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao carregar paradas");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  // tempo calculado “ao vivo”
+  useEffect(() => {
+    loadDay(diaRef);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diaRef]);
+
   const tempoCalc = useMemo(() => {
     return calcTempoParadaH(dataInicio, horaInicio, dataFim, horaFim);
   }, [dataInicio, horaInicio, dataFim, horaFim]);
 
-  // lista do dia selecionado (diaRef)
   const rowsDoDia = useMemo(() => {
-    // regra: considera "do dia" pelo Data Início (padrão)
-    return rows
-      .filter((r) => r.dataInicio === diaRef)
-      .sort((a, b) => {
-        const da = parseDateTimeLocal(a.dataInicio, a.horaInicio)?.getTime() ?? 0;
-        const db = parseDateTimeLocal(b.dataInicio, b.horaInicio)?.getTime() ?? 0;
-        return da - db;
-      });
-  }, [rows, diaRef]);
+    return [...rows].sort((a, b) => {
+      const da = parseDateTimeLocal(a.data_inicio, a.hora_inicio)?.getTime() ?? 0;
+      const db = parseDateTimeLocal(b.data_inicio, b.hora_inicio)?.getTime() ?? 0;
+      return da - db;
+    });
+  }, [rows]);
 
-  // horímetro de parada (horas paradas) por equipamento no diaRef
   const horimetroParada = useMemo(() => {
     const base: Record<string, number> = {};
     for (const eq of EQUIPAMENTOS) base[eq] = 0;
-
     for (const r of rowsDoDia) {
-      if (!base[r.equipamento]) base[r.equipamento] = 0;
-      base[r.equipamento] += r.tempoParadaH || 0;
+      base[r.equipamento] = (base[r.equipamento] || 0) + (r.tempo_parada_h || 0);
     }
     return base;
   }, [rowsDoDia]);
@@ -219,7 +233,7 @@ export default function Paradas() {
     setErr(null);
   }
 
-  function addRow() {
+  async function addRow() {
     setErr(null);
 
     if (!dataInicio || !horaInicio || !dataFim || !horaFim) {
@@ -237,34 +251,43 @@ export default function Paradas() {
       return;
     }
 
-    const newRow: StopRow = {
-      id: uid(),
-      turno,
-      dataInicio,
-      dataFim,
-      horaInicio,
-      horaFim,
-      equipamento,
-      tipoParada,
-      atividade,
-      descricao: descricao || "",
-      tempoParadaH: tempo,
-      createdAtISO: new Date().toISOString(),
-    };
+    try {
+      setLoading(true);
 
-    const next = [newRow, ...rows];
-    setRows(next);
-    saveAll(next);
+      // day = diaRef (a data “consultada”)
+      await apiPost<StopRow>(`/api/stops`, {
+        day: diaRef,
+        turno,
+        data_inicio: dataInicio,
+        hora_inicio: horaInicio,
+        data_fim: dataFim,
+        hora_fim: horaFim,
+        equipamento,
+        tipo_parada: tipoParada,
+        atividade,
+        descricao: descricao || "",
+        tempo_parada_h: tempo,
+      });
 
-    // mantém o diaRef para continuar no mesmo dia
-    setDiaRef(dataInicio);
-    resetForm();
+      await loadDay(diaRef);
+      resetForm();
+    } catch (e: any) {
+      setErr(e?.message || "Falha ao salvar parada");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function removeRow(id: string) {
-    const next = rows.filter((r) => r.id !== id);
-    setRows(next);
-    saveAll(next);
+  async function removeRow(id: number) {
+    try {
+      setLoading(true);
+      await apiDelete(`/api/stops/${id}`);
+      await loadDay(diaRef);
+    } catch (e: any) {
+      setErr(e?.message || "Falha ao excluir");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function exportCSV() {
@@ -283,15 +306,15 @@ export default function Paradas() {
 
     const lines = rowsDoDia.map((r) => [
       r.turno,
-      r.dataInicio,
-      r.horaInicio,
-      r.dataFim,
-      r.horaFim,
+      r.data_inicio,
+      r.hora_inicio,
+      r.data_fim,
+      r.hora_fim,
       r.equipamento,
-      r.tipoParada,
+      r.tipo_parada,
       r.atividade,
       r.descricao,
-      fmtH(r.tempoParadaH),
+      fmtH(r.tempo_parada_h),
     ]);
 
     const csv = [head, ...lines].map((row) => row.map(safeCSV).join(",")).join("\n");
@@ -312,10 +335,13 @@ export default function Paradas() {
         <div>
           <div className="mp-chip">Operação</div>
           <div className="mp-page-title">Paradas</div>
-          <div className="mp-page-sub">Registro de paradas + tempo automático + horímetro por equipamento (offline)</div>
+          <div className="mp-page-sub">Registro + cálculo automático + soma por equipamento (Postgres)</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button className="mp-btn" onClick={() => loadDay(diaRef)} disabled={loading}>
+            {loading ? "Atualizando..." : "Atualizar"}
+          </button>
           <button className="mp-btn" onClick={exportCSV} disabled={!rowsDoDia.length}>
             Exportar CSV (dia)
           </button>
@@ -325,7 +351,6 @@ export default function Paradas() {
         </div>
       </div>
 
-      {/* filtro do dia */}
       <div className="mp-card mt-4">
         <div className="mp-card-b" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "end" }}>
           <div style={{ minWidth: 220 }}>
@@ -334,25 +359,18 @@ export default function Paradas() {
           </div>
 
           <div className="mp-help" style={{ marginLeft: "auto" }}>
-            Registros do dia: <b>{rowsDoDia.length}</b>
+            {loading ? "Carregando..." : err ? `Erro: ${err}` : <>Registros do dia: <b>{rowsDoDia.length}</b></>}
           </div>
         </div>
       </div>
 
-      {/* horímetro */}
       <div className="mp-card mt-4">
         <div className="mp-card-h">
           <b>Horímetro de parada (h) • {brDate(diaRef)}</b>
           <span className="mp-help">Soma automática das paradas do dia por equipamento</span>
         </div>
         <div className="mp-card-b">
-          <div
-            style={{
-              display: "grid",
-              gap: 10,
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            }}
-          >
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
             {EQUIPAMENTOS.map((eq) => (
               <div
                 key={eq}
@@ -377,7 +395,6 @@ export default function Paradas() {
         </div>
       </div>
 
-      {/* formulário */}
       <div className="mp-card mt-4">
         <div className="mp-card-h">
           <b>Novo lançamento</b>
@@ -427,9 +444,7 @@ export default function Paradas() {
               <div className="mp-label">Equipamento</div>
               <select className="mp-input" value={equipamento} onChange={(e) => setEquipamento(e.target.value)}>
                 {EQUIPAMENTOS.map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
+                  <option key={x} value={x}>{x}</option>
                 ))}
               </select>
             </div>
@@ -438,9 +453,7 @@ export default function Paradas() {
               <div className="mp-label">Tipo de Parada</div>
               <select className="mp-input" value={tipoParada} onChange={(e) => setTipoParada(e.target.value)}>
                 {TIPOS_PARADA.map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
+                  <option key={x} value={x}>{x}</option>
                 ))}
               </select>
             </div>
@@ -449,28 +462,16 @@ export default function Paradas() {
               <div className="mp-label">Atividade</div>
               <select className="mp-input" value={atividade} onChange={(e) => setAtividade(e.target.value)}>
                 {ATIVIDADES.map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
+                  <option key={x} value={x}>{x}</option>
                 ))}
               </select>
             </div>
 
             <div>
               <div className="mp-label">Tempo Parada (h)</div>
-              <div
-                className="mp-input"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  fontWeight: 900,
-                }}
-              >
+              <div className="mp-input" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontWeight: 900 }}>
                 <span>{fmtH(tempoCalc)} h</span>
-                <span className="mp-help" style={{ margin: 0 }}>
-                  auto
-                </span>
+                <span className="mp-help" style={{ margin: 0 }}>auto</span>
               </div>
             </div>
 
@@ -486,19 +487,18 @@ export default function Paradas() {
             </div>
 
             <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button className="mp-btn mp-btn-primary" onClick={addRow}>
-                Adicionar parada
+              <button className="mp-btn mp-btn-primary" onClick={addRow} disabled={loading}>
+                {loading ? "Salvando..." : "Adicionar parada"}
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* tabela */}
       <div className="mp-card mt-4">
         <div className="mp-card-h">
           <b>Paradas do dia • {brDate(diaRef)}</b>
-          <span className="mp-help">Clique em excluir para remover um registro</span>
+          <span className="mp-help">Exclusão remove do Postgres</span>
         </div>
 
         <div className="mp-card-b" style={{ overflowX: "auto" }}>
@@ -506,17 +506,8 @@ export default function Paradas() {
             <thead>
               <tr>
                 {[
-                  "Turno",
-                  "Data Início",
-                  "Hora Início",
-                  "Data Fim",
-                  "Hora Fim",
-                  "Equipamento",
-                  "Tipo de Parada",
-                  "Atividade",
-                  "Descrição",
-                  "Tempo (h)",
-                  "",
+                  "Turno","Data Início","Hora Início","Data Fim","Hora Fim",
+                  "Equipamento","Tipo","Atividade","Descrição","Tempo (h)","",
                 ].map((h) => (
                   <th
                     key={h}
@@ -548,25 +539,24 @@ export default function Paradas() {
                 rowsDoDia.map((r) => (
                   <tr key={r.id}>
                     <td style={td}>{r.turno}</td>
-                    <td style={td}>{brDate(r.dataInicio)}</td>
-                    <td style={td}>{r.horaInicio}</td>
-                    <td style={td}>{brDate(r.dataFim)}</td>
-                    <td style={td}>{r.horaFim}</td>
-                    <td style={td}>
-                      <span className="mp-chip">{r.equipamento}</span>
-                    </td>
-                    <td style={td}>{r.tipoParada}</td>
+                    <td style={td}>{brDate(r.data_inicio)}</td>
+                    <td style={td}>{r.hora_inicio}</td>
+                    <td style={td}>{brDate(r.data_fim)}</td>
+                    <td style={td}>{r.hora_fim}</td>
+                    <td style={td}><span className="mp-chip">{r.equipamento}</span></td>
+                    <td style={td}>{r.tipo_parada}</td>
                     <td style={td}>{r.atividade}</td>
                     <td style={{ ...td, maxWidth: 420 }}>
-                      <div style={{ color: "rgba(255,255,255,.82)" }}>{r.descricao || "—"}</div>
+                      <div style={{ color: "rgba(255,255,255,.82)", whiteSpace: "normal" }}>
+                        {r.descricao || "—"}
+                      </div>
                     </td>
-                    <td style={td}>
-                      <b>{fmtH(r.tempoParadaH)}</b>
-                    </td>
+                    <td style={td}><b>{fmtH(r.tempo_parada_h)}</b></td>
                     <td style={td}>
                       <button
                         className="mp-btn"
                         onClick={() => removeRow(r.id)}
+                        disabled={loading}
                         style={{
                           height: 34,
                           padding: "0 10px",
@@ -585,7 +575,7 @@ export default function Paradas() {
           </table>
 
           <div className="mp-help" style={{ marginTop: 10 }}>
-            * Offline/localStorage. Depois a gente liga no backend.
+            * Agora está 100% no backend/Postgres.
           </div>
         </div>
       </div>
