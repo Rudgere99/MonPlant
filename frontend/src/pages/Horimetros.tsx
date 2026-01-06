@@ -197,7 +197,7 @@ export default function Horimetros() {
     try {
       setLoading(true);
 
-      await apiPost<HorimetroRow>(`/api/horimetros`, {
+      await apiPost(`/api/horimetros`, {
         day,
         turno,
         equipamento,
@@ -209,7 +209,7 @@ export default function Horimetros() {
       await loadLastByEq();
       await loadFiltered();
 
-      // ajusta filtros pra mostrar o que lançou
+      // filtros pra mostrar o que lançou
       setFDay(day);
       setFTurno(turno);
       setFEq(equipamento);
@@ -251,7 +251,6 @@ export default function Horimetros() {
       `}</style>
 
       <div className="mp-page-grid">
-        {/* header */}
         <div className="mp-col-span-12">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
@@ -273,7 +272,6 @@ export default function Horimetros() {
           </div>
         </div>
 
-        {/* resumo rápido */}
         <div className="mp-col-span-12">
           <div className="mp-card">
             <div className="mp-card-h">
@@ -309,7 +307,6 @@ export default function Horimetros() {
           </div>
         </div>
 
-        {/* esquerda: tabela */}
         <div className="mp-col-span-7" style={{ display: "grid", gap: 14 }}>
           <div className="mp-card">
             <div className="mp-card-h">
@@ -396,7 +393,6 @@ export default function Horimetros() {
           </div>
         </div>
 
-        {/* direita: lançamento + filtros */}
         <div className="mp-col-span-5" style={{ display: "grid", gap: 14 }}>
           <div className="mp-card">
             <div className="mp-card-h">
