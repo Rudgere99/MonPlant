@@ -596,7 +596,7 @@ export default function Dashboard() {
           <div style={{ ...cardBase, padding: 14 }}>
             <div style={headerStyle}>
               <div>
-                <div style={titleStyle}>Level</div>
+                <div style={titleStyle}>Taxa</div>
                 <div style={subStyle}>Taxa últimas horas (Freq%)</div>
               </div>
               <span
@@ -636,7 +636,7 @@ export default function Dashboard() {
           <div style={{ ...cardBase, padding: 14 }}>
             <div style={headerStyle}>
               <div>
-                <div style={titleStyle}>Insights</div>
+                <div style={titleStyle}>Média/Hora</div>
                 <div style={subStyle}>Média de produção por hora</div>
               </div>
               <span
