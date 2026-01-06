@@ -12,18 +12,7 @@ import {
   LabelList,
 } from "recharts";
 
-type PlantHourRow = {
-  period: string; // "07:00-08:00"
-  ton?: string | number | null;
-  freq?: string | number | null;
-};
-
-type PlantDayPayload = {
-  day: string; // YYYY-MM-DD
-  obs?: string | null;
-  rows: PlantHourRow[];
-  updated_at?: string | null;
-};
+/* ===================== helpers ===================== */
 
 function isoTodayLocal(): string {
   const d = new Date();
@@ -33,17 +22,15 @@ function isoTodayLocal(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function makePeriods(): string[] {
-  const res: string[] = [];
-  const hours = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5,6];
-  for (let i = 0; i < hours.length; i++) {
-    const h1 = hours[i];
-    const h2 = hours[(i + 1) % hours.length];
-    const a = String(h1).padStart(2, "0") + ":00";
-    const b = String(h2).padStart(2, "0") + ":00";
-    res.push(`${a}-${b}`);
-  }
-  return res;
+function isRetroDay(dayISO: string): boolean {
+  return dayISO < isoTodayLocal();
+}
+
+function fmtBR(n: number): string {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+}
+function fmtPct0(n: number): string {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(n);
 }
 
 function parseBRNumber(v: any): number | null {
@@ -52,9 +39,11 @@ function parseBRNumber(v: any): number | null {
 
   let s = String(v).trim();
   if (!s) return null;
+
   s = s.replace("%", "").trim();
   s = s.replace(/\s/g, "");
 
+  // "1.234,5" -> "1234.5"
   if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
   else if (s.includes(",")) s = s.replace(",", ".");
 
@@ -62,34 +51,144 @@ function parseBRNumber(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function fmtBR(n: number): string {
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+function makePeriods24(): string[] {
+  const res: string[] = [];
+  for (let h = 0; h < 24; h++) {
+    const h2 = (h + 1) % 24;
+    const a = String(h).padStart(2, "0") + ":00";
+    const b = String(h2).padStart(2, "0") + ":00";
+    res.push(`${a}-${b}`);
+  }
+  return res;
 }
-function fmtBR2(n: number): string {
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(n);
+
+function periodShort(p: string) {
+  const [a, b] = p.split("-");
+  return `${(a || "").slice(0, 2)}-${(b || "").slice(0, 2)}`;
 }
+
+type PlantHourRow = {
+  period: string;
+  ton?: string | number | null;
+  freq?: string | number | null;
+};
+
+type PlantDayPayload = {
+  day: string;
+  obs?: string | null;
+  rows: PlantHourRow[];
+  updated_at?: string | null;
+};
+
+/* ===================== auth / api ===================== */
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
 function authHeaders(): HeadersInit {
-  const keys = ["mp_token", "token", "access_token", "auth_token"];
-  for (const k of keys) {
-    const v = (localStorage.getItem(k) || "").trim();
-    if (v) return { Authorization: `Bearer ${v}` };
-  }
-  return {};
+  const t = (localStorage.getItem("mp_token") || "").trim();
+  return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-export default function PlantProductionDayView() {
-  const periods = useMemo(() => makePeriods(), []);
+/* ===================== recharts labels ===================== */
+
+const TonLabel = (props: any) => {
+  const { x, y, width, value } = props;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 80) return null;
+
+  return (
+    <text
+      x={x + width / 2}
+      y={y - 8}
+      textAnchor="middle"
+      fill="rgba(255,255,255,0.94)"
+      fontSize={11}
+      fontWeight={900}
+      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.75)", strokeWidth: 3 }}
+    >
+      {fmtBR(n)}
+    </text>
+  );
+};
+
+const FreqLabel = (props: any) => {
+  const { x, y, index, value, payload } = props;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (payload?.freq === null || payload?.freq === undefined) return null;
+
+  const bump = index % 2 === 0 ? -12 : -20;
+
+  return (
+    <text
+      x={x}
+      y={y + bump}
+      textAnchor="middle"
+      fill="rgba(255,255,255,0.94)"
+      fontSize={11}
+      fontWeight={900}
+      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.70)", strokeWidth: 4 }}
+    >
+      {fmtPct0(n)}%
+    </text>
+  );
+};
+
+const CustomTick = (props: any) => {
+  const { x, y, payload } = props;
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={14}
+        textAnchor="middle"
+        fill="rgba(255,255,255,0.75)"
+        fontSize={12}
+        fontWeight={700}
+      >
+        {periodShort(String(payload.value || ""))}
+      </text>
+    </g>
+  );
+};
+
+/* ===================== component ===================== */
+
+export default function PlantProduction() {
+  const periods = useMemo(() => makePeriods24(), []);
+
   const [day, setDay] = useState<string>(isoTodayLocal());
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [payload, setPayload] = useState<PlantDayPayload | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  const [payload, setPayload] = useState<PlantDayPayload>(() => ({
+    day: isoTodayLocal(),
+    obs: "",
+    rows: periods.map((p) => ({ period: p, ton: "", freq: "" })),
+    updated_at: null,
+  }));
+
+  const retro = isRetroDay(day);
+
+  function normalizeRows(rows: PlantHourRow[]): PlantHourRow[] {
+    const map: Record<string, PlantHourRow> = {};
+    for (const r of rows || []) map[r.period] = r;
+
+    return periods.map((p) => ({
+      period: p,
+      ton: map[p]?.ton ?? "",
+      freq: map[p]?.freq ?? "",
+    }));
+  }
 
   async function loadDay(d: string) {
     setLoading(true);
     setErr(null);
+    setInfo(null);
+
     try {
       const r = await fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(d)}`, {
         headers: authHeaders(),
@@ -99,7 +198,8 @@ export default function PlantProductionDayView() {
         setPayload({
           day: d,
           obs: "",
-          rows: periods.map((p) => ({ period: p, ton: null, freq: null })),
+          rows: periods.map((p) => ({ period: p, ton: "", freq: "" })),
+          updated_at: null,
         });
         return;
       }
@@ -110,11 +210,57 @@ export default function PlantProductionDayView() {
       }
 
       const data = (await r.json()) as PlantDayPayload;
-      setPayload(data);
+
+      setPayload({
+        day: d,
+        obs: data.obs ?? "",
+        rows: normalizeRows(data.rows || []),
+        updated_at: data.updated_at ?? null,
+      });
     } catch (e: any) {
       setErr(e?.message || "Erro ao carregar");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveDay() {
+    setSaving(true);
+    setErr(null);
+    setInfo(null);
+
+    try {
+      const body = {
+        obs: payload.obs ?? "",
+        rows: payload.rows.map((r) => ({
+          period: r.period,
+          ton: parseBRNumber(r.ton),
+          freq: parseBRNumber(r.freq),
+        })),
+      };
+
+      const r = await fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (r.status === 403) {
+        setErr("Retroativo não pode ser editado.");
+        return;
+      }
+
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        throw new Error(t || `HTTP ${r.status}`);
+      }
+
+      setInfo("Salvo com sucesso.");
+      await loadDay(day);
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao salvar");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -127,8 +273,7 @@ export default function PlantProductionDayView() {
     const map: Record<string, { ton: number | null; freq: number | null }> = {};
     for (const p of periods) map[p] = { ton: null, freq: null };
 
-    for (const r of payload?.rows || []) {
-      if (!map[r.period]) continue;
+    for (const r of payload.rows || []) {
       const ton = parseBRNumber(r.ton);
       const freq = parseBRNumber(r.freq);
       map[r.period] = {
@@ -138,67 +283,24 @@ export default function PlantProductionDayView() {
     }
 
     return periods.map((p) => ({ period: p, ton: map[p].ton, freq: map[p].freq }));
-  }, [payload, periods]);
+  }, [payload.rows, periods]);
 
-  const CustomTick = (props: any) => {
-    const { x, y, payload } = props;
-    const p = String(payload.value || "");
-    const [a, b] = p.split("-");
-    const ha = (a || "").slice(0, 2);
-    const hb = (b || "").slice(0, 2);
-    const label = `${ha}-${hb}`;
-    return (
-      <g transform={`translate(${x},${y})`}>
-        <text x={0} y={0} dy={14} textAnchor="middle" fill="rgba(255,255,255,0.75)" fontSize={12} fontWeight={700}>
-          {label}
-        </text>
-      </g>
-    );
-  };
-
-  const TonLabel = (props: any) => {
-    const { x, y, width, value } = props;
-    if (value === null || value === undefined) return null;
-    const n = Number(value);
-    if (!Number.isFinite(n) || n < 80) return null;
-    return (
-      <text
-        x={x + width / 2}
-        y={y - 6}
-        textAnchor="middle"
-        fill="rgba(255,255,255,0.92)"
-        fontSize={11}
-        fontWeight={800}
-        style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.75)", strokeWidth: 3 }}
-      >
-        {fmtBR(n)}
-      </text>
-    );
-  };
-
-  const FreqLabel = (props: any) => {
-    const { x, y, index, value } = props;
-    if (value === null || value === undefined) return null;
-    if (index % 2 !== 0) return null;
-    const n = Number(value);
-    if (!Number.isFinite(n)) return null;
-    return (
-      <text
-        x={x}
-        y={y - 10}
-        textAnchor="middle"
-        fill="rgba(255,255,255,0.92)"
-        fontSize={11}
-        fontWeight={800}
-        style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.75)", strokeWidth: 3 }}
-      >
-        {fmtBR2(n)}%
-      </text>
-    );
-  };
+  const totalTon = useMemo(() => {
+    let s = 0;
+    for (const r of chartData) if (typeof r.ton === "number") s += r.ton;
+    return s;
+  }, [chartData]);
 
   const [yy, mm, dd] = day.split("-");
   const dayBR = `${dd}/${mm}/${yy}`;
+
+  const chunks = useMemo(() => {
+    return [
+      payload.rows.slice(0, 8),
+      payload.rows.slice(8, 16),
+      payload.rows.slice(16, 24),
+    ];
+  }, [payload.rows]);
 
   return (
     <div className="mp-container">
@@ -206,27 +308,60 @@ export default function PlantProductionDayView() {
       <div className="mp-page-sub">Evolução horária • {dayBR}</div>
 
       <div className="mp-card" style={{ marginTop: 12 }}>
-        <div className="mp-card-h" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+        {/* header */}
+        <div
+          className="mp-card-h"
+          style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}
+        >
           <div style={{ flex: 1, minWidth: 260 }}>
             <b>Produção por hora (Ton/H + Frequência)</b>
+
             <div className="mp-help">
               {loading
                 ? "Carregando..."
                 : err
                 ? `Erro: ${err}`
+                : info
+                ? info
                 : payload?.updated_at
                 ? `Atualizado: ${payload.updated_at}`
                 : "—"}
+            </div>
+
+            <div className="mp-help" style={{ marginTop: 6 }}>
+              Total do dia (soma Ton/H): <b>{fmtBR(totalTon)}</b>
+              {retro ? (
+                <span style={{ marginLeft: 10, color: "rgba(245,158,11,0.95)", fontWeight: 800 }}>
+                  (Retroativo bloqueado)
+                </span>
+              ) : null}
             </div>
           </div>
 
           <div>
             <div className="mp-label">Data</div>
-            <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+            <input
+              className="mp-input"
+              type="date"
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+            />
           </div>
+
+          <button
+            className="mp-btn"
+            onClick={saveDay}
+            disabled={saving || loading || retro}
+            title={retro ? "Retroativo não pode ser editado" : "Salvar produção do dia"}
+            style={{ minWidth: 140 }}
+          >
+            {saving ? "Salvando..." : "Salvar"}
+          </button>
         </div>
 
+        {/* body */}
         <div className="mp-card-b">
+          {/* gráfico */}
           <div style={{ height: 440, width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 52, right: 24, bottom: 30, left: 10 }}>
@@ -262,7 +397,7 @@ export default function PlantProductionDayView() {
                 <Tooltip
                   formatter={(value: any, name: any) => {
                     if (value === null || value === undefined || value === "") return ["—", name];
-                    if (name === "Frequência (%)") return [`${fmtBR2(Number(value))}%`, name];
+                    if (name === "Frequência (%)") return [`${fmtPct0(Number(value))}%`, name];
                     if (name === "Ton/H") return [fmtBR(Number(value)), name];
                     return [String(value), name];
                   }}
@@ -277,7 +412,14 @@ export default function PlantProductionDayView() {
 
                 <Legend wrapperStyle={{ color: "rgba(255,255,255,0.8)" }} />
 
-                <Bar yAxisId="ton" dataKey="ton" name="Ton/H" fill="#22c55e" radius={[6, 6, 0, 0]} barSize={22}>
+                <Bar
+                  yAxisId="ton"
+                  dataKey="ton"
+                  name="Ton/H"
+                  fill="#22c55e"
+                  radius={[6, 6, 0, 0]}
+                  barSize={22}
+                >
                   <LabelList dataKey="ton" content={<TonLabel />} />
                 </Bar>
 
@@ -292,7 +434,14 @@ export default function PlantProductionDayView() {
                   dot={(p: any) => {
                     if (p?.payload?.freq === null || p?.payload?.freq === undefined) return null;
                     return (
-                      <circle cx={p.cx} cy={p.cy} r={4} fill="#f59e0b" stroke="rgba(0,0,0,.6)" strokeWidth={2} />
+                      <circle
+                        cx={p.cx}
+                        cy={p.cy}
+                        r={4}
+                        fill="#f59e0b"
+                        stroke="rgba(0,0,0,.6)"
+                        strokeWidth={2}
+                      />
                     );
                   }}
                   activeDot={{ r: 6 }}
@@ -303,11 +452,107 @@ export default function PlantProductionDayView() {
             </ResponsiveContainer>
           </div>
 
-          {!loading && !err && chartData.every((d) => d.ton === null && d.freq === null) ? (
-            <div className="mp-help" style={{ marginTop: 10 }}>
-              Sem dados para este dia.
+          {/* ✅ Observação (de volta "onde estava antes": abaixo do gráfico) */}
+          <div style={{ marginTop: 14 }}>
+            <div className="mp-label">Observação do dia</div>
+            <textarea
+              className="mp-textarea"
+              value={payload.obs ?? ""}
+              disabled={retro}
+              onChange={(e) => setPayload((p) => ({ ...p, obs: e.target.value }))}
+              placeholder="Ex.: chuva, manutenção, falta de energia, etc."
+              style={{ minHeight: 90 }}
+            />
+          </div>
+
+          {/* ✅ edição em 3 colunas (8 horas cada) */}
+          <div style={{ marginTop: 14 }}>
+            <div className="mp-help">
+              Edite Ton/H e Frequência (%) e clique em <b>Salvar</b>. Valores vazios ficam como <b>sem dado</b>.
             </div>
-          ) : null}
+
+            <div
+              style={{
+                marginTop: 10,
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(260px, 1fr))",
+                gap: 12,
+                overflowX: "auto",
+                paddingBottom: 2,
+              }}
+            >
+              {chunks.map((rows8, colIdx) => (
+                <div key={colIdx} className="mp-card" style={{ margin: 0 }}>
+                  <div className="mp-card-h" style={{ padding: "10px 12px" }}>
+                    <b>{colIdx === 0 ? "00–08" : colIdx === 1 ? "08–16" : "16–24"}</b>
+                    <div className="mp-help">8 faixas horárias</div>
+                  </div>
+
+                  <div className="mp-card-b" style={{ padding: 12 }}>
+                    <table className="mp-table" style={{ width: "100%", minWidth: 0 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ width: 84 }}>Hora</th>
+                          <th style={{ width: 110 }}>Ton/H</th>
+                          <th style={{ width: 130 }}>Freq (%)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows8.map((r) => {
+                          const globalIdx = payload.rows.findIndex((x) => x.period === r.period);
+
+                          return (
+                            <tr key={r.period}>
+                              <td style={{ color: "rgba(255,255,255,0.85)", fontWeight: 800 }}>
+                                {periodShort(r.period)}
+                              </td>
+
+                              <td>
+                                <input
+                                  className="mp-input"
+                                  value={r.ton ?? ""}
+                                  disabled={retro}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setPayload((p) => {
+                                      const rows = [...p.rows];
+                                      rows[globalIdx] = { ...rows[globalIdx], ton: v };
+                                      return { ...p, rows };
+                                    });
+                                  }}
+                                  placeholder="ex: 320"
+                                />
+                              </td>
+
+                              <td>
+                                <input
+                                  className="mp-input"
+                                  value={r.freq ?? ""}
+                                  disabled={retro}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setPayload((p) => {
+                                      const rows = [...p.rows];
+                                      rows[globalIdx] = { ...rows[globalIdx], freq: v };
+                                      return { ...p, rows };
+                                    });
+                                  }}
+                                  placeholder="ex: 85"
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* espaço final */}
+          <div style={{ height: 8 }} />
         </div>
       </div>
     </div>
