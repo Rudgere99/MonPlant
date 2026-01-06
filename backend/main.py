@@ -1,26 +1,86 @@
-from fastapi import FastAPI, HTTPException, Depends, Query
-from pydantic import BaseModel
-from datetime import date, datetime
+from __future__ import annotations
+
+from datetime import date
 from typing import Optional, List
 
-from db import get_conn
-from auth_dep import require_owner_id
+from fastapi import FastAPI, HTTPException, Depends, Header, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
+from db import get_conn
+
+
+# ============================================================
+# APP + CORS
+# ============================================================
 app = FastAPI()
 
-# ---------------------------
-# Helpers
-# ---------------------------
+# ✅ Ajuste/adicione seu domínio Vercel aqui
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    # coloque seu domínio real:
+    "https://monplant.vercel.app",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],  # precisa p/ Authorization
+)
+
+
+# ============================================================
+# AUTH DEP
+# ============================================================
+def require_owner_id(authorization: Optional[str] = Header(default=None)) -> str:
+    """
+    Pega o token Bearer e retorna owner_id.
+    ✅ Você precisa escolher UMA das opções abaixo e apagar a outra.
+    """
+
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+    # ------------------------------------------------------------
+    # OPÇÃO A (RECOMENDADA): se você já tem verify_token no projeto
+    # ------------------------------------------------------------
+    # from auth import verify_token  # ajuste o import conforme seu projeto
+    # payload = verify_token(token)  # deve retornar dict com user_id/owner_id
+    # owner_id = payload.get("owner_id") or payload.get("sub") or payload.get("user_id")
+    # if not owner_id:
+    #     raise HTTPException(status_code=401, detail="Token without owner_id")
+    # return str(owner_id)
+
+    # ------------------------------------------------------------
+    # OPÇÃO B (TEMPORÁRIA): usar o próprio token como owner_id (NÃO IDEAL)
+    # ------------------------------------------------------------
+    # ⚠️ Só pra não travar agora. Troque pela Opção A assim que possível.
+    return token
+
+
+# ============================================================
+# HELPERS
+# ============================================================
 def today_local() -> date:
     return date.today()
 
-def block_retro(day: date):
-    if day < today_local():
+def block_retro(d: date) -> None:
+    if d < today_local():
         raise HTTPException(status_code=403, detail="Retroativo não pode ser editado")
 
-# ---------------------------
-# Schemas
-# ---------------------------
+
+# ============================================================
+# SCHEMAS
+# ============================================================
 class PlantRow(BaseModel):
     period: str
     ton: Optional[float] = None
@@ -50,16 +110,18 @@ class HoriIn(BaseModel):
     horimetro: float
     obs: Optional[str] = None
 
-# ---------------------------
-# Health
-# ---------------------------
+
+# ============================================================
+# HEALTH
+# ============================================================
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# ---------------------------
-# Plant Production
-# ---------------------------
+
+# ============================================================
+# PLANT PRODUCTION
+# ============================================================
 @app.get("/api/plant-production/{day}")
 def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
@@ -85,7 +147,6 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
         rows = [{"period": r[0], "ton": r[1], "freq": r[2]} for r in cur.fetchall()]
 
         if not daily and not rows:
-            # front trata 404 criando layout vazio
             raise HTTPException(status_code=404, detail="Not found")
 
         obs = daily[0] if daily else ""
@@ -98,7 +159,6 @@ def put_plant_day(day: date, body: PlantDayUpsert, owner_id: str = Depends(requi
     block_retro(day)
 
     with get_conn() as conn, conn.cursor() as cur:
-        # upsert header
         cur.execute(
             """
             insert into public.bv_plant_production_daily(owner_id, day, obs)
@@ -109,7 +169,6 @@ def put_plant_day(day: date, body: PlantDayUpsert, owner_id: str = Depends(requi
             (owner_id, day, body.obs or ""),
         )
 
-        # upsert rows (24)
         for r in body.rows:
             cur.execute(
                 """
@@ -141,12 +200,14 @@ def last7days(owner_id: str = Depends(require_owner_id)):
         )
         return [{"day": str(x[0]), "total_ton": float(x[1] or 0)} for x in cur.fetchall()]
 
-# ---------------------------
-# Stops
-# ---------------------------
+
+# ============================================================
+# STOPS
+# ============================================================
 @app.post("/api/stops")
 def create_stop(body: StopIn, owner_id: str = Depends(require_owner_id)):
     block_retro(body.day)
+
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -204,7 +265,7 @@ def last_stop(day: date, owner_id: str = Depends(require_owner_id)):
             "tipo_parada": r[2],
             "atividade": r[3],
             "tempo_parada_h": float(r[4]),
-            "created_at": r[5].isoformat() if r[5] else None
+            "created_at": r[5].isoformat() if r[5] else None,
         }
 
 @app.get("/api/stops/total")
@@ -221,12 +282,14 @@ def total_stops(day: date, owner_id: str = Depends(require_owner_id)):
         v = cur.fetchone()[0]
         return {"day": str(day), "total_h": float(v or 0)}
 
-# ---------------------------
-# Horimetros
-# ---------------------------
+
+# ============================================================
+# HORIMETROS
+# ============================================================
 @app.post("/api/horimetros")
 def create_hori(body: HoriIn, owner_id: str = Depends(require_owner_id)):
     block_retro(body.day)
+
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -248,12 +311,16 @@ def list_hori(
 ):
     where = ["owner_id=%s"]
     params = [owner_id]
+
     if day:
-        where.append("day=%s"); params.append(day)
+        where.append("day=%s")
+        params.append(day)
     if turno:
-        where.append("turno=%s"); params.append(turno)
+        where.append("turno=%s")
+        params.append(turno)
     if equipamento:
-        where.append("equipamento=%s"); params.append(equipamento)
+        where.append("equipamento=%s")
+        params.append(equipamento)
 
     sql = f"""
       select id, day, turno, equipamento, horimetro, obs, created_at
@@ -262,6 +329,7 @@ def list_hori(
       order by created_at desc
       limit {limit}
     """
+
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(sql, tuple(params))
         cols = [d.name for d in cur.description]
@@ -286,19 +354,20 @@ def last_by_eq(owner_id: str = Depends(require_owner_id)):
                 "horimetro": float(r[1]),
                 "day": str(r[2]),
                 "turno": r[3],
-                "created_at": r[4].isoformat() if r[4] else None
+                "created_at": r[4].isoformat() if r[4] else None,
             }
             for r in cur.fetchall()
         ]
 
-# ---------------------------
-# Dashboard (tempo real)
-# ---------------------------
+
+# ============================================================
+# DASHBOARD
+# ============================================================
 @app.get("/api/dashboard/today")
 def dashboard_today(owner_id: str = Depends(require_owner_id)):
     d = today_local()
+
     with get_conn() as conn, conn.cursor() as cur:
-        # produção total do dia
         cur.execute(
             """
             select coalesce(sum(r.ton),0)
@@ -309,7 +378,6 @@ def dashboard_today(owner_id: str = Depends(require_owner_id)):
         )
         prod_total = float(cur.fetchone()[0] or 0)
 
-        # última parada
         cur.execute(
             """
             select id, equipamento, tipo_parada, atividade, tempo_parada_h, created_at
@@ -322,14 +390,20 @@ def dashboard_today(owner_id: str = Depends(require_owner_id)):
         )
         ls = cur.fetchone()
         last_stop = None if not ls else {
-            "id": ls[0], "equipamento": ls[1], "tipo_parada": ls[2],
-            "atividade": ls[3], "tempo_parada_h": float(ls[4]),
-            "created_at": ls[5].isoformat() if ls[5] else None
+            "id": ls[0],
+            "equipamento": ls[1],
+            "tipo_parada": ls[2],
+            "atividade": ls[3],
+            "tempo_parada_h": float(ls[4]),
+            "created_at": ls[5].isoformat() if ls[5] else None,
         }
 
-        # total paradas do dia
         cur.execute(
-            "select coalesce(sum(tempo_parada_h),0) from public.bv_stops where owner_id=%s and day=%s",
+            """
+            select coalesce(sum(tempo_parada_h),0)
+            from public.bv_stops
+            where owner_id=%s and day=%s
+            """,
             (owner_id, d),
         )
         total_stops_h = float(cur.fetchone()[0] or 0)
@@ -338,5 +412,5 @@ def dashboard_today(owner_id: str = Depends(require_owner_id)):
         "day": str(d),
         "plant_total_ton": prod_total,
         "last_stop": last_stop,
-        "total_stops_h": total_stops_h
+        "total_stops_h": total_stops_h,
     }
