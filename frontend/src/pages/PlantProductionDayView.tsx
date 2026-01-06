@@ -1,6 +1,4 @@
-import { useEffect, useMemo, useState, type HeadersInit } from "react";
-
-
+import { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -87,6 +85,10 @@ export default function PlantProductionDayView() {
   const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
   // ✅ TIPADO como HeadersInit (evita union estranho em build)
+function authHeaders(): HeadersInit {
+  const t = (localStorage.getItem("mp_token") || "").trim();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
   function authHeaders(): HeadersInit {
     const t = (localStorage.getItem("mp_token") || "").trim();
     return t ? { Authorization: `Bearer ${t}` } : {};
