@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -13,295 +12,429 @@ import {
 /* =========================
    CONFIG
 ========================= */
-const META_DIA = 8000;
-const LS_PREFIX = "monplant:plant-production:";
-const LS_PARADAS = "monplant:paradas:v1";
-const LS_HORIMETROS = "monplant:horimetros:v1";
-const EQUIPAMENTOS = ["BT-01", "BT-02", "PN-01", "PN-02"] as const;
-
-/* =========================
-   TYPES
-========================= */
-type Turno = 1 | 2;
-
-type PlantHourRow = {
-  period: string;
-  ton?: string | number | null;
-};
-
-type PlantDayPayload = {
-  day: string;
-  turno?: Turno;
-  rows: PlantHourRow[];
-};
-
-type StopRow = {
-  id: string;
-  dataInicio: string;
-  horaInicio: string;
-  dataFim: string;
-  horaFim: string;
-  equipamento: string;
-  tipoParada: string;
-  atividade: string;
-  descricao: string;
-  tempoParadaH: number;
-  createdAtISO: string;
-};
-
-type HorimetroRow = {
-  id: string;
-  day: string;
-  turno: Turno;
-  equipamento: string;
-  horimetro: number;
-  createdAtISO: string;
-};
+const META_DIA = 8000; // ajuste se quiser
+const POLL_MS = 10_000;
 
 /* =========================
    HELPERS
 ========================= */
 function isoTodayLocal(): string {
   const d = new Date();
-  return d.toISOString().slice(0, 10);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-function addDaysISO(iso: string, delta: number) {
-  const dt = new Date(iso);
-  dt.setDate(dt.getDate() + delta);
-  return dt.toISOString().slice(0, 10);
+function fmtBR(n: number): string {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+}
+function fmtBR0(n: number): string {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(n);
 }
 
-function brDayLabel(iso: string) {
+function safeNumber(v: any): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function dayLabel(iso: string) {
+  // "2026-01-06" -> "06/01"
   const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
   return `${d}/${m}`;
 }
 
-function fmt(n: number) {
-  return new Intl.NumberFormat("pt-BR").format(Math.round(n));
-}
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
-function parseBRNumber(v: any): number {
-  if (v == null) return 0;
-  if (typeof v === "number") return v;
-  return Number(String(v).replace(".", "").replace(",", ".")) || 0;
-}
-
-function loadPlant(day: string, turno: Turno): PlantDayPayload | null {
-  try {
-    const raw = localStorage.getItem(`${LS_PREFIX}${day}:T${turno}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
+function authHeaders(): HeadersInit {
+  const keys = ["mp_token", "token", "access_token", "auth_token"];
+  let t = "";
+  for (const k of keys) {
+    const v = (localStorage.getItem(k) || "").trim();
+    if (v) { t = v; break; }
   }
-}
-
-function sumTon(p: PlantDayPayload | null) {
-  if (!p?.rows) return 0;
-  return p.rows.reduce((s, r) => s + Math.max(0, parseBRNumber(r.ton)), 0);
-}
-
-function totalDay(day: string) {
-  return sumTon(loadPlant(day, 1)) + sumTon(loadPlant(day, 2));
-}
-
-function loadLS<T>(key: string): T[] {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
 /* =========================
-   UI – RADIAL
+   TYPES
 ========================= */
-function RadialProgress({ value, max }: { value: number; max: number }) {
-  const pct = max <= 0 ? 0 : Math.min(1, value / max);
-  const r = 52;
+type PlantRow = { period: string; ton?: number | null; freq?: number | null };
+type PlantDayResp = { day: string; obs?: string | null; rows: PlantRow[]; updated_at?: string | null };
+
+type Last7Item = { day: string; total_ton: number };
+
+type LastStop = {
+  id: number;
+  equipamento: string;
+  tipo_parada: string;
+  atividade: string;
+  tempo_parada_h: number;
+  created_at?: string | null;
+} | null;
+
+type TotalStopsResp = { day: string; total_h: number };
+
+type HoriLast = {
+  equipamento: string;
+  horimetro: number;
+  day: string;
+  turno: number;
+  created_at?: string | null;
+};
+
+/* =========================
+   UI: Donut
+========================= */
+function Donut({
+  value,
+  max,
+  labelTop,
+  labelBottom,
+}: {
+  value: number;
+  max: number;
+  labelTop: string;
+  labelBottom: string;
+}) {
+  const pct = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+  const size = 170;
+  const stroke = 14;
+  const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const dash = c * pct;
 
   return (
-    <svg width="140" height="140">
-      <circle cx="70" cy="70" r={r} stroke="rgba(255,255,255,.12)" strokeWidth="12" fill="none" />
-      <circle
-        cx="70"
-        cy="70"
-        r={r}
-        stroke="#22c55e"
-        strokeWidth="12"
-        fill="none"
-        strokeLinecap="round"
-        strokeDasharray={`${dash} ${c - dash}`}
-        transform="rotate(-90 70 70)"
-      />
-      <text x="70" y="66" textAnchor="middle" fill="white" fontSize="18" fontWeight={900}>
-        {Math.round(pct * 100)}%
-      </text>
-      <text x="70" y="86" textAnchor="middle" fill="rgba(255,255,255,.6)" fontSize="11">
-        {fmt(value)} / {fmt(max)}
-      </text>
-    </svg>
+    <div style={{ display: "grid", placeItems: "center" }}>
+      <svg width={size} height={size} style={{ overflow: "visible" }}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="rgba(255,255,255,0.10)"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="rgba(34,197,94,0.95)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={`${dash} ${c - dash}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+        <text
+          x="50%"
+          y="48%"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="rgba(255,255,255,0.92)"
+          fontSize="22"
+          fontWeight="900"
+          style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.70)", strokeWidth: 3 }}
+        >
+          {fmtBR0(value)}
+        </text>
+        <text
+          x="50%"
+          y="62%"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="rgba(255,255,255,0.70)"
+          fontSize="12"
+          fontWeight="800"
+        >
+          {labelBottom}
+        </text>
+      </svg>
+
+      <div style={{ marginTop: 6, textAlign: "center" }}>
+        <div style={{ color: "rgba(255,255,255,0.80)", fontWeight: 800 }}>{labelTop}</div>
+        <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 700, fontSize: 12 }}>
+          Meta: {fmtBR0(max)}
+        </div>
+      </div>
+    </div>
   );
 }
 
 /* =========================
-   DASHBOARD
+   PAGE
 ========================= */
 export default function Dashboard() {
-  const nav = useNavigate();
-  const today = isoTodayLocal();
+  const [day, setDay] = useState<string>(isoTodayLocal());
 
-  /* ===== BASE (SEU DASHBOARD) ===== */
-  const todayTotal = useMemo(() => totalDay(today), [today]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const last7 = useMemo(() => {
-    const arr = [];
-    for (let i = 6; i >= 0; i--) {
-      const day = addDaysISO(today, -i);
-      arr.push({ label: brDayLabel(day), total: totalDay(day) });
+  const [plant, setPlant] = useState<PlantDayResp | null>(null);
+  const [last7, setLast7] = useState<Last7Item[]>([]);
+  const [lastStop, setLastStop] = useState<LastStop>(null);
+  const [totalStops, setTotalStops] = useState<TotalStopsResp | null>(null);
+  const [horis, setHoris] = useState<HoriLast[]>([]);
+
+  const timerRef = useRef<number | null>(null);
+
+  const plantTotal = useMemo(() => {
+    if (!plant?.rows?.length) return 0;
+    return plant.rows.reduce((acc, r) => acc + safeNumber(r.ton ?? 0), 0);
+  }, [plant]);
+
+  async function apiGet<T>(path: string): Promise<T> {
+    const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+    if (r.status === 404) throw Object.assign(new Error("404"), { code: 404 });
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      throw new Error(t || `HTTP ${r.status}`);
     }
-    return arr;
-  }, [today]);
+    return (await r.json()) as T;
+  }
 
-  /* ===== NOVOS DADOS ===== */
-  const paradas = useMemo(() => loadLS<StopRow>(LS_PARADAS), []);
-  const horimetros = useMemo(() => loadLS<HorimetroRow>(LS_HORIMETROS), []);
+  async function loadAll() {
+    setLoading(true);
+    setErr(null);
 
-  const ultimaParada = useMemo(() => {
-    return [...paradas].sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO))[0];
-  }, [paradas]);
-
-  const ultimoHorimetro = useMemo(() => {
-    const map: Record<string, HorimetroRow | null> = {};
-    EQUIPAMENTOS.forEach((e) => (map[e] = null));
-    [...horimetros]
-      .sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO))
-      .forEach((h) => {
-        if (!map[h.equipamento]) map[h.equipamento] = h;
+    try {
+      // 1) Produção do dia selecionado (pra donut)
+      const plantResp = await apiGet<PlantDayResp>(`/api/plant-production/${encodeURIComponent(day)}`).catch((e: any) => {
+        if (e?.code === 404) return null;
+        throw e;
       });
-    return map;
-  }, [horimetros]);
+      setPlant(plantResp);
 
-  const [ini, setIni] = useState(today);
-  const [fim, setFim] = useState(today);
+      // 2) Últimos 7 dias (sempre do owner)
+      const last7Resp = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
+      setLast7(Array.isArray(last7Resp) ? last7Resp : []);
 
-  const totalParadas = useMemo(() => {
-    return paradas
-      .filter((p) => p.dataInicio >= ini && p.dataInicio <= fim)
-      .reduce((s, p) => s + p.tempoParadaH, 0);
-  }, [paradas, ini, fim]);
+      // 3) Paradas: última e total por dia selecionado
+      const [ls, tot] = await Promise.all([
+        apiGet<LastStop>(`/api/stops/last?day=${encodeURIComponent(day)}`).catch(() => null),
+        apiGet<TotalStopsResp>(`/api/stops/total?day=${encodeURIComponent(day)}`).catch(() => ({ day, total_h: 0 })),
+      ]);
+      setLastStop(ls);
+      setTotalStops(tot);
+
+      // 4) Horímetros: último por equipamento
+      const h = await apiGet<HoriLast[]>(`/api/horimetros/last-by-eq`).catch(() => []);
+      setHoris(Array.isArray(h) ? h : []);
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao carregar Dashboard");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Carrega ao abrir e ao trocar dia
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day]);
+
+  // Polling 10s (tempo real) — recarrega tudo
+  useEffect(() => {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = window.setInterval(() => {
+      loadAll();
+    }, POLL_MS);
+
+    return () => {
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day]);
+
+  const last7Chart = useMemo(() => {
+    return last7.map((x) => ({
+      day: dayLabel(x.day),
+      total: safeNumber(x.total_ton),
+    }));
+  }, [last7]);
 
   return (
     <div className="mp-container">
       <div className="mp-page-title">Dashboard</div>
-      <div className="mp-page-sub">Visão geral da produção</div>
+      <div className="mp-page-sub">Visão geral • Atualiza a cada 10s</div>
 
-      {/* ===== CARDS ORIGINAIS ===== */}
-      <div className="mp-grid" style={{ marginTop: 14 }}>
-        {/* Produção do dia */}
-        <button className="mp-card" onClick={() => nav("/dashboard/producao-dia")} style={{ padding: 0 }}>
-          <div className="mp-card-h">
-            <b>Produção do dia</b>
-            <span className="mp-help">Meta {fmt(META_DIA)}</span>
-          </div>
-          <div className="mp-card-b" style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            <RadialProgress value={todayTotal} max={META_DIA} />
-            <div>
-              <div style={{ fontSize: 26, fontWeight: 900 }}>{fmt(todayTotal)} t</div>
-              <div className="mp-help">Acumulado do dia</div>
+      {/* barra superior */}
+      <div className="mp-card" style={{ marginTop: 12 }}>
+        <div className="mp-card-h" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <b>Resumo Operacional</b>
+            <div className="mp-help">
+              {loading ? "Carregando..." : err ? `Erro: ${err}` : "—"}
             </div>
           </div>
-        </button>
 
-        {/* Últimos 7 dias */}
-        <button className="mp-card" onClick={() => nav("/dashboard/ultimos-7")} style={{ padding: 0 }}>
-          <div className="mp-card-h">
-            <b>Últimos 7 dias</b>
-            <span className="mp-help">Total diário</span>
+          <div>
+            <div className="mp-label">Data</div>
+            <input
+              className="mp-input"
+              type="date"
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+            />
           </div>
-          <div className="mp-card-b" style={{ height: 260 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={last7}>
-                <CartesianGrid stroke="rgba(255,255,255,.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="label" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="total" fill="#22c55e" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </button>
-      </div>
 
-      {/* ===== NOVOS CARDS ===== */}
-      <div
-        style={{
-          marginTop: 18,
-          display: "grid",
-          gap: 14,
-          gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
-        }}
-      >
-        {/* Última parada */}
-        <button className="mp-card" onClick={() => nav("/paradas")} style={{ textAlign: "left" }}>
-          <div className="mp-card-h"><b>Última parada</b></div>
-          <div className="mp-card-b">
-            {ultimaParada ? (
-              <>
-                <b>{ultimaParada.equipamento}</b> • {ultimaParada.tipoParada}
-                <div className="mp-help">
-                  {ultimaParada.dataInicio} {ultimaParada.horaInicio} → {ultimaParada.horaFim}
-                </div>
-                <div className="mp-help">{ultimaParada.tempoParadaH} h</div>
-              </>
-            ) : (
-              <div className="mp-help">Sem registros</div>
-            )}
-          </div>
-        </button>
+          <button className="mp-btn" onClick={loadAll} disabled={loading} style={{ minWidth: 140 }}>
+            {loading ? "Atualizando..." : "Atualizar"}
+          </button>
+        </div>
 
-        {/* Último horímetro */}
-        <button className="mp-card" onClick={() => nav("/horimetros")} style={{ textAlign: "left" }}>
-          <div className="mp-card-h"><b>Último horímetro</b></div>
-          <div className="mp-card-b" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10 }}>
-            {EQUIPAMENTOS.map((e) => (
-              <div key={e} className="mp-chip">
-                {e}: {ultimoHorimetro[e]?.horimetro ?? "—"}
+        <div className="mp-card-b">
+          {/* grid principal */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "420px 1fr",
+              gap: 12,
+              alignItems: "stretch",
+            }}
+          >
+            {/* donut + cards */}
+            <div className="mp-card" style={{ margin: 0 }}>
+              <div className="mp-card-h">
+                <b>Produção do dia</b>
+                <div className="mp-help">Soma de Ton/H do dia selecionado</div>
               </div>
-            ))}
-          </div>
-        </button>
+              <div className="mp-card-b" style={{ display: "grid", gap: 12 }}>
+                <Donut
+                  value={plantTotal}
+                  max={META_DIA}
+                  labelTop="Produção (Ton)"
+                  labelBottom={`${fmtBR0(Math.round((META_DIA > 0 ? (plantTotal / META_DIA) : 0) * 100))}%`}
+                />
 
-        {/* Total paradas */}
-        <div className="mp-card">
-          <div className="mp-card-h"><b>Total de paradas (h)</b></div>
-          <div className="mp-card-b">
-            <div style={{ display: "flex", gap: 8 }}>
-              <input className="mp-input" type="date" value={ini} onChange={(e) => setIni(e.target.value)} />
-              <input className="mp-input" type="date" value={fim} onChange={(e) => setFim(e.target.value)} />
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr",
+                    gap: 10,
+                  }}
+                >
+                  <div className="mp-card" style={{ margin: 0 }}>
+                    <div className="mp-card-h" style={{ padding: "10px 12px" }}>
+                      <b>Última parada</b>
+                      <div className="mp-help">Dia selecionado</div>
+                    </div>
+                    <div className="mp-card-b" style={{ padding: 12 }}>
+                      {lastStop ? (
+                        <div style={{ display: "grid", gap: 6 }}>
+                          <div style={{ color: "rgba(255,255,255,0.88)", fontWeight: 900 }}>
+                            {lastStop.equipamento} • {lastStop.tipo_parada}
+                          </div>
+                          <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 700 }}>
+                            {lastStop.atividade}
+                          </div>
+                          <div style={{ color: "rgba(255,255,255,0.62)", fontWeight: 800 }}>
+                            Tempo: <b>{fmtBR(lastStop.tempo_parada_h)}</b> h
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mp-help">Sem paradas registradas.</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mp-card" style={{ margin: 0 }}>
+                    <div className="mp-card-h" style={{ padding: "10px 12px" }}>
+                      <b>Total de paradas</b>
+                      <div className="mp-help">Soma (horas) no dia selecionado</div>
+                    </div>
+                    <div className="mp-card-b" style={{ padding: 12 }}>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: "rgba(255,255,255,0.92)" }}>
+                        {fmtBR(totalStops?.total_h ?? 0)} h
+                      </div>
+                      <div className="mp-help">Atualiza junto com o polling</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize: 28, fontWeight: 900, marginTop: 10 }}>
-              {totalParadas.toFixed(1)} h
+
+            {/* últimos 7 dias + horímetros */}
+            <div style={{ display: "grid", gridTemplateRows: "1fr auto", gap: 12 }}>
+              <div className="mp-card" style={{ margin: 0 }}>
+                <div className="mp-card-h">
+                  <b>Últimos 7 dias</b>
+                  <div className="mp-help">Total Ton por dia</div>
+                </div>
+
+                <div className="mp-card-b" style={{ height: 320 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={last7Chart} margin={{ top: 18, right: 18, bottom: 18, left: 6 }}>
+                      <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="day"
+                        tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12, fontWeight: 800 }}
+                        axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                        tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                      />
+                      <YAxis
+                        tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12, fontWeight: 800 }}
+                        axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                        tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                      />
+                      <Tooltip
+                        formatter={(value: any) => fmtBR0(safeNumber(value))}
+                        contentStyle={{
+                          background: "rgba(0,0,0,0.85)",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          borderRadius: 12,
+                        }}
+                        labelStyle={{ color: "rgba(255,255,255,0.85)" }}
+                      />
+                      <Bar dataKey="total" name="Total (Ton)" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="mp-card" style={{ margin: 0 }}>
+                <div className="mp-card-h">
+                  <b>Horímetros</b>
+                  <div className="mp-help">Último lançamento por equipamento</div>
+                </div>
+
+                <div className="mp-card-b">
+                  {horis.length ? (
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="mp-table" style={{ width: "100%", minWidth: 560 }}>
+                        <thead>
+                          <tr>
+                            <th>Equipamento</th>
+                            <th>Horímetro</th>
+                            <th>Dia</th>
+                            <th>Turno</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {horis.map((h) => (
+                            <tr key={h.equipamento}>
+                              <td style={{ fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>{h.equipamento}</td>
+                              <td>{fmtBR(h.horimetro)}</td>
+                              <td>{dayLabel(h.day)}</td>
+                              <td>{h.turno}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="mp-help">Sem horímetros registrados ainda.</div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
+
+          <div style={{ height: 6 }} />
         </div>
       </div>
-
-      <style>{`
-        .mp-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 14px;
-        }
-        @media (min-width: 1024px) {
-          .mp-grid {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-      `}</style>
     </div>
   );
 }
