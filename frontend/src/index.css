@@ -1,222 +1,214 @@
-* {
-  box-sizing: border-box;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-html,
-body,
-#root {
-  margin: 0;
-  padding: 0;
-  min-height: 100vh;
-  background: #0B0F14;
-  color: #E5E7EB;
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-button {
-  font-family: inherit;
-  cursor: pointer;
-}
-
-input,
-select,
-textarea {
-  background: #111827;
-  color: #E5E7EB;
-  border: 1px solid #1F2937;
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: #22C55E;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-thumb {
-  background: #1F2937;
-  border-radius: 4px;
-}
-
-/* =========================
-   MonPlant — Dark BI UI
-   ========================= */
+/* =========================================================
+   MonPlant Dark Executive Theme (Glass + Glow)
+   - Base background, cards, buttons, inputs, typography
+========================================================= */
 
 :root{
-  --bg: #0b0f14;
-  --panel: rgba(255,255,255,.04);
-  --panel2: rgba(255,255,255,.06);
-  --stroke: rgba(255,255,255,.10);
-  --stroke2: rgba(255,255,255,.14);
-  --text: rgba(255,255,255,.92);
-  --muted: rgba(255,255,255,.62);
-  --muted2: rgba(255,255,255,.45);
-  --brand: #34d399; /* emerald */
-  --brand2: rgba(52,211,153,.16);
-  --danger: #fb7185;
+  --bg0: #05070b;
+  --bg1: #0a0f16;
+  --panel: rgba(255,255,255,0.04);
+  --panel2: rgba(255,255,255,0.06);
+  --border: rgba(255,255,255,0.10);
+  --border2: rgba(255,255,255,0.14);
+  --text: rgba(255,255,255,0.92);
+  --muted: rgba(255,255,255,0.62);
+  --muted2: rgba(255,255,255,0.48);
+
+  --accent: #ff9f1a;          /* laranja executivo */
+  --accent2: #ff6a00;         /* glow */
+  --green: #22c55e;
+  --red: #fb7185;
+
+  --shadow: 0 18px 60px rgba(0,0,0,0.65);
+  --shadow2: 0 10px 34px rgba(0,0,0,0.55);
+
+  --r: 18px;
+  --r2: 22px;
 }
 
-html, body {
-  background: radial-gradient(1200px 600px at 20% 0%, rgba(52,211,153,.10), transparent 60%),
-              radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,.08), transparent 55%),
-              var(--bg);
+/* fundo com textura + gradiente */
+html, body, #root {
+  height: 100%;
+}
+
+body{
+  margin:0;
   color: var(--text);
+  background:
+    radial-gradient(1200px 700px at 20% 10%, rgba(255,159,26,0.10), transparent 60%),
+    radial-gradient(900px 520px at 85% 25%, rgba(34,197,94,0.08), transparent 60%),
+    radial-gradient(1400px 800px at 50% 115%, rgba(255,106,0,0.08), transparent 60%),
+    linear-gradient(180deg, var(--bg0), var(--bg1));
+  overflow-x: hidden;
 }
 
-* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-
-a { color: inherit; text-decoration: none; }
-
-/* scroll */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,.10); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.16); }
-
-/* Layout helpers */
-.mp-container { max-width: 1400px; margin: 0 auto; }
-.mp-page-title { font-size: 34px; font-weight: 900; letter-spacing: .2px; }
-.mp-page-sub { margin-top: 6px; color: var(--muted); font-size: 13px; }
-
-/* Card */
-.mp-card{
-  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
-  border: 1px solid var(--stroke);
-  border-radius: 18px;
-  box-shadow: 0 12px 30px rgba(0,0,0,.35);
-}
-.mp-card-h{
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--stroke);
-  display:flex; align-items:center; justify-content:space-between; gap: 10px;
-}
-.mp-card-b{ padding: 16px; }
-.mp-chip{
-  display:inline-flex; align-items:center; gap:8px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: var(--brand2);
-  border: 1px solid rgba(52,211,153,.20);
-  color: rgba(167,243,208,.95);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .4px;
-  text-transform: uppercase;
+/* grid pontilhado leve (tipo “dashboard premium”) */
+body::before{
+  content:"";
+  position: fixed;
+  inset: 0;
+  pointer-events:none;
+  opacity: 0.14;
+  background-image:
+    radial-gradient(rgba(255,255,255,0.20) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(circle at 30% 10%, rgba(0,0,0,1), rgba(0,0,0,0.12) 65%, rgba(0,0,0,0));
 }
 
-/* Buttons */
-.mp-btn{
-  height: 38px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.06);
-  color: var(--text);
-  font-weight: 800;
+/* =========================================================
+   Base helpers (mp-*)
+========================================================= */
+
+.mp-container{
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px 18px 36px;
+}
+
+.mp-page-title{
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.mp-page-sub{
+  margin-top: 6px;
+  color: var(--muted);
   font-size: 13px;
-  display:inline-flex; align-items:center; justify-content:center; gap: 8px;
-  transition: .15s ease;
-}
-.mp-btn:hover{ background: rgba(255,255,255,.09); border-color: var(--stroke2); }
-.mp-btn:active{ transform: translateY(1px); }
-
-.mp-btn-primary{
-  border-color: rgba(52,211,153,.30);
-  background: rgba(52,211,153,.14);
-}
-.mp-btn-primary:hover{ background: rgba(52,211,153,.20); }
-
-.mp-btn-danger{
-  border-color: rgba(251,113,133,.30);
-  background: rgba(251,113,133,.14);
-}
-.mp-btn-danger:hover{ background: rgba(251,113,133,.20); }
-
-/* Inputs */
-.mp-label{ font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
-.mp-input, .mp-textarea, .mp-select{
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.04);
-  color: var(--text);
-  padding: 10px 12px;
-  outline: none;
-  transition: .15s ease;
-}
-.mp-input{ height: 40px; }
-.mp-textarea{ min-height: 88px; resize: vertical; }
-.mp-input::placeholder, .mp-textarea::placeholder{ color: rgba(255,255,255,.30); }
-.mp-input:focus, .mp-textarea:focus, .mp-select:focus{
-  border-color: rgba(52,211,153,.35);
-  box-shadow: 0 0 0 4px rgba(52,211,153,.10);
 }
 
-/* Tables/grid form */
-.mp-grid{
-  display:grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
-}
-@media (min-width: 1024px){
-  .mp-grid{ grid-template-columns: 1.15fr .85fr; }
-}
-
-.mp-form-grid{
-  display:grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-@media (min-width: 1024px){
-  .mp-form-grid{ grid-template-columns: 1fr 1fr; gap: 14px; }
-}
-
-.mp-row{
-  display:grid;
-  grid-template-columns: 120px 1fr 1fr;
-  gap: 10px;
-  align-items:center;
-  padding: 8px 10px;
-  border-radius: 14px;
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.03);
-}
-.mp-row:hover{ background: rgba(255,255,255,.05); }
-.mp-row .mp-faixa{ font-weight: 900; letter-spacing: .2px; color: rgba(255,255,255,.85); }
-
-/* Small helper text */
-.mp-help{ color: var(--muted2); font-size: 12px; }
-.mp-error{
-  margin-top: 8px;
-  color: rgba(251,113,133,.95);
+.mp-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,159,26,0.25);
+  background: rgba(255,159,26,0.10);
+  color: rgba(255,255,255,0.86);
   font-weight: 800;
   font-size: 12px;
 }
 
-@keyframes mpPulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.28;
-  }
-  50% {
-    transform: scale(1.06);
-    opacity: 0.45;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0.28;
-  }
+/* card glass */
+.mp-card{
+  border-radius: var(--r2);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  box-shadow: var(--shadow2);
+  backdrop-filter: blur(10px);
 }
 
-.mp-offroad-pulse {
-  animation: mpPulse 6s ease-in-out infinite;
+.mp-card-h{
+  padding: 14px 14px 0;
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
 }
+
+.mp-card-b{
+  padding: 14px;
+}
+
+.mp-help{
+  color: var(--muted2);
+  font-size: 12px;
+}
+
+/* buttons */
+.mp-btn{
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.86);
+  font-weight: 800;
+  transition: transform .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.mp-btn:hover{
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+}
+.mp-btn:disabled{
+  opacity: 0.6;
+  cursor:not-allowed;
+  transform:none;
+}
+
+.mp-btn-primary{
+  border-color: rgba(255,159,26,0.35);
+  background: linear-gradient(180deg, rgba(255,159,26,0.22), rgba(255,106,0,0.14));
+  box-shadow: 0 18px 44px rgba(255,159,26,0.08);
+}
+.mp-btn-primary:hover{
+  border-color: rgba(255,159,26,0.50);
+  box-shadow: 0 20px 56px rgba(255,159,26,0.12);
+}
+
+/* inputs */
+.mp-label{
+  color: rgba(255,255,255,0.70);
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.mp-input, .mp-textarea{
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.25);
+  color: rgba(255,255,255,0.92);
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.mp-input:focus, .mp-textarea:focus{
+  border-color: rgba(255,159,26,0.45);
+  box-shadow: 0 0 0 3px rgba(255,159,26,0.12);
+}
+
+.mp-error{
+  border: 1px solid rgba(251,113,133,0.30);
+  background: rgba(251,113,133,0.10);
+  color: rgba(255,255,255,0.92);
+  padding: 10px 12px;
+  border-radius: 14px;
+  margin-bottom: 10px;
+}
+
+/* cards clicáveis */
+.mp-click{
+  cursor: pointer;
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.mp-click:hover{
+  transform: translateY(-2px);
+  border-color: rgba(255,159,26,0.22);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.60);
+}
+
+/* mini glow “executivo” */
+.mp-glow{
+  position: relative;
+}
+.mp-glow::after{
+  content:"";
+  position:absolute;
+  inset:-1px;
+  border-radius: inherit;
+  pointer-events:none;
+  background: radial-gradient(420px 220px at 30% 0%, rgba(255,159,26,0.18), transparent 60%);
+  opacity: 0.85;
+  mix-blend-mode: screen;
+}
+
+/* tabela - (se usar) */
+table th, table td { font-size: 13px; }
