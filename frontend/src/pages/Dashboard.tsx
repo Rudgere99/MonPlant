@@ -108,6 +108,9 @@ type HorimetroRow = {
   created_at?: string | null;
 };
 
+const EQ_BT01 = "BT-01";
+const EQS_TOP_PRODUCTS = ["BT-02", "PN-02", "PN-01", "EH-08"] as const;
+
 export default function Dashboard() {
   const nav = useNavigate();
   const [day, setDay] = useState<string>(isoTodayLocal());
@@ -166,7 +169,7 @@ export default function Dashboard() {
 
   /* ===================== computed ===================== */
 
-  // Produção do dia
+  // Produção do dia (total)
   const totalTonDay = useMemo(() => {
     const rows = prodDay?.rows || [];
     let sum = 0;
@@ -174,6 +177,7 @@ export default function Dashboard() {
     return sum;
   }, [prodDay]);
 
+  // % da meta => enche o meio círculo proporcionalmente (4% = 4% preenchido)
   const pctMeta = useMemo(() => {
     if (META_DIA <= 0) return 0;
     return Math.max(0, Math.min(100, (totalTonDay / META_DIA) * 100));
@@ -187,10 +191,17 @@ export default function Dashboard() {
       ton: parseBRNumber(r.ton),
       freq: parseBRNumber(r.freq),
     }));
-    // garante ordem por period (se vier bagunçado)
     data.sort((a, b) => a.period.localeCompare(b.period));
     return data;
   }, [prodDay]);
+
+  // Média de produção por hora (Insights)
+  const avgTonPerHour = useMemo(() => {
+    const filled = (hourlySeries || []).filter((r) => (Number(r.ton) || 0) > 0);
+    if (!filled.length) return 0;
+    const sum = filled.reduce((acc, r) => acc + (Number(r.ton) || 0), 0);
+    return sum / filled.length;
+  }, [hourlySeries]);
 
   // Últimos 7 dias (linha pequena)
   const last7Series = useMemo(() => {
@@ -209,16 +220,23 @@ export default function Dashboard() {
     return list[0] || null;
   }, [stops]);
 
-  // Último horímetro (pega o mais recente dentre todos equipamentos)
-  const lastHorimetro = useMemo(() => {
-    const all = Object.values(lastByEq || {}).filter(Boolean) as HorimetroRow[];
-    all.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
-    return all[0] || null;
+  // Último horímetro APENAS BT-01 (card Hoje)
+  const lastHorimetroBT01 = useMemo(() => {
+    return (lastByEq || {})[EQ_BT01] || null;
+  }, [lastByEq]);
+
+  // Top Products: últimos horímetros BT-02, PN-02, PN-01, EH-08
+  const topProductsHorimetros = useMemo(() => {
+    const map = lastByEq || {};
+    return EQS_TOP_PRODUCTS.map((eq) => ({
+      eq,
+      row: map[eq] || null,
+    }));
   }, [lastByEq]);
 
   // Level = taxa das últimas horas (freq%): pega as últimas 6 janelas preenchidas
   const levelBars = useMemo(() => {
-    const filled = (hourlySeries || []).filter((r) => r.freq > 0 || r.ton > 0);
+    const filled = (hourlySeries || []).filter((r) => (r.freq > 0) || (r.ton > 0));
     const last = filled.slice(-6);
     return last.map((r) => ({
       period: r.period,
@@ -236,7 +254,6 @@ export default function Dashboard() {
   const gaugeData = useMemo(() => [{ name: "meta", value: pctMeta, fill: "#ff9f1a" }], [pctMeta]);
 
   /* ===================== UI ===================== */
-
   const cardBase: React.CSSProperties = {
     borderRadius: 18,
     border: "1px solid rgba(255,255,255,0.10)",
@@ -342,9 +359,9 @@ export default function Dashboard() {
           gap: 14,
         }}
       >
-        {/* LEFT COLUMN (cards + charts) */}
+        {/* LEFT COLUMN */}
         <div style={{ gridColumn: "span 9 / span 9", display: "grid", gap: 14 }}>
-          {/* TODAY'S SALES (substituído por: ultima parada / total paradas / ultimo horimetro) */}
+          {/* HOJE: ultima parada / total paradas / ultimo horimetro BT-01 */}
           <div style={{ ...cardBase, padding: 14 }}>
             <div style={headerStyle}>
               <div>
@@ -357,7 +374,6 @@ export default function Dashboard() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-              {/* Última parada */}
               <MiniStat
                 icon="⏸"
                 title="Última Parada"
@@ -366,15 +382,10 @@ export default function Dashboard() {
                     ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h`
                     : "—"
                 }
-                sub={
-                  lastStop
-                    ? `${lastStop.data_inicio} ${lastStop.hora_inicio}`
-                    : "Sem registros no dia"
-                }
+                sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
                 onClick={() => nav("/paradas")}
               />
 
-              {/* Total paradas */}
               <MiniStat
                 icon="📌"
                 title="Total de Paradas"
@@ -383,18 +394,21 @@ export default function Dashboard() {
                 onClick={() => nav("/paradas")}
               />
 
-              {/* Último horímetro */}
               <MiniStat
                 icon="⏱"
-                title="Último Horímetro"
-                value={lastHorimetro ? `${lastHorimetro.equipamento} • ${fmtBR1(lastHorimetro.horimetro)}` : "—"}
-                sub={lastHorimetro ? `Dia ${brDate(lastHorimetro.day)} • Turno ${lastHorimetro.turno}` : "Sem registros"}
+                title="Último Horímetro (BT-01)"
+                value={lastHorimetroBT01 ? `${fmtBR1(lastHorimetroBT01.horimetro)}` : "—"}
+                sub={
+                  lastHorimetroBT01
+                    ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
+                    : "Sem registros"
+                }
                 onClick={() => nav("/horimetros")}
               />
             </div>
           </div>
 
-          {/* BIG LINE (Produção horária do dia) */}
+          {/* BIG LINE: Produção horária */}
           <div
             style={{ ...cardBase, padding: 14, cursor: "pointer" }}
             onClick={() => nav("/plant-production")}
@@ -407,7 +421,13 @@ export default function Dashboard() {
                   Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t
                 </div>
               </div>
-              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)" }}>
+              <span
+                style={{
+                  ...smallPill,
+                  borderColor: "rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.06)",
+                }}
+              >
                 {prodDay?.updated_at ? "Atualizado" : "—"}
               </span>
             </div>
@@ -434,36 +454,72 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* BOTTOM ROW: (Top Products placeholder) + (Last 7 days mini line) */}
+          {/* BOTTOM ROW: Top Products (horímetros) + Last 7 days */}
           <div style={{ display: "grid", gridTemplateColumns: "1.35fr 1fr", gap: 14 }}>
-            {/* Top Products (placeholder) */}
-            <div style={{ ...cardBase, padding: 14, opacity: 0.9 }}>
+            {/* Top Products: BT-02, PN-02, PN-01, EH-08 */}
+            <div style={{ ...cardBase, padding: 14 }}>
               <div style={headerStyle}>
                 <div>
                   <div style={titleStyle}>Top Products</div>
-                  <div style={subStyle}>placeholder (vamos preencher depois)</div>
+                  <div style={subStyle}>Últimos horímetros</div>
                 </div>
+                <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
+                  Abrir Horímetros
+                </button>
               </div>
 
-              <div
-                style={{
-                  marginTop: 10,
-                  borderRadius: 16,
-                  border: "1px dashed rgba(255,255,255,0.14)",
-                  background: "rgba(0,0,0,0.18)",
-                  height: 180,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "rgba(255,255,255,0.45)",
-                  fontWeight: 800,
-                }}
-              >
-                Em breve
+              <div style={{ display: "grid", gap: 10 }}>
+                {topProductsHorimetros.map(({ eq, row }) => (
+                  <div
+                    key={eq}
+                    style={{
+                      borderRadius: 16,
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      background: "rgba(0,0,0,0.18)",
+                      padding: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 12,
+                          border: "1px solid rgba(255,159,26,0.20)",
+                          background: "rgba(255,159,26,0.10)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 12,
+                          fontWeight: 950,
+                          color: "rgba(255,255,255,0.85)",
+                        }}
+                      >
+                        {eq}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
+                          {row ? fmtBR1(row.horimetro) : "—"}
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                          {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button className="mp-btn" style={{ height: 34 }} onClick={() => nav("/horimetros")}>
+                      Ver
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Last 7 days (mini line) */}
+            {/* Last 7 days */}
             <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/last7days")}>
               <div style={headerStyle}>
                 <div>
@@ -495,9 +551,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN (gauge + level + (extra placeholder)) */}
+        {/* RIGHT COLUMN */}
         <div style={{ gridColumn: "span 3 / span 3", display: "grid", gap: 14 }}>
-          {/* Earnings-style (meio círculo) = produção do dia */}
+          {/* Produção do dia (gauge meio círculo) */}
           <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/plant-production")}>
             <div style={headerStyle}>
               <div>
@@ -508,13 +564,7 @@ export default function Dashboard() {
 
             <div style={{ height: 210, position: "relative" }}>
               <ResponsiveContainer width="100%" height="100%">
-                <RadialBarChart
-                  data={gaugeData}
-                  innerRadius="75%"
-                  outerRadius="100%"
-                  startAngle={180}
-                  endAngle={0}
-                >
+                <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
                   <RadialBar
                     dataKey="value"
                     cornerRadius={14}
@@ -523,7 +573,6 @@ export default function Dashboard() {
                 </RadialBarChart>
               </ResponsiveContainer>
 
-              {/* Center text */}
               <div
                 style={{
                   position: "absolute",
@@ -583,29 +632,47 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Placeholder (igual “Customer Fulfillment” visual) */}
-          <div style={{ ...cardBase, padding: 14, opacity: 0.92 }}>
+          {/* Insights = média de produção por hora */}
+          <div style={{ ...cardBase, padding: 14 }}>
             <div style={headerStyle}>
               <div>
                 <div style={titleStyle}>Insights</div>
-                <div style={subStyle}>placeholder visual</div>
+                <div style={subStyle}>Média de produção por hora</div>
               </div>
+              <span
+                style={{
+                  ...smallPill,
+                  borderColor: "rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.06)",
+                  height: 32,
+                }}
+              >
+                {fmtBR1(avgTonPerHour)} t/h
+              </span>
             </div>
 
-            <div
-              style={{
-                height: 160,
-                borderRadius: 16,
-                border: "1px dashed rgba(255,255,255,0.14)",
-                background: "rgba(0,0,0,0.18)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "rgba(255,255,255,0.45)",
-                fontWeight: 800,
-              }}
-            >
-              Em breve
+            <div style={{ height: 160 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                  <XAxis dataKey="period" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                  <YAxis hide />
+                  <Tooltip
+                    formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
+                    contentStyle={{
+                      background: "rgba(0,0,0,0.86)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 14,
+                    }}
+                    labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                  />
+                  <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+              Considera somente horas preenchidas (Ton/H &gt; 0).
             </div>
           </div>
         </div>
