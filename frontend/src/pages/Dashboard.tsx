@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ResponsiveContainer,
   BarChart,
@@ -45,14 +46,18 @@ function dayLabel(iso: string) {
   return `${d}/${m}`;
 }
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
+const API_BASE =
+  (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
 function authHeaders(): HeadersInit {
   const keys = ["mp_token", "token", "access_token", "auth_token"];
   let t = "";
   for (const k of keys) {
     const v = (localStorage.getItem(k) || "").trim();
-    if (v) { t = v; break; }
+    if (v) {
+      t = v;
+      break;
+    }
   }
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
@@ -61,7 +66,12 @@ function authHeaders(): HeadersInit {
    TYPES
 ========================= */
 type PlantRow = { period: string; ton?: number | null; freq?: number | null };
-type PlantDayResp = { day: string; obs?: string | null; rows: PlantRow[]; updated_at?: string | null };
+type PlantDayResp = {
+  day: string;
+  obs?: string | null;
+  rows: PlantRow[];
+  updated_at?: string | null;
+};
 
 type Last7Item = { day: string; total_ton: number };
 
@@ -135,7 +145,11 @@ function Donut({
           fill="rgba(255,255,255,0.92)"
           fontSize="22"
           fontWeight="900"
-          style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.70)", strokeWidth: 3 }}
+          style={{
+            paintOrder: "stroke",
+            stroke: "rgba(0,0,0,0.70)",
+            strokeWidth: 3,
+          }}
         >
           {fmtBR0(value)}
         </text>
@@ -153,8 +167,16 @@ function Donut({
       </svg>
 
       <div style={{ marginTop: 6, textAlign: "center" }}>
-        <div style={{ color: "rgba(255,255,255,0.80)", fontWeight: 800 }}>{labelTop}</div>
-        <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 700, fontSize: 12 }}>
+        <div style={{ color: "rgba(255,255,255,0.80)", fontWeight: 800 }}>
+          {labelTop}
+        </div>
+        <div
+          style={{
+            color: "rgba(255,255,255,0.55)",
+            fontWeight: 700,
+            fontSize: 12,
+          }}
+        >
           Meta: {fmtBR0(max)}
         </div>
       </div>
@@ -166,6 +188,8 @@ function Donut({
    PAGE
 ========================= */
 export default function Dashboard() {
+  const nav = useNavigate();
+
   const [day, setDay] = useState<string>(isoTodayLocal());
 
   const [loading, setLoading] = useState(false);
@@ -178,6 +202,15 @@ export default function Dashboard() {
   const [horis, setHoris] = useState<HoriLast[]>([]);
 
   const timerRef = useRef<number | null>(null);
+
+  const clickableCardStyle: React.CSSProperties = {
+    cursor: "pointer",
+    transition: "transform .12s ease, box-shadow .12s ease",
+  };
+
+  function hoverUp(el: HTMLElement, on: boolean) {
+    el.style.transform = on ? "translateY(-2px)" : "translateY(0px)";
+  }
 
   const plantTotal = useMemo(() => {
     if (!plant?.rows?.length) return 0;
@@ -199,27 +232,33 @@ export default function Dashboard() {
     setErr(null);
 
     try {
-      // 1) Produção do dia selecionado (pra donut)
-      const plantResp = await apiGet<PlantDayResp>(`/api/plant-production/${encodeURIComponent(day)}`).catch((e: any) => {
+      const plantResp = await apiGet<PlantDayResp>(
+        `/api/plant-production/${encodeURIComponent(day)}`
+      ).catch((e: any) => {
         if (e?.code === 404) return null;
         throw e;
       });
       setPlant(plantResp);
 
-      // 2) Últimos 7 dias (sempre do owner)
-      const last7Resp = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
+      const last7Resp = await apiGet<Last7Item[]>(
+        `/api/plant-production/last7days`
+      ).catch(() => []);
       setLast7(Array.isArray(last7Resp) ? last7Resp : []);
 
-      // 3) Paradas: última e total por dia selecionado
       const [ls, tot] = await Promise.all([
-        apiGet<LastStop>(`/api/stops/last?day=${encodeURIComponent(day)}`).catch(() => null),
-        apiGet<TotalStopsResp>(`/api/stops/total?day=${encodeURIComponent(day)}`).catch(() => ({ day, total_h: 0 })),
+        apiGet<LastStop>(`/api/stops/last?day=${encodeURIComponent(day)}`).catch(
+          () => null
+        ),
+        apiGet<TotalStopsResp>(
+          `/api/stops/total?day=${encodeURIComponent(day)}`
+        ).catch(() => ({ day, total_h: 0 })),
       ]);
       setLastStop(ls);
       setTotalStops(tot);
 
-      // 4) Horímetros: último por equipamento
-      const h = await apiGet<HoriLast[]>(`/api/horimetros/last-by-eq`).catch(() => []);
+      const h = await apiGet<HoriLast[]>(`/api/horimetros/last-by-eq`).catch(
+        () => []
+      );
       setHoris(Array.isArray(h) ? h : []);
     } catch (e: any) {
       setErr(e?.message || "Erro ao carregar Dashboard");
@@ -228,13 +267,11 @@ export default function Dashboard() {
     }
   }
 
-  // Carrega ao abrir e ao trocar dia
   useEffect(() => {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day]);
 
-  // Polling 10s (tempo real) — recarrega tudo
   useEffect(() => {
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = window.setInterval(() => {
@@ -260,9 +297,16 @@ export default function Dashboard() {
       <div className="mp-page-title">Dashboard</div>
       <div className="mp-page-sub">Visão geral • Atualiza a cada 10s</div>
 
-      {/* barra superior */}
       <div className="mp-card" style={{ marginTop: 12 }}>
-        <div className="mp-card-h" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+        <div
+          className="mp-card-h"
+          style={{
+            display: "flex",
+            gap: 12,
+            alignItems: "flex-end",
+            flexWrap: "wrap",
+          }}
+        >
           <div style={{ flex: 1, minWidth: 260 }}>
             <b>Resumo Operacional</b>
             <div className="mp-help">
@@ -280,13 +324,17 @@ export default function Dashboard() {
             />
           </div>
 
-          <button className="mp-btn" onClick={loadAll} disabled={loading} style={{ minWidth: 140 }}>
+          <button
+            className="mp-btn"
+            onClick={loadAll}
+            disabled={loading}
+            style={{ minWidth: 140 }}
+          >
             {loading ? "Atualizando..." : "Atualizar"}
           </button>
         </div>
 
         <div className="mp-card-b">
-          {/* grid principal */}
           <div
             style={{
               display: "grid",
@@ -295,8 +343,15 @@ export default function Dashboard() {
               alignItems: "stretch",
             }}
           >
-            {/* donut + cards */}
-            <div className="mp-card" style={{ margin: 0 }}>
+            {/* PRODUÇÃO (clicável) */}
+            <div
+              className="mp-card"
+              style={{ margin: 0, ...clickableCardStyle }}
+              onClick={() => nav("/plant-production")}
+              onMouseEnter={(e) => hoverUp(e.currentTarget, true)}
+              onMouseLeave={(e) => hoverUp(e.currentTarget, false)}
+              title="Abrir Produção"
+            >
               <div className="mp-card-h">
                 <b>Produção do dia</b>
                 <div className="mp-help">Soma de Ton/H do dia selecionado</div>
@@ -306,17 +361,24 @@ export default function Dashboard() {
                   value={plantTotal}
                   max={META_DIA}
                   labelTop="Produção (Ton)"
-                  labelBottom={`${fmtBR0(Math.round((META_DIA > 0 ? (plantTotal / META_DIA) : 0) * 100))}%`}
+                  labelBottom={`${fmtBR0(
+                    Math.round((META_DIA > 0 ? plantTotal / META_DIA : 0) * 100)
+                  )}%`}
                 />
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr",
-                    gap: 10,
-                  }}
-                >
-                  <div className="mp-card" style={{ margin: 0 }}>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {/* ÚLTIMA PARADA (clicável) */}
+                  <div
+                    className="mp-card"
+                    style={{ margin: 0, ...clickableCardStyle }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      nav("/paradas");
+                    }}
+                    onMouseEnter={(e) => hoverUp(e.currentTarget, true)}
+                    onMouseLeave={(e) => hoverUp(e.currentTarget, false)}
+                    title="Abrir Paradas"
+                  >
                     <div className="mp-card-h" style={{ padding: "10px 12px" }}>
                       <b>Última parada</b>
                       <div className="mp-help">Dia selecionado</div>
@@ -324,13 +386,28 @@ export default function Dashboard() {
                     <div className="mp-card-b" style={{ padding: 12 }}>
                       {lastStop ? (
                         <div style={{ display: "grid", gap: 6 }}>
-                          <div style={{ color: "rgba(255,255,255,0.88)", fontWeight: 900 }}>
+                          <div
+                            style={{
+                              color: "rgba(255,255,255,0.88)",
+                              fontWeight: 900,
+                            }}
+                          >
                             {lastStop.equipamento} • {lastStop.tipo_parada}
                           </div>
-                          <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 700 }}>
+                          <div
+                            style={{
+                              color: "rgba(255,255,255,0.70)",
+                              fontWeight: 700,
+                            }}
+                          >
                             {lastStop.atividade}
                           </div>
-                          <div style={{ color: "rgba(255,255,255,0.62)", fontWeight: 800 }}>
+                          <div
+                            style={{
+                              color: "rgba(255,255,255,0.62)",
+                              fontWeight: 800,
+                            }}
+                          >
                             Tempo: <b>{fmtBR(lastStop.tempo_parada_h)}</b> h
                           </div>
                         </div>
@@ -340,23 +417,42 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="mp-card" style={{ margin: 0 }}>
+                  {/* TOTAL PARADAS (clicável) */}
+                  <div
+                    className="mp-card"
+                    style={{ margin: 0, ...clickableCardStyle }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      nav("/paradas");
+                    }}
+                    onMouseEnter={(e) => hoverUp(e.currentTarget, true)}
+                    onMouseLeave={(e) => hoverUp(e.currentTarget, false)}
+                    title="Abrir Paradas"
+                  >
                     <div className="mp-card-h" style={{ padding: "10px 12px" }}>
                       <b>Total de paradas</b>
-                      <div className="mp-help">Soma (horas) no dia selecionado</div>
+                      <div className="mp-help">
+                        Soma (horas) no dia selecionado
+                      </div>
                     </div>
                     <div className="mp-card-b" style={{ padding: 12 }}>
-                      <div style={{ fontSize: 22, fontWeight: 900, color: "rgba(255,255,255,0.92)" }}>
+                      <div
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 900,
+                          color: "rgba(255,255,255,0.92)",
+                        }}
+                      >
                         {fmtBR(totalStops?.total_h ?? 0)} h
                       </div>
-                      <div className="mp-help">Atualiza junto com o polling</div>
+                      <div className="mp-help">Clique para ver detalhes</div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* últimos 7 dias + horímetros */}
+            {/* ÚLTIMOS 7 DIAS + HORÍMETROS */}
             <div style={{ display: "grid", gridTemplateRows: "1fr auto", gap: 12 }}>
               <div className="mp-card" style={{ margin: 0 }}>
                 <div className="mp-card-h">
@@ -366,16 +462,30 @@ export default function Dashboard() {
 
                 <div className="mp-card-b" style={{ height: 320 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={last7Chart} margin={{ top: 18, right: 18, bottom: 18, left: 6 }}>
-                      <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                    <BarChart
+                      data={last7Chart}
+                      margin={{ top: 18, right: 18, bottom: 18, left: 6 }}
+                    >
+                      <CartesianGrid
+                        stroke="rgba(255,255,255,0.08)"
+                        strokeDasharray="3 3"
+                      />
                       <XAxis
                         dataKey="day"
-                        tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12, fontWeight: 800 }}
+                        tick={{
+                          fill: "rgba(255,255,255,0.70)",
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
                         axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
                         tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
                       />
                       <YAxis
-                        tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12, fontWeight: 800 }}
+                        tick={{
+                          fill: "rgba(255,255,255,0.70)",
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
                         axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
                         tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
                       />
@@ -388,13 +498,26 @@ export default function Dashboard() {
                         }}
                         labelStyle={{ color: "rgba(255,255,255,0.85)" }}
                       />
-                      <Bar dataKey="total" name="Total (Ton)" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                      <Bar
+                        dataKey="total"
+                        name="Total (Ton)"
+                        fill="#22c55e"
+                        radius={[6, 6, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="mp-card" style={{ margin: 0 }}>
+              {/* HORÍMETROS (clicável) */}
+              <div
+                className="mp-card"
+                style={{ margin: 0, ...clickableCardStyle }}
+                onClick={() => nav("/horimetros")}
+                onMouseEnter={(e) => hoverUp(e.currentTarget, true)}
+                onMouseLeave={(e) => hoverUp(e.currentTarget, false)}
+                title="Abrir Horímetros"
+              >
                 <div className="mp-card-h">
                   <b>Horímetros</b>
                   <div className="mp-help">Último lançamento por equipamento</div>
@@ -415,7 +538,9 @@ export default function Dashboard() {
                         <tbody>
                           {horis.map((h) => (
                             <tr key={h.equipamento}>
-                              <td style={{ fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>{h.equipamento}</td>
+                              <td style={{ fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                                {h.equipamento}
+                              </td>
                               <td>{fmtBR(h.horimetro)}</td>
                               <td>{dayLabel(h.day)}</td>
                               <td>{h.turno}</td>
