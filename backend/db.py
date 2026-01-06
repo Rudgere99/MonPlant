@@ -1,8 +1,9 @@
-create index if not exists ix_bv_hori_owner_day
-  on public.bv_horimetros(owner_id, day);
+# backend/db.py
+import os
+import psycopg
 
-create index if not exists ix_bv_hori_owner_eq
-  on public.bv_horimetros(owner_id, equipamento);
-
-create index if not exists ix_bv_hori_owner_created
-  on public.bv_horimetros(owner_id, created_at desc);
+def get_conn():
+    dsn = os.getenv("DATABASE_URL") or os.getenv("DATABASE_PUBLIC_URL")
+    if not dsn:
+        raise RuntimeError("DATABASE_URL não configurada no Railway")
+    return psycopg.connect(dsn, autocommit=True)
