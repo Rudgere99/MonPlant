@@ -1,24 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
+  CartesianGrid,
+  RadialBarChart,
+  RadialBar,
+  BarChart,
+  Bar,
 } from "recharts";
 
-/* =========================
-   CONFIG
-========================= */
-const META_DIA = 8000; // ajuste se quiser
-const POLL_MS = 10_000;
-
-/* =========================
-   HELPERS
-========================= */
+/* ===================== helpers ===================== */
 function isoTodayLocal(): string {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -27,241 +25,129 @@ function isoTodayLocal(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function fmtBR(n: number): string {
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
-}
-function fmtBR0(n: number): string {
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(n);
-}
-
-function safeNumber(v: any): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+function brDate(iso: string) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
 }
 
 function dayLabel(iso: string) {
-  // "2026-01-06" -> "06/01"
   const [y, m, d] = iso.split("-");
   if (!y || !m || !d) return iso;
   return `${d}/${m}`;
 }
 
-const API_BASE =
-  (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
+function parseBRNumber(v: any): number {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  let s = String(v).trim();
+  if (!s) return 0;
+  s = s.replace("%", "").trim();
+  s = s.replace(/\s/g, "");
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function fmtBR0(n: number) {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(n);
+}
+function fmtBR1(n: number) {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+}
+
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
 function authHeaders(): HeadersInit {
   const keys = ["mp_token", "token", "access_token", "auth_token"];
-  let t = "";
   for (const k of keys) {
     const v = (localStorage.getItem(k) || "").trim();
-    if (v) {
-      t = v;
-      break;
-    }
+    if (v) return { Authorization: `Bearer ${v}` };
   }
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  return {};
 }
 
-/* =========================
-   TYPES
-========================= */
-type PlantRow = { period: string; ton?: number | null; freq?: number | null };
-type PlantDayResp = {
-  day: string;
-  obs?: string | null;
-  rows: PlantRow[];
-  updated_at?: string | null;
-};
+async function apiGet<T>(path: string): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(t || `HTTP ${r.status}`);
+  }
+  return (await r.json()) as T;
+}
+
+/* ===================== types ===================== */
+type PlantHourRow = { period: string; ton?: any; freq?: any };
+type PlantDayPayload = { day: string; obs?: string | null; rows: PlantHourRow[]; updated_at?: string | null };
 
 type Last7Item = { day: string; total_ton: number };
 
-type LastStop = {
+type StopRow = {
   id: number;
+  day: string;
+  data_inicio: string;
+  hora_inicio: string;
+  data_fim: string;
+  hora_fim: string;
   equipamento: string;
   tipo_parada: string;
   atividade: string;
+  descricao: string;
   tempo_parada_h: number;
-  created_at?: string | null;
-} | null;
-
-type TotalStopsResp = { day: string; total_h: number };
-
-type HoriLast = {
-  equipamento: string;
-  horimetro: number;
-  day: string;
-  turno: number;
   created_at?: string | null;
 };
 
-/* =========================
-   UI: Donut
-========================= */
-function Donut({
-  value,
-  max,
-  labelTop,
-  labelBottom,
-}: {
-  value: number;
-  max: number;
-  labelTop: string;
-  labelBottom: string;
-}) {
-  const pct = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
-  const size = 170;
-  const stroke = 14;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const dash = c * pct;
+type HorimetroRow = {
+  id: number;
+  day: string;
+  turno: 1 | 2;
+  equipamento: string;
+  horimetro: number;
+  obs?: string | null;
+  created_at?: string | null;
+};
 
-  return (
-    <div style={{ display: "grid", placeItems: "center" }}>
-      <svg width={size} height={size} style={{ overflow: "visible" }}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="rgba(255,255,255,0.10)"
-          strokeWidth={stroke}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="rgba(34,197,94,0.95)"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${dash} ${c - dash}`}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-        <text
-          x="50%"
-          y="48%"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="rgba(255,255,255,0.92)"
-          fontSize="22"
-          fontWeight="900"
-          style={{
-            paintOrder: "stroke",
-            stroke: "rgba(0,0,0,0.70)",
-            strokeWidth: 3,
-          }}
-        >
-          {fmtBR0(value)}
-        </text>
-        <text
-          x="50%"
-          y="62%"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="rgba(255,255,255,0.70)"
-          fontSize="12"
-          fontWeight="800"
-        >
-          {labelBottom}
-        </text>
-      </svg>
-
-      <div style={{ marginTop: 6, textAlign: "center" }}>
-        <div style={{ color: "rgba(255,255,255,0.80)", fontWeight: 800 }}>
-          {labelTop}
-        </div>
-        <div
-          style={{
-            color: "rgba(255,255,255,0.55)",
-            fontWeight: 700,
-            fontSize: 12,
-          }}
-        >
-          Meta: {fmtBR0(max)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* =========================
-   PAGE
-========================= */
 export default function Dashboard() {
   const nav = useNavigate();
-
   const [day, setDay] = useState<string>(isoTodayLocal());
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const [plant, setPlant] = useState<PlantDayResp | null>(null);
+  const [prodDay, setProdDay] = useState<PlantDayPayload | null>(null);
   const [last7, setLast7] = useState<Last7Item[]>([]);
-  const [lastStop, setLastStop] = useState<LastStop>(null);
-  const [totalStops, setTotalStops] = useState<TotalStopsResp | null>(null);
-  const [horis, setHoris] = useState<HoriLast[]>([]);
+  const [stops, setStops] = useState<StopRow[]>([]);
+  const [lastByEq, setLastByEq] = useState<Record<string, HorimetroRow | null>>({});
 
-  const timerRef = useRef<number | null>(null);
-
-  const clickableCardStyle: React.CSSProperties = {
-    cursor: "pointer",
-    transition: "transform .12s ease, box-shadow .12s ease",
-  };
-
-  function hoverUp(el: HTMLElement, on: boolean) {
-    el.style.transform = on ? "translateY(-2px)" : "translateY(0px)";
-  }
-
-  const plantTotal = useMemo(() => {
-    if (!plant?.rows?.length) return 0;
-    return plant.rows.reduce((acc, r) => acc + safeNumber(r.ton ?? 0), 0);
-  }, [plant]);
-
-  async function apiGet<T>(path: string): Promise<T> {
-    const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
-    if (r.status === 404) throw Object.assign(new Error("404"), { code: 404 });
-    if (!r.ok) {
-      const t = await r.text().catch(() => "");
-      throw new Error(t || `HTTP ${r.status}`);
-    }
-    return (await r.json()) as T;
-  }
+  const POLL_MS = 10_000;
+  const META_DIA = 8000;
 
   async function loadAll() {
     setLoading(true);
     setErr(null);
 
     try {
-      const plantResp = await apiGet<PlantDayResp>(
-        `/api/plant-production/${encodeURIComponent(day)}`
-      ).catch((e: any) => {
-        if (e?.code === 404) return null;
-        throw e;
+      const p = await apiGet<PlantDayPayload>(`/api/plant-production/${encodeURIComponent(day)}`).catch(() => {
+        return { day, rows: [], obs: "" } as PlantDayPayload;
       });
-      setPlant(plantResp);
 
-      const last7Resp = await apiGet<Last7Item[]>(
-        `/api/plant-production/last7days`
-      ).catch(() => []);
-      setLast7(Array.isArray(last7Resp) ? last7Resp : []);
+      const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
+      const ps = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`).catch(() => []);
+      const hb = await apiGet<any[]>(`/api/horimetros/last-by-eq`).catch(() => []);
 
-      const [ls, tot] = await Promise.all([
-        apiGet<LastStop>(`/api/stops/last?day=${encodeURIComponent(day)}`).catch(
-          () => null
-        ),
-        apiGet<TotalStopsResp>(
-          `/api/stops/total?day=${encodeURIComponent(day)}`
-        ).catch(() => ({ day, total_h: 0 })),
-      ]);
-      setLastStop(ls);
-      setTotalStops(tot);
+      const map: Record<string, HorimetroRow | null> = {};
+      for (const r of hb || []) {
+        if (!r?.equipamento) continue;
+        map[r.equipamento] = r as HorimetroRow;
+      }
 
-      const h = await apiGet<HoriLast[]>(`/api/horimetros/last-by-eq`).catch(
-        () => []
-      );
-      setHoris(Array.isArray(h) ? h : []);
+      setProdDay(p);
+      setLast7(Array.isArray(l7) ? l7 : []);
+      setStops(Array.isArray(ps) ? ps : []);
+      setLastByEq(map);
     } catch (e: any) {
-      setErr(e?.message || "Erro ao carregar Dashboard");
+      setErr(e?.message || "Falha ao carregar dashboard");
     } finally {
       setLoading(false);
     }
@@ -273,292 +159,523 @@ export default function Dashboard() {
   }, [day]);
 
   useEffect(() => {
-    if (timerRef.current) window.clearInterval(timerRef.current);
-    timerRef.current = window.setInterval(() => {
-      loadAll();
-    }, POLL_MS);
-
-    return () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    };
+    const id = window.setInterval(() => loadAll(), POLL_MS);
+    return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day]);
 
-  const last7Chart = useMemo(() => {
-    return last7.map((x) => ({
+  /* ===================== computed ===================== */
+
+  // Produção do dia
+  const totalTonDay = useMemo(() => {
+    const rows = prodDay?.rows || [];
+    let sum = 0;
+    for (const r of rows) sum += parseBRNumber(r.ton);
+    return sum;
+  }, [prodDay]);
+
+  const pctMeta = useMemo(() => {
+    if (META_DIA <= 0) return 0;
+    return Math.max(0, Math.min(100, (totalTonDay / META_DIA) * 100));
+  }, [totalTonDay]);
+
+  // Produção horária (linha grande)
+  const hourlySeries = useMemo(() => {
+    const rows = prodDay?.rows || [];
+    const data = rows.map((r) => ({
+      period: r.period,
+      ton: parseBRNumber(r.ton),
+      freq: parseBRNumber(r.freq),
+    }));
+    // garante ordem por period (se vier bagunçado)
+    data.sort((a, b) => a.period.localeCompare(b.period));
+    return data;
+  }, [prodDay]);
+
+  // Últimos 7 dias (linha pequena)
+  const last7Series = useMemo(() => {
+    return (last7 || []).map((x) => ({
       day: dayLabel(x.day),
-      total: safeNumber(x.total_ton),
+      total: Number(x.total_ton) || 0,
     }));
   }, [last7]);
 
+  // Paradas
+  const totalStops = useMemo(() => (stops || []).length, [stops]);
+
+  const lastStop = useMemo(() => {
+    const list = [...(stops || [])];
+    list.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+    return list[0] || null;
+  }, [stops]);
+
+  // Último horímetro (pega o mais recente dentre todos equipamentos)
+  const lastHorimetro = useMemo(() => {
+    const all = Object.values(lastByEq || {}).filter(Boolean) as HorimetroRow[];
+    all.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+    return all[0] || null;
+  }, [lastByEq]);
+
+  // Level = taxa das últimas horas (freq%): pega as últimas 6 janelas preenchidas
+  const levelBars = useMemo(() => {
+    const filled = (hourlySeries || []).filter((r) => r.freq > 0 || r.ton > 0);
+    const last = filled.slice(-6);
+    return last.map((r) => ({
+      period: r.period,
+      freq: Math.max(0, Math.min(100, r.freq)),
+    }));
+  }, [hourlySeries]);
+
+  const levelAvg = useMemo(() => {
+    if (!levelBars.length) return 0;
+    const s = levelBars.reduce((acc, r) => acc + (Number(r.freq) || 0), 0);
+    return s / levelBars.length;
+  }, [levelBars]);
+
+  // Gauge (meio círculo)
+  const gaugeData = useMemo(() => [{ name: "meta", value: pctMeta, fill: "#ff9f1a" }], [pctMeta]);
+
+  /* ===================== UI ===================== */
+
+  const cardBase: React.CSSProperties = {
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))",
+    boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
+    backdropFilter: "blur(10px)",
+  };
+
+  const headerStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    justifyContent: "space-between",
+    marginBottom: 12,
+  };
+
+  const titleStyle: React.CSSProperties = {
+    fontWeight: 900,
+    letterSpacing: -0.02,
+    fontSize: 18,
+  };
+
+  const subStyle: React.CSSProperties = {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 12,
+    fontWeight: 700,
+  };
+
+  const topBar: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "1fr auto auto",
+    gap: 12,
+    alignItems: "center",
+    marginTop: 10,
+  };
+
+  const searchBox: React.CSSProperties = {
+    height: 42,
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(0,0,0,0.25)",
+    padding: "0 14px",
+    color: "rgba(255,255,255,0.85)",
+    outline: "none",
+  };
+
+  const smallPill: React.CSSProperties = {
+    height: 36,
+    borderRadius: 999,
+    border: "1px solid rgba(255,159,26,0.25)",
+    background: "rgba(255,159,26,0.10)",
+    padding: "0 12px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    fontWeight: 900,
+    color: "rgba(255,255,255,0.88)",
+  };
+
   return (
     <div className="mp-container">
-      <div className="mp-page-title">Dashboard</div>
-      <div className="mp-page-sub">Visão geral • Atualiza a cada 10s</div>
+      {/* TOP BAR (search + date + status) */}
+      <div style={topBar}>
+        <input
+          style={searchBox}
+          placeholder="Search here..."
+          disabled
+          value=""
+          onChange={() => {}}
+          title="(placeholder visual)"
+        />
 
-      <div className="mp-card" style={{ marginTop: 12 }}>
-        <div
-          className="mp-card-h"
-          style={{
-            display: "flex",
-            gap: 12,
-            alignItems: "flex-end",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 260 }}>
-            <b>Resumo Operacional</b>
-            <div className="mp-help">
-              {loading ? "Carregando..." : err ? `Erro: ${err}` : "—"}
-            </div>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ ...subStyle, marginRight: 6 }}>Data</span>
+          <input
+            className="mp-input"
+            style={{ width: 160, height: 42, borderRadius: 14 }}
+            type="date"
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+          />
+        </div>
 
-          <div>
-            <div className="mp-label">Data</div>
-            <input
-              className="mp-input"
-              type="date"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-            />
-          </div>
-
-          <button
-            className="mp-btn"
-            onClick={loadAll}
-            disabled={loading}
-            style={{ minWidth: 140 }}
-          >
-            {loading ? "Atualizando..." : "Atualizar"}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={smallPill}>{loading ? "Atualizando..." : err ? "Erro" : "Online"}</span>
+          <button className="mp-btn mp-btn-primary" onClick={loadAll} disabled={loading} style={{ height: 42 }}>
+            Atualizar
           </button>
         </div>
+      </div>
 
-        <div className="mp-card-b">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "420px 1fr",
-              gap: 12,
-              alignItems: "stretch",
-            }}
-          >
-            {/* PRODUÇÃO (clicável) */}
-            <div
-              className="mp-card"
-              style={{ margin: 0, ...clickableCardStyle }}
-              onClick={() => nav("/plant-production")}
-              onMouseEnter={(e) => hoverUp(e.currentTarget, true)}
-              onMouseLeave={(e) => hoverUp(e.currentTarget, false)}
-              title="Abrir Produção"
-            >
-              <div className="mp-card-h">
-                <b>Produção do dia</b>
-                <div className="mp-help">Soma de Ton/H do dia selecionado</div>
+      {/* status line */}
+      <div style={{ marginTop: 8, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 800 }}>
+        Dashboard • {brDate(day)} {err ? `• ${err}` : "• tempo real"}
+      </div>
+
+      {/* GRID MAIN (igual referência) */}
+      <div
+        style={{
+          marginTop: 14,
+          display: "grid",
+          gridTemplateColumns: "repeat(12, 1fr)",
+          gap: 14,
+        }}
+      >
+        {/* LEFT COLUMN (cards + charts) */}
+        <div style={{ gridColumn: "span 9 / span 9", display: "grid", gap: 14 }}>
+          {/* TODAY'S SALES (substituído por: ultima parada / total paradas / ultimo horimetro) */}
+          <div style={{ ...cardBase, padding: 14 }}>
+            <div style={headerStyle}>
+              <div>
+                <div style={titleStyle}>Hoje</div>
+                <div style={subStyle}>Resumo • Paradas + Horímetro</div>
               </div>
-              <div className="mp-card-b" style={{ display: "grid", gap: 12 }}>
-                <Donut
-                  value={plantTotal}
-                  max={META_DIA}
-                  labelTop="Produção (Ton)"
-                  labelBottom={`${fmtBR0(
-                    Math.round((META_DIA > 0 ? plantTotal / META_DIA : 0) * 100)
-                  )}%`}
-                />
+              <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/paradas")}>
+                Abrir Paradas
+              </button>
+            </div>
 
-                <div style={{ display: "grid", gap: 10 }}>
-                  {/* ÚLTIMA PARADA (clicável) */}
-                  <div
-                    className="mp-card"
-                    style={{ margin: 0, ...clickableCardStyle }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      nav("/paradas");
-                    }}
-                    onMouseEnter={(e) => hoverUp(e.currentTarget, true)}
-                    onMouseLeave={(e) => hoverUp(e.currentTarget, false)}
-                    title="Abrir Paradas"
-                  >
-                    <div className="mp-card-h" style={{ padding: "10px 12px" }}>
-                      <b>Última parada</b>
-                      <div className="mp-help">Dia selecionado</div>
-                    </div>
-                    <div className="mp-card-b" style={{ padding: 12 }}>
-                      {lastStop ? (
-                        <div style={{ display: "grid", gap: 6 }}>
-                          <div
-                            style={{
-                              color: "rgba(255,255,255,0.88)",
-                              fontWeight: 900,
-                            }}
-                          >
-                            {lastStop.equipamento} • {lastStop.tipo_parada}
-                          </div>
-                          <div
-                            style={{
-                              color: "rgba(255,255,255,0.70)",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {lastStop.atividade}
-                          </div>
-                          <div
-                            style={{
-                              color: "rgba(255,255,255,0.62)",
-                              fontWeight: 800,
-                            }}
-                          >
-                            Tempo: <b>{fmtBR(lastStop.tempo_parada_h)}</b> h
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mp-help">Sem paradas registradas.</div>
-                      )}
-                    </div>
-                  </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+              {/* Última parada */}
+              <MiniStat
+                icon="⏸"
+                title="Última Parada"
+                value={
+                  lastStop
+                    ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h`
+                    : "—"
+                }
+                sub={
+                  lastStop
+                    ? `${lastStop.data_inicio} ${lastStop.hora_inicio}`
+                    : "Sem registros no dia"
+                }
+                onClick={() => nav("/paradas")}
+              />
 
-                  {/* TOTAL PARADAS (clicável) */}
-                  <div
-                    className="mp-card"
-                    style={{ margin: 0, ...clickableCardStyle }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      nav("/paradas");
-                    }}
-                    onMouseEnter={(e) => hoverUp(e.currentTarget, true)}
-                    onMouseLeave={(e) => hoverUp(e.currentTarget, false)}
-                    title="Abrir Paradas"
-                  >
-                    <div className="mp-card-h" style={{ padding: "10px 12px" }}>
-                      <b>Total de paradas</b>
-                      <div className="mp-help">
-                        Soma (horas) no dia selecionado
-                      </div>
-                    </div>
-                    <div className="mp-card-b" style={{ padding: 12 }}>
-                      <div
-                        style={{
-                          fontSize: 22,
-                          fontWeight: 900,
-                          color: "rgba(255,255,255,0.92)",
-                        }}
-                      >
-                        {fmtBR(totalStops?.total_h ?? 0)} h
-                      </div>
-                      <div className="mp-help">Clique para ver detalhes</div>
-                    </div>
-                  </div>
+              {/* Total paradas */}
+              <MiniStat
+                icon="📌"
+                title="Total de Paradas"
+                value={String(totalStops)}
+                sub={`Dia ${brDate(day)}`}
+                onClick={() => nav("/paradas")}
+              />
+
+              {/* Último horímetro */}
+              <MiniStat
+                icon="⏱"
+                title="Último Horímetro"
+                value={lastHorimetro ? `${lastHorimetro.equipamento} • ${fmtBR1(lastHorimetro.horimetro)}` : "—"}
+                sub={lastHorimetro ? `Dia ${brDate(lastHorimetro.day)} • Turno ${lastHorimetro.turno}` : "Sem registros"}
+                onClick={() => nav("/horimetros")}
+              />
+            </div>
+          </div>
+
+          {/* BIG LINE (Produção horária do dia) */}
+          <div
+            style={{ ...cardBase, padding: 14, cursor: "pointer" }}
+            onClick={() => nav("/plant-production")}
+            title="Clique para abrir Produção por Hora"
+          >
+            <div style={headerStyle}>
+              <div>
+                <div style={titleStyle}>Produção Horária (Ton/H)</div>
+                <div style={subStyle}>
+                  Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t
                 </div>
+              </div>
+              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)" }}>
+                {prodDay?.updated_at ? "Atualizado" : "—"}
+              </span>
+            </div>
+
+            <div style={{ height: 320 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={hourlySeries} margin={{ top: 8, right: 18, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                  <XAxis dataKey="period" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
+                  <YAxis tickFormatter={(v) => fmtBR0(Number(v) || 0)} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(v: any) => fmtBR1(Number(v) || 0)}
+                    contentStyle={{
+                      background: "rgba(0,0,0,0.86)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 14,
+                      boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
+                    }}
+                    labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                  />
+                  <Line type="monotone" dataKey="ton" stroke="#ff9f1a" strokeWidth={3} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* BOTTOM ROW: (Top Products placeholder) + (Last 7 days mini line) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1.35fr 1fr", gap: 14 }}>
+            {/* Top Products (placeholder) */}
+            <div style={{ ...cardBase, padding: 14, opacity: 0.9 }}>
+              <div style={headerStyle}>
+                <div>
+                  <div style={titleStyle}>Top Products</div>
+                  <div style={subStyle}>placeholder (vamos preencher depois)</div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 10,
+                  borderRadius: 16,
+                  border: "1px dashed rgba(255,255,255,0.14)",
+                  background: "rgba(0,0,0,0.18)",
+                  height: 180,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "rgba(255,255,255,0.45)",
+                  fontWeight: 800,
+                }}
+              >
+                Em breve
               </div>
             </div>
 
-            {/* ÚLTIMOS 7 DIAS + HORÍMETROS */}
-            <div style={{ display: "grid", gridTemplateRows: "1fr auto", gap: 12 }}>
-              <div className="mp-card" style={{ margin: 0 }}>
-                <div className="mp-card-h">
-                  <b>Últimos 7 dias</b>
-                  <div className="mp-help">Total Ton por dia</div>
-                </div>
-
-                <div className="mp-card-b" style={{ height: 320 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={last7Chart}
-                      margin={{ top: 18, right: 18, bottom: 18, left: 6 }}
-                    >
-                      <CartesianGrid
-                        stroke="rgba(255,255,255,0.08)"
-                        strokeDasharray="3 3"
-                      />
-                      <XAxis
-                        dataKey="day"
-                        tick={{
-                          fill: "rgba(255,255,255,0.70)",
-                          fontSize: 12,
-                          fontWeight: 800,
-                        }}
-                        axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                        tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                      />
-                      <YAxis
-                        tick={{
-                          fill: "rgba(255,255,255,0.70)",
-                          fontSize: 12,
-                          fontWeight: 800,
-                        }}
-                        axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                        tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                      />
-                      <Tooltip
-                        formatter={(value: any) => fmtBR0(safeNumber(value))}
-                        contentStyle={{
-                          background: "rgba(0,0,0,0.85)",
-                          border: "1px solid rgba(255,255,255,0.12)",
-                          borderRadius: 12,
-                        }}
-                        labelStyle={{ color: "rgba(255,255,255,0.85)" }}
-                      />
-                      <Bar
-                        dataKey="total"
-                        name="Total (Ton)"
-                        fill="#22c55e"
-                        radius={[6, 6, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+            {/* Last 7 days (mini line) */}
+            <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/last7days")}>
+              <div style={headerStyle}>
+                <div>
+                  <div style={titleStyle}>Últimos 7 dias</div>
+                  <div style={subStyle}>Total por dia</div>
                 </div>
               </div>
 
-              {/* HORÍMETROS (clicável) */}
-              <div
-                className="mp-card"
-                style={{ margin: 0, ...clickableCardStyle }}
-                onClick={() => nav("/horimetros")}
-                onMouseEnter={(e) => hoverUp(e.currentTarget, true)}
-                onMouseLeave={(e) => hoverUp(e.currentTarget, false)}
-                title="Abrir Horímetros"
-              >
-                <div className="mp-card-h">
-                  <b>Horímetros</b>
-                  <div className="mp-help">Último lançamento por equipamento</div>
-                </div>
+              <div style={{ height: 200 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                    <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
+                    <YAxis hide />
+                    <Tooltip
+                      formatter={(v: any) => fmtBR0(Number(v) || 0)}
+                      contentStyle={{
+                        background: "rgba(0,0,0,0.86)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 14,
+                      }}
+                      labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                    />
+                    <Area type="monotone" dataKey="total" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                <div className="mp-card-b">
-                  {horis.length ? (
-                    <div style={{ overflowX: "auto" }}>
-                      <table className="mp-table" style={{ width: "100%", minWidth: 560 }}>
-                        <thead>
-                          <tr>
-                            <th>Equipamento</th>
-                            <th>Horímetro</th>
-                            <th>Dia</th>
-                            <th>Turno</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {horis.map((h) => (
-                            <tr key={h.equipamento}>
-                              <td style={{ fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
-                                {h.equipamento}
-                              </td>
-                              <td>{fmtBR(h.horimetro)}</td>
-                              <td>{dayLabel(h.day)}</td>
-                              <td>{h.turno}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="mp-help">Sem horímetros registrados ainda.</div>
-                  )}
+        {/* RIGHT COLUMN (gauge + level + (extra placeholder)) */}
+        <div style={{ gridColumn: "span 3 / span 3", display: "grid", gap: 14 }}>
+          {/* Earnings-style (meio círculo) = produção do dia */}
+          <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/plant-production")}>
+            <div style={headerStyle}>
+              <div>
+                <div style={titleStyle}>Produção do dia</div>
+                <div style={subStyle}>Meta: {fmtBR0(META_DIA)} t</div>
+              </div>
+            </div>
+
+            <div style={{ height: 210, position: "relative" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart
+                  data={gaugeData}
+                  innerRadius="75%"
+                  outerRadius="100%"
+                  startAngle={180}
+                  endAngle={0}
+                >
+                  <RadialBar
+                    dataKey="value"
+                    cornerRadius={14}
+                    background={{ fill: "rgba(255,255,255,0.08)" }}
+                  />
+                </RadialBarChart>
+              </ResponsiveContainer>
+
+              {/* Center text */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  top: 86,
+                  textAlign: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                <div style={{ fontSize: 34, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMeta)}%</div>
+                <div style={{ ...subStyle, marginTop: 4 }}>Atingimento</div>
+                <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                  {fmtBR0(totalTonDay)} t
                 </div>
               </div>
             </div>
           </div>
 
-          <div style={{ height: 6 }} />
+          {/* Level = taxa das últimas horas (freq%) */}
+          <div style={{ ...cardBase, padding: 14 }}>
+            <div style={headerStyle}>
+              <div>
+                <div style={titleStyle}>Level</div>
+                <div style={subStyle}>Taxa últimas horas (Freq%)</div>
+              </div>
+              <span
+                style={{
+                  ...smallPill,
+                  borderColor: "rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.06)",
+                  height: 32,
+                }}
+              >
+                {fmtBR0(levelAvg)}%
+              </span>
+            </div>
+
+            <div style={{ height: 170 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                  <XAxis dataKey="period" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
+                    contentStyle={{
+                      background: "rgba(0,0,0,0.86)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 14,
+                    }}
+                    labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                  />
+                  <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Placeholder (igual “Customer Fulfillment” visual) */}
+          <div style={{ ...cardBase, padding: 14, opacity: 0.92 }}>
+            <div style={headerStyle}>
+              <div>
+                <div style={titleStyle}>Insights</div>
+                <div style={subStyle}>placeholder visual</div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                height: 160,
+                borderRadius: 16,
+                border: "1px dashed rgba(255,255,255,0.14)",
+                background: "rgba(0,0,0,0.18)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "rgba(255,255,255,0.45)",
+                fontWeight: 800,
+              }}
+            >
+              Em breve
+            </div>
+          </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== MiniStat component ===================== */
+function MiniStat({
+  icon,
+  title,
+  value,
+  sub,
+  onClick,
+}: {
+  icon: string;
+  title: string;
+  value: string;
+  sub: string;
+  onClick?: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      title={onClick ? "Clique" : undefined}
+      style={{
+        borderRadius: 16,
+        border: "1px solid rgba(255,255,255,0.10)",
+        background: "rgba(0,0,0,0.18)",
+        padding: 12,
+        cursor: onClick ? "pointer" : "default",
+        transition: "transform .15s ease, border-color .15s ease, box-shadow .15s ease",
+        boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+      }}
+      onMouseEnter={(e) => {
+        if (!onClick) return;
+        (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,159,26,0.22)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.transform = "translateY(0px)";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,0.10)";
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <div
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 12,
+            border: "1px solid rgba(255,159,26,0.20)",
+            background: "rgba(255,159,26,0.10)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 16,
+          }}
+        >
+          {icon}
+        </div>
+        <div style={{ fontWeight: 900, color: "rgba(255,255,255,0.78)", fontSize: 13 }}>{title}</div>
+      </div>
+
+      <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.01, color: "rgba(255,255,255,0.92)" }}>
+        {value}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+        {sub}
       </div>
     </div>
   );
