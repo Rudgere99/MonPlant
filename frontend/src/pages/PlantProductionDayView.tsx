@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type HeadersInit } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -297,14 +297,7 @@ export default function PlantProductionDayView() {
 
                 <Legend wrapperStyle={{ color: "rgba(255,255,255,0.8)" }} />
 
-                <Bar
-                  yAxisId="ton"
-                  dataKey="ton"
-                  name="Ton/H"
-                  fill="#22c55e"
-                  radius={[6, 6, 0, 0]}
-                  barSize={22}
-                >
+                <Bar yAxisId="ton" dataKey="ton" name="Ton/H" fill="#22c55e" radius={[6, 6, 0, 0]} barSize={22}>
                   <LabelList dataKey="ton" content={<TonLabel />} />
                 </Bar>
 

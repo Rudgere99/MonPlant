@@ -9,6 +9,9 @@ import Horimetros from "../pages/Horimetros";
 import Paradas from "../pages/Paradas";
 import Exportar from "../pages/Exportar";
 
+import PlantProductionDayView from "../pages/PlantProductionDayView";
+import Last7DaysView from "../pages/Last7DaysView";
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -23,7 +26,11 @@ export function AppRoutes() {
         }
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
+
         <Route path="dashboard" element={<Dashboard />} />
+        <Route path="dashboard/producao-dia" element={<PlantProductionDayView />} />
+        <Route path="dashboard/ultimos-7" element={<Last7DaysView />} />
+
         <Route path="producao-planta" element={<PlantProduction />} />
         <Route path="horimetros" element={<Horimetros />} />
         <Route path="paradas" element={<Paradas />} />

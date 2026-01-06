@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { getTurnoFromNow, labelTurno } from "../utils/shift";
 import type { Turno } from "../utils/shift";
 
-
 type Props = {
   onChange?: (v: { day: string; turno: Turno }) => void;
 };
@@ -24,36 +23,47 @@ export default function ShiftBar({ onChange }: Props) {
   }
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
-      <div className="text-sm font-extrabold">Lançamentos</div>
-
-      <div className="ml-auto flex items-center gap-2">
-        <div className="text-xs text-white/60">Data</div>
-        <input
-          type="date"
-          value={day}
-          onChange={(e) => {
-            setDay(e.target.value);
-            emit(e.target.value, turno);
-          }}
-          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none"
-        />
+    <div className="mp-card" style={{ marginBottom: 14 }}>
+      <div className="mp-card-h">
+        <b>Lançamentos</b>
+        <span className="mp-help">Data e turno</span>
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="text-xs text-white/60">Turno</div>
-        <select
-          value={turno}
-          onChange={(e) => {
-            const t = Number(e.target.value) as Turno;
-            setTurno(t);
-            emit(day, t);
-          }}
-          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none"
-        >
-          <option value={1}>{labelTurno(1)}</option>
-          <option value={2}>{labelTurno(2)}</option>
-        </select>
+      <div className="mp-card-b" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "grid", gap: 6 }}>
+          <div className="mp-label">Data</div>
+          <input
+            type="date"
+            value={day}
+            onChange={(e) => {
+              setDay(e.target.value);
+              emit(e.target.value, turno);
+            }}
+            className="mp-input"
+            style={{ width: 190 }}
+          />
+        </div>
+
+        <div style={{ display: "grid", gap: 6 }}>
+          <div className="mp-label">Turno</div>
+          <select
+            value={turno}
+            onChange={(e) => {
+              const t = Number(e.target.value) as Turno;
+              setTurno(t);
+              emit(day, t);
+            }}
+            className="mp-select"
+            style={{ width: 190, height: 40 }}
+          >
+            <option value={1}>{labelTurno(1)}</option>
+            <option value={2}>{labelTurno(2)}</option>
+          </select>
+        </div>
+
+        <div style={{ marginLeft: "auto" }} className="mp-help">
+          {labelTurno(turno)}
+        </div>
       </div>
     </div>
   );
