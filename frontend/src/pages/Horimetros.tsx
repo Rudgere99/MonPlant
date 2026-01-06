@@ -7,12 +7,13 @@ type HorimetroRow = {
   day: string; // yyyy-mm-dd
   turno: Turno;
   equipamento: string;
-  horimetro: number;
+  horimetro_ini: number;
+  horimetro_fim: number;
   obs?: string | null;
   created_at?: string | null;
 };
 
-const EQUIPAMENTOS = ["BT-01", "BT-02", "PN-01", "PN-02"] as const;
+const EQUIPAMENTOS = ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08"] as const;
 
 /* ===================== helpers ===================== */
 function isoTodayLocal() {
@@ -101,7 +102,9 @@ export default function Horimetros() {
   const [day, setDay] = useState<string>(isoTodayLocal());
   const [turno, setTurno] = useState<Turno>(1);
   const [equipamento, setEquipamento] = useState<string>(EQUIPAMENTOS[0]);
-  const [horimetro, setHorimetro] = useState<string>("");
+
+  const [horimetroIni, setHorimetroIni] = useState<string>("");
+  const [horimetroFim, setHorimetroFim] = useState<string>("");
   const [obs, setObs] = useState<string>("");
 
   const [rows, setRows] = useState<HorimetroRow[]>([]);
@@ -160,6 +163,13 @@ export default function Horimetros() {
     return [...rows].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
   }, [rows]);
 
+  const difPreview = useMemo(() => {
+    const a = parseBRNumber(horimetroIni);
+    const b = parseBRNumber(horimetroFim);
+    if (a === null || b === null) return null;
+    return b - a;
+  }, [horimetroIni, horimetroFim]);
+
   async function addRow() {
     setErr(null);
 
@@ -168,23 +178,34 @@ export default function Horimetros() {
       return;
     }
 
-    const n = parseBRNumber(horimetro);
-    if (n === null || n < 0) {
-      setErr("Horímetro inválido. Ex: 1234,5");
+    const ini = parseBRNumber(horimetroIni);
+    const fim = parseBRNumber(horimetroFim);
+
+    if (ini === null || ini < 0) {
+      setErr("Horímetro Inicial inválido. Ex: 1234,5");
+      return;
+    }
+    if (fim === null || fim < 0) {
+      setErr("Horímetro Final inválido. Ex: 1234,5");
+      return;
+    }
+    if (fim < ini) {
+      setErr("Horímetro Final não pode ser menor que o Inicial.");
       return;
     }
 
     try {
       setLoading(true);
+
       await apiPost<HorimetroRow>(`/api/horimetros`, {
         day,
         turno,
         equipamento,
-        horimetro: n,
+        horimetro_ini: ini,
+        horimetro_fim: fim,
         obs: obs || "",
       });
 
-      // atualiza telas
       await loadLastByEq();
       await loadFiltered();
 
@@ -193,7 +214,8 @@ export default function Horimetros() {
       setFTurno(turno);
       setFEq(equipamento);
 
-      setHorimetro("");
+      setHorimetroIni("");
+      setHorimetroFim("");
       setObs("");
     } catch (e: any) {
       setErr(e?.message || "Falha ao salvar horímetro");
@@ -235,10 +257,17 @@ export default function Horimetros() {
             <div>
               <div className="mp-chip">Operação</div>
               <div className="mp-page-title">Horímetros</div>
-              <div className="mp-page-sub">Histórico + filtros + lançamento (Postgres)</div>
+              <div className="mp-page-sub">Histórico + filtros + lançamento (Inicial / Final)</div>
             </div>
 
-            <button className="mp-btn" onClick={() => { loadLastByEq(); loadFiltered(); }} disabled={loading}>
+            <button
+              className="mp-btn"
+              onClick={() => {
+                loadLastByEq();
+                loadFiltered();
+              }}
+              disabled={loading}
+            >
               {loading ? "Atualizando..." : "Atualizar"}
             </button>
           </div>
@@ -249,7 +278,7 @@ export default function Horimetros() {
           <div className="mp-card">
             <div className="mp-card-h">
               <b>Último horímetro por equipamento</b>
-              <span className="mp-help">Último registro encontrado no banco</span>
+              <span className="mp-help">Mostra o último registro (Final) encontrado</span>
             </div>
             <div className="mp-card-b">
               <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
@@ -267,7 +296,7 @@ export default function Horimetros() {
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                         <div style={{ fontWeight: 900 }}>{eq}</div>
-                        <span className="mp-chip">{r ? fmtBR(r.horimetro) : "—"}</span>
+                        <span className="mp-chip">{r ? fmtBR(r.horimetro_fim) : "—"}</span>
                       </div>
                       <div className="mp-help" style={{ marginTop: 6 }}>
                         {r ? `Dia ${brDate(r.day)} • Turno ${r.turno}` : "Sem registros ainda"}
@@ -292,7 +321,7 @@ export default function Horimetros() {
               <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
                 <thead>
                   <tr>
-                    {["Data", "Turno", "Equipamento", "Horímetro", "Observação", ""].map((h) => (
+                    {["Data", "Turno", "Equipamento", "Inicial", "Final", "Dif", "Observação", ""].map((h) => (
                       <th
                         key={h}
                         style={{
@@ -315,44 +344,53 @@ export default function Horimetros() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="mp-help" style={{ padding: 14 }}>
+                      <td colSpan={8} className="mp-help" style={{ padding: 14 }}>
                         Nenhum horímetro encontrado com estes filtros.
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((r) => (
-                      <tr key={r.id}>
-                        <td style={td}>{brDate(r.day)}</td>
-                        <td style={td}>{r.turno}</td>
-                        <td style={td}><span className="mp-chip">{r.equipamento}</span></td>
-                        <td style={td}><b>{fmtBR(r.horimetro)}</b></td>
-                        <td style={{ ...td, maxWidth: 520, whiteSpace: "normal" }}>
-                          <div style={{ color: "rgba(255,255,255,.82)" }}>{r.obs || "—"}</div>
-                        </td>
-                        <td style={td}>
-                          <button
-                            className="mp-btn"
-                            onClick={() => removeRow(r.id)}
-                            disabled={loading}
-                            style={{
-                              height: 34,
-                              padding: "0 10px",
-                              borderRadius: 12,
-                              border: "1px solid rgba(251,113,133,.30)",
-                              background: "rgba(251,113,133,.12)",
-                            }}
-                          >
-                            Excluir
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    filtered.map((r) => {
+                      const dif = (r.horimetro_fim ?? 0) - (r.horimetro_ini ?? 0);
+                      return (
+                        <tr key={r.id}>
+                          <td style={td}>{brDate(r.day)}</td>
+                          <td style={td}>{r.turno}</td>
+                          <td style={td}>
+                            <span className="mp-chip">{r.equipamento}</span>
+                          </td>
+                          <td style={td}>{fmtBR(r.horimetro_ini)}</td>
+                          <td style={td}>
+                            <b>{fmtBR(r.horimetro_fim)}</b>
+                          </td>
+                          <td style={td}>{fmtBR(dif)}</td>
+                          <td style={{ ...td, maxWidth: 520, whiteSpace: "normal" }}>
+                            <div style={{ color: "rgba(255,255,255,.82)" }}>{r.obs || "—"}</div>
+                          </td>
+                          <td style={td}>
+                            <button
+                              className="mp-btn"
+                              onClick={() => removeRow(r.id)}
+                              disabled={loading}
+                              style={{
+                                height: 34,
+                                padding: "0 10px",
+                                borderRadius: 12,
+                                border: "1px solid rgba(251,113,133,.30)",
+                                background: "rgba(251,113,133,.12)",
+                              }}
+                            >
+                              Excluir
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
 
               <div className="mp-help" style={{ marginTop: 10 }}>
-                * Agora está 100% no backend/Postgres.
+                * Dif = Final - Inicial.
               </div>
             </div>
           </div>
@@ -363,12 +401,19 @@ export default function Horimetros() {
           <div className="mp-card">
             <div className="mp-card-h">
               <b>Novo lançamento</b>
-              <span className="mp-help">Salva no banco</span>
+              <span className="mp-help">Salva Inicial e Final</span>
             </div>
             <div className="mp-card-b">
               {err && <div className="mp-error">{err}</div>}
 
-              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", alignItems: "end" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 12,
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  alignItems: "end",
+                }}
+              >
                 <div>
                   <div className="mp-label">Data</div>
                   <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
@@ -386,19 +431,31 @@ export default function Horimetros() {
                   <div className="mp-label">Equipamento</div>
                   <select className="mp-input" value={equipamento} onChange={(e) => setEquipamento(e.target.value)}>
                     {EQUIPAMENTOS.map((x) => (
-                      <option key={x} value={x}>{x}</option>
+                      <option key={x} value={x}>
+                        {x}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <div className="mp-label">Horímetro</div>
-                  <input
-                    className="mp-input"
-                    value={horimetro}
-                    onChange={(e) => setHorimetro(e.target.value)}
-                    placeholder="Ex: 1234,5"
-                  />
+                  <div className="mp-label">Horímetro Inicial</div>
+                  <input className="mp-input" value={horimetroIni} onChange={(e) => setHorimetroIni(e.target.value)} placeholder="Ex: 1234,5" />
+                </div>
+
+                <div>
+                  <div className="mp-label">Horímetro Final</div>
+                  <input className="mp-input" value={horimetroFim} onChange={(e) => setHorimetroFim(e.target.value)} placeholder="Ex: 1238,0" />
+                </div>
+
+                <div>
+                  <div className="mp-label">Diferença</div>
+                  <div className="mp-input" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: 900 }}>
+                    <span>{difPreview === null ? "—" : fmtBR(difPreview)}</span>
+                    <span className="mp-help" style={{ margin: 0 }}>
+                      auto
+                    </span>
+                  </div>
                 </div>
 
                 <div style={{ gridColumn: "1 / -1" }}>
@@ -421,7 +478,14 @@ export default function Horimetros() {
               <span className="mp-help">Pesquisa no histórico</span>
             </div>
             <div className="mp-card-b">
-              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", alignItems: "end" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 12,
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  alignItems: "end",
+                }}
+              >
                 <div>
                   <div className="mp-label">Data</div>
                   <input className="mp-input" type="date" value={fDay} onChange={(e) => setFDay(e.target.value)} />
@@ -445,18 +509,25 @@ export default function Horimetros() {
                   <select className="mp-input" value={fEq} onChange={(e) => setFEq(e.target.value)}>
                     <option value="ALL">Todos</option>
                     {EQUIPAMENTOS.map((x) => (
-                      <option key={x} value={x}>{x}</option>
+                      <option key={x} value={x}>
+                        {x}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="mp-help" style={{ marginLeft: "auto" }}>
-                  {loading ? "Carregando..." : <>Resultado: <b>{filtered.length}</b> registro(s)</>}
+                  {loading ? "Carregando..." : (
+                    <>
+                      Resultado: <b>{filtered.length}</b> registro(s)
+                    </>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );
