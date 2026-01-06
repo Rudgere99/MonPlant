@@ -460,7 +460,7 @@ export default function Dashboard() {
             <div style={{ ...cardBase, padding: 14 }}>
               <div style={headerStyle}>
                 <div>
-                  <div style={titleStyle}>Top Products</div>
+                  <div style={titleStyle}>Últimos Hórimetros</div>
                   <div style={subStyle}>Últimos horímetros</div>
                 </div>
                 <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
