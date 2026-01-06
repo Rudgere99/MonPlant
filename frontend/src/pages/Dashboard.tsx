@@ -59,7 +59,7 @@ function fmtBR1(n: number) {
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
-function authHeaders(): HeadersInit {
+function authHeaders(): Record<string, string> {
   const keys = ["mp_token", "token", "access_token", "auth_token"];
   for (const k of keys) {
     const v = (localStorage.getItem(k) || "").trim();
@@ -80,7 +80,6 @@ async function apiGet<T>(path: string): Promise<T> {
 /* ===================== types ===================== */
 type PlantHourRow = { period: string; ton?: any; freq?: any };
 type PlantDayPayload = { day: string; obs?: string | null; rows: PlantHourRow[]; updated_at?: string | null };
-
 type Last7Item = { day: string; total_ton: number };
 
 type StopRow = {
@@ -99,12 +98,11 @@ type StopRow = {
 };
 
 type HorimetroRow = {
-  id: number;
+  equipamento: string;
+  horimetro_ini: number;
+  horimetro_fim: number;
   day: string;
   turno: 1 | 2;
-  equipamento: string;
-  horimetro: number;
-  obs?: string | null;
   created_at?: string | null;
 };
 
@@ -137,12 +135,12 @@ export default function Dashboard() {
 
       const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
       const ps = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`).catch(() => []);
-      const hb = await apiGet<any[]>(`/api/horimetros/last-by-eq`).catch(() => []);
+      const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`).catch(() => []);
 
       const map: Record<string, HorimetroRow | null> = {};
       for (const r of hb || []) {
         if (!r?.equipamento) continue;
-        map[r.equipamento] = r as HorimetroRow;
+        map[r.equipamento] = r;
       }
 
       setProdDay(p);
@@ -169,7 +167,6 @@ export default function Dashboard() {
 
   /* ===================== computed ===================== */
 
-  // Produção do dia (total)
   const totalTonDay = useMemo(() => {
     const rows = prodDay?.rows || [];
     let sum = 0;
@@ -177,13 +174,11 @@ export default function Dashboard() {
     return sum;
   }, [prodDay]);
 
-  // % da meta => enche o meio círculo proporcionalmente (4% = 4% preenchido)
   const pctMeta = useMemo(() => {
     if (META_DIA <= 0) return 0;
     return Math.max(0, Math.min(100, (totalTonDay / META_DIA) * 100));
   }, [totalTonDay]);
 
-  // Produção horária (linha grande)
   const hourlySeries = useMemo(() => {
     const rows = prodDay?.rows || [];
     const data = rows.map((r) => ({
@@ -195,7 +190,6 @@ export default function Dashboard() {
     return data;
   }, [prodDay]);
 
-  // Média de produção por hora (Insights)
   const avgTonPerHour = useMemo(() => {
     const filled = (hourlySeries || []).filter((r) => (Number(r.ton) || 0) > 0);
     if (!filled.length) return 0;
@@ -203,7 +197,6 @@ export default function Dashboard() {
     return sum / filled.length;
   }, [hourlySeries]);
 
-  // Últimos 7 dias (linha pequena)
   const last7Series = useMemo(() => {
     return (last7 || []).map((x) => ({
       day: dayLabel(x.day),
@@ -211,7 +204,6 @@ export default function Dashboard() {
     }));
   }, [last7]);
 
-  // Paradas
   const totalStops = useMemo(() => (stops || []).length, [stops]);
 
   const lastStop = useMemo(() => {
@@ -220,12 +212,10 @@ export default function Dashboard() {
     return list[0] || null;
   }, [stops]);
 
-  // Último horímetro APENAS BT-01 (card Hoje)
   const lastHorimetroBT01 = useMemo(() => {
     return (lastByEq || {})[EQ_BT01] || null;
   }, [lastByEq]);
 
-  // Top Products: últimos horímetros BT-02, PN-02, PN-01, EH-08
   const topProductsHorimetros = useMemo(() => {
     const map = lastByEq || {};
     return EQS_TOP_PRODUCTS.map((eq) => ({
@@ -234,9 +224,8 @@ export default function Dashboard() {
     }));
   }, [lastByEq]);
 
-  // Level = taxa das últimas horas (freq%): pega as últimas 6 janelas preenchidas
   const levelBars = useMemo(() => {
-    const filled = (hourlySeries || []).filter((r) => (r.freq > 0) || (r.ton > 0));
+    const filled = (hourlySeries || []).filter((r) => r.freq > 0 || r.ton > 0);
     const last = filled.slice(-6);
     return last.map((r) => ({
       period: r.period,
@@ -250,10 +239,9 @@ export default function Dashboard() {
     return s / levelBars.length;
   }, [levelBars]);
 
-  // Gauge (meio círculo)
   const gaugeData = useMemo(() => [{ name: "meta", value: pctMeta, fill: "#ff9f1a" }], [pctMeta]);
 
-  /* ===================== UI ===================== */
+  /* ===================== styles ===================== */
   const cardBase: React.CSSProperties = {
     borderRadius: 18,
     border: "1px solid rgba(255,255,255,0.10)",
@@ -315,16 +303,9 @@ export default function Dashboard() {
 
   return (
     <div className="mp-container">
-      {/* TOP BAR (search + date + status) */}
+      {/* TOP BAR */}
       <div style={topBar}>
-        <input
-          style={searchBox}
-          placeholder="Search here..."
-          disabled
-          value=""
-          onChange={() => {}}
-          title="(placeholder visual)"
-        />
+        <input style={searchBox} placeholder="Search here..." disabled value="" onChange={() => {}} />
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ ...subStyle, marginRight: 6 }}>Data</span>
@@ -345,23 +326,15 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* status line */}
       <div style={{ marginTop: 8, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 800 }}>
         Dashboard • {brDate(day)} {err ? `• ${err}` : "• tempo real"}
       </div>
 
-      {/* GRID MAIN (igual referência) */}
-      <div
-        style={{
-          marginTop: 14,
-          display: "grid",
-          gridTemplateColumns: "repeat(12, 1fr)",
-          gap: 14,
-        }}
-      >
-        {/* LEFT COLUMN */}
+      {/* GRID */}
+      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14 }}>
+        {/* LEFT */}
         <div style={{ gridColumn: "span 9 / span 9", display: "grid", gap: 14 }}>
-          {/* HOJE: ultima parada / total paradas / ultimo horimetro BT-01 */}
+          {/* HOJE */}
           <div style={{ ...cardBase, padding: 14 }}>
             <div style={headerStyle}>
               <div>
@@ -377,11 +350,7 @@ export default function Dashboard() {
               <MiniStat
                 icon="⏸"
                 title="Última Parada"
-                value={
-                  lastStop
-                    ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h`
-                    : "—"
-                }
+                value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
                 sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
                 onClick={() => nav("/paradas")}
               />
@@ -397,7 +366,11 @@ export default function Dashboard() {
               <MiniStat
                 icon="⏱"
                 title="Último Horímetro (BT-01)"
-                value={lastHorimetroBT01 ? `${fmtBR1(lastHorimetroBT01.horimetro)}` : "—"}
+                value={
+                  lastHorimetroBT01
+                    ? `${fmtBR1(lastHorimetroBT01.horimetro_ini)} → ${fmtBR1(lastHorimetroBT01.horimetro_fim)}`
+                    : "—"
+                }
                 sub={
                   lastHorimetroBT01
                     ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
@@ -408,12 +381,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* BIG LINE: Produção horária */}
-          <div
-            style={{ ...cardBase, padding: 14, cursor: "pointer" }}
-            onClick={() => nav("/plant-production")}
-            title="Clique para abrir Produção por Hora"
-          >
+          {/* PRODUÇÃO HORÁRIA */}
+          <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/plant-production")}>
             <div style={headerStyle}>
               <div>
                 <div style={titleStyle}>Produção Horária (Ton/H)</div>
@@ -437,7 +406,10 @@ export default function Dashboard() {
                 <LineChart data={hourlySeries} margin={{ top: 8, right: 18, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                   <XAxis dataKey="period" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
-                  <YAxis tickFormatter={(v) => fmtBR0(Number(v) || 0)} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
+                  <YAxis
+                    tickFormatter={(v) => fmtBR0(Number(v) || 0)}
+                    tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                  />
                   <Tooltip
                     formatter={(v: any) => fmtBR1(Number(v) || 0)}
                     contentStyle={{
@@ -454,14 +426,14 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* BOTTOM ROW: Top Products (horímetros) + Last 7 days */}
+          {/* BOTTOM */}
           <div style={{ display: "grid", gridTemplateColumns: "1.35fr 1fr", gap: 14 }}>
-            {/* Top Products: BT-02, PN-02, PN-01, EH-08 */}
+            {/* TOP PRODUCTS (horímetros) */}
             <div style={{ ...cardBase, padding: 14 }}>
               <div style={headerStyle}>
                 <div>
-                  <div style={titleStyle}>Últimos Hórimetros</div>
-                  <div style={subStyle}>Últimos horímetros</div>
+                  <div style={titleStyle}>Horímetros</div>
+                  <div style={subStyle}>BT-02 • PN-02 • PN-01 • EH-08</div>
                 </div>
                 <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
                   Abrir Horímetros
@@ -486,7 +458,7 @@ export default function Dashboard() {
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <div
                         style={{
-                          width: 34,
+                          width: 52,
                           height: 34,
                           borderRadius: 12,
                           border: "1px solid rgba(255,159,26,0.20)",
@@ -503,7 +475,9 @@ export default function Dashboard() {
                       </div>
                       <div>
                         <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
-                          {row ? fmtBR1(row.horimetro) : "—"}
+                          {row
+                            ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}`
+                            : "—"}
                         </div>
                         <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
                           {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
@@ -519,7 +493,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Last 7 days */}
+            {/* LAST 7 DAYS */}
             <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/last7days")}>
               <div style={headerStyle}>
                 <div>
@@ -551,9 +525,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN */}
+        {/* RIGHT */}
         <div style={{ gridColumn: "span 3 / span 3", display: "grid", gap: 14 }}>
-          {/* Produção do dia (gauge meio círculo) */}
+          {/* GAUGE */}
           <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/plant-production")}>
             <div style={headerStyle}>
               <div>
@@ -565,24 +539,11 @@ export default function Dashboard() {
             <div style={{ height: 210, position: "relative" }}>
               <ResponsiveContainer width="100%" height="100%">
                 <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
-                  <RadialBar
-                    dataKey="value"
-                    cornerRadius={14}
-                    background={{ fill: "rgba(255,255,255,0.08)" }}
-                  />
+                  <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
                 </RadialBarChart>
               </ResponsiveContainer>
 
-              <div
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  top: 86,
-                  textAlign: "center",
-                  pointerEvents: "none",
-                }}
-              >
+              <div style={{ position: "absolute", left: 0, right: 0, top: 86, textAlign: "center", pointerEvents: "none" }}>
                 <div style={{ fontSize: 34, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMeta)}%</div>
                 <div style={{ ...subStyle, marginTop: 4 }}>Atingimento</div>
                 <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
@@ -592,21 +553,14 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Level = taxa das últimas horas (freq%) */}
+          {/* TAXA */}
           <div style={{ ...cardBase, padding: 14 }}>
             <div style={headerStyle}>
               <div>
                 <div style={titleStyle}>Taxa</div>
-                <div style={subStyle}>Taxa últimas horas (Freq%)</div>
+                <div style={subStyle}>Freq% últimas horas</div>
               </div>
-              <span
-                style={{
-                  ...smallPill,
-                  borderColor: "rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.06)",
-                  height: 32,
-                }}
-              >
+              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>
                 {fmtBR0(levelAvg)}%
               </span>
             </div>
@@ -619,11 +573,7 @@ export default function Dashboard() {
                   <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                   <Tooltip
                     formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
-                    contentStyle={{
-                      background: "rgba(0,0,0,0.86)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 14,
-                    }}
+                    contentStyle={{ background: "rgba(0,0,0,0.86)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}
                     labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                   />
                   <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a" />
@@ -632,21 +582,14 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Insights = média de produção por hora */}
+          {/* INSIGHTS */}
           <div style={{ ...cardBase, padding: 14 }}>
             <div style={headerStyle}>
               <div>
-                <div style={titleStyle}>Média/Hora</div>
+                <div style={titleStyle}>Insights</div>
                 <div style={subStyle}>Média de produção por hora</div>
               </div>
-              <span
-                style={{
-                  ...smallPill,
-                  borderColor: "rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.06)",
-                  height: 32,
-                }}
-              >
+              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>
                 {fmtBR1(avgTonPerHour)} t/h
               </span>
             </div>
@@ -659,11 +602,7 @@ export default function Dashboard() {
                   <YAxis hide />
                   <Tooltip
                     formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
-                    contentStyle={{
-                      background: "rgba(0,0,0,0.86)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 14,
-                    }}
+                    contentStyle={{ background: "rgba(0,0,0,0.86)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}
                     labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                   />
                   <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
@@ -681,7 +620,7 @@ export default function Dashboard() {
   );
 }
 
-/* ===================== MiniStat component ===================== */
+/* ===================== MiniStat ===================== */
 function MiniStat({
   icon,
   title,
@@ -699,7 +638,6 @@ function MiniStat({
     <div
       onClick={onClick}
       role={onClick ? "button" : undefined}
-      title={onClick ? "Clique" : undefined}
       style={{
         borderRadius: 16,
         border: "1px solid rgba(255,255,255,0.10)",
@@ -741,9 +679,7 @@ function MiniStat({
       <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.01, color: "rgba(255,255,255,0.92)" }}>
         {value}
       </div>
-      <div style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
-        {sub}
-      </div>
+      <div style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>{sub}</div>
     </div>
   );
 }
