@@ -10,6 +10,8 @@ import {
   LogOut,
   Menu,
   X,
+  Search,
+  ChevronRight,
 } from "lucide-react";
 
 type NavItem = {
@@ -37,6 +39,49 @@ function getGroupFromPath(pathname: string) {
   return hit?.group ?? "";
 }
 
+function ShellLogo({ onClick }: { onClick?: () => void }) {
+  return (
+    <Link
+      to="/dashboard"
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        textDecoration: "none",
+        color: "white",
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          height: 40,
+          width: 40,
+          borderRadius: 14,
+          display: "grid",
+          placeItems: "center",
+          background: "rgba(255,159,26,.12)",
+          border: "1px solid rgba(255,159,26,.18)",
+          fontWeight: 950,
+          letterSpacing: 0.5,
+          color: "rgba(255,255,255,.92)",
+          boxShadow: "0 16px 40px rgba(0,0,0,.45)",
+        }}
+      >
+        MP
+      </div>
+      <div style={{ lineHeight: 1.1, minWidth: 0 }}>
+        <div style={{ fontWeight: 950, letterSpacing: -0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          MonPlant
+        </div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,.55)", fontWeight: 800 }}>
+          Operação • Produção
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 export function AppShell() {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -52,67 +97,239 @@ export function AppShell() {
     navigate("/login");
   };
 
-  return (
-    <div style={{ minHeight: "100vh", background: "#0B0F14", color: "white" }}>
-      <div style={{ display: "flex", minHeight: "100vh" }}>
-        {/* ✅ SEM Sidebar fixa no desktop (removida) */}
+  const bgBase: React.CSSProperties = {
+    minHeight: "100vh",
+    color: "white",
+    background:
+      "radial-gradient(900px 520px at 15% 10%, rgba(255,159,26,.10), transparent 55%)," +
+      "radial-gradient(700px 420px at 90% 20%, rgba(255,255,255,.05), transparent 60%)," +
+      "radial-gradient(900px 520px at 50% 90%, rgba(255,159,26,.06), transparent 60%)," +
+      "#0B0F14",
+  };
 
-        {/* ✅ Drawer/Overlay (abre no clique do menu) */}
+  const cardGlass: React.CSSProperties = {
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,.10)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))",
+    boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
+    backdropFilter: "blur(10px)",
+  };
+
+  const sideW = 280;
+
+  return (
+    <div style={bgBase}>
+      <style>{`
+        .mp-shell * { box-sizing: border-box; }
+        .mp-scrollbar::-webkit-scrollbar { width: 10px; }
+        .mp-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.10); border-radius: 999px; }
+        .mp-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.16); }
+
+        /* belts */
+        @keyframes mpBeltMoveShell {
+          0%   { transform: translateX(-5%) rotate(-10deg); opacity: .68; }
+          50%  { transform: translateX(5%)  rotate(-10deg); opacity: .92; }
+          100% { transform: translateX(-5%) rotate(-10deg); opacity: .68; }
+        }
+        .mp-bg-belt-1 { animation: mpBeltMoveShell 10s ease-in-out infinite; }
+        .mp-bg-belt-2 { animation: mpBeltMoveShell 13s ease-in-out infinite; }
+        @keyframes mpDustFloatShell {
+          0%   { transform: translateY(0px); opacity: .55; }
+          50%  { transform: translateY(-8px); opacity: .78; }
+          100% { transform: translateY(0px); opacity: .55; }
+        }
+        .mp-bg-dust {
+          background-image:
+            radial-gradient(2px 2px at 12% 18%, rgba(255,159,26,.26) 0, transparent 60%),
+            radial-gradient(2px 2px at 28% 62%, rgba(255,255,255,.16) 0, transparent 60%),
+            radial-gradient(1.5px 1.5px at 48% 28%, rgba(255,159,26,.20) 0, transparent 60%),
+            radial-gradient(2px 2px at 66% 74%, rgba(255,255,255,.12) 0, transparent 60%),
+            radial-gradient(1.5px 1.5px at 82% 38%, rgba(255,159,26,.18) 0, transparent 60%),
+            radial-gradient(2px 2px at 92% 66%, rgba(255,255,255,.10) 0, transparent 60%);
+          background-size: 100% 100%;
+          animation: mpDustFloatShell 7s ease-in-out infinite;
+          filter: blur(.1px);
+        }
+
+        /* active link glow */
+        .mp-navlink-active {
+          border-color: rgba(255,159,26,.22) !important;
+          background: rgba(255,159,26,.08) !important;
+        }
+      `}</style>
+
+      <div className="mp-shell" style={{ display: "flex", minHeight: "100vh" }}>
+        {/* ===== Sidebar DESKTOP ===== */}
+        <aside
+          style={{
+            width: sideW,
+            display: "none",
+            padding: 14,
+          }}
+          className="mp-sidebar-desktop"
+        >
+          {/* CSS media */}
+          <style>{`
+            @media (min-width: 980px) {
+              .mp-sidebar-desktop { display: block !important; }
+            }
+          `}</style>
+
+          <div style={{ ...cardGlass, height: "calc(100vh - 28px)", padding: 14, display: "flex", flexDirection: "column" }}>
+            <ShellLogo />
+
+            <div
+              style={{
+                marginTop: 14,
+                height: 44,
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,.10)",
+                background: "rgba(0,0,0,.22)",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "0 12px",
+                color: "rgba(255,255,255,.70)",
+              }}
+              title="placeholder visual"
+            >
+              <Search size={16} />
+              <input
+                value=""
+                onChange={() => {}}
+                disabled
+                placeholder="Search here..."
+                style={{
+                  width: "100%",
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  color: "rgba(255,255,255,.80)",
+                  fontWeight: 800,
+                }}
+              />
+            </div>
+
+            <div
+              style={{
+                marginTop: 16,
+                padding: "0 10px",
+                fontSize: 11,
+                fontWeight: 950,
+                letterSpacing: 1,
+                color: "rgba(255,255,255,.40)",
+                textTransform: "uppercase",
+              }}
+            >
+              Menu
+            </div>
+
+            <nav style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+              {nav.map((i) => {
+                const Icon = i.icon;
+                return (
+                  <NavLink
+                    key={i.to}
+                    to={i.to}
+                    className={({ isActive }) => (isActive ? "mp-navlink-active" : "")}
+                    style={({ isActive }) => ({
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "10px 10px",
+                      borderRadius: 14,
+                      border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
+                      background: isActive ? "rgba(255,159,26,.08)" : "transparent",
+                      textDecoration: "none",
+                      color: "white",
+                      transition: "transform .12s ease, background .12s ease, border-color .12s ease",
+                    })}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <span
+                          style={{
+                            height: 36,
+                            width: 36,
+                            borderRadius: 12,
+                            display: "grid",
+                            placeItems: "center",
+                            background: isActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,.06)",
+                            border: "1px solid " + (isActive ? "rgba(255,159,26,.20)" : "rgba(255,255,255,.10)"),
+                          }}
+                        >
+                          <Icon size={18} />
+                        </span>
+
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
+                          <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
+                            {i.group || "—"}
+                          </div>
+                        </div>
+
+                        <ChevronRight size={16} style={{ opacity: isActive ? 0.9 : 0.35 }} />
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </nav>
+
+            <div style={{ flex: 1 }} />
+
+            <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 12 }}>
+              <button
+                onClick={handleLogout}
+                style={{
+                  width: "100%",
+                  height: 42,
+                  borderRadius: 14,
+                  border: "1px solid rgba(251,113,133,.30)",
+                  background: "rgba(251,113,133,.14)",
+                  fontWeight: 950,
+                  cursor: "pointer",
+                  color: "white",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                <LogOut size={18} /> Sair
+              </button>
+
+              <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
+                v1 • MonPlant
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* ===== Drawer MOBILE ===== */}
         {mobileOpen && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 50 }}>
+          <div style={{ position: "fixed", inset: 0, zIndex: 90 }}>
             <button
               onClick={() => setMobileOpen(false)}
-              style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.6)", border: "none" }}
+              style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.65)", border: "none" }}
               aria-label="Fechar menu"
             />
 
             <div
               style={{
                 position: "absolute",
-                left: 0,
-                top: 0,
-                height: "100%",
-                width: 320,
-                background: "#0B0F14",
-                borderRight: "1px solid rgba(255,255,255,.10)",
+                left: 12,
+                top: 12,
+                bottom: 12,
+                width: 330,
+                maxWidth: "calc(100vw - 24px)",
+                padding: 14,
+                ...cardGlass,
               }}
+              className="mp-scrollbar"
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: 14,
-                  borderBottom: "1px solid rgba(255,255,255,.10)",
-                }}
-              >
-                <Link
-                  to="/dashboard"
-                  onClick={() => setMobileOpen(false)}
-                  style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "white" }}
-                >
-                  <div
-                    style={{
-                      height: 38,
-                      width: 38,
-                      borderRadius: 14,
-                      display: "grid",
-                      placeItems: "center",
-                      background: "rgba(52,211,153,.16)",
-                      border: "1px solid rgba(52,211,153,.22)",
-                      fontWeight: 900,
-                      letterSpacing: 1,
-                      color: "rgba(167,243,208,.95)",
-                    }}
-                  >
-                    MP
-                  </div>
-                  <div style={{ lineHeight: 1.1 }}>
-                    <div style={{ fontWeight: 900 }}>MONPLANT</div>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,.55)" }}>Controle de Produção</div>
-                  </div>
-                </Link>
-
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <ShellLogo onClick={() => setMobileOpen(false)} />
                 <button
                   onClick={() => setMobileOpen(false)}
                   style={{
@@ -132,124 +349,151 @@ export function AppShell() {
                 </button>
               </div>
 
-              <div style={{ padding: 12 }}>
-                <div
+              <div
+                style={{
+                  marginTop: 14,
+                  height: 44,
+                  borderRadius: 14,
+                  border: "1px solid rgba(255,255,255,.10)",
+                  background: "rgba(0,0,0,.22)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "0 12px",
+                  color: "rgba(255,255,255,.70)",
+                }}
+                title="placeholder visual"
+              >
+                <Search size={16} />
+                <input
+                  value=""
+                  onChange={() => {}}
+                  disabled
+                  placeholder="Search here..."
                   style={{
-                    padding: "0 12px",
-                    fontSize: 11,
-                    fontWeight: 900,
-                    letterSpacing: 1,
-                    color: "rgba(255,255,255,.40)",
-                    textTransform: "uppercase",
-                    marginBottom: 10,
+                    width: "100%",
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    color: "rgba(255,255,255,.80)",
+                    fontWeight: 800,
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: "0 10px",
+                  fontSize: 11,
+                  fontWeight: 950,
+                  letterSpacing: 1,
+                  color: "rgba(255,255,255,.40)",
+                  textTransform: "uppercase",
+                }}
+              >
+                Navegação
+              </div>
+
+              <nav style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                {nav.map((i) => {
+                  const Icon = i.icon;
+                  return (
+                    <NavLink
+                      key={i.to}
+                      to={i.to}
+                      onClick={() => setMobileOpen(false)}
+                      className={({ isActive }) => (isActive ? "mp-navlink-active" : "")}
+                      style={({ isActive }) => ({
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "10px 10px",
+                        borderRadius: 14,
+                        border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
+                        background: isActive ? "rgba(255,159,26,.08)" : "transparent",
+                        textDecoration: "none",
+                        color: "white",
+                      })}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <span
+                            style={{
+                              height: 36,
+                              width: 36,
+                              borderRadius: 12,
+                              display: "grid",
+                              placeItems: "center",
+                              background: isActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,.06)",
+                              border: "1px solid " + (isActive ? "rgba(255,159,26,.20)" : "rgba(255,255,255,.10)"),
+                            }}
+                          >
+                            <Icon size={18} />
+                          </span>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
+                            <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
+                              {i.group || "—"}
+                            </div>
+                          </div>
+                          <ChevronRight size={16} style={{ opacity: isActive ? 0.9 : 0.35 }} />
+                        </>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </nav>
+
+              <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 12 }}>
+                <button
+                  onClick={handleLogout}
+                  style={{
+                    width: "100%",
+                    height: 42,
+                    borderRadius: 14,
+                    border: "1px solid rgba(251,113,133,.30)",
+                    background: "rgba(251,113,133,.14)",
+                    fontWeight: 950,
+                    cursor: "pointer",
+                    color: "white",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
                   }}
                 >
-                  Navegação
+                  <LogOut size={18} /> Sair
+                </button>
+
+                <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
+                  v1 • MonPlant
                 </div>
-
-                <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {nav.map((i) => {
-                    const Icon = i.icon;
-                    return (
-                      <NavLink
-                        key={i.to}
-                        to={i.to}
-                        onClick={() => setMobileOpen(false)}
-                        style={({ isActive }) => ({
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          padding: "10px 12px",
-                          borderRadius: 14,
-                          border: "1px solid " + (isActive ? "rgba(255,255,255,.12)" : "transparent"),
-                          background: isActive ? "rgba(255,255,255,.08)" : "transparent",
-                          textDecoration: "none",
-                        })}
-                      >
-                        {({ isActive }) => (
-                          <>
-                            {/* ✅ ícone alinhado/centralizado */}
-                            <span
-                              className="mp-icon"
-                              style={{
-                                height: 34,
-                                width: 34,
-                                borderRadius: 12,
-                                display: "grid",
-                                placeItems: "center",
-                                background: isActive ? "rgba(52,211,153,.12)" : "rgba(255,255,255,.06)",
-                                border: "1px solid " + (isActive ? "rgba(52,211,153,.20)" : "rgba(255,255,255,.10)"),
-                              }}
-                            >
-                              <Icon size={18} />
-                            </span>
-
-                            <span style={{ fontWeight: 800, color: "rgba(255,255,255,.90)" }}>{i.label}</span>
-                          </>
-                        )}
-                      </NavLink>
-                    );
-                  })}
-                </nav>
-
-                <div
-                  style={{
-                    marginTop: 12,
-                    borderRadius: 18,
-                    background: "rgba(255,255,255,.05)",
-                    border: "1px solid rgba(255,255,255,.10)",
-                    padding: 14,
-                  }}
-                >
-                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: "rgba(255,255,255,.45)" }}>
-                    SESSÃO
-                  </div>
-
-                  <button
-                    onClick={handleLogout}
-                    style={{
-                      marginTop: 10,
-                      width: "100%",
-                      height: 38,
-                      borderRadius: 14,
-                      border: "1px solid rgba(251,113,133,.30)",
-                      background: "rgba(251,113,133,.14)",
-                      fontWeight: 900,
-                      cursor: "pointer",
-                      color: "white",
-                    }}
-                  >
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                      <LogOut size={18} /> Sair
-                    </span>
-                  </button>
-                </div>
-
-                <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,.40)" }}>v1 • MonPlant</div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Main */}
+        {/* ===== Main ===== */}
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
           {/* Topbar */}
           <header
             style={{
               position: "sticky",
               top: 0,
-              zIndex: 40,
+              zIndex: 60,
               borderBottom: "1px solid rgba(255,255,255,.10)",
-              background: "rgba(11,15,20,.85)",
-              backdropFilter: "blur(10px)",
+              background: "rgba(11,15,20,.78)",
+              backdropFilter: "blur(12px)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
+              {/* mobile menu */}
               <button
                 onClick={() => setMobileOpen(true)}
                 style={{
-                  height: 40,
-                  width: 40,
+                  height: 42,
+                  width: 42,
                   borderRadius: 14,
                   background: "rgba(255,255,255,.06)",
                   border: "1px solid rgba(255,255,255,.10)",
@@ -259,9 +503,16 @@ export function AppShell() {
                   placeItems: "center",
                 }}
                 aria-label="Abrir menu"
+                className="mp-mobile-only"
               >
                 <Menu size={18} />
               </button>
+
+              <style>{`
+                @media (min-width: 980px) {
+                  .mp-mobile-only { display: none !important; }
+                }
+              `}</style>
 
               <div style={{ minWidth: 0 }}>
                 {pageGroup ? (
@@ -272,12 +523,12 @@ export function AppShell() {
                       borderRadius: 999,
                       padding: "4px 10px",
                       fontSize: 11,
-                      fontWeight: 900,
+                      fontWeight: 950,
                       letterSpacing: 0.8,
                       textTransform: "uppercase",
-                      background: "rgba(52,211,153,.14)",
-                      border: "1px solid rgba(52,211,153,.18)",
-                      color: "rgba(167,243,208,.95)",
+                      background: "rgba(255,159,26,.12)",
+                      border: "1px solid rgba(255,159,26,.18)",
+                      color: "rgba(255,255,255,.92)",
                     }}
                   >
                     {pageGroup}
@@ -287,7 +538,7 @@ export function AppShell() {
                 <div
                   style={{
                     fontSize: 16,
-                    fontWeight: 900,
+                    fontWeight: 950,
                     marginTop: 4,
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -298,12 +549,54 @@ export function AppShell() {
                 </div>
               </div>
 
+              {/* search (visual) */}
+              <div
+                style={{
+                  marginLeft: 10,
+                  flex: 1,
+                  height: 42,
+                  borderRadius: 14,
+                  border: "1px solid rgba(255,255,255,.10)",
+                  background: "rgba(0,0,0,.22)",
+                  display: "none",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "0 12px",
+                  color: "rgba(255,255,255,.70)",
+                }}
+                className="mp-search-desktop"
+                title="placeholder visual"
+              >
+                <Search size={16} />
+                <input
+                  value=""
+                  onChange={() => {}}
+                  disabled
+                  placeholder="Search here..."
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    color: "rgba(255,255,255,.80)",
+                    fontWeight: 850,
+                  }}
+                />
+              </div>
+
+              <style>{`
+                @media (min-width: 980px) {
+                  .mp-search-desktop { display: flex !important; }
+                }
+              `}</style>
+
               <div style={{ marginLeft: "auto" }}>
                 <div
                   style={{
                     borderRadius: 14,
-                    padding: "8px 10px",
+                    padding: "9px 10px",
                     fontSize: 12,
+                    fontWeight: 900,
                     color: "rgba(255,255,255,.70)",
                     border: "1px solid rgba(255,255,255,.10)",
                     background: "rgba(255,255,255,.05)",
@@ -315,139 +608,103 @@ export function AppShell() {
             </div>
           </header>
 
+          {/* content */}
           <main
-  style={{
-    position: "relative",
-    flex: 1,
-    minWidth: 0,
-    padding: "18px 14px",
-    overflow: "hidden",
-  }}
->
-  {/* ✅ FUNDO ANIMADO GLOBAL (MINERAÇÃO) */}
-  <div
-    aria-hidden
-    style={{
-      position: "absolute",
-      inset: 0,
-      zIndex: 0,
-      pointerEvents: "none",
-      overflow: "hidden",
-    }}
-  >
-    {/* Base glow */}
-    <div
-      style={{
-        position: "absolute",
-        inset: "-25%",
-        background:
-          "radial-gradient(900px 520px at 20% 20%, rgba(52,211,153,.10), transparent 60%)," +
-          "radial-gradient(700px 420px at 85% 30%, rgba(52,211,153,.07), transparent 60%)," +
-          "radial-gradient(900px 520px at 60% 90%, rgba(255,255,255,.04), transparent 60%)",
-      }}
-    />
+            style={{
+              position: "relative",
+              flex: 1,
+              minWidth: 0,
+              padding: "16px 14px",
+              overflow: "hidden",
+            }}
+          >
+            {/* ✅ FUNDO ANIMADO global (não bloqueia cliques) */}
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 0,
+                pointerEvents: "none",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: "-25%",
+                  background:
+                    "radial-gradient(900px 520px at 20% 20%, rgba(255,159,26,.10), transparent 60%)," +
+                    "radial-gradient(700px 420px at 85% 30%, rgba(255,255,255,.05), transparent 60%)," +
+                    "radial-gradient(900px 520px at 60% 90%, rgba(255,159,26,.06), transparent 60%)",
+                }}
+              />
 
-    {/* Grid sutil */}
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        opacity: 0.08,
-        backgroundImage:
-          "linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px)," +
-          "linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px)",
-        backgroundSize: "72px 72px",
-        maskImage:
-          "radial-gradient(600px 360px at 35% 30%, rgba(0,0,0,1), transparent 70%)",
-        WebkitMaskImage:
-          "radial-gradient(600px 360px at 35% 30%, rgba(0,0,0,1), transparent 70%)",
-      }}
-    />
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  opacity: 0.075,
+                  backgroundImage:
+                    "linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px)," +
+                    "linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px)",
+                  backgroundSize: "72px 72px",
+                  maskImage: "radial-gradient(650px 380px at 35% 30%, rgba(0,0,0,1), transparent 70%)",
+                  WebkitMaskImage: "radial-gradient(650px 380px at 35% 30%, rgba(0,0,0,1), transparent 70%)",
+                }}
+              />
 
-    {/* Esteiras diagonais */}
-    <div
-      className="mp-bg-belt-1"
-      style={{
-        position: "absolute",
-        left: "-35%",
-        top: "22%",
-        width: "180%",
-        height: 90,
-        transform: "rotate(-10deg)",
-        background:
-          "linear-gradient(90deg, transparent, rgba(52,211,153,.07), rgba(255,255,255,.05), rgba(52,211,153,.07), transparent)",
-        borderTop: "1px solid rgba(255,255,255,.06)",
-        borderBottom: "1px solid rgba(255,255,255,.06)",
-      }}
-    />
-    <div
-      className="mp-bg-belt-2"
-      style={{
-        position: "absolute",
-        left: "-30%",
-        top: "55%",
-        width: "170%",
-        height: 70,
-        transform: "rotate(-10deg)",
-        background:
-          "linear-gradient(90deg, transparent, rgba(52,211,153,.06), rgba(255,255,255,.04), rgba(52,211,153,.06), transparent)",
-        borderTop: "1px solid rgba(255,255,255,.05)",
-        borderBottom: "1px solid rgba(255,255,255,.05)",
-        opacity: 0.9,
-      }}
-    />
+              <div
+                className="mp-bg-belt-1"
+                style={{
+                  position: "absolute",
+                  left: "-35%",
+                  top: "22%",
+                  width: "180%",
+                  height: 90,
+                  transform: "rotate(-10deg)",
+                  background:
+                    "linear-gradient(90deg, transparent, rgba(255,159,26,.07), rgba(255,255,255,.05), rgba(255,159,26,.07), transparent)",
+                  borderTop: "1px solid rgba(255,255,255,.06)",
+                  borderBottom: "1px solid rgba(255,255,255,.06)",
+                }}
+              />
+              <div
+                className="mp-bg-belt-2"
+                style={{
+                  position: "absolute",
+                  left: "-30%",
+                  top: "55%",
+                  width: "170%",
+                  height: 70,
+                  transform: "rotate(-10deg)",
+                  background:
+                    "linear-gradient(90deg, transparent, rgba(255,159,26,.06), rgba(255,255,255,.04), rgba(255,159,26,.06), transparent)",
+                  borderTop: "1px solid rgba(255,255,255,.05)",
+                  borderBottom: "1px solid rgba(255,255,255,.05)",
+                  opacity: 0.9,
+                }}
+              />
 
-    {/* Poeira */}
-    <div className="mp-bg-dust" style={{ position: "absolute", inset: 0, opacity: 0.55 }} />
+              <div className="mp-bg-dust" style={{ position: "absolute", inset: 0, opacity: 0.55 }} />
 
-    {/* vinheta */}
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        background:
-          "radial-gradient(1100px 560px at 35% 35%, transparent 55%, rgba(0,0,0,.55) 100%)",
-      }}
-    />
-  </div>
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background:
+                    "radial-gradient(1100px 560px at 35% 35%, transparent 55%, rgba(0,0,0,.55) 100%)",
+                }}
+              />
+            </div>
 
-  {/* ✅ CONTEÚDO */}
-  <div style={{ position: "relative", zIndex: 1 }}>
-    <div className="mp-container">
-      <Outlet />
-    </div>
-  </div>
-
-  {/* ✅ CSS da animação global */}
-  <style>{`
-    @keyframes mpBeltMoveShell {
-      0%   { transform: translateX(-5%) rotate(-10deg); opacity: .70; }
-      50%  { transform: translateX(5%)  rotate(-10deg); opacity: .92; }
-      100% { transform: translateX(-5%) rotate(-10deg); opacity: .70; }
-    }
-    .mp-bg-belt-1 { animation: mpBeltMoveShell 10s ease-in-out infinite; }
-    .mp-bg-belt-2 { animation: mpBeltMoveShell 13s ease-in-out infinite; }
-
-    .mp-bg-dust {
-      background-image:
-        radial-gradient(2px 2px at 12% 18%, rgba(52,211,153,.28) 0, transparent 60%),
-        radial-gradient(2px 2px at 28% 62%, rgba(255,255,255,.18) 0, transparent 60%),
-        radial-gradient(1.5px 1.5px at 48% 28%, rgba(52,211,153,.22) 0, transparent 60%),
-        radial-gradient(2px 2px at 66% 74%, rgba(255,255,255,.14) 0, transparent 60%),
-        radial-gradient(1.5px 1.5px at 82% 38%, rgba(52,211,153,.18) 0, transparent 60%),
-        radial-gradient(2px 2px at 92% 66%, rgba(255,255,255,.12) 0, transparent 60%);
-      background-size: 100% 100%;
-      animation: mpDustFloatShell 7s ease-in-out infinite;
-      filter: blur(.1px);
-    }
-    @keyframes mpDustFloatShell {
-      0%   { transform: translateY(0px); opacity: .55; }
-      50%  { transform: translateY(-8px); opacity: .75; }
-      100% { transform: translateY(0px); opacity: .55; }
-    }
-  `}</style>
-</main>
-
+            {/* ✅ Conteúdo (z-index alto) */}
+            <div style={{ position: "relative", zIndex: 1 }}>
+              <div className="mp-container">
+                <Outlet />
+              </div>
+            </div>
+          </main>
         </div>
       </div>
     </div>
