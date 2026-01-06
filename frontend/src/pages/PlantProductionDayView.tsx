@@ -89,10 +89,6 @@ function authHeaders(): HeadersInit {
   const t = (localStorage.getItem("mp_token") || "").trim();
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
-  function authHeaders(): HeadersInit {
-    const t = (localStorage.getItem("mp_token") || "").trim();
-    return t ? { Authorization: `Bearer ${t}` } : {};
-  }
 
   async function loadDay(d: string) {
     setLoading(true);
