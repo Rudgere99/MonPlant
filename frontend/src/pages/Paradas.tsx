@@ -330,88 +330,196 @@ export default function Paradas() {
   }
 
   return (
-    <div className="mp-container px-4 py-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <div className="mp-chip">Operação</div>
-          <div className="mp-page-title">Paradas</div>
-          <div className="mp-page-sub">Registro + cálculo automático + soma por equipamento (Postgres)</div>
+    <div className="mp-container">
+      <style>{`
+        .mp-page-grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:14px; }
+        .mp-col-span-12{ grid-column: span 12 / span 12; }
+        .mp-col-span-8{ grid-column: span 8 / span 8; }
+        .mp-col-span-4{ grid-column: span 4 / span 4; }
+        @media (max-width: 980px){
+          .mp-page-grid{ grid-template-columns: 1fr; }
+          .mp-col-span-12,.mp-col-span-8,.mp-col-span-4{ grid-column: span 1 / span 1 !important; }
+        }
+      `}</style>
+
+      <div className="mp-page-grid">
+        {/* header */}
+        <div className="mp-col-span-12">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="mp-chip">Operação</div>
+              <div className="mp-page-title">Paradas</div>
+              <div className="mp-page-sub">Registro + cálculo automático + soma por equipamento (Postgres)</div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="mp-btn" onClick={() => loadDay(diaRef)} disabled={loading}>
+                {loading ? "Atualizando..." : "Atualizar"}
+              </button>
+              <button className="mp-btn" onClick={exportCSV} disabled={!rowsDoDia.length}>
+                Exportar CSV (dia)
+              </button>
+              <button className="mp-btn" onClick={resetForm}>
+                Limpar formulário
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button className="mp-btn" onClick={() => loadDay(diaRef)} disabled={loading}>
-            {loading ? "Atualizando..." : "Atualizar"}
-          </button>
-          <button className="mp-btn" onClick={exportCSV} disabled={!rowsDoDia.length}>
-            Exportar CSV (dia)
-          </button>
-          <button className="mp-btn" onClick={resetForm}>
-            Limpar formulário
-          </button>
-        </div>
-      </div>
+        {/* coluna esquerda */}
+        <div className="mp-col-span-8" style={{ display: "grid", gap: 14 }}>
+          {/* filtro dia */}
+          <div className="mp-card">
+            <div className="mp-card-b" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "end" }}>
+              <div style={{ minWidth: 220 }}>
+                <div className="mp-label">Dia para visualizar</div>
+                <input className="mp-input" type="date" value={diaRef} onChange={(e) => setDiaRef(e.target.value)} />
+              </div>
 
-      <div className="mp-card mt-4">
-        <div className="mp-card-b" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "end" }}>
-          <div style={{ minWidth: 220 }}>
-            <div className="mp-label">Dia para visualizar</div>
-            <input className="mp-input" type="date" value={diaRef} onChange={(e) => setDiaRef(e.target.value)} />
+              <div className="mp-help" style={{ marginLeft: "auto" }}>
+                {loading ? "Carregando..." : err ? `Erro: ${err}` : <>Registros do dia: <b>{rowsDoDia.length}</b></>}
+              </div>
+            </div>
           </div>
 
-          <div className="mp-help" style={{ marginLeft: "auto" }}>
-            {loading ? "Carregando..." : err ? `Erro: ${err}` : <>Registros do dia: <b>{rowsDoDia.length}</b></>}
+          {/* cards de soma */}
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Horímetro de parada (h) • {brDate(diaRef)}</b>
+              <span className="mp-help">Soma automática das paradas do dia por equipamento</span>
+            </div>
+            <div className="mp-card-b">
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                {EQUIPAMENTOS.map((eq) => (
+                  <div
+                    key={eq}
+                    className="mp-card"
+                    style={{
+                      borderRadius: 16,
+                      padding: 12,
+                      background: "rgba(255,255,255,.04)",
+                      border: "1px solid rgba(255,255,255,.10)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontWeight: 900 }}>{eq}</div>
+                      <span className="mp-chip">{fmtH(horimetroParada[eq] || 0)} h</span>
+                    </div>
+                    <div className="mp-help" style={{ marginTop: 6 }}>
+                      Total de paradas no dia
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* tabela */}
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Paradas do dia • {brDate(diaRef)}</b>
+              <span className="mp-help">Exclusão remove do Postgres</span>
+            </div>
+
+            <div className="mp-card-b" style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+                <thead>
+                  <tr>
+                    {[
+                      "Turno","Data Início","Hora Início","Data Fim","Hora Fim",
+                      "Equipamento","Tipo","Atividade","Descrição","Tempo (h)","",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        style={{
+                          textAlign: "left",
+                          padding: "10px 10px",
+                          fontSize: 12,
+                          letterSpacing: 0.6,
+                          textTransform: "uppercase",
+                          color: "rgba(255,255,255,.55)",
+                          borderBottom: "1px solid rgba(255,255,255,.10)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {rowsDoDia.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} className="mp-help" style={{ padding: 14 }}>
+                        Nenhuma parada registrada para este dia.
+                      </td>
+                    </tr>
+                  ) : (
+                    rowsDoDia.map((r) => (
+                      <tr key={r.id}>
+                        <td style={td}>{r.turno}</td>
+                        <td style={td}>{brDate(r.data_inicio)}</td>
+                        <td style={td}>{r.hora_inicio}</td>
+                        <td style={td}>{brDate(r.data_fim)}</td>
+                        <td style={td}>{r.hora_fim}</td>
+                        <td style={td}><span className="mp-chip">{r.equipamento}</span></td>
+                        <td style={td}>{r.tipo_parada}</td>
+                        <td style={td}>{r.atividade}</td>
+                        <td style={{ ...td, maxWidth: 420 }}>
+                          <div style={{ color: "rgba(255,255,255,.82)", whiteSpace: "normal" }}>
+                            {r.descricao || "—"}
+                          </div>
+                        </td>
+                        <td style={td}><b>{fmtH(r.tempo_parada_h)}</b></td>
+                        <td style={td}>
+                          <button
+                            className="mp-btn"
+                            onClick={() => removeRow(r.id)}
+                            disabled={loading}
+                            style={{
+                              height: 34,
+                              padding: "0 10px",
+                              borderRadius: 12,
+                              border: "1px solid rgba(251,113,133,.30)",
+                              background: "rgba(251,113,133,.12)",
+                            }}
+                          >
+                            Excluir
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+
+              <div className="mp-help" style={{ marginTop: 10 }}>
+                * Agora está 100% no backend/Postgres.
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="mp-card mt-4">
-        <div className="mp-card-h">
-          <b>Horímetro de parada (h) • {brDate(diaRef)}</b>
-          <span className="mp-help">Soma automática das paradas do dia por equipamento</span>
-        </div>
-        <div className="mp-card-b">
-          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-            {EQUIPAMENTOS.map((eq) => (
+        {/* coluna direita */}
+        <div className="mp-col-span-4" style={{ display: "grid", gap: 14 }}>
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Novo lançamento</b>
+              <span className="mp-help">Tempo Parada (h) é calculado automaticamente</span>
+            </div>
+
+            <div className="mp-card-b">
+              {err && <div className="mp-error">{err}</div>}
+
               <div
-                key={eq}
-                className="mp-card"
                 style={{
-                  borderRadius: 16,
-                  padding: 12,
-                  background: "rgba(255,255,255,.04)",
-                  border: "1px solid rgba(255,255,255,.10)",
+                  display: "grid",
+                  gap: 12,
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  alignItems: "end",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontWeight: 900 }}>{eq}</div>
-                  <span className="mp-chip">{fmtH(horimetroParada[eq] || 0)} h</span>
-                </div>
-                <div className="mp-help" style={{ marginTop: 6 }}>
-                  Total de paradas no dia
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="mp-card mt-4">
-        <div className="mp-card-h">
-          <b>Novo lançamento</b>
-          <span className="mp-help">Tempo Parada (h) é calculado automaticamente</span>
-        </div>
-
-        <div className="mp-card-b">
-          {err && <div className="mp-error">{err}</div>}
-
-          <div
-            style={{
-              display: "grid",
-              gap: 12,
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              alignItems: "end",
-            }}
-          >
             <div>
               <div className="mp-label">Turno</div>
               <select className="mp-input" value={turno} onChange={(e) => setTurno(Number(e.target.value) as Turno)}>
@@ -492,90 +600,7 @@ export default function Paradas() {
               </button>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="mp-card mt-4">
-        <div className="mp-card-h">
-          <b>Paradas do dia • {brDate(diaRef)}</b>
-          <span className="mp-help">Exclusão remove do Postgres</span>
-        </div>
-
-        <div className="mp-card-b" style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
-            <thead>
-              <tr>
-                {[
-                  "Turno","Data Início","Hora Início","Data Fim","Hora Fim",
-                  "Equipamento","Tipo","Atividade","Descrição","Tempo (h)","",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      textAlign: "left",
-                      padding: "10px 10px",
-                      fontSize: 12,
-                      letterSpacing: 0.6,
-                      textTransform: "uppercase",
-                      color: "rgba(255,255,255,.55)",
-                      borderBottom: "1px solid rgba(255,255,255,.10)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {rowsDoDia.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="mp-help" style={{ padding: 14 }}>
-                    Nenhuma parada registrada para este dia.
-                  </td>
-                </tr>
-              ) : (
-                rowsDoDia.map((r) => (
-                  <tr key={r.id}>
-                    <td style={td}>{r.turno}</td>
-                    <td style={td}>{brDate(r.data_inicio)}</td>
-                    <td style={td}>{r.hora_inicio}</td>
-                    <td style={td}>{brDate(r.data_fim)}</td>
-                    <td style={td}>{r.hora_fim}</td>
-                    <td style={td}><span className="mp-chip">{r.equipamento}</span></td>
-                    <td style={td}>{r.tipo_parada}</td>
-                    <td style={td}>{r.atividade}</td>
-                    <td style={{ ...td, maxWidth: 420 }}>
-                      <div style={{ color: "rgba(255,255,255,.82)", whiteSpace: "normal" }}>
-                        {r.descricao || "—"}
-                      </div>
-                    </td>
-                    <td style={td}><b>{fmtH(r.tempo_parada_h)}</b></td>
-                    <td style={td}>
-                      <button
-                        className="mp-btn"
-                        onClick={() => removeRow(r.id)}
-                        disabled={loading}
-                        style={{
-                          height: 34,
-                          padding: "0 10px",
-                          borderRadius: 12,
-                          border: "1px solid rgba(251,113,133,.30)",
-                          background: "rgba(251,113,133,.12)",
-                        }}
-                      >
-                        Excluir
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-
-          <div className="mp-help" style={{ marginTop: 10 }}>
-            * Agora está 100% no backend/Postgres.
+            </div>
           </div>
         </div>
       </div>

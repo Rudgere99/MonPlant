@@ -216,224 +216,245 @@ export default function Horimetros() {
   }
 
   return (
-    <div className="mp-container px-4 py-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <div className="mp-chip">Operação</div>
-          <div className="mp-page-title">Horímetros</div>
-          <div className="mp-page-sub">Histórico + filtros + lançamento (Postgres)</div>
-        </div>
+    <div className="mp-container">
+      <style>{`
+        .mp-page-grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:14px; }
+        .mp-col-span-12{ grid-column: span 12 / span 12; }
+        .mp-col-span-7{ grid-column: span 7 / span 7; }
+        .mp-col-span-5{ grid-column: span 5 / span 5; }
+        @media (max-width: 980px){
+          .mp-page-grid{ grid-template-columns: 1fr; }
+          .mp-col-span-12,.mp-col-span-7,.mp-col-span-5{ grid-column: span 1 / span 1 !important; }
+        }
+      `}</style>
 
-        <button className="mp-btn" onClick={() => { loadLastByEq(); loadFiltered(); }} disabled={loading}>
-          {loading ? "Atualizando..." : "Atualizar"}
-        </button>
-      </div>
+      <div className="mp-page-grid">
+        {/* header */}
+        <div className="mp-col-span-12">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="mp-chip">Operação</div>
+              <div className="mp-page-title">Horímetros</div>
+              <div className="mp-page-sub">Histórico + filtros + lançamento (Postgres)</div>
+            </div>
 
-      {/* resumo rápido */}
-      <div className="mp-card mt-4">
-        <div className="mp-card-h">
-          <b>Último horímetro por equipamento</b>
-          <span className="mp-help">Último registro encontrado no banco</span>
-        </div>
-        <div className="mp-card-b">
-          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-            {EQUIPAMENTOS.map((eq) => {
-              const r = lastByEq?.[eq] || null;
-              return (
-                <div
-                  key={eq}
-                  style={{
-                    borderRadius: 16,
-                    padding: 12,
-                    background: "rgba(255,255,255,.04)",
-                    border: "1px solid rgba(255,255,255,.10)",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                    <div style={{ fontWeight: 900 }}>{eq}</div>
-                    <span className="mp-chip">{r ? fmtBR(r.horimetro) : "—"}</span>
-                  </div>
-                  <div className="mp-help" style={{ marginTop: 6 }}>
-                    {r ? `Dia ${brDate(r.day)} • Turno ${r.turno}` : "Sem registros ainda"}
-                  </div>
-                </div>
-              );
-            })}
+            <button className="mp-btn" onClick={() => { loadLastByEq(); loadFiltered(); }} disabled={loading}>
+              {loading ? "Atualizando..." : "Atualizar"}
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* lançamento */}
-      <div className="mp-card mt-4">
-        <div className="mp-card-h">
-          <b>Novo lançamento</b>
-          <span className="mp-help">Salva no banco</span>
-        </div>
-        <div className="mp-card-b">
-          {err && <div className="mp-error">{err}</div>}
-
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", alignItems: "end" }}>
-            <div>
-              <div className="mp-label">Data</div>
-              <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+        {/* resumo rápido */}
+        <div className="mp-col-span-12">
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Último horímetro por equipamento</b>
+              <span className="mp-help">Último registro encontrado no banco</span>
             </div>
-
-            <div>
-              <div className="mp-label">Turno</div>
-              <select className="mp-input" value={turno} onChange={(e) => setTurno(Number(e.target.value) as Turno)}>
-                <option value={1}>Turno 1</option>
-                <option value={2}>Turno 2</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="mp-label">Equipamento</div>
-              <select className="mp-input" value={equipamento} onChange={(e) => setEquipamento(e.target.value)}>
-                {EQUIPAMENTOS.map((x) => (
-                  <option key={x} value={x}>{x}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <div className="mp-label">Horímetro</div>
-              <input
-                className="mp-input"
-                value={horimetro}
-                onChange={(e) => setHorimetro(e.target.value)}
-                placeholder="Ex: 1234,5"
-              />
-            </div>
-
-            <div style={{ gridColumn: "1 / -1" }}>
-              <div className="mp-label">Observação</div>
-              <textarea className="mp-textarea" value={obs} onChange={(e) => setObs(e.target.value)} style={{ minHeight: 90 }} />
-            </div>
-
-            <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
-              <button className="mp-btn mp-btn-primary" onClick={addRow} disabled={loading}>
-                {loading ? "Salvando..." : "Salvar horímetro"}
-              </button>
+            <div className="mp-card-b">
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                {EQUIPAMENTOS.map((eq) => {
+                  const r = lastByEq?.[eq] || null;
+                  return (
+                    <div
+                      key={eq}
+                      style={{
+                        borderRadius: 16,
+                        padding: 12,
+                        background: "rgba(255,255,255,.04)",
+                        border: "1px solid rgba(255,255,255,.10)",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                        <div style={{ fontWeight: 900 }}>{eq}</div>
+                        <span className="mp-chip">{r ? fmtBR(r.horimetro) : "—"}</span>
+                      </div>
+                      <div className="mp-help" style={{ marginTop: 6 }}>
+                        {r ? `Dia ${brDate(r.day)} • Turno ${r.turno}` : "Sem registros ainda"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* filtros */}
-      <div className="mp-card mt-4">
-        <div className="mp-card-h">
-          <b>Filtros</b>
-          <span className="mp-help">Pesquisa no histórico</span>
-        </div>
-        <div className="mp-card-b">
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", alignItems: "end" }}>
-            <div>
-              <div className="mp-label">Data</div>
-              <input className="mp-input" type="date" value={fDay} onChange={(e) => setFDay(e.target.value)} />
+        {/* esquerda: tabela */}
+        <div className="mp-col-span-7" style={{ display: "grid", gap: 14 }}>
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Histórico</b>
+              <span className="mp-help">Exclusão remove do Postgres</span>
             </div>
 
-            <div>
-              <div className="mp-label">Turno</div>
-              <select
-                className="mp-input"
-                value={fTurno}
-                onChange={(e) => setFTurno((e.target.value === "ALL" ? "ALL" : Number(e.target.value)) as any)}
-              >
-                <option value="ALL">Todos</option>
-                <option value={1}>Turno 1</option>
-                <option value={2}>Turno 2</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="mp-label">Equipamento</div>
-              <select className="mp-input" value={fEq} onChange={(e) => setFEq(e.target.value)}>
-                <option value="ALL">Todos</option>
-                {EQUIPAMENTOS.map((x) => (
-                  <option key={x} value={x}>{x}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mp-help" style={{ marginLeft: "auto" }}>
-              {loading ? "Carregando..." : <>Resultado: <b>{filtered.length}</b> registro(s)</>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* tabela */}
-      <div className="mp-card mt-4">
-        <div className="mp-card-h">
-          <b>Histórico</b>
-          <span className="mp-help">Exclusão remove do Postgres</span>
-        </div>
-
-        <div className="mp-card-b" style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
-            <thead>
-              <tr>
-                {["Data", "Turno", "Equipamento", "Horímetro", "Observação", ""].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      textAlign: "left",
-                      padding: "10px 10px",
-                      fontSize: 12,
-                      letterSpacing: 0.6,
-                      textTransform: "uppercase",
-                      color: "rgba(255,255,255,.55)",
-                      borderBottom: "1px solid rgba(255,255,255,.10)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="mp-help" style={{ padding: 14 }}>
-                    Nenhum horímetro encontrado com estes filtros.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((r) => (
-                  <tr key={r.id}>
-                    <td style={td}>{brDate(r.day)}</td>
-                    <td style={td}>{r.turno}</td>
-                    <td style={td}><span className="mp-chip">{r.equipamento}</span></td>
-                    <td style={td}><b>{fmtBR(r.horimetro)}</b></td>
-                    <td style={{ ...td, maxWidth: 520, whiteSpace: "normal" }}>
-                      <div style={{ color: "rgba(255,255,255,.82)" }}>{r.obs || "—"}</div>
-                    </td>
-                    <td style={td}>
-                      <button
-                        className="mp-btn"
-                        onClick={() => removeRow(r.id)}
-                        disabled={loading}
+            <div className="mp-card-b" style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+                <thead>
+                  <tr>
+                    {["Data", "Turno", "Equipamento", "Horímetro", "Observação", ""].map((h) => (
+                      <th
+                        key={h}
                         style={{
-                          height: 34,
-                          padding: "0 10px",
-                          borderRadius: 12,
-                          border: "1px solid rgba(251,113,133,.30)",
-                          background: "rgba(251,113,133,.12)",
+                          textAlign: "left",
+                          padding: "10px 10px",
+                          fontSize: 12,
+                          letterSpacing: 0.6,
+                          textTransform: "uppercase",
+                          color: "rgba(255,255,255,.55)",
+                          borderBottom: "1px solid rgba(255,255,255,.10)",
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        Excluir
-                      </button>
-                    </td>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
 
-          <div className="mp-help" style={{ marginTop: 10 }}>
-            * Agora está 100% no backend/Postgres.
+                <tbody>
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="mp-help" style={{ padding: 14 }}>
+                        Nenhum horímetro encontrado com estes filtros.
+                      </td>
+                    </tr>
+                  ) : (
+                    filtered.map((r) => (
+                      <tr key={r.id}>
+                        <td style={td}>{brDate(r.day)}</td>
+                        <td style={td}>{r.turno}</td>
+                        <td style={td}><span className="mp-chip">{r.equipamento}</span></td>
+                        <td style={td}><b>{fmtBR(r.horimetro)}</b></td>
+                        <td style={{ ...td, maxWidth: 520, whiteSpace: "normal" }}>
+                          <div style={{ color: "rgba(255,255,255,.82)" }}>{r.obs || "—"}</div>
+                        </td>
+                        <td style={td}>
+                          <button
+                            className="mp-btn"
+                            onClick={() => removeRow(r.id)}
+                            disabled={loading}
+                            style={{
+                              height: 34,
+                              padding: "0 10px",
+                              borderRadius: 12,
+                              border: "1px solid rgba(251,113,133,.30)",
+                              background: "rgba(251,113,133,.12)",
+                            }}
+                          >
+                            Excluir
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+
+              <div className="mp-help" style={{ marginTop: 10 }}>
+                * Agora está 100% no backend/Postgres.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* direita: lançamento + filtros */}
+        <div className="mp-col-span-5" style={{ display: "grid", gap: 14 }}>
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Novo lançamento</b>
+              <span className="mp-help">Salva no banco</span>
+            </div>
+            <div className="mp-card-b">
+              {err && <div className="mp-error">{err}</div>}
+
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", alignItems: "end" }}>
+                <div>
+                  <div className="mp-label">Data</div>
+                  <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+                </div>
+
+                <div>
+                  <div className="mp-label">Turno</div>
+                  <select className="mp-input" value={turno} onChange={(e) => setTurno(Number(e.target.value) as Turno)}>
+                    <option value={1}>Turno 1</option>
+                    <option value={2}>Turno 2</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div className="mp-label">Equipamento</div>
+                  <select className="mp-input" value={equipamento} onChange={(e) => setEquipamento(e.target.value)}>
+                    {EQUIPAMENTOS.map((x) => (
+                      <option key={x} value={x}>{x}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <div className="mp-label">Horímetro</div>
+                  <input
+                    className="mp-input"
+                    value={horimetro}
+                    onChange={(e) => setHorimetro(e.target.value)}
+                    placeholder="Ex: 1234,5"
+                  />
+                </div>
+
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <div className="mp-label">Observação</div>
+                  <textarea className="mp-textarea" value={obs} onChange={(e) => setObs(e.target.value)} style={{ minHeight: 90 }} />
+                </div>
+
+                <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
+                  <button className="mp-btn mp-btn-primary" onClick={addRow} disabled={loading}>
+                    {loading ? "Salvando..." : "Salvar horímetro"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Filtros</b>
+              <span className="mp-help">Pesquisa no histórico</span>
+            </div>
+            <div className="mp-card-b">
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", alignItems: "end" }}>
+                <div>
+                  <div className="mp-label">Data</div>
+                  <input className="mp-input" type="date" value={fDay} onChange={(e) => setFDay(e.target.value)} />
+                </div>
+
+                <div>
+                  <div className="mp-label">Turno</div>
+                  <select
+                    className="mp-input"
+                    value={fTurno}
+                    onChange={(e) => setFTurno((e.target.value === "ALL" ? "ALL" : Number(e.target.value)) as any)}
+                  >
+                    <option value="ALL">Todos</option>
+                    <option value={1}>Turno 1</option>
+                    <option value={2}>Turno 2</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div className="mp-label">Equipamento</div>
+                  <select className="mp-input" value={fEq} onChange={(e) => setFEq(e.target.value)}>
+                    <option value="ALL">Todos</option>
+                    {EQUIPAMENTOS.map((x) => (
+                      <option key={x} value={x}>{x}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mp-help" style={{ marginLeft: "auto" }}>
+                  {loading ? "Carregando..." : <>Resultado: <b>{filtered.length}</b> registro(s)</>}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
