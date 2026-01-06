@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, Depends, Header, Query, Request, Response
+from fastapi import FastAPI, HTTPException, Depends, Header, Query, Request, Response, Path
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -15,16 +15,12 @@ from db import get_conn
 # ============================================================
 app = FastAPI()
 
-# ✅ Regex para:
-# - produção: https://monplant.vercel.app
-# - previews: https://<qualquer-coisa>.vercel.app
-# - dev local: http://localhost:5173 / http://127.0.0.1:5173
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"^https:\/\/monplant\.vercel\.app$|^https:\/\/.*\.vercel\.app$|^http:\/\/localhost:5173$|^http:\/\/127\.0\.0\.1:5173$",
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],  # precisa p/ Authorization
+    allow_headers=["*"],
 )
 
 # ✅ Fallback global para qualquer preflight OPTIONS (evita 400)
@@ -37,11 +33,6 @@ def preflight(rest_of_path: str, request: Request):
 # AUTH DEP
 # ============================================================
 def require_owner_id(authorization: Optional[str] = Header(default=None)) -> str:
-    """
-    Pega o token Bearer e retorna owner_id.
-    ⚠️ Hoje está retornando o token como owner_id (temporário).
-    Depois você troca por verify_token e extrai owner_id real.
-    """
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
 
@@ -49,6 +40,7 @@ def require_owner_id(authorization: Optional[str] = Header(default=None)) -> str
     if not token:
         raise HTTPException(status_code=401, detail="Invalid bearer token")
 
+    # ✅ hoje: owner_id = token (temporário)
     return token
 
 
@@ -88,11 +80,13 @@ class StopIn(BaseModel):
     descricao: Optional[str] = ""
     tempo_parada_h: float
 
+# ✅ HORÍMETRO (INI/FIM)
 class HoriIn(BaseModel):
     day: date
     turno: int
     equipamento: str
-    horimetro: float
+    horimetro_ini: float
+    horimetro_fim: float
     obs: Optional[str] = None
 
 
@@ -269,22 +263,42 @@ def total_stops(day: date, owner_id: str = Depends(require_owner_id)):
 
 
 # ============================================================
-# HORIMETROS
+# HORIMETROS (INI/FIM)
 # ============================================================
 @app.post("/api/horimetros")
 def create_hori(body: HoriIn, owner_id: str = Depends(require_owner_id)):
     block_retro(body.day)
 
+    if body.horimetro_fim < body.horimetro_ini:
+        raise HTTPException(status_code=400, detail="horimetro_fim não pode ser menor que horimetro_ini")
+
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            insert into public.bv_horimetros(owner_id, day, turno, equipamento, horimetro, obs)
-            values (%s,%s,%s,%s,%s,%s)
+            insert into public.bv_horimetros(owner_id, day, turno, equipamento, horimetro_ini, horimetro_fim, obs)
+            values (%s,%s,%s,%s,%s,%s,%s)
             returning id
             """,
-            (owner_id, body.day, body.turno, body.equipamento, body.horimetro, body.obs),
+            (owner_id, body.day, body.turno, body.equipamento, body.horimetro_ini, body.horimetro_fim, body.obs),
         )
         return {"id": cur.fetchone()[0]}
+
+@app.delete("/api/horimetros/{id}")
+def delete_hori(
+    id: int = Path(..., ge=1),
+    owner_id: str = Depends(require_owner_id),
+):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            delete from public.bv_horimetros
+            where id=%s and owner_id=%s
+            """,
+            (id, owner_id),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Not found")
+        return {"ok": True}
 
 @app.get("/api/horimetros")
 def list_hori(
@@ -308,7 +322,7 @@ def list_hori(
         params.append(equipamento)
 
     sql = f"""
-      select id, day, turno, equipamento, horimetro, obs, created_at
+      select id, day, turno, equipamento, horimetro_ini, horimetro_fim, obs, created_at
       from public.bv_horimetros
       where {" and ".join(where)}
       order by created_at desc
@@ -326,7 +340,7 @@ def last_by_eq(owner_id: str = Depends(require_owner_id)):
         cur.execute(
             """
             select distinct on (equipamento)
-              equipamento, horimetro, day, turno, created_at
+              equipamento, horimetro_ini, horimetro_fim, day, turno, created_at
             from public.bv_horimetros
             where owner_id=%s
             order by equipamento, created_at desc
@@ -336,17 +350,18 @@ def last_by_eq(owner_id: str = Depends(require_owner_id)):
         return [
             {
                 "equipamento": r[0],
-                "horimetro": float(r[1]),
-                "day": str(r[2]),
-                "turno": r[3],
-                "created_at": r[4].isoformat() if r[4] else None,
+                "horimetro_ini": float(r[1]),
+                "horimetro_fim": float(r[2]),
+                "day": str(r[3]),
+                "turno": r[4],
+                "created_at": r[5].isoformat() if r[5] else None,
             }
             for r in cur.fetchall()
         ]
 
 
 # ============================================================
-# DASHBOARD
+# DASHBOARD (mantive como estava)
 # ============================================================
 @app.get("/api/dashboard/today")
 def dashboard_today(owner_id: str = Depends(require_owner_id)):
