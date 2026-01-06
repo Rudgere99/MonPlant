@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, Depends, Header, Query
+from fastapi import FastAPI, HTTPException, Depends, Header, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -11,27 +11,26 @@ from db import get_conn
 
 
 # ============================================================
-# APP + CORS
+# APP + CORS (Vercel + Previews + Localhost)
 # ============================================================
 app = FastAPI()
 
-# ✅ Ajuste/adicione seu domínio Vercel aqui
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    # coloque seu domínio real:
-    "https://monplant.vercel.app",
-]
-
+# ✅ Regex para:
+# - produção: https://monplant.vercel.app
+# - previews: https://<qualquer-coisa>.vercel.app
+# - dev local: http://localhost:5173 / http://127.0.0.1:5173
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"^https:\/\/monplant\.vercel\.app$|^https:\/\/.*\.vercel\.app$|^http:\/\/localhost:5173$|^http:\/\/127\.0\.0\.1:5173$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],  # precisa p/ Authorization
 )
+
+# ✅ Fallback global para qualquer preflight OPTIONS (evita 400)
+@app.options("/{rest_of_path:path}")
+def preflight(rest_of_path: str, request: Request):
+    return Response(status_code=200)
 
 
 # ============================================================
@@ -40,9 +39,9 @@ app.add_middleware(
 def require_owner_id(authorization: Optional[str] = Header(default=None)) -> str:
     """
     Pega o token Bearer e retorna owner_id.
-    ✅ Você precisa escolher UMA das opções abaixo e apagar a outra.
+    ⚠️ Hoje está retornando o token como owner_id (temporário).
+    Depois você troca por verify_token e extrai owner_id real.
     """
-
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
 
@@ -50,20 +49,6 @@ def require_owner_id(authorization: Optional[str] = Header(default=None)) -> str
     if not token:
         raise HTTPException(status_code=401, detail="Invalid bearer token")
 
-    # ------------------------------------------------------------
-    # OPÇÃO A (RECOMENDADA): se você já tem verify_token no projeto
-    # ------------------------------------------------------------
-    # from auth import verify_token  # ajuste o import conforme seu projeto
-    # payload = verify_token(token)  # deve retornar dict com user_id/owner_id
-    # owner_id = payload.get("owner_id") or payload.get("sub") or payload.get("user_id")
-    # if not owner_id:
-    #     raise HTTPException(status_code=401, detail="Token without owner_id")
-    # return str(owner_id)
-
-    # ------------------------------------------------------------
-    # OPÇÃO B (TEMPORÁRIA): usar o próprio token como owner_id (NÃO IDEAL)
-    # ------------------------------------------------------------
-    # ⚠️ Só pra não travar agora. Troque pela Opção A assim que possível.
     return token
 
 
