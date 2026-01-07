@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth } from "../auth/RequireAuth";
-import AppShell from "../components/AppShell";
+import { AppShell } from "../components/AppShell";
 
 import Login from "../pages/Login";
 import Dashboard from "../pages/Dashboard";
