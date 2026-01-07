@@ -482,8 +482,30 @@ def dev_list_logs(limit: int = Query(500, ge=1, le=2000), dev_payload=Depends(re
 
 
 # =========================
-# Plant Production (mantido)
+# Plant Production (FIX)
+# - last7days vem ANTES do {day} (evita 422)
+# - get_plant_day não retorna 404 (evita Dashboard "sumir")
 # =========================
+@app.get("/api/plant-production/last7days")
+def plant_last7(owner_id: str = Depends(require_owner_id)):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select day, coalesce(sum(coalesce(ton,0)),0) as total_ton
+            from public.bv_plant_production_rows
+            where owner_id=%s
+            group by day
+            order by day desc
+            limit 7
+            """,
+            (owner_id,),
+        )
+        rows = cur.fetchall() or []
+
+    rows = list(reversed(rows))
+    return [{"day": str(r["day"]), "total_ton": float(r["total_ton"] or 0)} for r in rows]
+
+
 @app.get("/api/plant-production/{day}")
 def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
@@ -508,11 +530,9 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
         )
         rows = cur.fetchall() or []
 
-    if not daily and not rows:
-        raise HTTPException(status_code=404, detail="Not found")
-
+    # ✅ não retorna 404: devolve vazio (dashboard fica estável)
     obs = (daily["obs"] if daily else "") or ""
-    updated_at = daily["updated_at"].isoformat() if (daily and daily["updated_at"]) else None
+    updated_at = daily["updated_at"].isoformat() if (daily and daily.get("updated_at")) else None
 
     return {
         "day": str(day),
@@ -574,26 +594,6 @@ def put_plant_day(
     )
 
     return {"ok": True, "day": str(day)}
-
-
-@app.get("/api/plant-production/last7days")
-def plant_last7(owner_id: str = Depends(require_owner_id)):
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            select day, coalesce(sum(coalesce(ton,0)),0) as total_ton
-            from public.bv_plant_production_rows
-            where owner_id=%s
-            group by day
-            order by day desc
-            limit 7
-            """,
-            (owner_id,),
-        )
-        rows = cur.fetchall() or []
-
-    rows = list(reversed(rows))
-    return [{"day": str(r["day"]), "total_ton": float(r["total_ton"] or 0)} for r in rows]
 
 
 # =========================
