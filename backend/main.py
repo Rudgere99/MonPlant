@@ -1,334 +1,257 @@
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from datetime import date, datetime
-from typing import Optional, List
-from zoneinfo import ZoneInfo  # ✅
+from datetime import date, datetime, time
+import psycopg
+import os
 
-from db import get_conn
-from auth_dep import require_owner_id
+app = FastAPI()
 
-
-app = FastAPI(title="MonPlant API", version="1.0.0")
-
-
-# =========================
-# CORS (resolve OPTIONS 400)
-# =========================
-ALLOWED_ORIGINS = ["*"]  # depois você trava na URL do Vercel
+# =====================================================
+# CORS
+# =====================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# =====================================================
+# DATABASE
+# =====================================================
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# =========================
-# Helpers
-# =========================
-BR_TZ = ZoneInfo("America/Sao_Paulo")
+def get_conn():
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL não configurada")
+    return psycopg.connect(DATABASE_URL)
 
-def today_local() -> date:
-    # ✅ "Hoje" no fuso do Brasil (BRT)
-    return datetime.now(BR_TZ).date()
+# =====================================================
+# HELPERS
+# =====================================================
+def today_local():
+    return date.today()
 
-def block_retro(d: date):
-    # ✅ Só bloqueia se for dia ANTERIOR ao hoje no Brasil
+def block_retro_day(d: date):
     if d < today_local():
-        raise HTTPException(status_code=403, detail="Dia anterior não pode ser editado.")
+        raise HTTPException(
+            status_code=403,
+            detail="Dia anterior não pode ser editado."
+        )
 
-def parse_float(v):
-    if v is None:
-        return None
-    try:
-        return float(v)
-    except Exception:
-        return None
+def combine_date_time(d: str, h: str) -> datetime:
+    return datetime.combine(
+        date.fromisoformat(d),
+        time.fromisoformat(h)
+    )
 
+def calc_hours(dt_ini: datetime, dt_fim: datetime) -> float:
+    return round((dt_fim - dt_ini).total_seconds() / 3600, 2)
 
-# =========================
-# Schemas
-# =========================
-class PlantRow(BaseModel):
-    period: str
-    ton: Optional[float] = None
-    freq: Optional[float] = None
-
-class PlantDayUpsert(BaseModel):
-    obs: Optional[str] = ""
-    rows: List[PlantRow] = Field(default_factory=list)
-
-class StopIn(BaseModel):
-    day: date
-    data_inicio: str
-    hora_inicio: str
-    data_fim: str
-    hora_fim: str
-    equipamento: str
-    tipo_parada: str
-    atividade: str
-    descricao: str
-    tempo_parada_h: float
-
-class HorimetroIn(BaseModel):
-    day: date
-    turno: int  # 1|2
-    equipamento: str
-    horimetro_ini: float
-    horimetro_fim: float
-    obs: Optional[str] = None
-
-
-# =========================
-# Health
-# =========================
+# =====================================================
+# HEALTH
+# =====================================================
 @app.get("/health")
 def health():
-    return {"status": "ok", "ts": datetime.utcnow().isoformat()}
+    return {"status": "ok"}
 
-
-# =========================
-# Plant Production
-# =========================
+# =====================================================
+# PRODUÇÃO DA PLANTA
+# =====================================================
 @app.get("/api/plant-production/{day}")
-def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
-    with get_conn() as conn, conn.cursor() as cur:
+def get_production(day: str, request: Request):
+    owner_id = request.headers.get("x-owner-id", "default")
+
+    conn = get_conn()
+    with conn.cursor() as cur:
         cur.execute(
             """
-            select obs, updated_at
-            from public.bv_plant_production_daily
-            where owner_id=%s and day=%s
+            SELECT rows, observacao
+            FROM bv_plant_production_daily
+            WHERE owner_id = %s AND day = %s
             """,
-            (owner_id, day),
+            (owner_id, day)
         )
-        daily = cur.fetchone()
+        row = cur.fetchone()
 
-        cur.execute(
-            """
-            select period, ton, freq
-            from public.bv_plant_production_rows
-            where owner_id=%s and day=%s
-            order by period
-            """,
-            (owner_id, day),
-        )
-        rows = cur.fetchall() or []
-
-    if not daily and not rows:
-        raise HTTPException(status_code=404, detail="Not found")
-
-    obs = (daily["obs"] if daily else "") or ""
-    updated_at = daily["updated_at"].isoformat() if (daily and daily["updated_at"]) else None
+    if not row:
+        return {"rows": [], "observacao": ""}
 
     return {
-        "day": str(day),
-        "obs": obs,
-        "rows": [{"period": r["period"], "ton": r["ton"], "freq": r["freq"]} for r in rows],
-        "updated_at": updated_at,
+        "rows": row[0],
+        "observacao": row[1]
     }
 
-
 @app.put("/api/plant-production/{day}")
-def put_plant_day(day: date, body: PlantDayUpsert, owner_id: str = Depends(require_owner_id)):
-    block_retro(day)
+def save_production(day: str, payload: dict, request: Request):
+    owner_id = request.headers.get("x-owner-id", "default")
+    d = date.fromisoformat(day)
+    block_retro_day(d)
 
-    with get_conn() as conn, conn.cursor() as cur:
+    conn = get_conn()
+    with conn.cursor() as cur:
         cur.execute(
             """
-            insert into public.bv_plant_production_daily(owner_id, day, obs, updated_at)
-            values (%s,%s,%s, now())
-            on conflict (owner_id, day)
-            do update set obs = excluded.obs, updated_at = now()
+            INSERT INTO bv_plant_production_daily
+            (owner_id, day, rows, observacao)
+            VALUES (%s,%s,%s,%s)
+            ON CONFLICT (owner_id, day)
+            DO UPDATE SET
+              rows = EXCLUDED.rows,
+              observacao = EXCLUDED.observacao
             """,
-            (owner_id, day, body.obs or ""),
-        )
-
-        cur.execute(
-            "delete from public.bv_plant_production_rows where owner_id=%s and day=%s",
-            (owner_id, day),
-        )
-
-        for r in body.rows or []:
-            cur.execute(
-                """
-                insert into public.bv_plant_production_rows(owner_id, day, period, ton, freq)
-                values (%s,%s,%s,%s,%s)
-                """,
-                (owner_id, day, r.period, r.ton, r.freq),
+            (
+                owner_id,
+                day,
+                payload.get("rows", []),
+                payload.get("observacao", "")
             )
-
+        )
         conn.commit()
 
-    return {"ok": True, "day": str(day)}
+    return {"ok": True}
 
-
-@app.get("/api/plant-production/last7days")
-def plant_last7(owner_id: str = Depends(require_owner_id)):
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            select day, coalesce(sum(coalesce(ton,0)),0) as total_ton
-            from public.bv_plant_production_rows
-            where owner_id=%s
-            group by day
-            order by day desc
-            limit 7
-            """,
-            (owner_id,),
-        )
-        rows = cur.fetchall() or []
-
-    rows = list(reversed(rows))
-    return [{"day": str(r["day"]), "total_ton": float(r["total_ton"] or 0)} for r in rows]
-
-
-# =========================
-# Stops
-# =========================
-@app.get("/api/stops")
-def list_stops(day: date = Query(...), owner_id: str = Depends(require_owner_id)):
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            select *
-            from public.bv_stops
-            where owner_id=%s and day=%s
-            order by created_at desc
-            """,
-            (owner_id, day),
-        )
-        rows = cur.fetchall() or []
-    return rows
-
-
+# =====================================================
+# PARADAS
+# =====================================================
 @app.post("/api/stops")
-def create_stop(body: StopIn, owner_id: str = Depends(require_owner_id)):
-    block_retro(body.day)
+def create_stop(payload: dict, request: Request):
+    owner_id = request.headers.get("x-owner-id", "default")
 
-    with get_conn() as conn, conn.cursor() as cur:
+    day = date.fromisoformat(payload["day"])
+    block_retro_day(day)
+
+    dt_ini = combine_date_time(
+        payload["data_inicio"],
+        payload["hora_inicio"]
+    )
+    dt_fim = combine_date_time(
+        payload["data_fim"],
+        payload["hora_fim"]
+    )
+
+    if dt_fim <= dt_ini:
+        raise HTTPException(400, "Fim deve ser maior que início")
+
+    tempo_h = calc_hours(dt_ini, dt_fim)
+
+    conn = get_conn()
+    with conn.cursor() as cur:
         cur.execute(
             """
-            insert into public.bv_stops(
-              owner_id, day, data_inicio, hora_inicio, data_fim, hora_fim,
-              equipamento, tipo_parada, atividade, descricao, tempo_parada_h
+            INSERT INTO bv_stops (
+                owner_id,
+                day,
+                turno,
+                equipamento,
+                tipo_parada,
+                atividade,
+                descricao,
+                data_inicio,
+                hora_inicio,
+                data_fim,
+                hora_fim,
+                tempo_parada_h
             )
-            values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            returning id
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
             """,
             (
                 owner_id,
-                body.day,
-                body.data_inicio,
-                body.hora_inicio,
-                body.data_fim,
-                body.hora_fim,
-                body.equipamento,
-                body.tipo_parada,
-                body.atividade,
-                body.descricao,
-                body.tempo_parada_h,
-            ),
+                day,
+                payload["turno"],
+                payload["equipamento"],
+                payload["tipo_parada"],
+                payload["atividade"],
+                payload.get("descricao"),
+                payload["data_inicio"],
+                payload["hora_inicio"],
+                payload["data_fim"],
+                payload["hora_fim"],
+                tempo_h
+            )
         )
-        new_id = cur.fetchone()["id"]
+        stop_id = cur.fetchone()[0]
         conn.commit()
-    return {"ok": True, "id": new_id}
 
+    return {
+        "id": stop_id,
+        "tempo_parada_h": tempo_h
+    }
 
-# =========================
-# Horimetros (INI/FIM)
-# =========================
+# =====================================================
+# HORÍMETROS
+# =====================================================
 @app.post("/api/horimetros")
-def create_horimetro(body: HorimetroIn, owner_id: str = Depends(require_owner_id)):
-    block_retro(body.day)
+def create_horimetro(payload: dict, request: Request):
+    owner_id = request.headers.get("x-owner-id", "default")
 
-    if body.horimetro_fim < body.horimetro_ini:
-        raise HTTPException(status_code=400, detail="horimetro_fim deve ser >= horimetro_ini")
+    day = date.fromisoformat(payload["day"])
+    block_retro_day(day)
 
-    with get_conn() as conn, conn.cursor() as cur:
+    h_ini = payload["horimetro_ini"]
+    h_fim = payload["horimetro_fim"]
+
+    if h_fim < h_ini:
+        raise HTTPException(400, "Horímetro final menor que inicial")
+
+    conn = get_conn()
+    with conn.cursor() as cur:
         cur.execute(
             """
-            insert into public.bv_horimetros(
-              owner_id, day, turno, equipamento, horimetro_ini, horimetro_fim, obs
+            INSERT INTO bv_horimetros (
+                owner_id,
+                day,
+                turno,
+                equipamento,
+                horimetro_ini,
+                horimetro_fim,
+                obs
             )
-            values (%s,%s,%s,%s,%s,%s,%s)
-            returning id
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
             """,
             (
                 owner_id,
-                body.day,
-                int(body.turno),
-                body.equipamento,
-                body.horimetro_ini,
-                body.horimetro_fim,
-                body.obs,
-            ),
+                day,
+                payload["turno"],
+                payload["equipamento"],
+                h_ini,
+                h_fim,
+                payload.get("obs")
+            )
         )
-        new_id = cur.fetchone()["id"]
+        hid = cur.fetchone()[0]
         conn.commit()
 
-    return {"ok": True, "id": new_id}
-
-
-@app.get("/api/horimetros")
-def list_horimetros(
-    equipamento: Optional[str] = None,
-    limit: int = Query(200, ge=1, le=2000),
-    owner_id: str = Depends(require_owner_id),
-):
-    with get_conn() as conn, conn.cursor() as cur:
-        if equipamento:
-            cur.execute(
-                """
-                select *
-                from public.bv_horimetros
-                where owner_id=%s and equipamento=%s
-                order by created_at desc
-                limit %s
-                """,
-                (owner_id, equipamento, limit),
-            )
-        else:
-            cur.execute(
-                """
-                select *
-                from public.bv_horimetros
-                where owner_id=%s
-                order by created_at desc
-                limit %s
-                """,
-                (owner_id, limit),
-            )
-        rows = cur.fetchall() or []
-    return rows
-
+    return {"id": hid}
 
 @app.get("/api/horimetros/last-by-eq")
-def last_by_eq(owner_id: str = Depends(require_owner_id)):
-    with get_conn() as conn, conn.cursor() as cur:
+def last_horimetros(request: Request):
+    owner_id = request.headers.get("x-owner-id", "default")
+
+    conn = get_conn()
+    with conn.cursor() as cur:
         cur.execute(
             """
-            select distinct on (equipamento)
-              equipamento, horimetro_ini, horimetro_fim, day, turno, created_at
-            from public.bv_horimetros
-            where owner_id=%s
-            order by equipamento, created_at desc
+            SELECT DISTINCT ON (equipamento)
+              equipamento,
+              horimetro_fim,
+              created_at
+            FROM bv_horimetros
+            WHERE owner_id = %s
+            ORDER BY equipamento, created_at DESC
             """,
-            (owner_id,),
+            (owner_id,)
         )
-        rows = cur.fetchall() or []
+        rows = cur.fetchall()
 
-    out = []
-    for r in rows:
-        out.append(
-            {
-                "equipamento": r["equipamento"],
-                "horimetro_ini": parse_float(r["horimetro_ini"]),
-                "horimetro_fim": parse_float(r["horimetro_fim"]),
-                "day": str(r["day"]),
-                "turno": int(r["turno"]),
-                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-            }
-        )
-    return out
+    return [
+        {
+            "equipamento": r[0],
+            "horimetro": r[1],
+            "created_at": r[2]
+        }
+        for r in rows
+    ]
