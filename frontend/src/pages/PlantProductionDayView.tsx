@@ -1,717 +1,494 @@
-import React, { useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthProvider";
+import { useEffect, useMemo, useState } from "react";
 import {
-  LayoutDashboard,
-  Code2, // ✅ ADICIONADO
-  Factory,
-  Timer,
-  PauseCircle,
-  FileSpreadsheet,
-  LogOut,
-  Menu,
-  X,
-  Search,
-  ChevronRight,
-} from "lucide-react";
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  LabelList,
+} from "recharts";
 
-type NavItem = {
-  to: string;
-  label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-  group?: string;
+/* ===================== helpers ===================== */
+
+function isoTodayLocal(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function br(iso: string) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function makePeriods24(): string[] {
+  const res: string[] = [];
+  for (let h = 0; h < 24; h++) {
+    const h2 = (h + 1) % 24;
+    const a = String(h).padStart(2, "0") + ":00";
+    const b = String(h2).padStart(2, "0") + ":00";
+    res.push(`${a}-${b}`);
+  }
+  return res;
+}
+
+function periodShort(p: string) {
+  const [a, b] = p.split("-");
+  return `${(a || "").slice(0, 2)}-${(b || "").slice(0, 2)}`;
+}
+
+function parseBRNumber(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+
+  let s = String(v).trim();
+  if (!s) return null;
+
+  s = s.replace("%", "").trim();
+  s = s.replace(/\s/g, "");
+
+  // "1.234,5" -> "1234.5"
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function fmtBR0(n: number) {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(n);
+}
+function fmtBR1(n: number) {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+}
+
+/* ===================== types ===================== */
+
+type PlantHourRow = {
+  period: string;
+  ton?: string | number | null;
+  freq?: string | number | null;
 };
 
-const nav: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Visão geral" },
+type PlantDayPayload = {
+  day: string;
+  obs?: string | null;
+  rows: PlantHourRow[];
+  updated_at?: string | null;
+};
 
-  // ✅ ADICIONADO: Dev Dash (PlantProductionDayView)
-  { to: "/dashboard/producao-dia", label: "Dev Dash", icon: Code2, group: "Desenvolvimento" },
+/* ===================== api ===================== */
 
-  { to: "/producao-planta", label: "Produção da Planta", icon: Factory, group: "Produção" },
-  { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
-  { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
-  { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
-];
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
-function getTitleFromPath(pathname: string) {
-  const hit = nav.find((n) => pathname.startsWith(n.to));
-  return hit?.label ?? "MonPlant";
+function authHeaders(): HeadersInit {
+  // mantém compatível com seu projeto (mp_token e/ou token)
+  const keys = ["mp_token", "token", "access_token", "auth_token"];
+  for (const k of keys) {
+    const v = (localStorage.getItem(k) || "").trim();
+    if (v) return { Authorization: `Bearer ${v}` };
+  }
+  return {};
 }
 
-function getGroupFromPath(pathname: string) {
-  const hit = nav.find((n) => pathname.startsWith(n.to));
-  return hit?.group ?? "";
+async function readErr(r: Response) {
+  const t = await r.text().catch(() => "");
+  if (!t) return `HTTP ${r.status}`;
+  try {
+    const j = JSON.parse(t);
+    if (j?.detail) return typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+    return JSON.stringify(j);
+  } catch {
+    return t;
+  }
 }
 
-function ShellLogo({ onClick }: { onClick?: () => void }) {
+/* ===================== chart label components (TS safe) ===================== */
+
+const FreqLabel = (props: any) => {
+  const { x, y, value, index } = props;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+
+  // alterna altura pra evitar colidir com outros labels
+  const bump = (index ?? 0) % 2 === 0 ? -10 : -18;
+
   return (
-    <Link
-      to="/dashboard"
-      onClick={onClick}
+    <text
+      x={x}
+      y={y + bump}
+      textAnchor="middle"
+      fill="rgba(255,255,255,0.86)"
+      fontSize={11}
+      fontWeight={900}
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        textDecoration: "none",
-        color: "white",
-        minWidth: 0,
+        paintOrder: "stroke",
+        stroke: "rgba(0,0,0,0.70)",
+        strokeWidth: 3,
       }}
     >
-      <div
-        style={{
-          height: 40,
-          width: 40,
-          borderRadius: 14,
-          display: "grid",
-          placeItems: "center",
-          background: "rgba(255,159,26,.12)",
-          border: "1px solid rgba(255,159,26,.18)",
-          fontWeight: 950,
-          letterSpacing: 0.5,
-          color: "rgba(255,255,255,.92)",
-          boxShadow: "0 16px 40px rgba(0,0,0,.45)",
-        }}
-      >
-        MP
-      </div>
-      <div style={{ lineHeight: 1.1, minWidth: 0 }}>
-        <div style={{ fontWeight: 950, letterSpacing: -0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          MonPlant
-        </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,.55)", fontWeight: 800 }}>
-          Operação • Produção
-        </div>
-      </div>
-    </Link>
+      {`${Math.round(n)}%`}
+    </text>
   );
-}
+};
 
-export function AppShell() {
-  const { logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  const pageTitle = useMemo(() => getTitleFromPath(location.pathname), [location.pathname]);
-  const pageGroup = useMemo(() => getGroupFromPath(location.pathname), [location.pathname]);
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
-
-  const bgBase: React.CSSProperties = {
-    minHeight: "100vh",
-    color: "white",
-    background:
-      "radial-gradient(900px 520px at 15% 10%, rgba(255,159,26,.10), transparent 55%)," +
-      "radial-gradient(700px 420px at 90% 20%, rgba(255,255,255,.05), transparent 60%)," +
-      "radial-gradient(900px 520px at 50% 90%, rgba(255,159,26,.06), transparent 60%)," +
-      "#0B0F14",
-  };
-
-  const cardGlass: React.CSSProperties = {
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,.10)",
-    background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))",
-    boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
-    backdropFilter: "blur(10px)",
-  };
-
-  const sideW = 280;
+const TonLabel = (props: any) => {
+  const { x, y, width, value } = props;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
 
   return (
-    <div style={bgBase}>
-      <style>{`
-        .mp-shell * { box-sizing: border-box; }
-        .mp-scrollbar::-webkit-scrollbar { width: 10px; }
-        .mp-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.10); border-radius: 999px; }
-        .mp-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.16); }
+    <text
+      x={x + width / 2}
+      y={y - 8}
+      textAnchor="middle"
+      fill="rgba(255,255,255,0.92)"
+      fontSize={11}
+      fontWeight={900}
+      style={{
+        paintOrder: "stroke",
+        stroke: "rgba(0,0,0,0.70)",
+        strokeWidth: 3,
+      }}
+    >
+      {fmtBR1(n)}
+    </text>
+  );
+};
 
-        /* belts */
-        @keyframes mpBeltMoveShell {
-          0%   { transform: translateX(-5%) rotate(-10deg); opacity: .68; }
-          50%  { transform: translateX(5%)  rotate(-10deg); opacity: .92; }
-          100% { transform: translateX(-5%) rotate(-10deg); opacity: .68; }
-        }
-        .mp-bg-belt-1 { animation: mpBeltMoveShell 10s ease-in-out infinite; }
-        .mp-bg-belt-2 { animation: mpBeltMoveShell 13s ease-in-out infinite; }
-        @keyframes mpDustFloatShell {
-          0%   { transform: translateY(0px); opacity: .55; }
-          50%  { transform: translateY(-8px); opacity: .78; }
-          100% { transform: translateY(0px); opacity: .55; }
-        }
-        .mp-bg-dust {
-          background-image:
-            radial-gradient(2px 2px at 12% 18%, rgba(255,159,26,.26) 0, transparent 60%),
-            radial-gradient(2px 2px at 28% 62%, rgba(255,255,255,.16) 0, transparent 60%),
-            radial-gradient(1.5px 1.5px at 48% 28%, rgba(255,159,26,.20) 0, transparent 60%),
-            radial-gradient(2px 2px at 66% 74%, rgba(255,255,255,.12) 0, transparent 60%),
-            radial-gradient(1.5px 1.5px at 82% 38%, rgba(255,159,26,.18) 0, transparent 60%),
-            radial-gradient(2px 2px at 92% 66%, rgba(255,255,255,.10) 0, transparent 60%);
-          background-size: 100% 100%;
-          animation: mpDustFloatShell 7s ease-in-out infinite;
-          filter: blur(.1px);
-        }
+/* ===================== component ===================== */
 
-        /* active link glow */
-        .mp-navlink-active {
-          border-color: rgba(255,159,26,.22) !important;
-          background: rgba(255,159,26,.08) !important;
-        }
-      `}</style>
+export default function PlantProductionDayView() {
+  const periods = useMemo(() => makePeriods24(), []);
+  const [day, setDay] = useState<string>(isoTodayLocal());
 
-      <div className="mp-shell" style={{ display: "flex", minHeight: "100vh" }}>
-        {/* ===== Sidebar DESKTOP ===== */}
-        <aside
-          style={{
-            width: sideW,
-            display: "none",
-            padding: 14,
-          }}
-          className="mp-sidebar-desktop"
-        >
-          {/* CSS media */}
-          <style>{`
-            @media (min-width: 980px) {
-              .mp-sidebar-desktop { display: block !important; }
-            }
-          `}</style>
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
-          <div style={{ ...cardGlass, height: "calc(100vh - 28px)", padding: 14, display: "flex", flexDirection: "column" }}>
-            <ShellLogo />
+  const [obs, setObs] = useState<string>("");
+  const [rows, setRows] = useState<PlantHourRow[]>(periods.map((p) => ({ period: p, ton: "", freq: "" })));
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
-            <div
-              style={{
-                marginTop: 14,
-                height: 44,
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,.10)",
-                background: "rgba(0,0,0,.22)",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "0 12px",
-                color: "rgba(255,255,255,.70)",
-              }}
-              title="placeholder visual"
-            >
-              <Search size={16} />
-              <input
-                value=""
-                onChange={() => {}}
-                disabled
-                placeholder="Search here..."
-                style={{
-                  width: "100%",
-                  border: "none",
-                  outline: "none",
-                  background: "transparent",
-                  color: "rgba(255,255,255,.80)",
-                  fontWeight: 800,
-                }}
-              />
+  function normalizeRows(inRows: PlantHourRow[]): PlantHourRow[] {
+    const map: Record<string, PlantHourRow> = {};
+    for (const r of inRows || []) map[r.period] = r;
+
+    return periods.map((p) => ({
+      period: p,
+      ton: map[p]?.ton ?? "",
+      freq: map[p]?.freq ?? "",
+    }));
+  }
+
+  async function loadDay() {
+    setLoading(true);
+    setErr(null);
+    setInfo(null);
+
+    try {
+      const r = await fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, {
+        headers: authHeaders(),
+      });
+
+      if (r.status === 404) {
+        // dia sem dados ainda
+        setObs("");
+        setRows(periods.map((p) => ({ period: p, ton: "", freq: "" })));
+        setUpdatedAt(null);
+        return;
+      }
+
+      if (!r.ok) throw new Error(await readErr(r));
+
+      const data = (await r.json()) as PlantDayPayload;
+      setObs(data?.obs ?? "");
+      setRows(normalizeRows(data?.rows || []));
+      setUpdatedAt(data?.updated_at ?? null);
+    } catch (e: any) {
+      setErr(e?.message || "Falha ao carregar");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveDay() {
+    setSaving(true);
+    setErr(null);
+    setInfo(null);
+
+    try {
+      const body = {
+        obs: obs ?? "",
+        rows: rows.map((r) => ({
+          period: r.period,
+          ton: parseBRNumber(r.ton),
+          freq: parseBRNumber(r.freq),
+        })),
+      };
+
+      const r = await fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!r.ok) throw new Error(await readErr(r));
+
+      setInfo("Salvo (DEV) com sucesso.");
+      await loadDay();
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao salvar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  useEffect(() => {
+    loadDay();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day]);
+
+  const chartData = useMemo(() => {
+    return rows.map((r) => {
+      const ton = parseBRNumber(r.ton);
+      const freq = parseBRNumber(r.freq);
+      return {
+        period: r.period,
+        ton: ton === null ? null : Math.max(0, ton),
+        freq: freq === null ? null : Math.max(0, Math.min(100, freq)),
+      };
+    });
+  }, [rows]);
+
+  const totalTon = useMemo(() => {
+    let s = 0;
+    for (const r of chartData) if (typeof r.ton === "number") s += r.ton;
+    return s;
+  }, [chartData]);
+
+  const chunks = useMemo(() => [rows.slice(0, 8), rows.slice(8, 16), rows.slice(16, 24)], [rows]);
+
+  function setCell(period: string, key: "ton" | "freq", value: string) {
+    setRows((prev) => prev.map((r) => (r.period === period ? { ...r, [key]: value } : r)));
+  }
+
+  return (
+    <div className="mp-container">
+      <div className="mp-page-title">
+        <span className="mp-badge mp-badge-dev">DEV</span> Dev Dash
+      </div>
+      <div className="mp-page-sub">
+        Editável qualquer dia • Dia {br(day)} • Total: <b>{fmtBR0(totalTon)}</b> t
+        {updatedAt ? ` • Atualizado: ${new Date(updatedAt).toLocaleString("pt-BR")}` : ""}
+      </div>
+
+      {/* ===== Card: Data + Ações ===== */}
+      <div className="mp-card" style={{ marginTop: 12 }}>
+        <div className="mp-card-h">
+          <b>Produção do dia</b>
+          <span className="mp-help" style={{ marginLeft: 10 }}>
+            (DEV)
+          </span>
+        </div>
+
+        <div className="mp-card-b">
+          <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
+            <div>
+              <div className="mp-label">Data</div>
+              <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
             </div>
 
-            <div
-              style={{
-                marginTop: 16,
-                padding: "0 10px",
-                fontSize: 11,
-                fontWeight: 950,
-                letterSpacing: 1,
-                color: "rgba(255,255,255,.40)",
-                textTransform: "uppercase",
-              }}
-            >
-              Menu
-            </div>
+            <button className="mp-btn" onClick={loadDay} disabled={loading}>
+              {loading ? "Atualizando..." : "Atualizar"}
+            </button>
 
-            <nav style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-              {nav.map((i) => {
-                const Icon = i.icon;
-                return (
-                  <NavLink
-                    key={i.to}
-                    to={i.to}
-                    className={({ isActive }) => (isActive ? "mp-navlink-active" : "")}
-                    style={({ isActive }) => ({
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "10px 10px",
-                      borderRadius: 14,
-                      border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
-                      background: isActive ? "rgba(255,159,26,.08)" : "transparent",
-                      textDecoration: "none",
-                      color: "white",
-                      transition: "transform .12s ease, background .12s ease, border-color .12s ease",
-                    })}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <span
-                          style={{
-                            height: 36,
-                            width: 36,
-                            borderRadius: 12,
-                            display: "grid",
-                            placeItems: "center",
-                            background: isActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,.06)",
-                            border: "1px solid " + (isActive ? "rgba(255,159,26,.20)" : "rgba(255,255,255,.10)"),
-                          }}
-                        >
-                          <Icon size={18} />
-                        </span>
-
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
-                          <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
-                            {i.group || "—"}
-                          </div>
-                        </div>
-
-                        <ChevronRight size={16} style={{ opacity: isActive ? 0.9 : 0.35 }} />
-                      </>
-                    )}
-                  </NavLink>
-                );
-              })}
-            </nav>
-
-            <div style={{ flex: 1 }} />
-
-            <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 12 }}>
-              <button
-                onClick={handleLogout}
-                style={{
-                  width: "100%",
-                  height: 42,
-                  borderRadius: 14,
-                  border: "1px solid rgba(251,113,133,.30)",
-                  background: "rgba(251,113,133,.14)",
-                  fontWeight: 950,
-                  cursor: "pointer",
-                  color: "white",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                }}
-              >
-                <LogOut size={18} /> Sair
-              </button>
-
-              <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
-                v1 • MonPlant
-              </div>
-            </div>
+            <button className="mp-btn mp-btn-primary" onClick={saveDay} disabled={saving}>
+              {saving ? "Salvando..." : "Salvar (DEV)"}
+            </button>
           </div>
-        </aside>
 
-        {/* ===== Drawer MOBILE ===== */}
-        {mobileOpen && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 90 }}>
-            <button
-              onClick={() => setMobileOpen(false)}
-              style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.65)", border: "none" }}
-              aria-label="Fechar menu"
-            />
-
-            <div
-              style={{
-                position: "absolute",
-                left: 12,
-                top: 12,
-                bottom: 12,
-                width: 330,
-                maxWidth: "calc(100vw - 24px)",
-                padding: 14,
-                ...cardGlass,
-              }}
-              className="mp-scrollbar"
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <ShellLogo onClick={() => setMobileOpen(false)} />
-                <button
-                  onClick={() => setMobileOpen(false)}
-                  style={{
-                    height: 40,
-                    width: 40,
-                    borderRadius: 14,
-                    background: "rgba(255,255,255,.06)",
-                    border: "1px solid rgba(255,255,255,.10)",
-                    cursor: "pointer",
-                    color: "white",
-                    display: "grid",
-                    placeItems: "center",
-                  }}
-                  aria-label="Fechar"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 14,
-                  height: 44,
-                  borderRadius: 14,
-                  border: "1px solid rgba(255,255,255,.10)",
-                  background: "rgba(0,0,0,.22)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "0 12px",
-                  color: "rgba(255,255,255,.70)",
-                }}
-                title="placeholder visual"
-              >
-                <Search size={16} />
-                <input
-                  value=""
-                  onChange={() => {}}
-                  disabled
-                  placeholder="Search here..."
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    color: "rgba(255,255,255,.80)",
-                    fontWeight: 800,
-                  }}
-                />
-              </div>
-
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: "0 10px",
-                  fontSize: 11,
-                  fontWeight: 950,
-                  letterSpacing: 1,
-                  color: "rgba(255,255,255,.40)",
-                  textTransform: "uppercase",
-                }}
-              >
-                Navegação
-              </div>
-
-              <nav style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                {nav.map((i) => {
-                  const Icon = i.icon;
-                  return (
-                    <NavLink
-                      key={i.to}
-                      to={i.to}
-                      onClick={() => setMobileOpen(false)}
-                      className={({ isActive }) => (isActive ? "mp-navlink-active" : "")}
-                      style={({ isActive }) => ({
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "10px 10px",
-                        borderRadius: 14,
-                        border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
-                        background: isActive ? "rgba(255,159,26,.08)" : "transparent",
-                        textDecoration: "none",
-                        color: "white",
-                      })}
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <span
-                            style={{
-                              height: 36,
-                              width: 36,
-                              borderRadius: 12,
-                              display: "grid",
-                              placeItems: "center",
-                              background: isActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,.06)",
-                              border: "1px solid " + (isActive ? "rgba(255,159,26,.20)" : "rgba(255,255,255,.10)"),
-                            }}
-                          >
-                            <Icon size={18} />
-                          </span>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
-                            <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
-                              {i.group || "—"}
-                            </div>
-                          </div>
-                          <ChevronRight size={16} style={{ opacity: isActive ? 0.9 : 0.35 }} />
-                        </>
-                      )}
-                    </NavLink>
-                  );
-                })}
-              </nav>
-
-              <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 12 }}>
-                <button
-                  onClick={handleLogout}
-                  style={{
-                    width: "100%",
-                    height: 42,
-                    borderRadius: 14,
-                    border: "1px solid rgba(251,113,133,.30)",
-                    background: "rgba(251,113,133,.14)",
-                    fontWeight: 950,
-                    cursor: "pointer",
-                    color: "white",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                  }}
-                >
-                  <LogOut size={18} /> Sair
-                </button>
-
-                <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
-                  v1 • MonPlant
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ===== Main ===== */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          {/* Topbar */}
-          <header
-            style={{
-              position: "sticky",
-              top: 0,
-              zIndex: 60,
-              borderBottom: "1px solid rgba(255,255,255,.10)",
-              background: "rgba(11,15,20,.78)",
-              backdropFilter: "blur(12px)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
-              {/* mobile menu */}
-              <button
-                onClick={() => setMobileOpen(true)}
-                style={{
-                  height: 42,
-                  width: 42,
-                  borderRadius: 14,
-                  background: "rgba(255,255,255,.06)",
-                  border: "1px solid rgba(255,255,255,.10)",
-                  cursor: "pointer",
-                  color: "white",
-                  display: "grid",
-                  placeItems: "center",
-                }}
-                aria-label="Abrir menu"
-                className="mp-mobile-only"
-              >
-                <Menu size={18} />
-              </button>
-
-              <style>{`
-                @media (min-width: 980px) {
-                  .mp-mobile-only { display: none !important; }
-                }
-              `}</style>
-
-              <div style={{ minWidth: 0 }}>
-                {pageGroup ? (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      borderRadius: 999,
-                      padding: "4px 10px",
-                      fontSize: 11,
-                      fontWeight: 950,
-                      letterSpacing: 0.8,
-                      textTransform: "uppercase",
-                      background: "rgba(255,159,26,.12)",
-                      border: "1px solid rgba(255,159,26,.18)",
-                      color: "rgba(255,255,255,.92)",
-                    }}
-                  >
-                    {pageGroup}
-                  </span>
-                ) : null}
-
-                <div
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 950,
-                    marginTop: 4,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {pageTitle}
-                </div>
-              </div>
-
-              {/* search (visual) */}
-              <div
-                style={{
-                  marginLeft: 10,
-                  flex: 1,
-                  height: 42,
-                  borderRadius: 14,
-                  border: "1px solid rgba(255,255,255,.10)",
-                  background: "rgba(0,0,0,.22)",
-                  display: "none",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "0 12px",
-                  color: "rgba(255,255,255,.70)",
-                }}
-                className="mp-search-desktop"
-                title="placeholder visual"
-              >
-                <Search size={16} />
-                <input
-                  value=""
-                  onChange={() => {}}
-                  disabled
-                  placeholder="Search here..."
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    color: "rgba(255,255,255,.80)",
-                    fontWeight: 850,
-                  }}
-                />
-              </div>
-
-              <style>{`
-                @media (min-width: 980px) {
-                  .mp-search-desktop { display: flex !important; }
-                }
-              `}</style>
-
-              <div style={{ marginLeft: "auto" }}>
-                <div
-                  style={{
-                    borderRadius: 14,
-                    padding: "9px 10px",
-                    fontSize: 12,
-                    fontWeight: 900,
-                    color: "rgba(255,255,255,.70)",
-                    border: "1px solid rgba(255,255,255,.10)",
-                    background: "rgba(255,255,255,.05)",
-                  }}
-                >
-                  v1 • MonPlant
-                </div>
-              </div>
-            </div>
-          </header>
-
-          {/* content */}
-          <main
-            style={{
-              position: "relative",
-              flex: 1,
-              minWidth: 0,
-              padding: "16px 14px",
-              overflow: "hidden",
-            }}
-          >
-            {/* ✅ FUNDO ANIMADO global (não bloqueia cliques) */}
-            <div
-              aria-hidden
-              style={{
-                position: "absolute",
-                inset: 0,
-                zIndex: 0,
-                pointerEvents: "none",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  inset: "-25%",
-                  background:
-                    "radial-gradient(900px 520px at 20% 20%, rgba(255,159,26,.10), transparent 60%)," +
-                    "radial-gradient(700px 420px at 85% 30%, rgba(255,255,255,.05), transparent 60%)," +
-                    "radial-gradient(900px 520px at 60% 90%, rgba(255,159,26,.06), transparent 60%)",
-                }}
-              />
-
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  opacity: 0.075,
-                  backgroundImage:
-                    "linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px)," +
-                    "linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px)",
-                  backgroundSize: "72px 72px",
-                  maskImage: "radial-gradient(650px 380px at 35% 30%, rgba(0,0,0,1), transparent 70%)",
-                  WebkitMaskImage: "radial-gradient(650px 380px at 35% 30%, rgba(0,0,0,1), transparent 70%)",
-                }}
-              />
-
-              <div
-                className="mp-bg-belt-1"
-                style={{
-                  position: "absolute",
-                  left: "-35%",
-                  top: "22%",
-                  width: "180%",
-                  height: 90,
-                  transform: "rotate(-10deg)",
-                  background:
-                    "linear-gradient(90deg, transparent, rgba(255,159,26,.07), rgba(255,255,255,.05), rgba(255,159,26,.07), transparent)",
-                  borderTop: "1px solid rgba(255,255,255,.06)",
-                  borderBottom: "1px solid rgba(255,255,255,.06)",
-                }}
-              />
-              <div
-                className="mp-bg-belt-2"
-                style={{
-                  position: "absolute",
-                  left: "-30%",
-                  top: "55%",
-                  width: "170%",
-                  height: 70,
-                  transform: "rotate(-10deg)",
-                  background:
-                    "linear-gradient(90deg, transparent, rgba(255,159,26,.06), rgba(255,255,255,.04), rgba(255,159,26,.06), transparent)",
-                  borderTop: "1px solid rgba(255,255,255,.05)",
-                  borderBottom: "1px solid rgba(255,255,255,.05)",
-                  opacity: 0.9,
-                }}
-              />
-
-              <div className="mp-bg-dust" style={{ position: "absolute", inset: 0, opacity: 0.55 }} />
-
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  background:
-                    "radial-gradient(1100px 560px at 35% 35%, transparent 55%, rgba(0,0,0,.55) 100%)",
-                }}
-              />
-            </div>
-
-            {/* ✅ Conteúdo (z-index alto) */}
-            <div style={{ position: "relative", zIndex: 1 }}>
-              <div className="mp-container">
-                <Outlet />
-              </div>
-            </div>
-          </main>
+          {err && <div style={{ marginTop: 10, color: "#f87171", fontWeight: 900 }}>{err}</div>}
+          {info && <div style={{ marginTop: 10, color: "#34d399", fontWeight: 900 }}>{info}</div>}
         </div>
       </div>
+
+      {/* ===== Gráfico ===== */}
+      <div className="mp-card" style={{ marginTop: 14 }}>
+        <div className="mp-card-h">
+          <b>Gráfico (Ton/H + %)</b>
+          <span className="mp-badge mp-badge-dev" style={{ marginLeft: 10 }}>
+            DEV
+          </span>
+        </div>
+
+        <div className="mp-card-b" style={{ height: 420 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 42, right: 18, left: 10, bottom: 22 }}>
+              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+
+              <XAxis
+                dataKey="period"
+                tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12, fontWeight: 800 }}
+                tickFormatter={(v) => periodShort(String(v))}
+              />
+
+              <YAxis
+                yAxisId="ton"
+                tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+              />
+
+              <YAxis
+                yAxisId="freq"
+                orientation="right"
+                domain={[0, 100]}
+                tickFormatter={(v) => `${v}%`}
+                tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+              />
+
+              <Tooltip
+                formatter={(value: any, name: any) => {
+                  if (value === null || value === undefined) return ["—", name];
+                  if (name === "Frequência (%)") return [`${fmtBR0(Number(value))}%`, name];
+                  if (name === "Ton/H") return [fmtBR1(Number(value)), name];
+                  return [String(value), name];
+                }}
+                labelFormatter={(label) => `Faixa: ${label}`}
+                contentStyle={{
+                  background: "rgba(0,0,0,0.86)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 12,
+                }}
+                labelStyle={{ color: "rgba(255,255,255,0.85)", fontWeight: 900 }}
+              />
+
+              <Legend wrapperStyle={{ color: "rgba(255,255,255,0.75)" }} />
+
+              <Bar yAxisId="ton" dataKey="ton" name="Ton/H" fill="#22c55e" radius={[6, 6, 0, 0]} barSize={22}>
+                <LabelList dataKey="ton" content={<TonLabel />} />
+              </Bar>
+
+              <Line
+                yAxisId="freq"
+                type="monotone"
+                dataKey="freq"
+                name="Frequência (%)"
+                stroke="#f59e0b"
+                strokeWidth={3}
+                connectNulls={false}
+                dot={(p: any) => {
+                  if (p?.payload?.freq === null || p?.payload?.freq === undefined) return null;
+                  return (
+                    <circle cx={p.cx} cy={p.cy} r={4} fill="#f59e0b" stroke="rgba(0,0,0,.6)" strokeWidth={2} />
+                  );
+                }}
+                activeDot={{ r: 6 }}
+              >
+                {/* ✅ sem formatter => sem erro TS */}
+                <LabelList dataKey="freq" content={<FreqLabel />} />
+              </Line>
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ===== Observação ===== */}
+      <div className="mp-card" style={{ marginTop: 14 }}>
+        <div className="mp-card-h">
+          <b>Observação do dia</b>
+          <span className="mp-badge mp-badge-dev" style={{ marginLeft: 10 }}>
+            DEV
+          </span>
+        </div>
+
+        <div className="mp-card-b">
+          <textarea
+            className="mp-textarea"
+            value={obs ?? ""}
+            onChange={(e) => setObs(e.target.value)}
+            placeholder="Ex.: chuva, manutenção, falta de energia, etc."
+            style={{ minHeight: 120 }}
+          />
+        </div>
+      </div>
+
+      {/* ===== Tabela em 3 colunas ===== */}
+      <div className="mp-help" style={{ marginTop: 14 }}>
+        Preencha <b>Ton/H</b> e <b>Freq%</b> por hora. (DEV: sem bloqueio retroativo)
+      </div>
+
+      <div
+        style={{
+          marginTop: 10,
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(260px, 1fr))",
+          gap: 12,
+          overflowX: "auto",
+          paddingBottom: 2,
+        }}
+      >
+        {chunks.map((rows8, colIdx) => (
+          <div key={colIdx} className="mp-card" style={{ margin: 0 }}>
+            <div className="mp-card-h" style={{ padding: "10px 12px" }}>
+              <b>{colIdx === 0 ? "00–08" : colIdx === 1 ? "08–16" : "16–24"}</b>
+              <span className="mp-help">8 faixas</span>
+            </div>
+
+            <div className="mp-card-b" style={{ padding: 12 }}>
+              <table className="mp-table" style={{ width: "100%", minWidth: 0 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 84 }}>Hora</th>
+                    <th style={{ width: 110 }}>Ton/H</th>
+                    <th style={{ width: 130 }}>Freq (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows8.map((r) => (
+                    <tr key={r.period}>
+                      <td style={{ color: "rgba(255,255,255,0.85)", fontWeight: 800 }}>
+                        {periodShort(r.period)}
+                      </td>
+
+                      <td>
+                        <input
+                          className="mp-input"
+                          value={(r.ton as any) ?? ""}
+                          onChange={(e) => setCell(r.period, "ton", e.target.value)}
+                          placeholder="ex: 320"
+                        />
+                      </td>
+
+                      <td>
+                        <input
+                          className="mp-input"
+                          value={(r.freq as any) ?? ""}
+                          onChange={(e) => setCell(r.period, "freq", e.target.value)}
+                          placeholder="ex: 85"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ height: 8 }} />
     </div>
   );
 }
