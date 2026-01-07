@@ -177,19 +177,22 @@ export default function PlantProductionDayView() {
                 strokeWidth={3}
                 dot={{ r: 4 }}
               >
-                <LabelList
-                  dataKey="freq"
-                  position="top"
-                  formatter={(v: number) => `${Math.round(v)}%`}
-                  fill="rgba(255,255,255,0.85)"
-                  fontSize={11}
-                  fontWeight={800}
-                  style={{
-                    paintOrder: "stroke",
-                    stroke: "rgba(0,0,0,0.7)",
-                    strokeWidth: 3,
-                  }}
-                />
+               <LabelList
+  dataKey="freq"
+  position="top"
+  formatter={(v) =>
+    typeof v === "number" ? `${Math.round(v)}%` : ""
+  }
+  fill="rgba(255,255,255,0.85)"
+  fontSize={11}
+  fontWeight={800}
+  style={{
+    paintOrder: "stroke",
+    stroke: "rgba(0,0,0,0.7)",
+    strokeWidth: 3,
+  }}
+/>
+
               </Line>
             </ComposedChart>
           </ResponsiveContainer>
