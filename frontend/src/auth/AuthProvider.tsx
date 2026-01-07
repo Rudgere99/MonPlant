@@ -1,76 +1,77 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type AuthUser = {
-  name?: string;
-  email?: string;
+type UserType = "apontador" | "controlador" | "dev";
+
+export type MpUser = {
+  id: string;
+  full_name: string;
+  sector: string;
+  user_type: UserType;
+  email: string;
 };
 
-type AuthState = {
+type AuthCtx = {
   token: string | null;
-  user: AuthUser | null;
-  isReady: boolean; // ✅ evita render antes de carregar localStorage
-};
-
-type AuthContextType = {
-  auth: AuthState;
+  user: MpUser | null;
+  isDev: boolean;
   setToken: (t: string | null) => void;
+  setUser: (u: MpUser | null) => void;
   logout: () => void;
 };
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthCtx | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
-  const [user] = useState<AuthUser | null>(null);
-  const [isReady, setIsReady] = useState(false);
+  const [user, setUserState] = useState<MpUser | null>(null);
 
-  // ✅ carrega token do localStorage com segurança
   useEffect(() => {
-    try {
-      const t = localStorage.getItem("mp_token");
-      setTokenState(t ? t.trim() : null);
-    } catch {
-      setTokenState(null);
-    } finally {
-      setIsReady(true);
+    const t = localStorage.getItem("mp_token");
+    const u = localStorage.getItem("mp_user");
+    if (t) setTokenState(t);
+    if (u) {
+      try {
+        setUserState(JSON.parse(u));
+      } catch {
+        setUserState(null);
+      }
     }
   }, []);
 
   const setToken = (t: string | null) => {
     setTokenState(t);
-    try {
-      if (t) localStorage.setItem("mp_token", t);
-      else localStorage.removeItem("mp_token");
-    } catch {
-      // ignore
-    }
+    if (t) localStorage.setItem("mp_token", t);
+    else localStorage.removeItem("mp_token");
   };
 
-  const logout = () => setToken(null);
+  const setUser = (u: MpUser | null) => {
+    setUserState(u);
+    if (u) localStorage.setItem("mp_user", JSON.stringify(u));
+    else localStorage.removeItem("mp_user");
+  };
 
-  const value = useMemo<AuthContextType>(
+  const logout = () => {
+    setToken(null);
+    setUser(null);
+  };
+
+  const value = useMemo<AuthCtx>(
     () => ({
-      auth: { token, user, isReady },
+      token,
+      user,
+      isDev: user?.user_type === "dev",
       setToken,
+      setUser,
       logout,
     }),
-    [token, user, isReady]
+    [token, user]
   );
-
-  // ✅ enquanto não leu localStorage, não renderiza (evita bugs)
-  if (!isReady) {
-    return (
-      <div style={{ background: "#0B0F14", color: "white", minHeight: "100vh", padding: 20 }}>
-        Carregando...
-      </div>
-    );
-  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth deve ser usado dentro de AuthProvider");
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
