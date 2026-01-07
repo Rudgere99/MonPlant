@@ -98,6 +98,12 @@ function authHeaders(): HeadersInit {
   return {};
 }
 
+function devHeaders(): HeadersInit {
+  // ✅ DEV KEY que libera retroativo no backend
+  const devKey = (localStorage.getItem("mp_dev_key") || "").trim();
+  return devKey ? { "X-Dev-Key": devKey } : {};
+}
+
 async function readErr(r: Response) {
   const t = await r.text().catch(() => "");
   if (!t) return `HTTP ${r.status}`;
@@ -178,6 +184,8 @@ export default function PlantProductionDayView() {
   const [rows, setRows] = useState<PlantHourRow[]>(periods.map((p) => ({ period: p, ton: "", freq: "" })));
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
+  const hasDevKey = useMemo(() => (localStorage.getItem("mp_dev_key") || "").trim().length > 0, []);
+
   function normalizeRows(inRows: PlantHourRow[]): PlantHourRow[] {
     const map: Record<string, PlantHourRow> = {};
     for (const r of inRows || []) map[r.period] = r;
@@ -237,7 +245,11 @@ export default function PlantProductionDayView() {
 
       const r = await fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, {
         method: "PUT",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        headers: {
+          ...authHeaders(),
+          ...devHeaders(), // ✅ aqui libera retroativo no backend
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(body),
       });
 
@@ -290,6 +302,17 @@ export default function PlantProductionDayView() {
         Editável qualquer dia • Dia {br(day)} • Total: <b>{fmtBR0(totalTon)}</b> t
         {updatedAt ? ` • Atualizado: ${new Date(updatedAt).toLocaleString("pt-BR")}` : ""}
       </div>
+
+      {!hasDevKey && (
+        <div className="mp-card" style={{ marginTop: 12 }}>
+          <div className="mp-card-b" style={{ color: "#fbbf24", fontWeight: 900 }}>
+            DEV KEY não encontrada. Para liberar retroativo:
+            <div style={{ marginTop: 8, fontFamily: "monospace", opacity: 0.95 }}>
+              localStorage.setItem("mp_dev_key", "SUA_DEV_KEY")
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== Card: Data + Ações ===== */}
       <div className="mp-card" style={{ marginTop: 12 }}>
@@ -396,7 +419,6 @@ export default function PlantProductionDayView() {
                 }}
                 activeDot={{ r: 6 }}
               >
-                {/* ✅ sem formatter => sem erro TS */}
                 <LabelList dataKey="freq" content={<FreqLabel />} />
               </Line>
             </ComposedChart>
