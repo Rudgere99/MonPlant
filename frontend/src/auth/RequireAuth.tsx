@@ -1,17 +1,13 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
 
-type RequireAuthProps = {
-  children: React.ReactNode;
-};
+export function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { token } = useAuth();
+  const location = useLocation();
 
-export function RequireAuth({ children }: RequireAuthProps) {
-  const { auth } = useAuth();
-
-  // ✅ se não tem token, manda pro login
-  if (!auth?.token) {
-    return <Navigate to="/login" replace />;
+  if (!token) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
   return <>{children}</>;
