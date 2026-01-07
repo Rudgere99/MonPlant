@@ -9,6 +9,7 @@ import base64
 import json
 import hmac
 import hashlib
+import re  # ✅ ADD
 
 from passlib.context import CryptContext
 
@@ -89,6 +90,51 @@ def parse_float(v):
         return float(v)
     except Exception:
         return None
+
+
+# =========================
+# ✅ Plant Production period normalizer
+# =========================
+def _period_std_from_h(h: int) -> str:
+    return f"{h:02d}:00-{(h+1)%24:02d}:00"
+
+
+def normalize_period(p: str) -> Optional[str]:
+    """
+    Aceita:
+      - "00-01"
+      - "23-00"
+      - "00:00-01:00"
+      - "00:00 - 01:00"
+      - "00:00:00-01:00:00"
+    Retorna sempre no padrão do banco: "HH:00-HH:00"
+    """
+    if not p:
+        return None
+    s = p.strip()
+    s = re.sub(r"\s+", "", s)
+
+    # "HH-HH"
+    m = re.fullmatch(r"(\d{2})-(\d{2})", s)
+    if m:
+        h1 = int(m.group(1))
+        h2 = int(m.group(2))
+        if 0 <= h1 <= 23 and 0 <= h2 <= 23:
+            return f"{h1:02d}:00-{h2:02d}:00"
+        return None
+
+    # "HH:MM-HH:MM" (com ou sem segundos)
+    m = re.fullmatch(r"(\d{2}):(\d{2})(?::\d{2})?-(\d{2}):(\d{2})(?::\d{2})?", s)
+    if m:
+        h1 = int(m.group(1))
+        m1 = int(m.group(2))
+        h2 = int(m.group(3))
+        m2 = int(m.group(4))
+        if (0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59):
+            return f"{h1:02d}:00-{h2:02d}:00"
+        return None
+
+    return None
 
 
 # =========================
@@ -214,7 +260,6 @@ def log_action(
             )
             conn.commit()
     except Exception:
-        # log nunca deve derrubar a API
         return
 
 
@@ -482,43 +527,32 @@ def dev_list_logs(limit: int = Query(500, ge=1, le=2000), dev_payload=Depends(re
 
 
 # =========================
-# Plant Production (FIX)
-# - last7days vem ANTES do {day} (evita 422)
-# - last7days sempre retorna 7 dias (mesmo 0)
-# - get_plant_day sempre retorna 24 faixas (00-01..23-00)
+# ✅ Plant Production (FIX: last7days BEFORE /{day})
 # =========================
 @app.get("/api/plant-production/last7days")
 def plant_last7(owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            with days as (
-              select (current_date - offs)::date as day
-              from generate_series(6, 0, -1) as offs
-            ),
-            sums as (
-              select day, coalesce(sum(coalesce(ton,0)),0) as total_ton
-              from public.bv_plant_production_rows
-              where owner_id=%s
-                and day >= (current_date - 6)
-                and day <= current_date
-              group by day
-            )
-            select d.day, coalesce(s.total_ton, 0) as total_ton
-            from days d
-            left join sums s on s.day = d.day
-            order by d.day;
+            select day, coalesce(sum(coalesce(ton,0)),0) as total_ton
+            from public.bv_plant_production_rows
+            where owner_id=%s
+            group by day
+            order by day desc
+            limit 7
             """,
             (owner_id,),
         )
         rows = cur.fetchall() or []
 
+    rows = list(reversed(rows))
     return [{"day": str(r["day"]), "total_ton": float(r["total_ton"] or 0)} for r in rows]
 
 
 @app.get("/api/plant-production/{day}")
 def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
-    periods = [f"{h:02d}-{(h+1)%24:02d}" for h in range(24)]
+    # ✅ sempre devolve 24 faixas padrão
+    periods = [_period_std_from_h(h) for h in range(24)]
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -541,14 +575,19 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
         )
         db_rows = cur.fetchall() or []
 
-    by_period = {r["period"]: r for r in db_rows}
+    # ✅ normaliza period do banco
+    by_period: Dict[str, Any] = {}
+    for r in db_rows:
+        key = normalize_period(r["period"])
+        if key:
+            by_period[key] = r
 
     full_rows = []
     for p in periods:
         r = by_period.get(p)
         full_rows.append(
             {
-                "period": p,
+                "period": p,  # padrão "HH:00-HH:00"
                 "ton": r["ton"] if r else None,
                 "freq": r["freq"] if r else None,
             }
@@ -574,7 +613,6 @@ def put_plant_day(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    # ✅ permite lançar "ontem" após meia-noite (grace) e libera DEV via X-Dev-Key
     block_retro(day, x_dev_key)
 
     user_payload = get_optional_user(authorization)
@@ -597,12 +635,13 @@ def put_plant_day(
         )
 
         for r in body.rows or []:
+            p = normalize_period(r.period) or r.period  # ✅ aceita "00-01" e "00:00-01:00"
             cur.execute(
                 """
                 insert into public.bv_plant_production_rows(owner_id, day, period, ton, freq)
                 values (%s,%s,%s,%s,%s)
                 """,
-                (owner_id, day, r.period, r.ton, r.freq),
+                (owner_id, day, p, r.ton, r.freq),
             )
 
         conn.commit()
