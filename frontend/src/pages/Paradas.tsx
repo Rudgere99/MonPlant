@@ -71,8 +71,8 @@ type StopRow = {
 /* ===================== constants ===================== */
 const EQUIPAMENTOS = ["BT-01", "BT-02", "PN-01", "PN-02"] as const;
 
-const TIPOS_PARADA = ["Mecânica", "Elétrica", "Operacional", "Programada"] as const;
-const ATIVIDADES = ["Correia", "Britador", "Peneira", "Troca de turno", "Outros"] as const;
+const TIPOS_PARADA = ["Parada Operacional", "Parda de Manutenção", "Parada por Segurança"] as const;
+const ATIVIDADES = [  "Abastecimento/Lubrificação", "Engaiolamento", "Falha Eletrica", "Falta de equipamento de apoio", "Falta de mão de obra", "Limpeza", "Limpeza de cone / Aguardando quebra", "Manutenção corretiva", "Manutenção de infraestrutura", "Manutenção preventiva", "Material Umido", "Mau tempo", "Sobrecarga", "Outros",] as const;
 
 /* ===================== helpers ===================== */
 function isoTodayLocal(): string {
