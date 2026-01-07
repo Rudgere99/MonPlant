@@ -586,7 +586,7 @@ export default function Dashboard() {
           <div style={{ ...cardBase, padding: 14 }}>
             <div style={headerStyle}>
               <div>
-                <div style={titleStyle}>Insights</div>
+                <div style={titleStyle}>Média/Hora</div>
                 <div style={subStyle}>Média de produção por hora</div>
               </div>
               <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>
