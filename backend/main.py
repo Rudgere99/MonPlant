@@ -484,30 +484,42 @@ def dev_list_logs(limit: int = Query(500, ge=1, le=2000), dev_payload=Depends(re
 # =========================
 # Plant Production (FIX)
 # - last7days vem ANTES do {day} (evita 422)
-# - get_plant_day não retorna 404 (evita Dashboard "sumir")
+# - last7days sempre retorna 7 dias (mesmo 0)
+# - get_plant_day sempre retorna 24 faixas (00-01..23-00)
 # =========================
 @app.get("/api/plant-production/last7days")
 def plant_last7(owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select day, coalesce(sum(coalesce(ton,0)),0) as total_ton
-            from public.bv_plant_production_rows
-            where owner_id=%s
-            group by day
-            order by day desc
-            limit 7
+            with days as (
+              select (current_date - offs)::date as day
+              from generate_series(6, 0, -1) as offs
+            ),
+            sums as (
+              select day, coalesce(sum(coalesce(ton,0)),0) as total_ton
+              from public.bv_plant_production_rows
+              where owner_id=%s
+                and day >= (current_date - 6)
+                and day <= current_date
+              group by day
+            )
+            select d.day, coalesce(s.total_ton, 0) as total_ton
+            from days d
+            left join sums s on s.day = d.day
+            order by d.day;
             """,
             (owner_id,),
         )
         rows = cur.fetchall() or []
 
-    rows = list(reversed(rows))
     return [{"day": str(r["day"]), "total_ton": float(r["total_ton"] or 0)} for r in rows]
 
 
 @app.get("/api/plant-production/{day}")
 def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
+    periods = [f"{h:02d}-{(h+1)%24:02d}" for h in range(24)]
+
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -524,20 +536,31 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
             select period, ton, freq
             from public.bv_plant_production_rows
             where owner_id=%s and day=%s
-            order by period
             """,
             (owner_id, day),
         )
-        rows = cur.fetchall() or []
+        db_rows = cur.fetchall() or []
 
-    # ✅ não retorna 404: devolve vazio (dashboard fica estável)
+    by_period = {r["period"]: r for r in db_rows}
+
+    full_rows = []
+    for p in periods:
+        r = by_period.get(p)
+        full_rows.append(
+            {
+                "period": p,
+                "ton": r["ton"] if r else None,
+                "freq": r["freq"] if r else None,
+            }
+        )
+
     obs = (daily["obs"] if daily else "") or ""
     updated_at = daily["updated_at"].isoformat() if (daily and daily.get("updated_at")) else None
 
     return {
         "day": str(day),
         "obs": obs,
-        "rows": [{"period": r["period"], "ton": r["ton"], "freq": r["freq"]} for r in rows],
+        "rows": full_rows,
         "updated_at": updated_at,
     }
 
@@ -551,7 +574,7 @@ def put_plant_day(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    # ✅ agora permite lançar 23:00-00:00 logo após meia-noite
+    # ✅ permite lançar "ontem" após meia-noite (grace) e libera DEV via X-Dev-Key
     block_retro(day, x_dev_key)
 
     user_payload = get_optional_user(authorization)
