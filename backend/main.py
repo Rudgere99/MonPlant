@@ -9,7 +9,7 @@ import base64
 import json
 import hmac
 import hashlib
-import re
+import re  # ✅ ADD
 
 from passlib.context import CryptContext
 
@@ -30,58 +30,141 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # =========================
-# Helpers gerais
+# Helpers
 # =========================
-TZ_BR = ZoneInfo("America/Sao_Paulo")
+BR_TZ = ZoneInfo("America/Sao_Paulo")
+pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+AUTH_SECRET = (os.getenv("AUTH_SECRET") or "CHANGE_ME_AUTH_SECRET").strip()
+AUTH_TTL_HOURS = int(os.getenv("AUTH_TTL_HOURS") or "168")  # 7 dias
 
 
-def now_br() -> datetime:
-    return datetime.now(TZ_BR)
+def now_local() -> datetime:
+    return datetime.now(BR_TZ)
 
 
-def br_today() -> date:
-    return now_br().date()
+def today_local() -> date:
+    return now_local().date()
 
 
-def br_yesterday() -> date:
-    return (now_br() - timedelta(days=1)).date()
+def is_dev(dev_key: Optional[str]) -> bool:
+    """
+    Habilita bypass do bloqueio retroativo, usando header X-Dev-Key.
+    Configure no Railway: DEV_KEY=uma_senha_forte
+    """
+    if not dev_key:
+        return False
+    expected = (os.getenv("DEV_KEY") or "").strip()
+    return bool(expected) and dev_key.strip() == expected
 
 
-def parse_bearer(authorization: Optional[str]) -> Optional[str]:
-    if not authorization:
+def block_retro(d: date, dev_key: Optional[str] = None):
+    """
+    Regra:
+      - Bloqueia somente se for dia ANTERIOR ao "hoje" no Brasil
+      - EXCETO: permite editar "ontem" durante uma janela após meia-noite (ex.: 01:00)
+      - DEV: se X-Dev-Key bater, não bloqueia nada
+    """
+    if is_dev(dev_key):
+        return
+
+    tdy = today_local()
+    if d >= tdy:
+        return
+
+    # ✅ tolerância: após virar o dia, ainda pode editar "ontem" por X minutos
+    n = now_local()
+    grace_minutes = int(os.getenv("RETRO_GRACE_MINUTES") or "60")  # padrão 60 min
+    if d == (tdy - timedelta(days=1)):
+        if n.hour == 0 and n.minute < grace_minutes:
+            return
+
+    raise HTTPException(status_code=403, detail="Dia anterior não pode ser editado.")
+
+
+def parse_float(v):
+    if v is None:
         return None
-    parts = authorization.strip().split()
-    if len(parts) == 2 and parts[0].lower() == "bearer":
-        return parts[1]
+    try:
+        return float(v)
+    except Exception:
+        return None
+
+
+# =========================
+# ✅ Plant Production period normalizer
+# =========================
+def _period_std_from_h(h: int) -> str:
+    return f"{h:02d}:00-{(h+1)%24:02d}:00"
+
+
+def normalize_period(p: str) -> Optional[str]:
+    """
+    Aceita:
+      - "00-01"
+      - "23-00"
+      - "00:00-01:00"
+      - "00:00 - 01:00"
+      - "00:00:00-01:00:00"
+    Retorna sempre no padrão do banco: "HH:00-HH:00"
+    """
+    if not p:
+        return None
+    s = p.strip()
+    s = re.sub(r"\s+", "", s)
+
+    # "HH-HH"
+    m = re.fullmatch(r"(\d{2})-(\d{2})", s)
+    if m:
+        h1 = int(m.group(1))
+        h2 = int(m.group(2))
+        if 0 <= h1 <= 23 and 0 <= h2 <= 23:
+            return f"{h1:02d}:00-{h2:02d}:00"
+        return None
+
+    # "HH:MM-HH:MM" (com ou sem segundos)
+    m = re.fullmatch(r"(\d{2}):(\d{2})(?::\d{2})?-(\d{2}):(\d{2})(?::\d{2})?", s)
+    if m:
+        h1 = int(m.group(1))
+        m1 = int(m.group(2))
+        h2 = int(m.group(3))
+        m2 = int(m.group(4))
+        if (0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59):
+            return f"{h1:02d}:00-{h2:02d}:00"
+        return None
+
     return None
 
 
 # =========================
-# Token simples (HMAC) - já estava no seu main
+# Auth helpers (token HMAC simples)
 # =========================
-SECRET = os.getenv("AUTH_SECRET", "DEV_SECRET_CHANGE_ME")
-TOKEN_TTL_SECONDS = int(os.getenv("TOKEN_TTL_SECONDS", "2592000"))  # 30 dias
-
-
-def _b64url_encode(b: bytes) -> str:
-    return base64.urlsafe_b64encode(b).decode("utf-8").rstrip("=")
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
 
 
 def _b64url_decode(s: str) -> bytes:
     pad = "=" * (-len(s) % 4)
-    return base64.urlsafe_b64decode((s + pad).encode("utf-8"))
+    return base64.urlsafe_b64decode(s + pad)
 
 
 def _sign(payload_b64: str) -> str:
-    sig = hmac.new(SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256).digest()
-    return _b64url_encode(sig)
+    sig = hmac.new(AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256).digest()
+    return _b64url(sig)
 
 
-def encode_token(payload: Dict[str, Any]) -> str:
+def create_token(user_id: str, user_type: str, email: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(hours=AUTH_TTL_HOURS)
+    payload = {
+        "uid": user_id,
+        "typ": user_type,
+        "em": email,
+        "exp": int(exp.timestamp()),
+        "v": 1,
+    }
     payload_b = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    payload_b64 = _b64url_encode(payload_b)
+    payload_b64 = _b64url(payload_b)
     sig_b64 = _sign(payload_b64)
     return f"{payload_b64}.{sig_b64}"
 
@@ -103,36 +186,118 @@ def decode_token(token: str) -> Dict[str, Any]:
     return payload
 
 
-def get_optional_user(authorization: Optional[str]) -> Optional[Dict[str, Any]]:
-    token = parse_bearer(authorization)
-    if not token:
+def bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+    a = authorization.strip()
+    if not a.lower().startswith("bearer "):
+        return None
+    return a.split(" ", 1)[1].strip()
+
+
+def get_optional_user(
+    authorization: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """
+    Retorna payload do token se existir e for válido.
+    Não bloqueia endpoints existentes (por enquanto).
+    """
+    tok = bearer_token(authorization)
+    if not tok:
         return None
     try:
-        return decode_token(token)
+        return decode_token(tok)
     except Exception:
         return None
 
 
+def require_dev_user(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    tok = bearer_token(authorization)
+    if not tok:
+        raise HTTPException(status_code=401, detail="Sem token")
+    payload = decode_token(tok)
+    if payload.get("typ") != "dev":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    return payload
+
+
 # =========================
-# Retroativo (bloqueio por dia)
-# - Mantém a lógica que você já tinha
+# Logging helpers
 # =========================
-def block_retro(day: date, x_dev_key: Optional[str]) -> None:
-    # Dev key libera retroativo (pra sua página DEV / Dev Dash)
-    dev_key_env = os.getenv("DEV_KEY", "")
-    if dev_key_env and x_dev_key and x_dev_key == dev_key_env:
+def log_action(
+    *,
+    action: str,
+    request: Request,
+    user_id: Optional[str] = None,
+    entity: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    payload: Optional[dict] = None,
+):
+    """
+    Insere em public.bv_logs.
+    Não pode quebrar o fluxo principal: se falhar, ignora.
+    """
+    try:
+        ip = request.client.host if request.client else None
+        ua = request.headers.get("user-agent")
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into public.bv_logs(user_id, action, entity, entity_id, ip, user_agent, payload, created_at)
+                values (%s,%s,%s,%s,%s,%s,%s, now())
+                """,
+                (
+                    user_id,
+                    action,
+                    entity,
+                    entity_id,
+                    ip,
+                    ua,
+                    json.dumps(payload) if payload is not None else None,
+                ),
+            )
+            conn.commit()
+    except Exception:
         return
 
-    # regra: não pode editar dia anterior (só hoje)
-    if day < br_today():
-        raise HTTPException(status_code=403, detail="Retroativo não pode ser editado (somente hoje).")
-
 
 # =========================
-# Auth / Users / Logs
-# (mantido do seu main — não mexi aqui além do necessário)
+# Schemas
 # =========================
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+class PlantRow(BaseModel):
+    period: str
+    ton: Optional[float] = None
+    freq: Optional[float] = None
+
+
+class PlantDayUpsert(BaseModel):
+    obs: Optional[str] = ""
+    rows: List[PlantRow] = Field(default_factory=list)
+
+
+class StopIn(BaseModel):
+    day: date
+    turno: int  # 1|2
+    data_inicio: str
+    hora_inicio: str
+    data_fim: str
+    hora_fim: str
+    equipamento: str
+    tipo_parada: str
+    atividade: str
+    descricao: str
+    tempo_parada_h: float
+
+
+class HorimetroIn(BaseModel):
+    day: date
+    turno: int  # 1|2
+    equipamento: str
+    horimetro_ini: float
+    horimetro_fim: float
+    obs: Optional[str] = None
 
 
 class LoginIn(BaseModel):
@@ -140,42 +305,28 @@ class LoginIn(BaseModel):
     password: str
 
 
-class LoginOut(BaseModel):
-    token: str
-    user: Dict[str, Any]
+class DevCreateUserIn(BaseModel):
+    full_name: str
+    sector: str
+    user_type: str  # apontador | controlador | dev
+    email: EmailStr
+    password: str
 
 
-def log_action(
-    *,
-    owner_id: str,
-    user_id: Optional[str],
-    action: str,
-    entity: str,
-    entity_id: Optional[str],
-    request: Request,
-    payload: Optional[Dict[str, Any]] = None,
-):
-    try:
-        ip = request.headers.get("x-forwarded-for") or request.client.host
-        ua = request.headers.get("user-agent")
-    except Exception:
-        ip, ua = None, None
-
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            insert into public.bv_logs(user_id, action, entity, entity_id, ip, user_agent, payload)
-            values (%s,%s,%s,%s,%s,%s,%s)
-            """,
-            (user_id, action, entity, entity_id, ip, ua, json.dumps(payload) if payload else None),
-        )
-        conn.commit()
+# =========================
+# Health
+# =========================
+@app.get("/health")
+def health():
+    return {"status": "ok", "ts": datetime.utcnow().isoformat()}
 
 
+# =========================
+# AUTH (bv_users)
+# =========================
 @app.post("/auth/login")
 def auth_login(body: LoginIn, request: Request):
-    email = body.email.strip().lower()
-    plain = body.password
+    email = str(body.email).lower().strip()
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -188,53 +339,31 @@ def auth_login(body: LoginIn, request: Request):
         )
         u = cur.fetchone()
 
-    if not u or not u.get("is_active"):
-        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+        if not u or not u["is_active"]:
+            raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-    stored = (u.get("password_hash") or "").strip()
+        pw_hash = u["password_hash"] or ""
 
-    ok = False
-
-    # suporte legado: DEV_PLAIN:senha
-    if stored.startswith("DEV_PLAIN:"):
-        legacy_plain = stored.split(":", 1)[1] if ":" in stored else ""
-        ok = (plain == legacy_plain)
-        if ok:
-            # migra para bcrypt automaticamente
+        # Migração: DEV_PLAIN:senha -> converte para bcrypt no primeiro login
+        if pw_hash.startswith("DEV_PLAIN:"):
+            plain = pw_hash.split(":", 1)[1]
             new_hash = pwd.hash(plain)
-            with get_conn() as conn, conn.cursor() as cur:
-                cur.execute(
-                    "update public.bv_users set password_hash=%s where id=%s",
-                    (new_hash, u["id"]),
-                )
-                conn.commit()
-    else:
-        try:
-            ok = pwd.verify(plain, stored)
-        except Exception:
-            ok = False
+            cur.execute("update public.bv_users set password_hash=%s where id=%s", (new_hash, u["id"]))
+            conn.commit()
+            pw_hash = new_hash
 
-    if not ok:
-        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+        if not pwd.verify(body.password, pw_hash):
+            raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-    exp = int((datetime.now(timezone.utc) + timedelta(seconds=TOKEN_TTL_SECONDS)).timestamp())
-    payload = {
-        "uid": str(u["id"]),
-        "email": u["email"],
-        "name": u["full_name"],
-        "type": u["user_type"],
-        "exp": exp,
-    }
-    token = encode_token(payload)
+        token = create_token(str(u["id"]), u["user_type"], u["email"])
 
     log_action(
-        owner_id="shared",
-        user_id=str(u["id"]),
-        action="login",
-        entity="auth",
-        entity_id=None,
+        action="LOGIN",
         request=request,
-        payload={"email": u["email"]},
+        user_id=str(u["id"]),
+        entity="bv_users",
+        entity_id=str(u["id"]),
+        payload={"email": email, "user_type": u["user_type"]},
     )
 
     return {
@@ -249,173 +378,157 @@ def auth_login(body: LoginIn, request: Request):
     }
 
 
+@app.get("/auth/me")
+def auth_me(authorization: Optional[str] = Header(default=None, alias="Authorization")):
+    tok = bearer_token(authorization)
+    if not tok:
+        raise HTTPException(status_code=401, detail="Sem token")
+
+    payload = decode_token(tok)
+    uid = payload.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select id, full_name, sector, user_type, email, is_active
+            from public.bv_users
+            where id=%s
+            """,
+            (uid,),
+        )
+        u = cur.fetchone()
+
+    if not u or not u["is_active"]:
+        raise HTTPException(status_code=401, detail="Usuário inválido")
+
+    return {
+        "id": str(u["id"]),
+        "full_name": u["full_name"],
+        "sector": u["sector"],
+        "user_type": u["user_type"],
+        "email": u["email"],
+    }
+
+
 # =========================
-# Plant Production (helpers)
+# DEV (users + logs)
 # =========================
-def _canon_period(p: str) -> str:
-    """
-    Normaliza periodos:
-    - aceita '00-01' e devolve '00:00-01:00'
-    - aceita '00:00-01:00' e devolve igual
-    """
-    if p is None:
-        return ""
-    s = str(p).strip()
-    if not s:
-        return ""
-
-    # HH-HH
-    m = re.fullmatch(r"(\d{2})-(\d{2})", s)
-    if m:
-        a, b = m.group(1), m.group(2)
-        return f"{a}:00-{b}:00"
-
-    # HH:MM-HH:MM
-    m = re.fullmatch(r"(\d{2}):(\d{2})-(\d{2}):(\d{2})", s)
-    if m:
-        a_h, a_m, b_h, b_m = m.groups()
-        return f"{a_h}:{a_m}-{b_h}:{b_m}"
-
-    # variações raras
-    m = re.fullmatch(r"(\d{2}):(\d{2})-(\d{2})", s)
-    if m:
-        a_h, a_m, b_h = m.groups()
-        return f"{a_h}:{a_m}-{b_h}:00"
-
-    m = re.fullmatch(r"(\d{2})-(\d{2}):(\d{2})", s)
-    if m:
-        a_h, b_h, b_m = m.groups()
-        return f"{a_h}:00-{b_h}:{b_m}"
-
-    return s
+@app.get("/dev/users")
+def dev_list_users(dev_payload=Depends(require_dev_user)):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select id, full_name, sector, user_type, email, is_active, created_at
+            from public.bv_users
+            order by created_at desc
+            """
+        )
+        rows = cur.fetchall() or []
+    return [
+        {
+            "id": str(r["id"]),
+            "full_name": r["full_name"],
+            "sector": r["sector"],
+            "user_type": r["user_type"],
+            "email": r["email"],
+            "is_active": bool(r["is_active"]),
+            "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+        }
+        for r in rows
+    ]
 
 
-def _periods24() -> List[str]:
+@app.post("/dev/users")
+def dev_create_user(
+    body: DevCreateUserIn,
+    request: Request,
+    dev_payload=Depends(require_dev_user),
+):
+    allowed = {"apontador", "controlador", "dev"}
+    if body.user_type not in allowed:
+        raise HTTPException(status_code=400, detail="user_type inválido")
+
+    email = str(body.email).lower().strip()
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("select 1 from public.bv_users where email=%s", (email,))
+        if cur.fetchone():
+            raise HTTPException(status_code=400, detail="Email já existe")
+
+        pw_hash = pwd.hash(body.password)
+
+        cur.execute(
+            """
+            insert into public.bv_users(full_name, sector, user_type, email, password_hash, is_active)
+            values (%s,%s,%s,%s,%s,true)
+            returning id
+            """,
+            (body.full_name.strip(), body.sector.strip(), body.user_type, email, pw_hash),
+        )
+        new_id = cur.fetchone()["id"]
+        conn.commit()
+
+    log_action(
+        action="CREATE_USER",
+        request=request,
+        user_id=dev_payload.get("uid"),
+        entity="bv_users",
+        entity_id=str(new_id),
+        payload={
+            "created_user": {
+                "id": str(new_id),
+                "full_name": body.full_name.strip(),
+                "sector": body.sector.strip(),
+                "user_type": body.user_type,
+                "email": email,
+            }
+        },
+    )
+
+    return {"ok": True, "id": str(new_id)}
+
+
+@app.get("/dev/logs")
+def dev_list_logs(limit: int = Query(500, ge=1, le=2000), dev_payload=Depends(require_dev_user)):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select l.id, l.user_id, l.action, l.entity, l.entity_id, l.ip, l.user_agent, l.payload, l.created_at,
+                   u.full_name as user_name, u.user_type as user_type
+            from public.bv_logs l
+            left join public.bv_users u on u.id = l.user_id
+            order by l.created_at desc
+            limit %s
+            """,
+            (limit,),
+        )
+        rows = cur.fetchall() or []
+
     out = []
-    for h in range(24):
-        h2 = (h + 1) % 24
-        out.append(f"{h:02d}:00-{h2:02d}:00")
+    for r in rows:
+        out.append(
+            {
+                "id": int(r["id"]),
+                "user_id": str(r["user_id"]) if r["user_id"] else None,
+                "user_name": r.get("user_name"),
+                "user_type": r.get("user_type"),
+                "action": r["action"],
+                "entity": r["entity"],
+                "entity_id": r["entity_id"],
+                "ip": r["ip"],
+                "user_agent": r["user_agent"],
+                "payload": r["payload"],
+                "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+            }
+        )
     return out
 
 
 # =========================
-# Plant Production (mantido)
+# ✅ Plant Production (FIX: last7days BEFORE /{day})
 # =========================
-class PlantRow(BaseModel):
-    period: str
-    ton: Optional[float] = None
-    freq: Optional[float] = None
-
-
-class PlantDayUpsert(BaseModel):
-    obs: Optional[str] = ""
-    rows: List[PlantRow] = Field(default_factory=list)
-
-
-@app.get("/api/plant-production/{day}")
-def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
-    periods = _periods24()
-
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            select obs, updated_at
-            from public.bv_plant_production_daily
-            where owner_id=%s and day=%s
-            """,
-            (owner_id, day),
-        )
-        daily = cur.fetchone()
-
-        cur.execute(
-            """
-            select period, ton, freq
-            from public.bv_plant_production_rows
-            where owner_id=%s and day=%s
-            order by period
-            """,
-            (owner_id, day),
-        )
-        rows_db = cur.fetchall() or []
-
-    if not daily and not rows_db:
-        raise HTTPException(status_code=404, detail="Not found")
-
-    obs = (daily["obs"] if daily else "") or ""
-    updated_at = daily["updated_at"].isoformat() if (daily and daily["updated_at"]) else None
-
-    # normaliza periodos e garante 24 faixas
-    map_rows: Dict[str, Dict[str, Any]] = {}
-    for r in rows_db:
-        p = _canon_period(r.get("period"))
-        map_rows[p] = {"period": p, "ton": r.get("ton"), "freq": r.get("freq")}
-
-    rows = [map_rows.get(p, {"period": p, "ton": None, "freq": None}) for p in periods]
-
-    return {
-        "day": str(day),
-        "obs": obs,
-        "rows": rows,
-        "updated_at": updated_at,
-    }
-
-
-@app.put("/api/plant-production/{day}")
-def put_plant_day(
-    day: date,
-    body: PlantDayUpsert,
-    request: Request,
-    owner_id: str = Depends(require_owner_id),
-    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
-    authorization: Optional[str] = Header(default=None, alias="Authorization"),
-):
-    # ✅ agora permite lançar 23:00-00:00 logo após meia-noite (mantém sua lógica)
-    block_retro(day, x_dev_key)
-
-    user_payload = get_optional_user(authorization)
-    user_id = user_payload.get("uid") if user_payload else None
-
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            insert into public.bv_plant_production_daily(owner_id, day, obs, updated_at)
-            values (%s,%s,%s,now())
-            on conflict (owner_id, day) do update
-              set obs=excluded.obs,
-                  updated_at=now()
-            """,
-            (owner_id, day, (body.obs or "").strip()),
-        )
-
-        cur.execute(
-            "delete from public.bv_plant_production_rows where owner_id=%s and day=%s",
-            (owner_id, day),
-        )
-
-        for r in body.rows or []:
-            cur.execute(
-                """
-                insert into public.bv_plant_production_rows(owner_id, day, period, ton, freq)
-                values (%s,%s,%s,%s,%s)
-                """,
-                (owner_id, day, _canon_period(r.period), r.ton, r.freq),
-            )
-
-        conn.commit()
-
-    log_action(
-        owner_id=owner_id,
-        user_id=user_id,
-        action="upsert",
-        entity="plant_production",
-        entity_id=str(day),
-        request=request,
-        payload={"day": str(day)},
-    )
-
-    return {"ok": True, "day": str(day)}
-
-
 @app.get("/api/plant-production/last7days")
 def plant_last7(owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
@@ -436,30 +549,127 @@ def plant_last7(owner_id: str = Depends(require_owner_id)):
     return [{"day": str(r["day"]), "total_ton": float(r["total_ton"] or 0)} for r in rows]
 
 
+@app.get("/api/plant-production/{day}")
+def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
+    # ✅ sempre devolve 24 faixas padrão
+    periods = [_period_std_from_h(h) for h in range(24)]
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select obs, updated_at
+            from public.bv_plant_production_daily
+            where owner_id=%s and day=%s
+            """,
+            (owner_id, day),
+        )
+        daily = cur.fetchone()
+
+        cur.execute(
+            """
+            select period, ton, freq
+            from public.bv_plant_production_rows
+            where owner_id=%s and day=%s
+            """,
+            (owner_id, day),
+        )
+        db_rows = cur.fetchall() or []
+
+    # ✅ normaliza period do banco
+    by_period: Dict[str, Any] = {}
+    for r in db_rows:
+        key = normalize_period(r["period"])
+        if key:
+            by_period[key] = r
+
+    full_rows = []
+    for p in periods:
+        r = by_period.get(p)
+        full_rows.append(
+            {
+                "period": p,  # padrão "HH:00-HH:00"
+                "ton": r["ton"] if r else None,
+                "freq": r["freq"] if r else None,
+            }
+        )
+
+    obs = (daily["obs"] if daily else "") or ""
+    updated_at = daily["updated_at"].isoformat() if (daily and daily.get("updated_at")) else None
+
+    return {
+        "day": str(day),
+        "obs": obs,
+        "rows": full_rows,
+        "updated_at": updated_at,
+    }
+
+
+@app.put("/api/plant-production/{day}")
+def put_plant_day(
+    day: date,
+    body: PlantDayUpsert,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    block_retro(day, x_dev_key)
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into public.bv_plant_production_daily(owner_id, day, obs, updated_at)
+            values (%s,%s,%s, now())
+            on conflict (owner_id, day)
+            do update set obs = excluded.obs, updated_at = now()
+            """,
+            (owner_id, day, body.obs or ""),
+        )
+
+        cur.execute(
+            "delete from public.bv_plant_production_rows where owner_id=%s and day=%s",
+            (owner_id, day),
+        )
+
+        for r in body.rows or []:
+            p = normalize_period(r.period) or r.period  # ✅ aceita "00-01" e "00:00-01:00"
+            cur.execute(
+                """
+                insert into public.bv_plant_production_rows(owner_id, day, period, ton, freq)
+                values (%s,%s,%s,%s,%s)
+                """,
+                (owner_id, day, p, r.ton, r.freq),
+            )
+
+        conn.commit()
+
+    log_action(
+        action="UPDATE_PLANT_PRODUCTION",
+        request=request,
+        user_id=user_id,
+        entity="bv_plant_production_daily",
+        entity_id=str(day),
+        payload={"owner_id": owner_id, "day": str(day)},
+    )
+
+    return {"ok": True, "day": str(day)}
+
+
 # =========================
 # Stops (mantido + log)
 # =========================
-class StopIn(BaseModel):
-    id: Optional[int] = None
-    day: date
-    eq: str
-    tipo: str
-    atividade: str
-    start: str
-    end: str
-    hours: float = 0.0
-    note: Optional[str] = ""
-
-
 @app.get("/api/stops")
 def list_stops(day: date = Query(...), owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select id, day, eq, tipo, atividade, start, "end", hours, note, created_at
+            select *
             from public.bv_stops
             where owner_id=%s and day=%s
-            order by id desc
+            order by created_at desc
             """,
             (owner_id, day),
         )
@@ -468,7 +678,7 @@ def list_stops(day: date = Query(...), owner_id: str = Depends(require_owner_id)
 
 
 @app.post("/api/stops")
-def upsert_stop(
+def create_stop(
     body: StopIn,
     request: Request,
     owner_id: str = Depends(require_owner_id),
@@ -481,129 +691,87 @@ def upsert_stop(
     user_id = user_payload.get("uid") if user_payload else None
 
     with get_conn() as conn, conn.cursor() as cur:
-        if body.id:
-            cur.execute(
-                """
-                update public.bv_stops
-                set eq=%s, tipo=%s, atividade=%s, start=%s, "end"=%s, hours=%s, note=%s
-                where owner_id=%s and id=%s
-                """,
-                (
-                    body.eq,
-                    body.tipo,
-                    body.atividade,
-                    body.start,
-                    body.end,
-                    body.hours,
-                    body.note,
-                    owner_id,
-                    body.id,
-                ),
+        cur.execute(
+            """
+            insert into public.bv_stops(
+              owner_id, day, turno,
+              data_inicio, hora_inicio, data_fim, hora_fim,
+              equipamento, tipo_parada, atividade, descricao, tempo_parada_h
             )
-            entity_id = str(body.id)
-            action = "update"
-        else:
-            cur.execute(
-                """
-                insert into public.bv_stops(owner_id, day, eq, tipo, atividade, start, "end", hours, note)
-                values (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                returning id
-                """,
-                (
-                    owner_id,
-                    body.day,
-                    body.eq,
-                    body.tipo,
-                    body.atividade,
-                    body.start,
-                    body.end,
-                    body.hours,
-                    body.note,
-                ),
-            )
-            new_id = cur.fetchone()["id"]
-            entity_id = str(new_id)
-            action = "insert"
-
+            values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            returning id
+            """,
+            (
+                owner_id,
+                body.day,
+                int(body.turno),
+                body.data_inicio,
+                body.hora_inicio,
+                body.data_fim,
+                body.hora_fim,
+                body.equipamento,
+                body.tipo_parada,
+                body.atividade,
+                body.descricao,
+                body.tempo_parada_h,
+            ),
+        )
+        new_id = cur.fetchone()["id"]
         conn.commit()
 
     log_action(
-        owner_id=owner_id,
-        user_id=user_id,
-        action=action,
-        entity="stops",
-        entity_id=entity_id,
+        action="CREATE_STOP",
         request=request,
-        payload={"day": str(body.day), "eq": body.eq, "tipo": body.tipo, "atividade": body.atividade},
+        user_id=user_id,
+        entity="bv_stops",
+        entity_id=str(new_id),
+        payload={"owner_id": owner_id, "day": str(body.day), "equipamento": body.equipamento},
     )
 
-    return {"ok": True, "id": int(entity_id)}
+    return {"ok": True, "id": new_id}
 
 
 @app.delete("/api/stops/{stop_id}")
 def delete_stop(
     stop_id: int,
-    day: date = Query(...),
-    request: Request = None,
+    request: Request,
     owner_id: str = Depends(require_owner_id),
-    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(day, x_dev_key)
-
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            "delete from public.bv_stops where owner_id=%s and id=%s",
-            (owner_id, stop_id),
+            """
+            delete from public.bv_stops
+            where id=%s and owner_id=%s
+            """,
+            (stop_id, owner_id),
         )
+        deleted = cur.rowcount
         conn.commit()
 
-    if request is not None:
-        log_action(
-            owner_id=owner_id,
-            user_id=user_id,
-            action="delete",
-            entity="stops",
-            entity_id=str(stop_id),
-            request=request,
-            payload={"day": str(day)},
-        )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Not found")
 
-    return {"ok": True, "id": int(stop_id)}
+    log_action(
+        action="DELETE_STOP",
+        request=request,
+        user_id=user_id,
+        entity="bv_stops",
+        entity_id=str(stop_id),
+        payload={"owner_id": owner_id},
+    )
+
+    return {"ok": True}
 
 
 # =========================
-# Horimetros (mantido + log)
+# Horimetros (INI/FIM) + log
 # =========================
-class HorimetroIn(BaseModel):
-    id: Optional[int] = None
-    day: date
-    eq: str
-    horimetro_ini: float
-    horimetro_fim: float
-
-
-@app.get("/api/horimetros/last-by-eq")
-def hor_last_by_eq(owner_id: str = Depends(require_owner_id)):
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            select distinct on (eq) eq, day, horimetro_ini, horimetro_fim, created_at
-            from public.bv_horimetros
-            where owner_id=%s
-            order by eq, day desc, created_at desc
-            """,
-            (owner_id,),
-        )
-        rows = cur.fetchall() or []
-    return rows
-
-
 @app.post("/api/horimetros")
-def upsert_horimetro(
+def create_horimetro(
     body: HorimetroIn,
     request: Request,
     owner_id: str = Depends(require_owner_id),
@@ -619,58 +787,133 @@ def upsert_horimetro(
     user_id = user_payload.get("uid") if user_payload else None
 
     with get_conn() as conn, conn.cursor() as cur:
-        if body.id:
-            cur.execute(
-                """
-                update public.bv_horimetros
-                set eq=%s, day=%s, horimetro_ini=%s, horimetro_fim=%s
-                where owner_id=%s and id=%s
-                """,
-                (
-                    body.eq,
-                    body.day,
-                    body.horimetro_ini,
-                    body.horimetro_fim,
-                    owner_id,
-                    body.id,
-                ),
+        cur.execute(
+            """
+            insert into public.bv_horimetros(
+              owner_id, day, turno, equipamento, horimetro_ini, horimetro_fim, obs
             )
-            entity_id = str(body.id)
-            action = "update"
-        else:
-            cur.execute(
-                """
-                insert into public.bv_horimetros(owner_id, day, eq, horimetro_ini, horimetro_fim)
-                values (%s,%s,%s,%s,%s)
-                returning id
-                """,
-                (
-                    owner_id,
-                    body.day,
-                    body.eq,
-                    body.horimetro_ini,
-                    body.horimetro_fim,
-                ),
-            )
-            new_id = cur.fetchone()["id"]
-            entity_id = str(new_id)
-            action = "insert"
-
+            values (%s,%s,%s,%s,%s,%s,%s)
+            returning id
+            """,
+            (
+                owner_id,
+                body.day,
+                int(body.turno),
+                body.equipamento,
+                body.horimetro_ini,
+                body.horimetro_fim,
+                body.obs,
+            ),
+        )
+        new_id = cur.fetchone()["id"]
         conn.commit()
 
     log_action(
-        owner_id=owner_id,
-        user_id=user_id,
-        action=action,
-        entity="horimetros",
-        entity_id=entity_id,
+        action="CREATE_HORIMETRO",
         request=request,
-        payload={"day": str(body.day), "eq": body.eq},
+        user_id=user_id,
+        entity="bv_horimetros",
+        entity_id=str(new_id),
+        payload={"owner_id": owner_id, "day": str(body.day), "equipamento": body.equipamento},
     )
 
-    return {"ok": True, "id": int(entity_id)}
+    return {"ok": True, "id": new_id}
 
 
-@app.get("/health")
-def health():
-    return {"ok": True, "ts": datetime.now(timezone.utc).isoformat()}
+@app.get("/api/horimetros")
+def list_horimetros(
+    equipamento: Optional[str] = None,
+    limit: int = Query(200, ge=1, le=2000),
+    owner_id: str = Depends(require_owner_id),
+):
+    with get_conn() as conn, conn.cursor() as cur:
+        if equipamento:
+            cur.execute(
+                """
+                select *
+                from public.bv_horimetros
+                where owner_id=%s and equipamento=%s
+                order by created_at desc
+                limit %s
+                """,
+                (owner_id, equipamento, limit),
+            )
+        else:
+            cur.execute(
+                """
+                select *
+                from public.bv_horimetros
+                where owner_id=%s
+                order by created_at desc
+                limit %s
+                """,
+                (owner_id, limit),
+            )
+        rows = cur.fetchall() or []
+    return rows
+
+
+@app.get("/api/horimetros/last-by-eq")
+def last_by_eq(owner_id: str = Depends(require_owner_id)):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select distinct on (equipamento)
+              equipamento, horimetro_ini, horimetro_fim, day, turno, created_at
+            from public.bv_horimetros
+            where owner_id=%s
+            order by equipamento, created_at desc
+            """,
+            (owner_id,),
+        )
+        rows = cur.fetchall() or []
+
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "equipamento": r["equipamento"],
+                "horimetro_ini": parse_float(r["horimetro_ini"]),
+                "horimetro_fim": parse_float(r["horimetro_fim"]),
+                "day": str(r["day"]),
+                "turno": int(r["turno"]),
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+        )
+    return out
+
+
+@app.delete("/api/horimetros/{horimetro_id}")
+def delete_horimetro(
+    horimetro_id: int,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            delete from public.bv_horimetros
+            where id=%s and owner_id=%s
+            """,
+            (horimetro_id, owner_id),
+        )
+        deleted = cur.rowcount
+        conn.commit()
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    log_action(
+        action="DELETE_HORIMETRO",
+        request=request,
+        user_id=user_id,
+        entity="bv_horimetros",
+        entity_id=str(horimetro_id),
+        payload={"owner_id": owner_id},
+    )
+
+    return {"ok": True}
