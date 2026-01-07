@@ -2,6 +2,30 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 
+type LoginResponse = {
+  token: string;
+  user?: {
+    id: string;
+    full_name: string;
+    sector: string;
+    user_type: "apontador" | "controlador" | "dev";
+    email: string;
+  };
+};
+
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
+
+async function readErr(res: Response) {
+  try {
+    const j = await res.json();
+    if (j?.detail) return typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+    return JSON.stringify(j);
+  } catch {
+    const t = await res.text().catch(() => "");
+    return t || `HTTP ${res.status}`;
+  }
+}
+
 export default function Login() {
   const { setToken } = useAuth();
   const nav = useNavigate();
@@ -9,18 +33,46 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
 
+    const em = email.trim().toLowerCase();
+    const pw = pass;
+
+    if (!em || !pw) {
+      setErr("Informe e-mail e senha");
+      return;
+    }
+
+    setLoading(true);
     try {
-      // por enquanto: mock. Depois liga no backend /auth/login
-      if (!email || !pass) throw new Error("Informe e-mail e senha");
-      setToken("TOKEN_MOCK");
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: em, password: pw }),
+      });
+
+      if (!res.ok) throw new Error(await readErr(res));
+
+      const data = (await res.json()) as LoginResponse;
+
+      if (!data?.token) throw new Error("Resposta inválida do servidor (sem token)");
+
+      // ✅ padrão do projeto
+      localStorage.setItem("mp_token", data.token);
+      if (data.user) localStorage.setItem("mp_user", JSON.stringify(data.user));
+
+      // ✅ AuthProvider
+      setToken(data.token);
+
       nav("/dashboard");
     } catch (e: any) {
-      setErr(e?.message || "Erro");
+      setErr(e?.message || "Erro ao entrar");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -59,10 +111,8 @@ export default function Login() {
               "linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px)," +
               "linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px)",
             backgroundSize: "64px 64px",
-            maskImage:
-              "radial-gradient(500px 320px at 50% 45%, rgba(0,0,0,1), transparent 70%)",
-            WebkitMaskImage:
-              "radial-gradient(500px 320px at 50% 45%, rgba(0,0,0,1), transparent 70%)",
+            maskImage: "radial-gradient(500px 320px at 50% 45%, rgba(0,0,0,1), transparent 70%)",
+            WebkitMaskImage: "radial-gradient(500px 320px at 50% 45%, rgba(0,0,0,1), transparent 70%)",
           }}
         />
 
@@ -108,17 +158,13 @@ export default function Login() {
           style={{
             position: "absolute",
             inset: 0,
-            background:
-              "radial-gradient(900px 520px at 50% 40%, transparent 50%, rgba(0,0,0,.65) 100%)",
+            background: "radial-gradient(900px 520px at 50% 40%, transparent 50%, rgba(0,0,0,.65) 100%)",
           }}
         />
       </div>
 
       {/* ✅ CONTEÚDO (LOGIN) */}
-      <div
-        className="min-h-screen w-full flex items-center justify-center px-4 py-10"
-        style={{ position: "relative", zIndex: 1 }}
-      >
+      <div className="min-h-screen w-full flex items-center justify-center px-4 py-10" style={{ position: "relative", zIndex: 1 }}>
         <div className="mp-card" style={{ width: 420, maxWidth: "100%" }}>
           <div className="mp-card-h">
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -173,12 +219,12 @@ export default function Login() {
                 />
               </div>
 
-              <button className="mp-btn mp-btn-primary" type="submit">
-                Entrar
+              <button className="mp-btn mp-btn-primary" type="submit" disabled={loading}>
+                {loading ? "Entrando..." : "Entrar"}
               </button>
 
               <div className="mp-help">
-                * Por enquanto está em modo mock (TOKEN_MOCK). Depois ligamos no backend /auth/login.
+                Dica: use o DEV inicial <b>dev@monplant.com</b> / <b>dev123</b> (depois você troca).
               </div>
             </form>
           </div>
