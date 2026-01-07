@@ -2,7 +2,8 @@ from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
+from zoneinfo import ZoneInfo  # ✅
 
 from db import get_conn
 from auth_dep import require_owner_id
@@ -14,9 +15,7 @@ app = FastAPI(title="MonPlant API", version="1.0.0")
 # =========================
 # CORS (resolve OPTIONS 400)
 # =========================
-ALLOWED_ORIGINS = [
-    "*",  # depois, se quiser travar, eu te passo como deixar só sua URL do Vercel
-]
+ALLOWED_ORIGINS = ["*"]  # depois você trava na URL do Vercel
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -29,15 +28,16 @@ app.add_middleware(
 # =========================
 # Helpers
 # =========================
-def today_local() -> date:
-    return date.today()
+BR_TZ = ZoneInfo("America/Sao_Paulo")
 
+def today_local() -> date:
+    # ✅ "Hoje" no fuso do Brasil (BRT)
+    return datetime.now(BR_TZ).date()
 
 def block_retro(d: date):
-    # não pode editar retroativo
+    # ✅ Só bloqueia se for dia ANTERIOR ao hoje no Brasil
     if d < today_local():
-        raise HTTPException(status_code=403, detail="Dia retroativo não pode ser editado.")
-
+        raise HTTPException(status_code=403, detail="Dia anterior não pode ser editado.")
 
 def parse_float(v):
     if v is None:
@@ -56,11 +56,9 @@ class PlantRow(BaseModel):
     ton: Optional[float] = None
     freq: Optional[float] = None
 
-
 class PlantDayUpsert(BaseModel):
     obs: Optional[str] = ""
     rows: List[PlantRow] = Field(default_factory=list)
-
 
 class StopIn(BaseModel):
     day: date
@@ -73,7 +71,6 @@ class StopIn(BaseModel):
     atividade: str
     descricao: str
     tempo_parada_h: float
-
 
 class HorimetroIn(BaseModel):
     day: date
@@ -98,7 +95,6 @@ def health():
 @app.get("/api/plant-production/{day}")
 def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
-        # daily
         cur.execute(
             """
             select obs, updated_at
@@ -109,7 +105,6 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
         )
         daily = cur.fetchone()
 
-        # rows
         cur.execute(
             """
             select period, ton, freq
@@ -140,7 +135,6 @@ def put_plant_day(day: date, body: PlantDayUpsert, owner_id: str = Depends(requi
     block_retro(day)
 
     with get_conn() as conn, conn.cursor() as cur:
-        # upsert daily
         cur.execute(
             """
             insert into public.bv_plant_production_daily(owner_id, day, obs, updated_at)
@@ -151,7 +145,6 @@ def put_plant_day(day: date, body: PlantDayUpsert, owner_id: str = Depends(requi
             (owner_id, day, body.obs or ""),
         )
 
-        # replace rows
         cur.execute(
             "delete from public.bv_plant_production_rows where owner_id=%s and day=%s",
             (owner_id, day),
@@ -187,7 +180,6 @@ def plant_last7(owner_id: str = Depends(require_owner_id)):
         )
         rows = cur.fetchall() or []
 
-    # devolve do mais antigo -> mais novo
     rows = list(reversed(rows))
     return [{"day": str(r["day"]), "total_ton": float(r["total_ton"] or 0)} for r in rows]
 
@@ -196,10 +188,7 @@ def plant_last7(owner_id: str = Depends(require_owner_id)):
 # Stops
 # =========================
 @app.get("/api/stops")
-def list_stops(
-    day: date = Query(...),
-    owner_id: str = Depends(require_owner_id),
-):
+def list_stops(day: date = Query(...), owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -317,9 +306,6 @@ def list_horimetros(
 
 @app.get("/api/horimetros/last-by-eq")
 def last_by_eq(owner_id: str = Depends(require_owner_id)):
-    """
-    Retorna 1 registro por equipamento (o mais recente).
-    """
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
