@@ -1,120 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
-
-/* ===================== tipos ===================== */
-type Turno = 1 | 2;
-
-type StopRow = {
-  id: number;
-  owner_id?: string;
-  day: string; // YYYY-MM-DD (dia referência)
-  turno: Turno;
-
-  data_inicio: string; // YYYY-MM-DD
-  hora_inicio: string; // HH:MM
-  data_fim: string; // YYYY-MM-DD
-  hora_fim: string; // HH:MM
-
-  equipamento: string;
-  tipo_parada: string;
-  atividade: string;
-  descricao: string;
-
-  tempo_parada_h: number;
-  created_at?: string | null;
-};
-
-/* ===================== constantes (combos) ===================== */
-const EQUIPAMENTOS = ["BT-01", "BT-02", "PN-01", "PN-02"] as const;
-
-const TIPOS_PARADA = [
-  "Mecânica",
-  "Elétrica",
-  "Operacional",
-  "Falta de Material",
-  "Clima/Chuva",
-  "Troca de Turno",
-  "Preventiva",
-  "Outros",
-] as const;
-
-const ATIVIDADES = [
-  "Correia",
-  "Britador",
-  "Peneira",
-  "Motor",
-  "Lubrificação",
-  "Inspeção",
-  "Limpeza",
-  "Solda",
-  "Aguardando",
-  "Outros",
-] as const;
-
-/* ===================== helpers ===================== */
-function isoTodayLocal() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function parseDateTimeLocal(dateISO: string, timeHHMM: string): Date | null {
-  if (!dateISO || !timeHHMM) return null;
-  const [y, m, d] = dateISO.split("-").map(Number);
-  const [hh, mm] = timeHHMM.split(":").map(Number);
-  if (!y || !m || !d || Number.isNaN(hh) || Number.isNaN(mm)) return null;
-  return new Date(y, m - 1, d, hh, mm, 0, 0);
-}
-
-function diffHours(start: Date, end: Date) {
-  const ms = end.getTime() - start.getTime();
-  return ms / (1000 * 60 * 60);
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
-function fmtH(n: number) {
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
-}
-
-function brDate(iso: string) {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-function safeCSV(v: any) {
-  const s = String(v ?? "");
-  if (s.includes('"') || s.includes(",") || s.includes("\n")) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
-
-function calcTempoParadaH(
-  dataInicio: string,
-  horaInicio: string,
-  dataFim: string,
-  horaFim: string
-): number {
-  const s = parseDateTimeLocal(dataInicio, horaInicio);
-  const e = parseDateTimeLocal(dataFim, horaFim);
-  if (!s || !e) return 0;
-
-  let h = diffHours(s, e);
-
-  // se fim "antes", tenta +1 dia
-  if (h < 0) {
-    const e2 = new Date(e.getTime() + 24 * 60 * 60 * 1000);
-    h = diffHours(s, e2);
-  }
-
-  if (!Number.isFinite(h)) return 0;
-  return clamp(h, 0, 72);
-}
+import { useEffect, useMemo, useState } from "react";
 
 /* ===================== API ===================== */
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
@@ -128,12 +12,22 @@ function authHeaders(): HeadersInit {
   return {};
 }
 
+async function readErr(r: Response) {
+  const t = await r.text().catch(() => "");
+  if (!t) return `HTTP ${r.status}`;
+  // tenta trazer detail do FastAPI
+  try {
+    const j = JSON.parse(t);
+    if (j?.detail) return typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+    return JSON.stringify(j);
+  } catch {
+    return t;
+  }
+}
+
 async function apiGet<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(t || `HTTP ${r.status}`);
-  }
+  if (!r.ok) throw new Error(await readErr(r));
   return (await r.json()) as T;
 }
 
@@ -143,47 +37,99 @@ async function apiPost<T>(path: string, body: any): Promise<T> {
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(t || `HTTP ${r.status}`);
-  }
+  if (!r.ok) throw new Error(await readErr(r));
   return (await r.json()) as T;
 }
 
 async function apiDelete(path: string): Promise<void> {
   const r = await fetch(`${API_BASE}${path}`, { method: "DELETE", headers: authHeaders() });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(t || `HTTP ${r.status}`);
-  }
+  if (!r.ok) throw new Error(await readErr(r));
 }
 
-/* ===================== estilos locais (padrão dashboard) ===================== */
-const td: React.CSSProperties = {
-  padding: "10px 10px",
-  borderBottom: "1px solid rgba(255,255,255,.06)",
-  verticalAlign: "top",
-  whiteSpace: "nowrap",
-  color: "rgba(255,255,255,.85)",
+/* ===================== types ===================== */
+type Turno = 1 | 2;
+
+type StopRow = {
+  id: number;
+  owner_id?: string;
+  day: string; // yyyy-mm-dd
+  turno: Turno;
+
+  data_inicio: string; // yyyy-mm-dd
+  hora_inicio: string; // HH:MM
+  data_fim: string; // yyyy-mm-dd
+  hora_fim: string; // HH:MM
+
+  equipamento: string;
+  tipo_parada: string;
+  atividade: string;
+  descricao: string;
+
+  tempo_parada_h: number;
+  created_at?: string;
 };
 
-function kpiBoxStyle(): React.CSSProperties {
-  return {
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,.10)",
-    background: "rgba(255,255,255,.04)",
-    padding: 14,
-  };
+/* ===================== constants ===================== */
+const EQUIPAMENTOS = ["BT-01", "BT-02", "PN-01", "PN-02"] as const;
+
+// você pode ajustar depois conforme as “especificações programadas”
+const TIPOS_PARADA = ["Mecânica", "Elétrica", "Operacional", "Programada"] as const;
+const ATIVIDADES = ["Correia", "Britador", "Peneira", "Troca de turno", "Outros"] as const;
+
+/* ===================== helpers ===================== */
+function isoTodayLocal(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-/* ===================== componente ===================== */
+function br(iso: string) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function safeCSV(v: any) {
+  const s = String(v ?? "");
+  if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function parseDateTimeLocal(dISO: string, hHM: string): Date | null {
+  if (!dISO || !hHM) return null;
+  const [y, m, d] = dISO.split("-").map(Number);
+  const [hh, mm] = hHM.split(":").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d, hh || 0, mm || 0, 0, 0);
+}
+
+function calcTempoParadaH(dataIni: string, horaIni: string, dataFim: string, horaFim: string): number {
+  const a = parseDateTimeLocal(dataIni, horaIni);
+  const b = parseDateTimeLocal(dataFim, horaFim);
+  if (!a || !b) return 0;
+  const ms = b.getTime() - a.getTime();
+  if (ms <= 0) return 0;
+  return ms / 3600000;
+}
+
+function fmtH(n: number) {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+}
+
+/* ===================== page ===================== */
 export default function Paradas() {
   const [diaRef, setDiaRef] = useState<string>(isoTodayLocal());
-
   const [turno, setTurno] = useState<Turno>(1);
+
   const [dataInicio, setDataInicio] = useState<string>(isoTodayLocal());
-  const [dataFim, setDataFim] = useState<string>(isoTodayLocal());
   const [horaInicio, setHoraInicio] = useState<string>("07:00");
+  const [dataFim, setDataFim] = useState<string>(isoTodayLocal());
   const [horaFim, setHoraFim] = useState<string>("07:30");
 
   const [equipamento, setEquipamento] = useState<string>(EQUIPAMENTOS[0]);
@@ -195,15 +141,15 @@ export default function Paradas() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  async function loadDay(d: string) {
+  async function loadDay(day: string) {
     setLoading(true);
     setErr(null);
     try {
-      const data = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(d)}`);
+      const data = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`);
       setRows(Array.isArray(data) ? data : []);
     } catch (e: any) {
-      setErr(e?.message || "Erro ao carregar paradas");
       setRows([]);
+      setErr(e?.message || "Falha ao carregar paradas");
     } finally {
       setLoading(false);
     }
@@ -212,11 +158,21 @@ export default function Paradas() {
   useEffect(() => {
     loadDay(diaRef);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setDataInicio(diaRef);
+    setDataFim(diaRef);
+    loadDay(diaRef);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diaRef]);
 
-  const tempoCalc = useMemo(() => {
-    return calcTempoParadaH(dataInicio, horaInicio, dataFim, horaFim);
-  }, [dataInicio, horaInicio, dataFim, horaFim]);
+  const tempoPreview = useMemo(() => calcTempoParadaH(dataInicio, horaInicio, dataFim, horaFim), [
+    dataInicio,
+    horaInicio,
+    dataFim,
+    horaFim,
+  ]);
 
   const rowsDoDia = useMemo(() => {
     return [...rows].sort((a, b) => {
@@ -291,9 +247,9 @@ export default function Paradas() {
     try {
       setLoading(true);
 
-      await apiPost<StopRow>(`/api/stops`, {
+      await apiPost(`/api/stops`, {
         day: diaRef,
-        turno,
+        turno, // ✅ backend agora aceita e grava
         data_inicio: dataInicio,
         hora_inicio: horaInicio,
         data_fim: dataFim,
@@ -317,7 +273,7 @@ export default function Paradas() {
   async function removeRow(id: number) {
     try {
       setLoading(true);
-      await apiDelete(`/api/stops/${id}`);
+      await apiDelete(`/api/stops/${id}`); // ✅ backend agora tem essa rota
       await loadDay(diaRef);
     } catch (e: any) {
       setErr(e?.message || "Falha ao excluir");
@@ -361,366 +317,256 @@ export default function Paradas() {
     a.href = url;
     a.download = `paradas_${diaRef}.csv`;
     a.click();
-
     URL.revokeObjectURL(url);
   }
 
   return (
-    <div className="mp-container" style={{ padding: "10px 8px 30px" }}>
-      {/* ===== header (padrão dashboard) ===== */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "end", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <div className="mp-chip">Operação</div>
-          <div className="mp-page-title">Paradas</div>
-          <div className="mp-page-sub">
-            Registro e consulta por dia (Postgres) • {brDate(diaRef)}
-          </div>
-        </div>
+    <div className="mp-container">
+      <style>{`
+        .mp-grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:14px; }
+        .mp-col-12{ grid-column: span 12 / span 12; }
+        .mp-col-8{ grid-column: span 8 / span 8; }
+        .mp-col-4{ grid-column: span 4 / span 4; }
+        @media (max-width: 1100px){
+          .mp-grid{ grid-template-columns: 1fr; }
+          .mp-col-12,.mp-col-8,.mp-col-4{ grid-column: span 1 / span 1 !important; }
+        }
+        .mp-form-grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:12px; }
+        .mp-fcol-3{ grid-column: span 3 / span 3; }
+        .mp-fcol-4{ grid-column: span 4 / span 4; }
+        .mp-fcol-6{ grid-column: span 6 / span 6; }
+        .mp-fcol-12{ grid-column: span 12 / span 12; }
+        @media (max-width: 980px){
+          .mp-form-grid{ grid-template-columns: 1fr; }
+          .mp-fcol-3,.mp-fcol-4,.mp-fcol-6,.mp-fcol-12{ grid-column: span 1 / span 1 !important; }
+        }
+        .mp-input, .mp-select, .mp-textarea{
+          width:100%;
+          padding:10px 12px;
+          border-radius:12px;
+          background: rgba(255,255,255,.06);
+          border: 1px solid rgba(255,255,255,.10);
+          color: rgba(255,255,255,.92);
+          outline:none;
+        }
+        .mp-textarea{ min-height: 92px; resize: vertical; }
+        .mp-label{ font-size: 12px; color: rgba(255,255,255,.65); font-weight: 700; margin-bottom: 6px; }
+        .mp-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        .mp-kpi{ display:flex; gap:10px; flex-wrap:wrap; }
+        .mp-pill{ padding: 8px 10px; border-radius: 999px; background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.25); color: rgba(255,255,255,.9); font-weight: 800; font-size: 12px; }
+        table{ width:100%; border-collapse: collapse; }
+        th,td{ padding: 10px 10px; border-bottom: 1px solid rgba(255,255,255,.08); font-size: 13px; }
+        th{ color: rgba(255,255,255,.6); text-align:left; font-weight: 800; }
+      `}</style>
 
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
-          <div style={{ minWidth: 220 }}>
-            <div className="mp-label">Dia para visualizar</div>
-            <input className="mp-input" type="date" value={diaRef} onChange={(e) => setDiaRef(e.target.value)} />
-          </div>
-
-          <div style={{ display: "flex", gap: 10, alignItems: "end" }}>
-            <button className="mp-btn" onClick={() => loadDay(diaRef)} disabled={loading}>
-              {loading ? "Atualizando..." : "Atualizar"}
-            </button>
-            <button className="mp-btn" onClick={exportCSV} disabled={!rowsDoDia.length}>
-              Exportar CSV
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ===== grid estilo template ===== */}
-      <div
-        style={{
-          marginTop: 14,
-          display: "grid",
-          gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
-          gap: 14,
-          alignItems: "start",
-        }}
-      >
-        {/* ===== KPI cards (4) ===== */}
-        <div className="mp-card" style={{ gridColumn: "span 12" }}>
-          <div className="mp-card-b">
-            <div
-              style={{
-                display: "grid",
-                gap: 12,
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              }}
-            >
-              <div style={kpiBoxStyle()}>
-                <div className="mp-help">Total de Paradas</div>
-                <div style={{ fontSize: 26, fontWeight: 950, marginTop: 6 }}>{totals.totalParadas}</div>
-                <div className="mp-help" style={{ marginTop: 6 }}>
-                  Registros no dia
-                </div>
-              </div>
-
-              <div style={kpiBoxStyle()}>
-                <div className="mp-help">Total de Horas Paradas</div>
-                <div style={{ fontSize: 26, fontWeight: 950, marginTop: 6 }}>{fmtH(totals.totalHoras)} h</div>
-                <div className="mp-help" style={{ marginTop: 6 }}>
-                  Soma automática (tempo_parada_h)
-                </div>
-              </div>
-
-              <div style={kpiBoxStyle()}>
-                <div className="mp-help">Pior Equipamento</div>
-                <div style={{ fontSize: 18, fontWeight: 950, marginTop: 6 }}>
-                  {totals.topEq ? totals.topEq.name : "—"}
-                </div>
-                <div className="mp-help" style={{ marginTop: 6 }}>
-                  {totals.topEq ? `${fmtH(totals.topEq.hours)} h` : "Sem dados"}
-                </div>
-              </div>
-
-              <div style={kpiBoxStyle()}>
-                <div className="mp-help">Tipo com mais horas</div>
-                <div style={{ fontSize: 18, fontWeight: 950, marginTop: 6 }}>
-                  {totals.topTipo ? totals.topTipo.name : "—"}
-                </div>
-                <div className="mp-help" style={{ marginTop: 6 }}>
-                  {totals.topTipo ? `${fmtH(totals.topTipo.hours)} h` : "Sem dados"}
-                </div>
-              </div>
+      <div className="mp-grid">
+        <div className="mp-col-12">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="mp-chip">Operação</div>
+              <div className="mp-page-title">Paradas</div>
+              <div className="mp-page-sub">Lançamento + histórico do dia • Tempo Parada (h) é calculado automaticamente</div>
             </div>
 
-            <div className="mp-help" style={{ marginTop: 10 }}>
-              {loading ? "Carregando..." : err ? `Erro: ${err}` : <>Registros do dia: <b>{rowsDoDia.length}</b></>}
+            <div className="mp-row">
+              <button className="mp-btn" onClick={() => loadDay(diaRef)} disabled={loading}>
+                {loading ? "Atualizando..." : "Atualizar"}
+              </button>
+              <button className="mp-btn" onClick={exportCSV} disabled={!rowsDoDia.length}>
+                Exportar CSV
+              </button>
             </div>
           </div>
         </div>
 
-        {/* ===== Left: Tabela grande ===== */}
-        <div className="mp-card" style={{ gridColumn: "span 12" }}>
-          <div className="mp-card-h">
-            <b>Paradas do dia • {brDate(diaRef)}</b>
-            <span className="mp-help">Exclusão remove do Postgres</span>
+        {/* ===== Form / Lançamento ===== */}
+        <div className="mp-col-12">
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Novo lançamento</b>
+              <span className="mp-help">Tempo Parada (h) é calculado automaticamente</span>
+            </div>
+
+            <div className="mp-card-b">
+              {err && <div style={{ color: "#f87171", fontWeight: 800, marginBottom: 10 }}>{err}</div>}
+
+              <div className="mp-form-grid">
+                <div className="mp-fcol-3">
+                  <div className="mp-label">Turno</div>
+                  <select className="mp-select" value={turno} onChange={(e) => setTurno(Number(e.target.value) as Turno)}>
+                    <option value={1}>Turno 1</option>
+                    <option value={2}>Turno 2</option>
+                  </select>
+                </div>
+
+                <div className="mp-fcol-3">
+                  <div className="mp-label">Data (referência)</div>
+                  <input className="mp-input" type="date" value={diaRef} onChange={(e) => setDiaRef(e.target.value)} />
+                </div>
+
+                <div className="mp-fcol-3">
+                  <div className="mp-label">Data Início</div>
+                  <input className="mp-input" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+                </div>
+
+                <div className="mp-fcol-3">
+                  <div className="mp-label">Hora Início</div>
+                  <input className="mp-input" type="time" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} />
+                </div>
+
+                <div className="mp-fcol-3">
+                  <div className="mp-label">Data Fim</div>
+                  <input className="mp-input" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
+                </div>
+
+                <div className="mp-fcol-3">
+                  <div className="mp-label">Hora Fim</div>
+                  <input className="mp-input" type="time" value={horaFim} onChange={(e) => setHoraFim(e.target.value)} />
+                </div>
+
+                <div className="mp-fcol-3">
+                  <div className="mp-label">Equipamento</div>
+                  <select className="mp-select" value={equipamento} onChange={(e) => setEquipamento(e.target.value)}>
+                    {EQUIPAMENTOS.map((x) => (
+                      <option key={x} value={x}>
+                        {x}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mp-fcol-3">
+                  <div className="mp-label">Tipo de Parada</div>
+                  <select className="mp-select" value={tipoParada} onChange={(e) => setTipoParada(e.target.value)}>
+                    {TIPOS_PARADA.map((x) => (
+                      <option key={x} value={x}>
+                        {x}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mp-fcol-3">
+                  <div className="mp-label">Atividade</div>
+                  <select className="mp-select" value={atividade} onChange={(e) => setAtividade(e.target.value)}>
+                    {ATIVIDADES.map((x) => (
+                      <option key={x} value={x}>
+                        {x}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mp-fcol-3">
+                  <div className="mp-label">Tempo Parada (h)</div>
+                  <input className="mp-input" value={`${fmtH(tempoPreview)} h`} readOnly />
+                </div>
+
+                <div className="mp-fcol-12">
+                  <div className="mp-label">Descrição detalhada da parada</div>
+                  <textarea
+                    className="mp-textarea"
+                    placeholder="Detalhe o que ocorreu..."
+                    value={descricao}
+                    onChange={(e) => setDescricao(e.target.value)}
+                  />
+                </div>
+
+                <div className="mp-fcol-12">
+                  <div className="mp-row">
+                    <button className="mp-btn mp-btn-primary" onClick={addRow} disabled={loading}>
+                      {loading ? "Salvando..." : "Salvar"}
+                    </button>
+                    <button className="mp-btn" onClick={resetForm} disabled={loading}>
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 mp-kpi">
+                <span className="mp-pill">Total paradas: {totals.totalParadas}</span>
+                <span className="mp-pill">Total horas: {fmtH(totals.totalHoras)} h</span>
+                {totals.topEq && <span className="mp-pill">Maior impacto: {totals.topEq.name} ({fmtH(totals.topEq.hours)} h)</span>}
+                {totals.topTipo && <span className="mp-pill">Tipo principal: {totals.topTipo.name} ({fmtH(totals.topTipo.hours)} h)</span>}
+              </div>
+
+              <div className="mt-3 mp-kpi">
+                {EQUIPAMENTOS.map((eq) => (
+                  <span key={eq} className="mp-pill">
+                    {eq}: {fmtH(horimetroParada[eq] || 0)} h
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
+        </div>
 
-          <div className="mp-card-b" style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
-              <thead>
-                <tr>
-                  {[
-                    "Turno",
-                    "Data Início",
-                    "Hora Início",
-                    "Data Fim",
-                    "Hora Fim",
-                    "Equipamento",
-                    "Tipo",
-                    "Atividade",
-                    "Descrição",
-                    "Tempo (h)",
-                    "",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        textAlign: "left",
-                        padding: "10px 10px",
-                        fontSize: 12,
-                        letterSpacing: 0.6,
-                        textTransform: "uppercase",
-                        color: "rgba(255,255,255,.55)",
-                        borderBottom: "1px solid rgba(255,255,255,.10)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+        {/* ===== Tabela ===== */}
+        <div className="mp-col-12">
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Histórico do dia</b>
+              <span className="mp-help">Dia {br(diaRef)} • {rowsDoDia.length} registros</span>
+            </div>
 
-              <tbody>
-                {rowsDoDia.length === 0 ? (
+            <div className="mp-card-b" style={{ overflowX: "auto" }}>
+              <table>
+                <thead>
                   <tr>
-                    <td colSpan={11} className="mp-help" style={{ padding: 14 }}>
-                      Nenhuma parada registrada para este dia.
-                    </td>
+                    <th>Turno</th>
+                    <th>Início</th>
+                    <th>Fim</th>
+                    <th>Equip.</th>
+                    <th>Tipo</th>
+                    <th>Atividade</th>
+                    <th>Tempo (h)</th>
+                    <th>Descrição</th>
+                    <th></th>
                   </tr>
-                ) : (
-                  rowsDoDia.map((r) => (
-                    <tr key={r.id}>
-                      <td style={td}>{r.turno}</td>
-                      <td style={td}>{brDate(r.data_inicio)}</td>
-                      <td style={td}>{r.hora_inicio}</td>
-                      <td style={td}>{brDate(r.data_fim)}</td>
-                      <td style={td}>{r.hora_fim}</td>
-                      <td style={td}>
-                        <span className="mp-chip">{r.equipamento}</span>
-                      </td>
-                      <td style={td}>{r.tipo_parada}</td>
-                      <td style={td}>{r.atividade}</td>
-                      <td style={{ ...td, maxWidth: 520 }}>
-                        <div style={{ color: "rgba(255,255,255,.82)", whiteSpace: "normal" }}>
-                          {r.descricao || "—"}
-                        </div>
-                      </td>
-                      <td style={td}>
-                        <b>{fmtH(r.tempo_parada_h)}</b>
-                      </td>
-                      <td style={td}>
-                        <button
-                          className="mp-btn"
-                          onClick={() => removeRow(r.id)}
-                          disabled={loading}
-                          style={{
-                            height: 34,
-                            padding: "0 10px",
-                            borderRadius: 12,
-                            border: "1px solid rgba(251,113,133,.30)",
-                            background: "rgba(251,113,133,.12)",
-                          }}
-                        >
-                          Excluir
-                        </button>
+                </thead>
+                <tbody>
+                  {!rowsDoDia.length ? (
+                    <tr>
+                      <td colSpan={9} style={{ color: "rgba(255,255,255,.6)" }}>
+                        Sem registros neste dia.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    rowsDoDia.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.turno}</td>
+                        <td>
+                          {br(r.data_inicio)} {r.hora_inicio}
+                        </td>
+                        <td>
+                          {br(r.data_fim)} {r.hora_fim}
+                        </td>
+                        <td>{r.equipamento}</td>
+                        <td>{r.tipo_parada}</td>
+                        <td>{r.atividade}</td>
+                        <td style={{ fontWeight: 900 }}>{fmtH(r.tempo_parada_h)}</td>
+                        <td style={{ maxWidth: 420, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {r.descricao}
+                        </td>
+                        <td>
+                          <button className="mp-btn mp-btn-danger" onClick={() => removeRow(r.id)} disabled={loading}>
+                            Excluir
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
 
-            <div className="mp-help" style={{ marginTop: 10 }}>
-              * Tudo aqui já está no backend/Postgres.
-            </div>
-          </div>
-        </div>
-
-        {/* ===== Right column stack (Resumo por equipamento + Form) ===== */}
-        <div className="mp-card" style={{ gridColumn: "span 12" }}>
-          <div className="mp-card-h">
-            <b>Resumo por equipamento (h)</b>
-            <span className="mp-help">Soma das paradas do dia por equipamento</span>
-          </div>
-          <div className="mp-card-b">
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-              {EQUIPAMENTOS.map((eq) => (
-                <div
-                  key={eq}
-                  style={{
-                    borderRadius: 16,
-                    padding: 12,
-                    background: "rgba(255,255,255,.04)",
-                    border: "1px solid rgba(255,255,255,.10)",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                    <div style={{ fontWeight: 950 }}>{eq}</div>
-                    <span className="mp-chip">{fmtH(horimetroParada[eq] || 0)} h</span>
-                  </div>
-                  <div className="mp-help" style={{ marginTop: 6 }}>
-                    Total do dia
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mp-card" style={{ gridColumn: "span 12" }}>
-          <div className="mp-card-h">
-            <b>Novo lançamento</b>
-            <span className="mp-help">Tempo Parada (h) é calculado automaticamente</span>
-          </div>
-
-          <div className="mp-card-b">
-            {err && <div className="mp-error">{err}</div>}
-
-            <div
-              style={{
-                display: "grid",
-                gap: 12,
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                alignItems: "end",
-              }}
-            >
-              <div>
-                <div className="mp-label">Turno</div>
-                <select className="mp-input" value={turno} onChange={(e) => setTurno(Number(e.target.value) as Turno)}>
-                  <option value={1}>Turno 1</option>
-                  <option value={2}>Turno 2</option>
-                </select>
-              </div>
-
-              <div>
-                <div className="mp-label">Data Início</div>
-                <input className="mp-input" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
-              </div>
-
-              <div>
-                <div className="mp-label">Hora Início</div>
-                <input className="mp-input" type="time" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} />
-              </div>
-
-              <div>
-                <div className="mp-label">Data Fim</div>
-                <input className="mp-input" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
-              </div>
-
-              <div>
-                <div className="mp-label">Hora Fim</div>
-                <input className="mp-input" type="time" value={horaFim} onChange={(e) => setHoraFim(e.target.value)} />
-              </div>
-
-              <div>
-                <div className="mp-label">Equipamento</div>
-                <select className="mp-input" value={equipamento} onChange={(e) => setEquipamento(e.target.value)}>
-                  {EQUIPAMENTOS.map((x) => (
-                    <option key={x} value={x}>
-                      {x}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <div className="mp-label">Tipo de Parada</div>
-                <select className="mp-input" value={tipoParada} onChange={(e) => setTipoParada(e.target.value)}>
-                  {TIPOS_PARADA.map((x) => (
-                    <option key={x} value={x}>
-                      {x}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <div className="mp-label">Atividade</div>
-                <select className="mp-input" value={atividade} onChange={(e) => setAtividade(e.target.value)}>
-                  {ATIVIDADES.map((x) => (
-                    <option key={x} value={x}>
-                      {x}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <div className="mp-label">Tempo Parada (h)</div>
-                <div
-                  className="mp-input"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    fontWeight: 950,
-                  }}
-                >
-                  <span>{fmtH(tempoCalc)} h</span>
-                  <span className="mp-help" style={{ margin: 0 }}>
-                    auto
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ gridColumn: "1 / -1" }}>
-                <div className="mp-label">Descrição detalhada da parada</div>
-                <textarea
-                  className="mp-textarea"
-                  value={descricao}
-                  onChange={(e) => setDescricao(e.target.value)}
-                  placeholder="Detalhe o que ocorreu..."
-                  style={{ minHeight: 110 }}
-                />
-              </div>
-
-              <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                <button className="mp-btn" onClick={resetForm} disabled={loading}>
-                  Limpar
-                </button>
-                <button className="mp-btn mp-btn-primary" onClick={addRow} disabled={loading}>
-                  {loading ? "Salvando..." : "Adicionar parada"}
-                </button>
+              <div className="mp-help" style={{ marginTop: 10 }}>
+                * Tempo Parada (h) = (Data/Hora Fim) - (Data/Hora Início)
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* responsivo: em telas grandes, vira 2 colunas (tabela na esquerda, lateral na direita) */}
-      <style>{`
-        @media (min-width: 1100px) {
-          /* KPI ocupa tudo */
-          .mp-container > div[style*="grid-template-columns"] > .mp-card:nth-child(1) { grid-column: span 12; }
-
-          /* tabela ocupa 8 colunas */
-          .mp-container > div[style*="grid-template-columns"] > .mp-card:nth-child(2) { grid-column: span 8; }
-
-          /* resumo + form empilham na direita (4 colunas) */
-          .mp-container > div[style*="grid-template-columns"] > .mp-card:nth-child(3) { grid-column: span 4; }
-          .mp-container > div[style*="grid-template-columns"] > .mp-card:nth-child(4) { grid-column: span 4; }
-        }
-      `}</style>
     </div>
   );
 }
