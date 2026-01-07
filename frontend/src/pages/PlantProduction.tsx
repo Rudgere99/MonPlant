@@ -1,19 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
-  ComposedChart,
+  BarChart,
   Bar,
-  Line,
-  CartesianGrid,
   XAxis,
   YAxis,
+  CartesianGrid,
   Tooltip,
-  Legend,
   LabelList,
 } from "recharts";
 
 /* ===================== helpers ===================== */
-
 function isoTodayLocal(): string {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -21,36 +18,33 @@ function isoTodayLocal(): string {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-
-function isRetroDay(dayISO: string): boolean {
-  return dayISO < isoTodayLocal();
+function br(iso: string) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
 }
-
-function fmtBR(n: number): string {
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
-}
-function fmtPct0(n: number): string {
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(n);
-}
-
-function parseBRNumber(v: any): number | null {
-  if (v === null || v === undefined) return null;
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-
+function parseBRNumber(v: any): number {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   let s = String(v).trim();
-  if (!s) return null;
-
+  if (!s) return 0;
   s = s.replace("%", "").trim();
   s = s.replace(/\s/g, "");
-
-  // "1.234,5" -> "1234.5"
   if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
   else if (s.includes(",")) s = s.replace(",", ".");
-
   const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) ? n : 0;
 }
-
+function fmtBR0(n: number) {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(n);
+}
+function fmtBR1(n: number) {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+}
+function periodShort(p: string) {
+  const [a, b] = p.split("-");
+  return `${(a || "").slice(0, 2)}-${(b || "").slice(0, 2)}`;
+}
 function makePeriods24(): string[] {
   const res: string[] = [];
   for (let h = 0; h < 24; h++) {
@@ -62,120 +56,97 @@ function makePeriods24(): string[] {
   return res;
 }
 
-function periodShort(p: string) {
-  const [a, b] = p.split("-");
-  return `${(a || "").slice(0, 2)}-${(b || "").slice(0, 2)}`;
-}
-
-type PlantHourRow = {
-  period: string;
-  ton?: string | number | null;
-  freq?: string | number | null;
-};
-
-type PlantDayPayload = {
-  day: string;
-  obs?: string | null;
-  rows: PlantHourRow[];
-  updated_at?: string | null;
-};
-
-/* ===================== auth / api ===================== */
-
+/* ===================== api ===================== */
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
-function authHeaders(): HeadersInit {
-  const t = (localStorage.getItem("mp_token") || "").trim();
-  return t ? { Authorization: `Bearer ${t}` } : {};
+function authHeaders(): Record<string, string> {
+  const keys = ["mp_token", "token", "access_token", "auth_token"];
+  for (const k of keys) {
+    const v = (localStorage.getItem(k) || "").trim();
+    if (v) return { Authorization: `Bearer ${v}` };
+  }
+  return {};
 }
 
-/* ===================== recharts labels ===================== */
+async function readErr(r: Response) {
+  const t = await r.text().catch(() => "");
+  if (!t) return `HTTP ${r.status}`;
+  try {
+    const j = JSON.parse(t);
+    if (j?.detail) return typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+    return JSON.stringify(j);
+  } catch {
+    return t;
+  }
+}
 
-const TonLabel = (props: any) => {
-  const { x, y, width, value } = props;
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < 80) return null;
+async function apiGet<T>(path: string): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+  if (!r.ok) throw new Error(await readErr(r));
+  return (await r.json()) as T;
+}
 
-  return (
-    <text
-      x={x + width / 2}
-      y={y - 8}
-      textAnchor="middle"
-      fill="rgba(255,255,255,0.94)"
-      fontSize={11}
-      fontWeight={900}
-      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.75)", strokeWidth: 3 }}
-    >
-      {fmtBR(n)}
-    </text>
-  );
-};
+async function apiPut<T>(path: string, body: any): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(await readErr(r));
+  return (await r.json()) as T;
+}
 
-const FreqLabel = (props: any) => {
-  const { x, y, index, value, payload } = props;
-  const n = Number(value);
-  if (!Number.isFinite(n)) return null;
-  if (payload?.freq === null || payload?.freq === undefined) return null;
+/* ===================== types ===================== */
+type PlantHourRow = { period: string; ton?: any; freq?: any };
+type PlantDayPayload = { day: string; obs?: string | null; rows: PlantHourRow[]; updated_at?: string | null };
 
-  const bump = index % 2 === 0 ? -12 : -20;
+/* ===================== retro rules (NORMAL) ===================== */
+/**
+ * NORMAL:
+ * - Bloqueia dia anterior
+ * - EXCEÇÃO: permite editar ONTEM durante 00:00–00:59 (pra lançar 23:00–00:00)
+ */
+function isRetroDay(dayISO: string): boolean {
+  const today = isoTodayLocal();
+  if (dayISO >= today) return false;
 
-  return (
-    <text
-      x={x}
-      y={y + bump}
-      textAnchor="middle"
-      fill="rgba(255,255,255,0.94)"
-      fontSize={11}
-      fontWeight={900}
-      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.70)", strokeWidth: 4 }}
-    >
-      {fmtPct0(n)}%
-    </text>
-  );
-};
+  // ontem
+  const now = new Date();
+  const y = new Date(now);
+  y.setDate(now.getDate() - 1);
+  const yISO =
+    y.getFullYear() +
+    "-" +
+    String(y.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(y.getDate()).padStart(2, "0");
 
-const CustomTick = (props: any) => {
-  const { x, y, payload } = props;
-  return (
-    <g transform={`translate(${x},${y})`}>
-      <text
-        x={0}
-        y={0}
-        dy={14}
-        textAnchor="middle"
-        fill="rgba(255,255,255,0.75)"
-        fontSize={12}
-        fontWeight={700}
-      >
-        {periodShort(String(payload.value || ""))}
-      </text>
-    </g>
-  );
-};
+  if (dayISO === yISO && now.getHours() === 0) return false; // ✅ libera 00:00–00:59
+
+  return true;
+}
 
 /* ===================== component ===================== */
-
 export default function PlantProduction() {
   const periods = useMemo(() => makePeriods24(), []);
-
   const [day, setDay] = useState<string>(isoTodayLocal());
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  const [payload, setPayload] = useState<PlantDayPayload>(() => ({
-    day: isoTodayLocal(),
-    obs: "",
-    rows: periods.map((p) => ({ period: p, ton: "", freq: "" })),
-    updated_at: null,
-  }));
+  const [server, setServer] = useState<PlantDayPayload | null>(null);
 
-  const retro = isRetroDay(day);
+  // editor
+  const [obs, setObs] = useState<string>("");
+  const [rows, setRows] = useState<PlantHourRow[]>(periods.map((p) => ({ period: p, ton: "", freq: "" })));
 
-  function normalizeRows(rows: PlantHourRow[]): PlantHourRow[] {
+  const retro = useMemo(() => isRetroDay(day), [day]);
+
+  function normalizeRows(inRows: PlantHourRow[]): PlantHourRow[] {
     const map: Record<string, PlantHourRow> = {};
-    for (const r of rows || []) map[r.period] = r;
+    for (const r of inRows || []) map[r.period] = r;
 
     return periods.map((p) => ({
       period: p,
@@ -184,79 +155,86 @@ export default function PlantProduction() {
     }));
   }
 
-  async function loadDay(d: string) {
+  async function loadDay() {
     setLoading(true);
     setErr(null);
     setInfo(null);
 
     try {
-      const r = await fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(d)}`, {
-        headers: authHeaders(),
+      const data = await apiGet<PlantDayPayload>(`/api/plant-production/${encodeURIComponent(day)}`).catch(() => {
+        return { day, obs: "", rows: [], updated_at: null } as PlantDayPayload;
       });
 
-      if (r.status === 404) {
-        setPayload({
-          day: d,
-          obs: "",
-          rows: periods.map((p) => ({ period: p, ton: "", freq: "" })),
-          updated_at: null,
-        });
-        return;
-      }
-
-      if (!r.ok) {
-        const t = await r.text().catch(() => "");
-        throw new Error(t || `HTTP ${r.status}`);
-      }
-
-      const data = (await r.json()) as PlantDayPayload;
-
-      setPayload({
-        day: d,
-        obs: data.obs ?? "",
-        rows: normalizeRows(data.rows || []),
-        updated_at: data.updated_at ?? null,
-      });
+      setServer(data);
+      setObs(data?.obs ?? "");
+      setRows(normalizeRows(data?.rows || []));
     } catch (e: any) {
-      setErr(e?.message || "Erro ao carregar");
+      setErr(e?.message || "Falha ao carregar produção do dia");
     } finally {
       setLoading(false);
     }
   }
 
-  async function saveDay() {
-    setSaving(true);
+  useEffect(() => {
+    loadDay();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day]);
+
+  const totalTon = useMemo(() => {
+    let s = 0;
+    for (const r of rows) s += parseBRNumber(r.ton);
+    return s;
+  }, [rows]);
+
+  const chartData = useMemo(() => {
+    return rows.map((r) => {
+      const ton = parseBRNumber(r.ton);
+      const freq = parseBRNumber(r.freq);
+      return {
+        period: r.period,
+        periodShort: periodShort(r.period),
+        ton,
+        tonLabel: ton > 0 ? fmtBR1(ton) : "",
+        freq,
+        freqLabel: freq > 0 ? `${fmtBR0(freq)}%` : "",
+      };
+    });
+  }, [rows]);
+
+  const chunks = useMemo(() => {
+    return [rows.slice(0, 8), rows.slice(8, 16), rows.slice(16, 24)];
+  }, [rows]);
+
+  async function save() {
     setErr(null);
     setInfo(null);
 
+    if (retro) {
+      setErr("Dia anterior não pode ser editado (exceto na virada 00:00–00:59 para lançar 23:00–00:00).");
+      return;
+    }
+
     try {
+      setSaving(true);
+
       const body = {
-        obs: payload.obs ?? "",
-        rows: payload.rows.map((r) => ({
+        obs: obs ?? "",
+        rows: rows.map((r) => ({
           period: r.period,
-          ton: parseBRNumber(r.ton),
-          freq: parseBRNumber(r.freq),
+          ton: (() => {
+            const n = parseBRNumber(r.ton);
+            return Number.isFinite(n) ? n : null;
+          })(),
+          freq: (() => {
+            const n = parseBRNumber(r.freq);
+            return Number.isFinite(n) ? n : null;
+          })(),
         })),
       };
 
-      const r = await fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, {
-        method: "PUT",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (r.status === 403) {
-        setErr("Retroativo não pode ser editado.");
-        return;
-      }
-
-      if (!r.ok) {
-        const t = await r.text().catch(() => "");
-        throw new Error(t || `HTTP ${r.status}`);
-      }
-
+      await apiPut(`/api/plant-production/${encodeURIComponent(day)}`, body);
       setInfo("Salvo com sucesso.");
-      await loadDay(day);
+      await loadDay();
     } catch (e: any) {
       setErr(e?.message || "Erro ao salvar");
     } finally {
@@ -264,295 +242,187 @@ export default function PlantProduction() {
     }
   }
 
-  useEffect(() => {
-    loadDay(day);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day]);
-
-  const chartData = useMemo(() => {
-    const map: Record<string, { ton: number | null; freq: number | null }> = {};
-    for (const p of periods) map[p] = { ton: null, freq: null };
-
-    for (const r of payload.rows || []) {
-      const ton = parseBRNumber(r.ton);
-      const freq = parseBRNumber(r.freq);
-      map[r.period] = {
-        ton: ton === null ? null : Math.max(0, ton),
-        freq: freq === null ? null : Math.max(0, Math.min(100, freq)),
-      };
-    }
-
-    return periods.map((p) => ({ period: p, ton: map[p].ton, freq: map[p].freq }));
-  }, [payload.rows, periods]);
-
-  const totalTon = useMemo(() => {
-    let s = 0;
-    for (const r of chartData) if (typeof r.ton === "number") s += r.ton;
-    return s;
-  }, [chartData]);
-
-  const [yy, mm, dd] = day.split("-");
-  const dayBR = `${dd}/${mm}/${yy}`;
-
-  const chunks = useMemo(() => {
-    return [
-      payload.rows.slice(0, 8),
-      payload.rows.slice(8, 16),
-      payload.rows.slice(16, 24),
-    ];
-  }, [payload.rows]);
+  function setCell(idx: number, key: "ton" | "freq", value: string) {
+    setRows((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [key]: value };
+      return next;
+    });
+  }
 
   return (
     <div className="mp-container">
-      <div className="mp-page-title">Produção do dia</div>
-      <div className="mp-page-sub">Evolução horária • {dayBR}</div>
-
-      <div className="mp-card" style={{ marginTop: 12 }}>
-        {/* header */}
-        <div
-          className="mp-card-h"
-          style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}
-        >
-          <div style={{ flex: 1, minWidth: 260 }}>
-            <b>Produção por hora (Ton/H + Frequência)</b>
-
-            <div className="mp-help">
-              {loading
-                ? "Carregando..."
-                : err
-                ? `Erro: ${err}`
-                : info
-                ? info
-                : payload?.updated_at
-                ? `Atualizado: ${payload.updated_at}`
-                : "—"}
+      <div className="mp-grid">
+        <div className="mp-col-12">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="mp-chip">Produção Planta</div>
+              <div className="mp-page-title">Produção Horária</div>
+              <div className="mp-page-sub">
+                Dia {br(day)} • Total: <b>{fmtBR0(totalTon)}</b> t
+                {server?.updated_at ? ` • Atualizado: ${new Date(server.updated_at).toLocaleString("pt-BR")}` : ""}
+              </div>
             </div>
 
-            <div className="mp-help" style={{ marginTop: 6 }}>
-              Total do dia (soma Ton/H): <b>{fmtBR(totalTon)}</b>
-              {retro ? (
-                <span style={{ marginLeft: 10, color: "rgba(245,158,11,0.95)", fontWeight: 800 }}>
-                  (Retroativo bloqueado)
+            <div className="mp-row">
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="mp-help" style={{ fontWeight: 800 }}>
+                  Data
                 </span>
-              ) : null}
+                <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} style={{ width: 170 }} />
+              </div>
+
+              <button className="mp-btn" onClick={loadDay} disabled={loading}>
+                {loading ? "Atualizando..." : "Atualizar"}
+              </button>
+
+              <button className="mp-btn mp-btn-primary" onClick={save} disabled={saving || retro}>
+                {saving ? "Salvando..." : retro ? "Bloqueado (retroativo)" : "Salvar"}
+              </button>
             </div>
           </div>
 
-          <div>
-            <div className="mp-label">Data</div>
-            <input
-              className="mp-input"
-              type="date"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-            />
-          </div>
-
-          <button
-            className="mp-btn"
-            onClick={saveDay}
-            disabled={saving || loading || retro}
-            title={retro ? "Retroativo não pode ser editado" : "Salvar produção do dia"}
-            style={{ minWidth: 140 }}
-          >
-            {saving ? "Salvando..." : "Salvar"}
-          </button>
+          {err && <div style={{ color: "#f87171", fontWeight: 900, marginTop: 10 }}>{err}</div>}
+          {info && <div style={{ color: "#34d399", fontWeight: 900, marginTop: 10 }}>{info}</div>}
+          {retro && (
+            <div className="mp-help" style={{ marginTop: 8 }}>
+              ⚠️ Retroativo bloqueado. <b>Exceção:</b> na virada (00:00–00:59) você consegue lançar o dia anterior (23:00–00:00).
+            </div>
+          )}
         </div>
 
-        {/* body */}
-        <div className="mp-card-b">
-          {/* gráfico */}
-          <div style={{ height: 440, width: "100%" }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 52, right: 24, bottom: 30, left: 10 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-
-                <XAxis
-                  dataKey="period"
-                  tick={<CustomTick />}
-                  interval={1}
-                  height={44}
-                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                />
-
-                <YAxis
-                  yAxisId="ton"
-                  domain={[0, 600]}
-                  tick={{ fill: "rgba(255,255,255,0.75)", fontSize: 12 }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                />
-
-                <YAxis
-                  yAxisId="freq"
-                  orientation="right"
-                  domain={[0, 100]}
-                  tickFormatter={(v) => `${v}%`}
-                  tick={{ fill: "rgba(255,255,255,0.75)", fontSize: 12 }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                />
-
-                <Tooltip
-                  formatter={(value: any, name: any) => {
-                    if (value === null || value === undefined || value === "") return ["—", name];
-                    if (name === "Frequência (%)") return [`${fmtPct0(Number(value))}%`, name];
-                    if (name === "Ton/H") return [fmtBR(Number(value)), name];
-                    return [String(value), name];
-                  }}
-                  labelFormatter={(label) => `Faixa: ${label}`}
-                  contentStyle={{
-                    background: "rgba(0,0,0,0.85)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    borderRadius: 12,
-                  }}
-                  labelStyle={{ color: "rgba(255,255,255,0.85)" }}
-                />
-
-                <Legend wrapperStyle={{ color: "rgba(255,255,255,0.8)" }} />
-
-                <Bar
-                  yAxisId="ton"
-                  dataKey="ton"
-                  name="Ton/H"
-                  fill="#22c55e"
-                  radius={[6, 6, 0, 0]}
-                  barSize={22}
-                >
-                  <LabelList dataKey="ton" content={<TonLabel />} />
-                </Bar>
-
-                <Line
-                  yAxisId="freq"
-                  type="monotone"
-                  dataKey="freq"
-                  name="Frequência (%)"
-                  stroke="#f59e0b"
-                  strokeWidth={3}
-                  connectNulls={false}
-                  dot={(p: any) => {
-                    if (p?.payload?.freq === null || p?.payload?.freq === undefined) return null;
-                    return (
-                      <circle
-                        cx={p.cx}
-                        cy={p.cy}
-                        r={4}
-                        fill="#f59e0b"
-                        stroke="rgba(0,0,0,.6)"
-                        strokeWidth={2}
-                      />
-                    );
-                  }}
-                  activeDot={{ r: 6 }}
-                >
-                  <LabelList dataKey="freq" content={<FreqLabel />} />
-                </Line>
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* ✅ Observação (de volta "onde estava antes": abaixo do gráfico) */}
-          <div style={{ marginTop: 14 }}>
-            <div className="mp-label">Observação do dia</div>
-            <textarea
-              className="mp-textarea"
-              value={payload.obs ?? ""}
-              disabled={retro}
-              onChange={(e) => setPayload((p) => ({ ...p, obs: e.target.value }))}
-              placeholder="Ex.: chuva, manutenção, falta de energia, etc."
-              style={{ minHeight: 90 }}
-            />
-          </div>
-
-          {/* ✅ edição em 3 colunas (8 horas cada) */}
-          <div style={{ marginTop: 14 }}>
-            <div className="mp-help">
-              Edite Ton/H e Frequência (%) e clique em <b>Salvar</b>. Valores vazios ficam como <b>sem dado</b>.
+        {/* CHART */}
+        <div className="mp-col-12">
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Gráfico (Ton/H)</b>
+              <span className="mp-help">Labels acima das barras</span>
             </div>
 
-            <div
-              style={{
-                marginTop: 10,
-                display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(260px, 1fr))",
-                gap: 12,
-                overflowX: "auto",
-                paddingBottom: 2,
-              }}
-            >
-              {chunks.map((rows8, colIdx) => (
-                <div key={colIdx} className="mp-card" style={{ margin: 0 }}>
-                  <div className="mp-card-h" style={{ padding: "10px 12px" }}>
-                    <b>{colIdx === 0 ? "00–08" : colIdx === 1 ? "08–16" : "16–24"}</b>
-                    <div className="mp-help">8 faixas horárias</div>
-                  </div>
+            <div className="mp-card-b" style={{ height: 320 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 22, right: 16, left: 0, bottom: 6 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                  <XAxis dataKey="periodShort" tick={{ fill: "rgba(255,255,255,0.65)", fontSize: 12 }} />
+                  <YAxis tick={{ fill: "rgba(255,255,255,0.65)", fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(v: any, name: any) => {
+                      if (name === "ton") return [`${fmtBR1(Number(v) || 0)}`, "Ton/H"];
+                      if (name === "freq") return [`${fmtBR0(Number(v) || 0)}%`, "Freq%"];
+                      return [String(v), String(name)];
+                    }}
+                    contentStyle={{
+                      background: "rgba(0,0,0,0.86)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 14,
+                      boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
+                    }}
+                    labelStyle={{ color: "rgba(255,255,255,0.86)", fontWeight: 900 }}
+                  />
 
-                  <div className="mp-card-b" style={{ padding: 12 }}>
-                    <table className="mp-table" style={{ width: "100%", minWidth: 0 }}>
-                      <thead>
-                        <tr>
-                          <th style={{ width: 84 }}>Hora</th>
-                          <th style={{ width: 110 }}>Ton/H</th>
-                          <th style={{ width: 130 }}>Freq (%)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows8.map((r) => {
-                          const globalIdx = payload.rows.findIndex((x) => x.period === r.period);
+                  <Bar yAxisId="ton" dataKey="ton" name="Ton/H" fill="#ff9f1a" radius={[10, 10, 0, 0]}>
+                    <LabelList
+                      dataKey="tonLabel"
+                      position="top"
+                      offset={12}
+                      fill="rgba(255,255,255,0.92)"
+                      fontSize={12}
+                      fontWeight={900}
+                      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.70)", strokeWidth: 3 }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
 
-                          return (
-                            <tr key={r.period}>
-                              <td style={{ color: "rgba(255,255,255,0.85)", fontWeight: 800 }}>
-                                {periodShort(r.period)}
-                              </td>
+        {/* OBS */}
+        <div className="mp-col-12">
+          <div className="mp-card">
+            <div className="mp-card-h">
+              <b>Observação do dia</b>
+              <span className="mp-help">fica salva junto do dia</span>
+            </div>
+            <div className="mp-card-b">
+              <textarea
+                className="mp-textarea"
+                value={obs ?? ""}
+                onChange={(e) => setObs(e.target.value)}
+                placeholder="Ex.: chuva, manutenção, falta de energia, etc."
+                style={{ minHeight: 100 }}
+                disabled={retro}
+              />
+            </div>
+          </div>
+        </div>
 
-                              <td>
-                                <input
-                                  className="mp-input"
-                                  value={r.ton ?? ""}
-                                  disabled={retro}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setPayload((p) => {
-                                      const rows = [...p.rows];
-                                      rows[globalIdx] = { ...rows[globalIdx], ton: v };
-                                      return { ...p, rows };
-                                    });
-                                  }}
-                                  placeholder="ex: 320"
-                                />
-                              </td>
+        {/* TABLE EDITOR (3 colunas) */}
+        <div className="mp-col-12">
+          <div className="mp-help" style={{ marginBottom: 10 }}>
+            Preencha <b>Ton/H</b> e <b>Freq%</b> por hora. (24 faixas)
+          </div>
 
-                              <td>
-                                <input
-                                  className="mp-input"
-                                  value={r.freq ?? ""}
-                                  disabled={retro}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setPayload((p) => {
-                                      const rows = [...p.rows];
-                                      rows[globalIdx] = { ...rows[globalIdx], freq: v };
-                                      return { ...p, rows };
-                                    });
-                                  }}
-                                  placeholder="ex: 85"
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(260px, 1fr))",
+              gap: 12,
+              overflowX: "auto",
+              paddingBottom: 2,
+            }}
+          >
+            {chunks.map((rows8, colIdx) => (
+              <div key={colIdx} className="mp-card" style={{ margin: 0 }}>
+                <div className="mp-card-h" style={{ padding: "10px 12px" }}>
+                  <b>{colIdx === 0 ? "00–08" : colIdx === 1 ? "08–16" : "16–24"}</b>
+                  <span className="mp-help">8 faixas</span>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* espaço final */}
-          <div style={{ height: 8 }} />
+                <div className="mp-card-b" style={{ padding: 12 }}>
+                  <table className="mp-table" style={{ width: "100%", minWidth: 0 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 78 }}>Hora</th>
+                        <th style={{ width: 110 }}>Ton/H</th>
+                        <th style={{ width: 120 }}>Freq %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows8.map((r) => {
+                        const idx = rows.findIndex((x) => x.period === r.period);
+                        return (
+                          <tr key={r.period}>
+                            <td style={{ color: "rgba(255,255,255,0.90)", fontWeight: 900 }}>{periodShort(r.period)}</td>
+
+                            <td>
+                              <input
+                                className="mp-input"
+                                value={r.ton ?? ""}
+                                onChange={(e) => setCell(idx, "ton", e.target.value)}
+                                placeholder="ex: 320"
+                                disabled={retro}
+                              />
+                            </td>
+
+                            <td>
+                              <input
+                                className="mp-input"
+                                value={r.freq ?? ""}
+                                onChange={(e) => setCell(idx, "freq", e.target.value)}
+                                placeholder="ex: 85"
+                                disabled={retro}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
