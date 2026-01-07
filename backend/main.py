@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional, List
 from zoneinfo import ZoneInfo
+import os
 
 from db import get_conn
 from auth_dep import require_owner_id
@@ -28,15 +29,47 @@ app.add_middleware(
 BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 
+def now_local() -> datetime:
+    return datetime.now(BR_TZ)
+
+
 def today_local() -> date:
-    # "Hoje" no fuso do Brasil (BRT)
-    return datetime.now(BR_TZ).date()
+    return now_local().date()
 
 
-def block_retro(d: date):
-    # Só bloqueia se for dia ANTERIOR ao hoje no Brasil
-    if d < today_local():
-        raise HTTPException(status_code=403, detail="Dia anterior não pode ser editado.")
+def is_dev(dev_key: Optional[str]) -> bool:
+    """
+    Habilita bypass do bloqueio retroativo, usando header X-Dev-Key.
+    Configure no Railway: DEV_KEY=uma_senha_forte
+    """
+    if not dev_key:
+        return False
+    expected = (os.getenv("DEV_KEY") or "").strip()
+    return bool(expected) and dev_key.strip() == expected
+
+
+def block_retro(d: date, dev_key: Optional[str] = None):
+    """
+    Regra:
+      - Bloqueia somente se for dia ANTERIOR ao "hoje" no Brasil
+      - EXCETO: permite editar "ontem" durante uma janela após meia-noite (ex.: 01:00)
+      - DEV: se X-Dev-Key bater, não bloqueia nada
+    """
+    if is_dev(dev_key):
+        return
+
+    tdy = today_local()
+    if d >= tdy:
+        return
+
+    # ✅ tolerância: após virar o dia, ainda pode editar "ontem" por 1 hora
+    n = now_local()
+    grace_minutes = int(os.getenv("RETRO_GRACE_MINUTES") or "60")  # padrão 60 min
+    if d == (tdy - timedelta(days=1)):
+        if n.hour == 0 and n.minute < grace_minutes:
+            return
+
+    raise HTTPException(status_code=403, detail="Dia anterior não pode ser editado.")
 
 
 def parse_float(v):
@@ -64,7 +97,7 @@ class PlantDayUpsert(BaseModel):
 
 class StopIn(BaseModel):
     day: date
-    turno: int  # 1|2  ✅ (antes não tinha)
+    turno: int  # 1|2
     data_inicio: str
     hora_inicio: str
     data_fim: str
@@ -135,8 +168,14 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
 
 
 @app.put("/api/plant-production/{day}")
-def put_plant_day(day: date, body: PlantDayUpsert, owner_id: str = Depends(require_owner_id)):
-    block_retro(day)
+def put_plant_day(
+    day: date,
+    body: PlantDayUpsert,
+    owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+):
+    # ✅ agora permite lançar 23:00-00:00 logo após meia-noite
+    block_retro(day, x_dev_key)
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -208,11 +247,14 @@ def list_stops(day: date = Query(...), owner_id: str = Depends(require_owner_id)
 
 
 @app.post("/api/stops")
-def create_stop(body: StopIn, owner_id: str = Depends(require_owner_id)):
-    block_retro(body.day)
+def create_stop(
+    body: StopIn,
+    owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+):
+    block_retro(body.day, x_dev_key)
 
     with get_conn() as conn, conn.cursor() as cur:
-        # ✅ inclui TURNO no insert
         cur.execute(
             """
             insert into public.bv_stops(
@@ -246,7 +288,6 @@ def create_stop(body: StopIn, owner_id: str = Depends(require_owner_id)):
 
 @app.delete("/api/stops/{stop_id}")
 def delete_stop(stop_id: int, owner_id: str = Depends(require_owner_id)):
-    # ✅ agora o front consegue excluir
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -268,8 +309,12 @@ def delete_stop(stop_id: int, owner_id: str = Depends(require_owner_id)):
 # Horimetros (INI/FIM)
 # =========================
 @app.post("/api/horimetros")
-def create_horimetro(body: HorimetroIn, owner_id: str = Depends(require_owner_id)):
-    block_retro(body.day)
+def create_horimetro(
+    body: HorimetroIn,
+    owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+):
+    block_retro(body.day, x_dev_key)
 
     if body.horimetro_fim < body.horimetro_ini:
         raise HTTPException(status_code=400, detail="horimetro_fim deve ser >= horimetro_ini")
