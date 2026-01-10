@@ -930,10 +930,12 @@ def create_horimetro(
     body: HorimetroIn,
     request: Request,
     owner_id: str = Depends(require_owner_id),
+    # mantive o header pra não quebrar front (mas ele não é mais usado aqui)
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(body.day, x_dev_key)
+    # ✅ Horímetros: NÃO trava retroativo (dia anterior, etc.)
+    # block_retro(body.day, x_dev_key)
 
     if body.horimetro_fim < body.horimetro_ini:
         raise HTTPException(status_code=400, detail="horimetro_fim deve ser >= horimetro_ini")
