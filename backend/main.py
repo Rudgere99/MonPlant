@@ -9,7 +9,7 @@ import base64
 import json
 import hmac
 import hashlib
-import re  # ✅ ADD
+import re
 
 from passlib.context import CryptContext
 
@@ -19,7 +19,7 @@ from auth_dep import require_owner_id
 app = FastAPI(title="MonPlant API", version="1.0.0")
 
 # =========================
-# CORS (resolve OPTIONS 400)
+# CORS
 # =========================
 ALLOWED_ORIGINS = ["*"]  # depois você trava na URL do Vercel
 app.add_middleware(
@@ -73,7 +73,7 @@ def block_retro(d: date, dev_key: Optional[str] = None):
     if d >= tdy:
         return
 
-    # ✅ tolerância: após virar o dia, ainda pode editar "ontem" por X minutos
+    # tolerância: após virar o dia, ainda pode editar "ontem" por X minutos
     n = now_local()
     grace_minutes = int(os.getenv("RETRO_GRACE_MINUTES") or "60")  # padrão 60 min
     if d == (tdy - timedelta(days=1)):
@@ -93,7 +93,7 @@ def parse_float(v):
 
 
 # =========================
-# ✅ Plant Production period normalizer
+# Plant Production period normalizer
 # =========================
 def _period_std_from_h(h: int) -> str:
     return f"{h:02d}:00-{(h+1)%24:02d}:00"
@@ -114,7 +114,6 @@ def normalize_period(p: str) -> Optional[str]:
     s = p.strip()
     s = re.sub(r"\s+", "", s)
 
-    # "HH-HH"
     m = re.fullmatch(r"(\d{2})-(\d{2})", s)
     if m:
         h1 = int(m.group(1))
@@ -123,7 +122,6 @@ def normalize_period(p: str) -> Optional[str]:
             return f"{h1:02d}:00-{h2:02d}:00"
         return None
 
-    # "HH:MM-HH:MM" (com ou sem segundos)
     m = re.fullmatch(r"(\d{2}):(\d{2})(?::\d{2})?-(\d{2}):(\d{2})(?::\d{2})?", s)
     if m:
         h1 = int(m.group(1))
@@ -195,13 +193,7 @@ def bearer_token(authorization: Optional[str]) -> Optional[str]:
     return a.split(" ", 1)[1].strip()
 
 
-def get_optional_user(
-    authorization: Optional[str],
-) -> Optional[Dict[str, Any]]:
-    """
-    Retorna payload do token se existir e for válido.
-    Não bloqueia endpoints existentes (por enquanto).
-    """
+def get_optional_user(authorization: Optional[str]) -> Optional[Dict[str, Any]]:
     tok = bearer_token(authorization)
     if not tok:
         return None
@@ -313,6 +305,14 @@ class DevCreateUserIn(BaseModel):
     password: str
 
 
+class DevUpdateUserIn(BaseModel):
+    full_name: Optional[str] = None
+    sector: Optional[str] = None
+    user_type: Optional[str] = None  # apontador | controlador | dev
+    is_active: Optional[bool] = None
+    reset_password: Optional[str] = None  # se vier, troca senha
+
+
 # =========================
 # Health
 # =========================
@@ -415,8 +415,7 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
 # =========================
 # DEV (users + logs)
 # =========================
-@app.get("/dev/users")
-def dev_list_users(dev_payload=Depends(require_dev_user)):
+def _dev_list_users():
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -440,12 +439,18 @@ def dev_list_users(dev_payload=Depends(require_dev_user)):
     ]
 
 
-@app.post("/dev/users")
-def dev_create_user(
-    body: DevCreateUserIn,
-    request: Request,
-    dev_payload=Depends(require_dev_user),
-):
+@app.get("/dev/users")
+def dev_list_users(dev_payload=Depends(require_dev_user)):
+    return _dev_list_users()
+
+
+# ✅ Alias pro front (se você estiver usando /api/dev/...)
+@app.get("/api/dev/users")
+def api_dev_list_users(dev_payload=Depends(require_dev_user)):
+    return _dev_list_users()
+
+
+def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[str, Any]):
     allowed = {"apontador", "controlador", "dev"}
     if body.user_type not in allowed:
         raise HTTPException(status_code=400, detail="user_type inválido")
@@ -490,19 +495,141 @@ def dev_create_user(
     return {"ok": True, "id": str(new_id)}
 
 
-@app.get("/dev/logs")
-def dev_list_logs(limit: int = Query(500, ge=1, le=2000), dev_payload=Depends(require_dev_user)):
+@app.post("/dev/users")
+def dev_create_user(body: DevCreateUserIn, request: Request, dev_payload=Depends(require_dev_user)):
+    return _dev_create_user(body, request, dev_payload)
+
+
+@app.post("/api/dev/users")
+def api_dev_create_user(body: DevCreateUserIn, request: Request, dev_payload=Depends(require_dev_user)):
+    return _dev_create_user(body, request, dev_payload)
+
+
+@app.patch("/dev/users/{user_id}")
+def dev_update_user(
+    user_id: str,
+    body: DevUpdateUserIn,
+    request: Request,
+    dev_payload=Depends(require_dev_user),
+):
+    allowed = {"apontador", "controlador", "dev"}
+
+    fields = []
+    values = []
+
+    if body.full_name is not None:
+        fields.append("full_name=%s")
+        values.append(body.full_name.strip())
+
+    if body.sector is not None:
+        fields.append("sector=%s")
+        values.append(body.sector.strip())
+
+    if body.user_type is not None:
+        if body.user_type not in allowed:
+            raise HTTPException(status_code=400, detail="user_type inválido")
+        fields.append("user_type=%s")
+        values.append(body.user_type)
+
+    if body.is_active is not None:
+        fields.append("is_active=%s")
+        values.append(bool(body.is_active))
+
+    if body.reset_password is not None:
+        fields.append("password_hash=%s")
+        values.append(pwd.hash(body.reset_password))
+
+    if not fields:
+        return {"ok": True, "changed": False}
+
+    values.append(user_id)
+
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            """
+            f"update public.bv_users set {', '.join(fields)} where id=%s",
+            tuple(values),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        conn.commit()
+
+    log_action(
+        action="UPDATE_USER",
+        request=request,
+        user_id=dev_payload.get("uid"),
+        entity="bv_users",
+        entity_id=str(user_id),
+        payload={
+            "changes": body.model_dump(exclude_none=True),
+        },
+    )
+
+    return {"ok": True, "changed": True}
+
+
+@app.patch("/api/dev/users/{user_id}")
+def api_dev_update_user(
+    user_id: str,
+    body: DevUpdateUserIn,
+    request: Request,
+    dev_payload=Depends(require_dev_user),
+):
+    return dev_update_user(user_id, body, request, dev_payload)
+
+
+def _dev_list_logs(
+    limit: int,
+    offset: int,
+    action: Optional[str],
+    entity: Optional[str],
+    user_id: Optional[str],
+    q: Optional[str],
+    day_from: Optional[date],
+    day_to: Optional[date],
+):
+    where = []
+    args: List[Any] = []
+
+    if action:
+        where.append("l.action = %s")
+        args.append(action)
+
+    if entity:
+        where.append("l.entity = %s")
+        args.append(entity)
+
+    if user_id:
+        where.append("l.user_id = %s")
+        args.append(user_id)
+
+    if day_from:
+        where.append("l.created_at >= %s")
+        args.append(datetime.combine(day_from, datetime.min.time()).replace(tzinfo=timezone.utc))
+
+    if day_to:
+        where.append("l.created_at < %s")
+        args.append(datetime.combine(day_to + timedelta(days=1), datetime.min.time()).replace(tzinfo=timezone.utc))
+
+    if q:
+        # busca simples em entity_id, ip, user_name
+        where.append("(cast(l.entity_id as text) ilike %s or l.ip ilike %s or u.full_name ilike %s)")
+        qq = f"%{q}%"
+        args.extend([qq, qq, qq])
+
+    where_sql = ("where " + " and ".join(where)) if where else ""
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
             select l.id, l.user_id, l.action, l.entity, l.entity_id, l.ip, l.user_agent, l.payload, l.created_at,
                    u.full_name as user_name, u.user_type as user_type
             from public.bv_logs l
             left join public.bv_users u on u.id = l.user_id
+            {where_sql}
             order by l.created_at desc
-            limit %s
+            limit %s offset %s
             """,
-            (limit,),
+            tuple(args + [limit, offset]),
         )
         rows = cur.fetchall() or []
 
@@ -526,8 +653,38 @@ def dev_list_logs(limit: int = Query(500, ge=1, le=2000), dev_payload=Depends(re
     return out
 
 
+@app.get("/dev/logs")
+def dev_list_logs(
+    limit: int = Query(500, ge=1, le=2000),
+    offset: int = Query(0, ge=0, le=1000000),
+    action: Optional[str] = None,
+    entity: Optional[str] = None,
+    user_id: Optional[str] = None,
+    q: Optional[str] = None,
+    day_from: Optional[date] = None,
+    day_to: Optional[date] = None,
+    dev_payload=Depends(require_dev_user),
+):
+    return _dev_list_logs(limit, offset, action, entity, user_id, q, day_from, day_to)
+
+
+@app.get("/api/dev/logs")
+def api_dev_list_logs(
+    limit: int = Query(500, ge=1, le=2000),
+    offset: int = Query(0, ge=0, le=1000000),
+    action: Optional[str] = None,
+    entity: Optional[str] = None,
+    user_id: Optional[str] = None,
+    q: Optional[str] = None,
+    day_from: Optional[date] = None,
+    day_to: Optional[date] = None,
+    dev_payload=Depends(require_dev_user),
+):
+    return _dev_list_logs(limit, offset, action, entity, user_id, q, day_from, day_to)
+
+
 # =========================
-# ✅ Plant Production (FIX: last7days BEFORE /{day})
+# Plant Production
 # =========================
 @app.get("/api/plant-production/last7days")
 def plant_last7(owner_id: str = Depends(require_owner_id)):
@@ -551,7 +708,6 @@ def plant_last7(owner_id: str = Depends(require_owner_id)):
 
 @app.get("/api/plant-production/{day}")
 def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
-    # ✅ sempre devolve 24 faixas padrão
     periods = [_period_std_from_h(h) for h in range(24)]
 
     with get_conn() as conn, conn.cursor() as cur:
@@ -575,7 +731,6 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
         )
         db_rows = cur.fetchall() or []
 
-    # ✅ normaliza period do banco
     by_period: Dict[str, Any] = {}
     for r in db_rows:
         key = normalize_period(r["period"])
@@ -587,7 +742,7 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
         r = by_period.get(p)
         full_rows.append(
             {
-                "period": p,  # padrão "HH:00-HH:00"
+                "period": p,
                 "ton": r["ton"] if r else None,
                 "freq": r["freq"] if r else None,
             }
@@ -635,7 +790,7 @@ def put_plant_day(
         )
 
         for r in body.rows or []:
-            p = normalize_period(r.period) or r.period  # ✅ aceita "00-01" e "00:00-01:00"
+            p = normalize_period(r.period) or r.period
             cur.execute(
                 """
                 insert into public.bv_plant_production_rows(owner_id, day, period, ton, freq)
@@ -659,7 +814,7 @@ def put_plant_day(
 
 
 # =========================
-# Stops (mantido + log)
+# Stops
 # =========================
 @app.get("/api/stops")
 def list_stops(day: date = Query(...), owner_id: str = Depends(require_owner_id)):
@@ -768,7 +923,7 @@ def delete_stop(
 
 
 # =========================
-# Horimetros (INI/FIM) + log
+# Horimetros
 # =========================
 @app.post("/api/horimetros")
 def create_horimetro(
