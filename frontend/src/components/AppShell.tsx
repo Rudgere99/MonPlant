@@ -3,11 +3,13 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { useAuth } from "../auth/AuthProvider";
 import {
   LayoutDashboard,
-  Code2, // ✅ ADICIONADO
+  Code2,
   Factory,
   Timer,
   PauseCircle,
   FileSpreadsheet,
+  Logs,
+  Users,
   LogOut,
   Menu,
   X,
@@ -20,14 +22,18 @@ type NavItem = {
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   group?: string;
+  devOnly?: boolean;
 };
 
 const nav: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Visão geral" },
 
-  // ✅ ADICIONADO: Dev Dash (PlantProductionDayView)
-  { to: "/dashboard/producao-dia", label: "Dev Dash", icon: Code2, group: "Desenvolvimento" },
+  // ===== DEV =====
+  { to: "/dashboard/producao-dia", label: "Dev Dash", icon: Code2, group: "Desenvolvimento", devOnly: true },
+  { to: "/dev/users", label: "Usuários", icon: Users, group: "Desenvolvimento", devOnly: true },
+  { to: "/dev/logs", label: "Logs", icon: Logs, group: "Desenvolvimento", devOnly: true },
 
+  // ===== APP =====
   { to: "/producao-planta", label: "Produção da Planta", icon: Factory, group: "Produção" },
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
@@ -65,21 +71,29 @@ function ShellLogo({ onClick }: { onClick?: () => void }) {
           borderRadius: 14,
           display: "grid",
           placeItems: "center",
-          background: "rgba(255,159,26,.12)",
-          border: "1px solid rgba(255,159,26,.18)",
+          background: "rgba(255,159,26,12)",
+          border: "1px solid rgba(255,159,26,18)",
           fontWeight: 950,
           letterSpacing: 0.5,
-          color: "rgba(255,255,255,.92)",
-          boxShadow: "0 16px 40px rgba(0,0,0,.45)",
+          color: "rgba(255,255,255,92)",
+          boxShadow: "0 16px 40px rgba(0,0,0,45)",
         }}
       >
         MP
       </div>
       <div style={{ lineHeight: 1.1, minWidth: 0 }}>
-        <div style={{ fontWeight: 950, letterSpacing: -0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div
+          style={{
+            fontWeight: 950,
+            letterSpacing: -0.2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
           MonPlant
         </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,.55)", fontWeight: 800 }}>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,55)", fontWeight: 800 }}>
           Operação • Produção
         </div>
       </div>
@@ -88,7 +102,7 @@ function ShellLogo({ onClick }: { onClick?: () => void }) {
 }
 
 export function AppShell() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth() as any; // mantém compatível mesmo se seu AuthProvider ainda não tipou "user"
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -97,40 +111,92 @@ export function AppShell() {
   const pageTitle = useMemo(() => getTitleFromPath(location.pathname), [location.pathname]);
   const pageGroup = useMemo(() => getGroupFromPath(location.pathname), [location.pathname]);
 
+  const devKey = (() => {
+    try {
+      return localStorage.getItem("mp_dev_key");
+    } catch {
+      return null;
+    }
+  })();
+
+  const isDev =
+    (user?.user_type && String(user.user_type).toLowerCase() === "dev") ||
+    devKey === "RAG2026";
+
+  const filteredNav = useMemo(() => {
+    return nav.filter((i) => (i.devOnly ? isDev : true));
+  }, [isDev]);
+
   const handleLogout = () => {
-    logout();
+    logout?.();
     navigate("/login");
   };
 
-  const bgBase: React.CSSProperties = {
-    minHeight: "100vh",
-    color: "white",
-    background:
-      "radial-gradient(900px 520px at 15% 10%, rgba(255,159,26,.10), transparent 55%)," +
-      "radial-gradient(700px 420px at 90% 20%, rgba(255,255,255,.05), transparent 60%)," +
-      "radial-gradient(900px 520px at 50% 90%, rgba(255,159,26,.06), transparent 60%)," +
-      "#0B0F14",
-  };
+  const sideW = 300;
 
   const cardGlass: React.CSSProperties = {
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,.10)",
-    background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))",
-    boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
-    backdropFilter: "blur(10px)",
+    borderRadius: 22,
+    border: "1px solid rgba(255,255,255,10)",
+    background: "rgba(255,255,255,06)",
+    boxShadow: "0 30px 60px rgba(0,0,0,55)",
+    backdropFilter: "blur(14px)",
   };
 
-  const sideW = 280;
-
   return (
-    <div style={bgBase}>
-      <style>{`
-        .mp-shell * { box-sizing: border-box; }
-        .mp-scrollbar::-webkit-scrollbar { width: 10px; }
-        .mp-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.10); border-radius: 999px; }
-        .mp-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.16); }
+    <div style={{ position: "relative", minHeight: "100vh", background: "#07090d" }}>
+      {/* ===== Fundo animado (não bloqueia cliques) ===== */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 0,
+          background:
+            "radial-gradient(1200px 700px at 20% 20%, rgba(255,159,26,0.12), transparent 60%)," +
+            "radial-gradient(900px 600px at 80% 30%, rgba(34,197,94,0.10), transparent 55%)," +
+            "radial-gradient(900px 700px at 50% 90%, rgba(59,130,246,0.08), transparent 55%)",
+        }}
+      />
+      <div
+        className="mp-bg-belt-1"
+        style={{
+          position: "fixed",
+          inset: "-20%",
+          pointerEvents: "none",
+          zIndex: 0,
+          transform: "rotate(-10deg)",
+          background:
+            "linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent)",
+          opacity: 0.35,
+          filter: "blur(0.2px)",
+        }}
+      />
+      <div
+        className="mp-bg-belt-2"
+        style={{
+          position: "fixed",
+          inset: "-25%",
+          pointerEvents: "none",
+          zIndex: 0,
+          transform: "rotate(-10deg)",
+          background:
+            "linear-gradient(90deg, transparent, rgba(255,159,26,.05), transparent)",
+          opacity: 0.35,
+          filter: "blur(0.2px)",
+        }}
+      />
+      <div
+        className="mp-bg-dust"
+        style={{
+          position: "fixed",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 0,
+          opacity: 1,
+        }}
+      />
 
-        /* belts */
+      <style>{`
         @keyframes mpBeltMoveShell {
           0%   { transform: translateX(-5%) rotate(-10deg); opacity: .68; }
           50%  { transform: translateX(5%)  rotate(-10deg); opacity: .92; }
@@ -138,6 +204,7 @@ export function AppShell() {
         }
         .mp-bg-belt-1 { animation: mpBeltMoveShell 10s ease-in-out infinite; }
         .mp-bg-belt-2 { animation: mpBeltMoveShell 13s ease-in-out infinite; }
+
         @keyframes mpDustFloatShell {
           0%   { transform: translateY(0px); opacity: .55; }
           50%  { transform: translateY(-8px); opacity: .78; }
@@ -145,25 +212,24 @@ export function AppShell() {
         }
         .mp-bg-dust {
           background-image:
-            radial-gradient(2px 2px at 12% 18%, rgba(255,159,26,.26) 0, transparent 60%),
-            radial-gradient(2px 2px at 28% 62%, rgba(255,255,255,.16) 0, transparent 60%),
-            radial-gradient(1.5px 1.5px at 48% 28%, rgba(255,159,26,.20) 0, transparent 60%),
-            radial-gradient(2px 2px at 66% 74%, rgba(255,255,255,.12) 0, transparent 60%),
-            radial-gradient(1.5px 1.5px at 82% 38%, rgba(255,159,26,.18) 0, transparent 60%),
-            radial-gradient(2px 2px at 92% 66%, rgba(255,255,255,.10) 0, transparent 60%);
+            radial-gradient(2px 2px at 12% 18%, rgba(255,159,26,26) 0, transparent 60%),
+            radial-gradient(2px 2px at 28% 62%, rgba(255,255,255,16) 0, transparent 60%),
+            radial-gradient(1.5px 1.5px at 48% 28%, rgba(255,159,26,20) 0, transparent 60%),
+            radial-gradient(2px 2px at 66% 74%, rgba(255,255,255,12) 0, transparent 60%),
+            radial-gradient(1.5px 1.5px at 82% 38%, rgba(255,159,26,18) 0, transparent 60%),
+            radial-gradient(2px 2px at 92% 66%, rgba(255,255,255,10) 0, transparent 60%);
           background-size: 100% 100%;
           animation: mpDustFloatShell 7s ease-in-out infinite;
           filter: blur(.1px);
         }
 
-        /* active link glow */
         .mp-navlink-active {
           border-color: rgba(255,159,26,.22) !important;
           background: rgba(255,159,26,.08) !important;
         }
       `}</style>
 
-      <div className="mp-shell" style={{ display: "flex", minHeight: "100vh" }}>
+      <div className="mp-shell" style={{ position: "relative", zIndex: 1, display: "flex", minHeight: "100vh" }}>
         {/* ===== Sidebar DESKTOP ===== */}
         <aside
           style={{
@@ -173,7 +239,6 @@ export function AppShell() {
           }}
           className="mp-sidebar-desktop"
         >
-          {/* CSS media */}
           <style>{`
             @media (min-width: 980px) {
               .mp-sidebar-desktop { display: block !important; }
@@ -188,13 +253,13 @@ export function AppShell() {
                 marginTop: 14,
                 height: 44,
                 borderRadius: 14,
-                border: "1px solid rgba(255,255,255,.10)",
-                background: "rgba(0,0,0,.22)",
+                border: "1px solid rgba(255,255,255,10)",
+                background: "rgba(0,0,0,22)",
                 display: "flex",
                 alignItems: "center",
                 gap: 10,
                 padding: "0 12px",
-                color: "rgba(255,255,255,.70)",
+                color: "rgba(255,255,255,70)",
               }}
               title="placeholder visual"
             >
@@ -203,13 +268,13 @@ export function AppShell() {
                 value=""
                 onChange={() => {}}
                 disabled
-                placeholder="Search here..."
+                placeholder="Search here."
                 style={{
                   width: "100%",
                   border: "none",
                   outline: "none",
                   background: "transparent",
-                  color: "rgba(255,255,255,.80)",
+                  color: "rgba(255,255,255,80)",
                   fontWeight: 800,
                 }}
               />
@@ -230,7 +295,7 @@ export function AppShell() {
             </div>
 
             <nav style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-              {nav.map((i) => {
+              {filteredNav.map((i) => {
                 const Icon = i.icon;
                 return (
                   <NavLink
@@ -265,14 +330,12 @@ export function AppShell() {
                         >
                           <Icon size={18} />
                         </span>
-
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
                           <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
                             {i.group || "—"}
                           </div>
                         </div>
-
                         <ChevronRight size={16} style={{ opacity: isActive ? 0.9 : 0.35 }} />
                       </>
                     )}
@@ -281,17 +344,15 @@ export function AppShell() {
               })}
             </nav>
 
-            <div style={{ flex: 1 }} />
-
-            <div style={{ marginTop: 12, borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 12 }}>
+            <div style={{ marginTop: "auto", borderTop: "1px solid rgba(255,255,255,10)", paddingTop: 12 }}>
               <button
                 onClick={handleLogout}
                 style={{
                   width: "100%",
                   height: 42,
                   borderRadius: 14,
-                  border: "1px solid rgba(251,113,133,.30)",
-                  background: "rgba(251,113,133,.14)",
+                  border: "1px solid rgba(251,113,133,30)",
+                  background: "rgba(251,113,133,14)",
                   fontWeight: 950,
                   cursor: "pointer",
                   color: "white",
@@ -311,173 +372,175 @@ export function AppShell() {
           </div>
         </aside>
 
-        {/* ===== Drawer MOBILE ===== */}
-        {mobileOpen && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 90 }}>
-            <button
-              onClick={() => setMobileOpen(false)}
-              style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.65)", border: "none" }}
-              aria-label="Fechar menu"
-            />
-
+        {/* ===== Mobile Drawer ===== */}
+        {mobileOpen ? (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 120,
+              background: "rgba(0,0,0,.55)",
+              backdropFilter: "blur(6px)",
+            }}
+            onClick={() => setMobileOpen(false)}
+          >
             <div
               style={{
                 position: "absolute",
-                left: 12,
-                top: 12,
-                bottom: 12,
-                width: 330,
-                maxWidth: "calc(100vw - 24px)",
-                padding: 14,
-                ...cardGlass,
+                top: 14,
+                left: 14,
+                right: 14,
+                maxWidth: 440,
               }}
-              className="mp-scrollbar"
+              onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <ShellLogo onClick={() => setMobileOpen(false)} />
-                <button
-                  onClick={() => setMobileOpen(false)}
+              <div style={{ ...cardGlass, padding: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                  <ShellLogo onClick={() => setMobileOpen(false)} />
+                  <button
+                    onClick={() => setMobileOpen(false)}
+                    style={{
+                      height: 42,
+                      width: 42,
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,06)",
+                      border: "1px solid rgba(255,255,255,10)",
+                      cursor: "pointer",
+                      color: "white",
+                      display: "grid",
+                      placeItems: "center",
+                    }}
+                    aria-label="Fechar menu"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div
                   style={{
-                    height: 40,
-                    width: 40,
+                    marginTop: 14,
+                    height: 44,
                     borderRadius: 14,
-                    background: "rgba(255,255,255,.06)",
-                    border: "1px solid rgba(255,255,255,.10)",
-                    cursor: "pointer",
-                    color: "white",
-                    display: "grid",
-                    placeItems: "center",
-                  }}
-                  aria-label="Fechar"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 14,
-                  height: 44,
-                  borderRadius: 14,
-                  border: "1px solid rgba(255,255,255,.10)",
-                  background: "rgba(0,0,0,.22)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "0 12px",
-                  color: "rgba(255,255,255,.70)",
-                }}
-                title="placeholder visual"
-              >
-                <Search size={16} />
-                <input
-                  value=""
-                  onChange={() => {}}
-                  disabled
-                  placeholder="Search here..."
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    color: "rgba(255,255,255,.80)",
-                    fontWeight: 800,
-                  }}
-                />
-              </div>
-
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: "0 10px",
-                  fontSize: 11,
-                  fontWeight: 950,
-                  letterSpacing: 1,
-                  color: "rgba(255,255,255,.40)",
-                  textTransform: "uppercase",
-                }}
-              >
-                Navegação
-              </div>
-
-              <nav style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                {nav.map((i) => {
-                  const Icon = i.icon;
-                  return (
-                    <NavLink
-                      key={i.to}
-                      to={i.to}
-                      onClick={() => setMobileOpen(false)}
-                      className={({ isActive }) => (isActive ? "mp-navlink-active" : "")}
-                      style={({ isActive }) => ({
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "10px 10px",
-                        borderRadius: 14,
-                        border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
-                        background: isActive ? "rgba(255,159,26,.08)" : "transparent",
-                        textDecoration: "none",
-                        color: "white",
-                      })}
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <span
-                            style={{
-                              height: 36,
-                              width: 36,
-                              borderRadius: 12,
-                              display: "grid",
-                              placeItems: "center",
-                              background: isActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,.06)",
-                              border: "1px solid " + (isActive ? "rgba(255,159,26,.20)" : "rgba(255,255,255,.10)"),
-                            }}
-                          >
-                            <Icon size={18} />
-                          </span>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
-                            <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
-                              {i.group || "—"}
-                            </div>
-                          </div>
-                          <ChevronRight size={16} style={{ opacity: isActive ? 0.9 : 0.35 }} />
-                        </>
-                      )}
-                    </NavLink>
-                  );
-                })}
-              </nav>
-
-              <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 12 }}>
-                <button
-                  onClick={handleLogout}
-                  style={{
-                    width: "100%",
-                    height: 42,
-                    borderRadius: 14,
-                    border: "1px solid rgba(251,113,133,.30)",
-                    background: "rgba(251,113,133,.14)",
-                    fontWeight: 950,
-                    cursor: "pointer",
-                    color: "white",
-                    display: "inline-flex",
+                    border: "1px solid rgba(255,255,255,10)",
+                    background: "rgba(0,0,0,22)",
+                    display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
+                    gap: 10,
+                    padding: "0 12px",
+                    color: "rgba(255,255,255,70)",
+                  }}
+                  title="placeholder visual"
+                >
+                  <Search size={16} />
+                  <input
+                    value=""
+                    onChange={() => {}}
+                    disabled
+                    placeholder="Search here."
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      outline: "none",
+                      background: "transparent",
+                      color: "rgba(255,255,255,80)",
+                      fontWeight: 800,
+                    }}
+                  />
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: "0 10px",
+                    fontSize: 11,
+                    fontWeight: 950,
+                    letterSpacing: 1,
+                    color: "rgba(255,255,255,.40)",
+                    textTransform: "uppercase",
                   }}
                 >
-                  <LogOut size={18} /> Sair
-                </button>
+                  Menu
+                </div>
 
-                <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
-                  v1 • MonPlant
+                <nav style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                  {filteredNav.map((i) => {
+                    const Icon = i.icon;
+                    return (
+                      <NavLink
+                        key={i.to}
+                        to={i.to}
+                        onClick={() => setMobileOpen(false)}
+                        className={({ isActive }) => (isActive ? "mp-navlink-active" : "")}
+                        style={({ isActive }) => ({
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "10px 10px",
+                          borderRadius: 14,
+                          border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
+                          background: isActive ? "rgba(255,159,26,.08)" : "transparent",
+                          textDecoration: "none",
+                          color: "white",
+                        })}
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <span
+                              style={{
+                                height: 36,
+                                width: 36,
+                                borderRadius: 12,
+                                display: "grid",
+                                placeItems: "center",
+                                background: isActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,.06)",
+                                border: "1px solid " + (isActive ? "rgba(255,159,26,.20)" : "rgba(255,255,255,.10)"),
+                              }}
+                            >
+                              <Icon size={18} />
+                            </span>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
+                              <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
+                                {i.group || "—"}
+                              </div>
+                            </div>
+                            <ChevronRight size={16} style={{ opacity: isActive ? 0.9 : 0.35 }} />
+                          </>
+                        )}
+                      </NavLink>
+                    );
+                  })}
+                </nav>
+
+                <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,10)", paddingTop: 12 }}>
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      width: "100%",
+                      height: 42,
+                      borderRadius: 14,
+                      border: "1px solid rgba(251,113,133,30)",
+                      background: "rgba(251,113,133,14)",
+                      fontWeight: 950,
+                      cursor: "pointer",
+                      color: "white",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <LogOut size={18} /> Sair
+                  </button>
+
+                  <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
+                    v1 • MonPlant
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* ===== Main ===== */}
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -487,8 +550,8 @@ export function AppShell() {
               position: "sticky",
               top: 0,
               zIndex: 60,
-              borderBottom: "1px solid rgba(255,255,255,.10)",
-              background: "rgba(11,15,20,.78)",
+              borderBottom: "1px solid rgba(255,255,255,10)",
+              background: "rgba(11,15,20,78)",
               backdropFilter: "blur(12px)",
             }}
           >
@@ -500,8 +563,8 @@ export function AppShell() {
                   height: 42,
                   width: 42,
                   borderRadius: 14,
-                  background: "rgba(255,255,255,.06)",
-                  border: "1px solid rgba(255,255,255,.10)",
+                  background: "rgba(255,255,255,06)",
+                  border: "1px solid rgba(255,255,255,10)",
                   cursor: "pointer",
                   color: "white",
                   display: "grid",
@@ -561,13 +624,13 @@ export function AppShell() {
                   flex: 1,
                   height: 42,
                   borderRadius: 14,
-                  border: "1px solid rgba(255,255,255,.10)",
-                  background: "rgba(0,0,0,.22)",
+                  border: "1px solid rgba(255,255,255,10)",
+                  background: "rgba(0,0,0,22)",
                   display: "none",
                   alignItems: "center",
                   gap: 10,
                   padding: "0 12px",
-                  color: "rgba(255,255,255,.70)",
+                  color: "rgba(255,255,255,70)",
                 }}
                 className="mp-search-desktop"
                 title="placeholder visual"
@@ -577,13 +640,13 @@ export function AppShell() {
                   value=""
                   onChange={() => {}}
                   disabled
-                  placeholder="Search here..."
+                  placeholder="Search here."
                   style={{
                     width: "100%",
                     border: "none",
                     outline: "none",
                     background: "transparent",
-                    color: "rgba(255,255,255,.80)",
+                    color: "rgba(255,255,255,80)",
                     fontWeight: 850,
                   }}
                 />
@@ -623,95 +686,12 @@ export function AppShell() {
               overflow: "hidden",
             }}
           >
-            {/* ✅ FUNDO ANIMADO global (não bloqueia cliques) */}
-            <div
-              aria-hidden
-              style={{
-                position: "absolute",
-                inset: 0,
-                zIndex: 0,
-                pointerEvents: "none",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  inset: "-25%",
-                  background:
-                    "radial-gradient(900px 520px at 20% 20%, rgba(255,159,26,.10), transparent 60%)," +
-                    "radial-gradient(700px 420px at 85% 30%, rgba(255,255,255,.05), transparent 60%)," +
-                    "radial-gradient(900px 520px at 60% 90%, rgba(255,159,26,.06), transparent 60%)",
-                }}
-              />
-
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  opacity: 0.075,
-                  backgroundImage:
-                    "linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px)," +
-                    "linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px)",
-                  backgroundSize: "72px 72px",
-                  maskImage: "radial-gradient(650px 380px at 35% 30%, rgba(0,0,0,1), transparent 70%)",
-                  WebkitMaskImage: "radial-gradient(650px 380px at 35% 30%, rgba(0,0,0,1), transparent 70%)",
-                }}
-              />
-
-              <div
-                className="mp-bg-belt-1"
-                style={{
-                  position: "absolute",
-                  left: "-35%",
-                  top: "22%",
-                  width: "180%",
-                  height: 90,
-                  transform: "rotate(-10deg)",
-                  background:
-                    "linear-gradient(90deg, transparent, rgba(255,159,26,.07), rgba(255,255,255,.05), rgba(255,159,26,.07), transparent)",
-                  borderTop: "1px solid rgba(255,255,255,.06)",
-                  borderBottom: "1px solid rgba(255,255,255,.06)",
-                }}
-              />
-              <div
-                className="mp-bg-belt-2"
-                style={{
-                  position: "absolute",
-                  left: "-30%",
-                  top: "55%",
-                  width: "170%",
-                  height: 70,
-                  transform: "rotate(-10deg)",
-                  background:
-                    "linear-gradient(90deg, transparent, rgba(255,159,26,.06), rgba(255,255,255,.04), rgba(255,159,26,.06), transparent)",
-                  borderTop: "1px solid rgba(255,255,255,.05)",
-                  borderBottom: "1px solid rgba(255,255,255,.05)",
-                  opacity: 0.9,
-                }}
-              />
-
-              <div className="mp-bg-dust" style={{ position: "absolute", inset: 0, opacity: 0.55 }} />
-
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  background:
-                    "radial-gradient(1100px 560px at 35% 35%, transparent 55%, rgba(0,0,0,.55) 100%)",
-                }}
-              />
-            </div>
-
-            {/* ✅ Conteúdo (z-index alto) */}
-            <div style={{ position: "relative", zIndex: 1 }}>
-              <div className="mp-container">
-                <Outlet />
-              </div>
-            </div>
+            <Outlet />
           </main>
         </div>
       </div>
     </div>
   );
 }
+
+export default AppShell;
