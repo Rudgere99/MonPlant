@@ -222,10 +222,6 @@ export default function Login() {
               <button className="mp-btn mp-btn-primary" type="submit" disabled={loading}>
                 {loading ? "Entrando..." : "Entrar"}
               </button>
-
-              <div className="mp-help">
-                Dica: use o DEV inicial <b>dev@monplant.com</b> / <b>dev123</b> (depois você troca).
-              </div>
             </form>
           </div>
         </div>
