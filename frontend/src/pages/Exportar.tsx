@@ -151,6 +151,22 @@ function downloadArrayBuffer(buf: ArrayBuffer, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Turnos:
+ * - T1: 07:00–19:00
+ * - T2: 19:00–07:00
+ *
+ * period esperado tipo: "07:00-08:00" (ou variações com espaços/traços)
+ */
+function getTurnoFromPeriod(period: any): "T1" | "T2" {
+  const s = String(period || "").trim();
+  // pega as 2 primeiras casas da hora inicial "HH"
+  const m = s.match(/(\d{1,2})\s*:\s*\d{2}/);
+  const h = m ? Number(m[1]) : NaN;
+  if (!Number.isFinite(h)) return "T2";
+  return h >= 7 && h < 19 ? "T1" : "T2";
+}
+
 export default function Exportar() {
   const today = useMemo(() => ymd(new Date()), []);
   const [fromDay, setFromDay] = useState(today);
@@ -164,7 +180,7 @@ export default function Exportar() {
 
     try {
       // 1) carrega TEMPLATE do public
-      const tplRes = await fetch("/BASE_PLANTA.xlsx");
+      const tplRes = await fetch("/BASE_PLANTA.xlsx", { cache: "no-store" });
       if (!tplRes.ok) throw new Error("Não achei /BASE_PLANTA.xlsx em public/");
       const tplBuf = await tplRes.arrayBuffer();
 
@@ -233,7 +249,8 @@ export default function Exportar() {
         const equip = pick(s, ["equipamento", "equipment", "eq", "tag", "planta"]) || "";
         const tipo = pick(s, ["tipo", "tipo_parada", "stop_type", "type"]) || "";
         const ativ = pick(s, ["atividade", "activity"]) || "";
-        const desc = pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "";
+        const desc =
+          pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "";
 
         const tempo =
           pick(s, ["tempo_h", "tempo_parada_h", "duration_h", "duracao_h"]) ??
@@ -241,12 +258,23 @@ export default function Exportar() {
 
         let dTurno: Date | null = null;
         if (typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)) dTurno = parseISODate(day);
-        else if (start.date) dTurno = new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate());
+        else if (start.date)
+          dTurno = new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate());
 
         setCell(wsParadas, rPar, 1, dTurno);
         setCell(wsParadas, rPar, 2, String(turno || ""));
-        setCell(wsParadas, rPar, 3, start.date ? new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate()) : "");
-        setCell(wsParadas, rPar, 4, end.date ? new Date(end.date.getFullYear(), end.date.getMonth(), end.date.getDate()) : "");
+        setCell(
+          wsParadas,
+          rPar,
+          3,
+          start.date ? new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate()) : ""
+        );
+        setCell(
+          wsParadas,
+          rPar,
+          4,
+          end.date ? new Date(end.date.getFullYear(), end.date.getMonth(), end.date.getDate()) : ""
+        );
         setCell(wsParadas, rPar, 5, start.hhmm || "");
         setCell(wsParadas, rPar, 6, end.hhmm || "");
         setCell(wsParadas, rPar, 7, equip);
@@ -278,7 +306,9 @@ export default function Exportar() {
         const byEq = new Map<string, { ini: number | null; fim: number | null; turno: any }>();
 
         for (const h of list) {
-          const eq = String(pick(h, ["equipamento", "equipment", "eq", "tag"]) || "").toUpperCase();
+          const eq = String(pick(h, ["equipamento", "equipment", "eq", "tag"]) || "")
+            .toUpperCase()
+            .trim();
           const ini = Number(pick(h, ["horimetro_ini", "ini", "inicial", "start"]) ?? NaN);
           const fim = Number(pick(h, ["horimetro_fim", "fim", "final", "end"]) ?? NaN);
           const turno = pick(h, ["turno", "shift", "turn"]);
@@ -321,25 +351,37 @@ export default function Exportar() {
         rHor++;
       }
 
-      // ===================== ABA: PRODUÇÃO =====================
-      const wsProd = getOrCreateSheet(wb, "PRODUÇÃO");
-      clearSheetValues(wsProd, 3);
+      // ===================== ABA: PRODUÇÃO (por turno) =====================
+      // Seu template (print) usa "Planilha1" com colunas:
+      // A Data | B Meta diaria | C Produção 1º T | D Produção 2º T | E Total produzido (fórmula)
+      const wsProd = getOrCreateSheet(wb, "Planilha1");
+      clearSheetValues(wsProd, 2);
 
-      const prodMap = new Map<string, { total: number; obs: string }>();
+      const prodByDay = new Map<string, { t1: number; t2: number; obs: string }>();
       for (const pd of plantDays) {
-        const total = (pd.rows || []).reduce((acc, r) => acc + (Number(r.ton) || 0), 0);
-        prodMap.set(pd.day, { total, obs: String(pd.obs || "") });
+        let t1 = 0;
+        let t2 = 0;
+
+        for (const row of pd.rows || []) {
+          const ton = Number(row.ton) || 0;
+          const turno = getTurnoFromPeriod(row.period);
+          if (turno === "T1") t1 += ton;
+          else t2 += ton;
+        }
+
+        prodByDay.set(pd.day, { t1, t2, obs: String(pd.obs || "") });
       }
 
-      let rProd = 3;
+      let rProd = 2;
       for (const d of days) {
         const dt = parseISODate(d);
-        const v = prodMap.get(d) || { total: 0, obs: "" };
+        const v = prodByDay.get(d) || { t1: 0, t2: 0, obs: "" };
 
-        setCell(wsProd, rProd, 2, dt);      // B = Data
-        setCell(wsProd, rProd, 3, "");      // C = Meta diaria (deixa template/fórmula)
-        setCell(wsProd, rProd, 4, v.total || ""); // D = Produção
-        setCell(wsProd, rProd, 5, v.obs || "");   // E = Observação
+        setCell(wsProd, rProd, 1, dt);       // A = Data
+        // B = Meta diaria -> deixa como está no template (não sobrescreve)
+        setCell(wsProd, rProd, 3, v.t1 || ""); // C = Produção 1º Turno (07–19)
+        setCell(wsProd, rProd, 4, v.t2 || ""); // D = Produção 2º Turno (19–07)
+        // E = Total produzido -> fórmula do template (não sobrescreve)
 
         rProd++;
       }
@@ -380,12 +422,24 @@ export default function Exportar() {
           <div className="mp-grid-2" style={{ gap: 12 }}>
             <div>
               <div className="mp-help">Data inicial</div>
-              <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={busy} />
+              <input
+                className="mp-input"
+                type="date"
+                value={fromDay}
+                onChange={(e) => setFromDay(e.target.value)}
+                disabled={busy}
+              />
             </div>
 
             <div>
               <div className="mp-help">Data final</div>
-              <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={busy} />
+              <input
+                className="mp-input"
+                type="date"
+                value={toDay}
+                onChange={(e) => setToDay(e.target.value)}
+                disabled={busy}
+              />
             </div>
           </div>
 
