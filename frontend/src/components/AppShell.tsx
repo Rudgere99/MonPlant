@@ -40,6 +40,39 @@ const nav: NavItem[] = [
   { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
 ];
 
+
+type UserRole = "apontador" | "controlador" | "dev";
+
+function getRole(user: any, devKey: string | null): UserRole {
+  // role vem do backend em user.user_type (dev/controlador/apontador)
+  // devKey é um override manual (se você quiser manter)
+  if (devKey === "RAG2026") return "dev";
+
+  const t = String(user?.user_type || "").toLowerCase();
+  if (t === "dev") return "dev";
+  if (t === "controlador") return "controlador";
+  return "apontador";
+}
+
+function canAccess(role: UserRole, path: string) {
+  if (role === "dev") return true;
+
+  // DEV pages
+  if (path.startsWith("/dev") || path.startsWith("/dashboard/producao-dia")) return false;
+
+  if (role === "apontador") {
+    return path.startsWith("/producao-planta") || path.startsWith("/paradas");
+  }
+
+  // controlador: tudo exceto dev
+  return true;
+}
+
+function defaultPathFor(role: UserRole) {
+  return role === "apontador" ? "/producao-planta" : "/dashboard";
+}
+
+
 function getTitleFromPath(pathname: string) {
   const hit = nav.find((n) => pathname.startsWith(n.to));
   return hit?.label ?? "MonPlant";
@@ -50,10 +83,10 @@ function getGroupFromPath(pathname: string) {
   return hit?.group ?? "";
 }
 
-function ShellLogo({ onClick }: { onClick?: () => void }) {
+function ShellLogo({ onClick, to }: { onClick?: () => void; to: string }) {
   return (
     <Link
-      to="/dashboard"
+      to={to}
       onClick={onClick}
       style={{
         display: "flex",
@@ -119,13 +152,16 @@ export function AppShell() {
     }
   })();
 
-  const isDev =
-    (user?.user_type && String(user.user_type).toLowerCase() === "dev") ||
-    devKey === "RAG2026";
+  const role = useMemo(() => getRole(user, devKey), [user, devKey]);
+  const isDev = role === "dev";
 
   const filteredNav = useMemo(() => {
-    return nav.filter((i) => (i.devOnly ? isDev : true));
-  }, [isDev]);
+    return nav.filter((i) => {
+      if (i.devOnly && !isDev) return false;
+      return canAccess(role, i.to);
+    });
+  }, [isDev, role]);
+
 
   const handleLogout = () => {
     logout?.();
@@ -267,7 +303,7 @@ export function AppShell() {
               flexDirection: "column",
             }}
           >
-            <ShellLogo />
+            <ShellLogo to={defaultPathFor(role)} />
 
             <div
               style={{
@@ -417,7 +453,7 @@ export function AppShell() {
             >
               <div style={{ ...cardGlass, padding: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                  <ShellLogo onClick={() => setMobileOpen(false)} />
+                  <ShellLogo to={defaultPathFor(role)} onClick={() => setMobileOpen(false)} />
                   <button
                     onClick={() => setMobileOpen(false)}
                     style={{
