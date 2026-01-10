@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import type { ReactNode } from "react";
 import { RequireAuth } from "../auth/RequireAuth";
 import { AppShell } from "../components/AppShell";
 import { useAuth } from "../auth/AuthProvider";
@@ -44,7 +45,7 @@ function defaultPathFor(role: UserRole) {
   return role === "apontador" ? "/producao-planta" : "/dashboard";
 }
 
-function RequireRole({ children }: { children: JSX.Element }) {
+function RequireRole({ children }: { children: ReactNode }) {
   const { user } = useAuth() as any;
   const role = getRole(user);
   const location = useLocation();
@@ -54,7 +55,7 @@ function RequireRole({ children }: { children: JSX.Element }) {
     return <Navigate to={defaultPathFor(role)} replace />;
   }
 
-  return children;
+  return <>{children}</>;
 }
 
 function RoleIndexRedirect() {
