@@ -102,7 +102,7 @@ function ShellLogo({ onClick }: { onClick?: () => void }) {
 }
 
 export function AppShell() {
-  const { logout, user } = useAuth() as any; // mantém compatível mesmo se seu AuthProvider ainda não tipou "user"
+  const { logout, user } = useAuth() as any;
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -134,10 +134,11 @@ export function AppShell() {
 
   const sideW = 300;
 
+  // ✅ reforço: glass “escuro” (pra não ficar branco por CSS global)
   const cardGlass: React.CSSProperties = {
     borderRadius: 22,
     border: "1px solid rgba(255,255,255,10)",
-    background: "rgba(255,255,255,06)",
+    background: "rgba(14,18,22,0.78)",
     boxShadow: "0 30px 60px rgba(0,0,0,55)",
     backdropFilter: "blur(14px)",
   };
@@ -165,8 +166,7 @@ export function AppShell() {
           pointerEvents: "none",
           zIndex: 0,
           transform: "rotate(-10deg)",
-          background:
-            "linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent)",
+          background: "linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent)",
           opacity: 0.35,
           filter: "blur(0.2px)",
         }}
@@ -179,8 +179,7 @@ export function AppShell() {
           pointerEvents: "none",
           zIndex: 0,
           transform: "rotate(-10deg)",
-          background:
-            "linear-gradient(90deg, transparent, rgba(255,159,26,.05), transparent)",
+          background: "linear-gradient(90deg, transparent, rgba(255,159,26,.05), transparent)",
           opacity: 0.35,
           filter: "blur(0.2px)",
         }}
@@ -229,13 +228,27 @@ export function AppShell() {
         }
       `}</style>
 
-      <div className="mp-shell" style={{ position: "relative", zIndex: 1, display: "flex", minHeight: "100vh" }}>
+      <div
+        className="mp-shell"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "flex",
+          minHeight: "100vh",
+        }}
+      >
         {/* ===== Sidebar DESKTOP ===== */}
         <aside
           style={{
             width: sideW,
             display: "none",
             padding: 14,
+            // ✅ força fundo escuro da coluna toda
+            background: "rgba(7,9,13,0.92)",
+            borderRight: "1px solid rgba(255,255,255,0.08)",
+            position: "sticky",
+            top: 0,
+            height: "100vh",
           }}
           className="mp-sidebar-desktop"
         >
@@ -245,7 +258,15 @@ export function AppShell() {
             }
           `}</style>
 
-          <div style={{ ...cardGlass, height: "calc(100vh - 28px)", padding: 14, display: "flex", flexDirection: "column" }}>
+          <div
+            style={{
+              ...cardGlass,
+              height: "calc(100vh - 28px)",
+              padding: 14,
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <ShellLogo />
 
             <div
