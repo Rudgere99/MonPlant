@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 type Turno = 1 | 2;
 
@@ -98,7 +98,7 @@ export default function Horimetros() {
   const [fTurno, setFTurno] = useState<Turno | "ALL">(1);
   const [fEq, setFEq] = useState<string | "ALL">("ALL");
 
-  // lançamento
+  // lançamento (IMPORTANTE: SEM TRAVA de dia anterior)
   const [day, setDay] = useState<string>(isoTodayLocal());
   const [turno, setTurno] = useState<Turno>(1);
   const [equipamento, setEquipamento] = useState<string>(EQUIPAMENTOS[0]);
@@ -173,6 +173,7 @@ export default function Horimetros() {
   async function addRow() {
     setErr(null);
 
+    // SEM qualquer regra de "dia anterior" aqui.
     if (!day || !equipamento) {
       setErr("Informe a data e selecione o equipamento.");
       return;
@@ -186,7 +187,7 @@ export default function Horimetros() {
       return;
     }
     if (fim === null || fim < 0) {
-      setErr("Horímetro Final inválido. Ex: 1234,5");
+      setErr("Horímetro Final inválido. Ex: 1238,0");
       return;
     }
     if (fim < ini) {
@@ -209,7 +210,7 @@ export default function Horimetros() {
       await loadLastByEq();
       await loadFiltered();
 
-      // filtros pra mostrar o que lançou
+      // mostra o que lançou (mantém isso porque ajuda, mas não trava nada)
       setFDay(day);
       setFTurno(turno);
       setFEq(equipamento);
@@ -256,7 +257,7 @@ export default function Horimetros() {
             <div>
               <div className="mp-chip">Operação</div>
               <div className="mp-page-title">Horímetros</div>
-              <div className="mp-page-sub">Histórico + filtros + lançamento (Inicial / Final)</div>
+              <div className="mp-page-sub">Histórico + filtros + lançamento (Inicial / Final) — permitido lançar qualquer data</div>
             </div>
 
             <button
@@ -397,7 +398,7 @@ export default function Horimetros() {
           <div className="mp-card">
             <div className="mp-card-h">
               <b>Novo lançamento</b>
-              <span className="mp-help">Salva Inicial e Final</span>
+              <span className="mp-help">Salva Inicial e Final (sem travar dia anterior)</span>
             </div>
             <div className="mp-card-b">
               {err && <div className="mp-error">{err}</div>}
@@ -412,7 +413,13 @@ export default function Horimetros() {
               >
                 <div>
                   <div className="mp-label">Data</div>
-                  <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+                  <input
+                    className="mp-input"
+                    type="date"
+                    value={day}
+                    onChange={(e) => setDay(e.target.value)}
+                    // IMPORTANTE: não colocar min/max aqui
+                  />
                 </div>
 
                 <div>
@@ -484,7 +491,13 @@ export default function Horimetros() {
               >
                 <div>
                   <div className="mp-label">Data</div>
-                  <input className="mp-input" type="date" value={fDay} onChange={(e) => setFDay(e.target.value)} />
+                  <input
+                    className="mp-input"
+                    type="date"
+                    value={fDay}
+                    onChange={(e) => setFDay(e.target.value)}
+                    // IMPORTANTE: sem min/max
+                  />
                 </div>
 
                 <div>
@@ -513,7 +526,9 @@ export default function Horimetros() {
                 </div>
 
                 <div className="mp-help" style={{ marginLeft: "auto" }}>
-                  {loading ? "Carregando..." : (
+                  {loading ? (
+                    "Carregando..."
+                  ) : (
                     <>
                       Resultado: <b>{filtered.length}</b> registro(s)
                     </>
