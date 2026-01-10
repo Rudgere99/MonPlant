@@ -96,21 +96,6 @@ function getOrCreateSheet(wb: XLSX.WorkBook, name: string) {
   return ws;
 }
 
-function clearSheetValues(ws: XLSX.WorkSheet, startRow: number) {
-  const ref = ws["!ref"];
-  if (!ref) return;
-  const rng = XLSX.utils.decode_range(ref);
-  for (let r = startRow - 1; r <= rng.e.r; r++) {
-    for (let c = rng.s.c; c <= rng.e.c; c++) {
-      const addr = XLSX.utils.encode_cell({ r, c });
-      if (ws[addr]) {
-        ws[addr].v = undefined as any;
-        ws[addr].w = undefined as any;
-      }
-    }
-  }
-}
-
 function setCell(ws: XLSX.WorkSheet, r1: number, c1: number, value: any) {
   const addr = XLSX.utils.encode_cell({ r: r1 - 1, c: c1 - 1 });
   ws[addr] = ws[addr] || ({ t: "s", v: "" } as any);
@@ -137,6 +122,11 @@ function setCell(ws: XLSX.WorkSheet, r1: number, c1: number, value: any) {
   ws[addr].v = String(value);
 }
 
+function getCellValue(ws: XLSX.WorkSheet, r1: number, c1: number) {
+  const addr = XLSX.utils.encode_cell({ r: r1 - 1, c: c1 - 1 });
+  return ws[addr]?.v;
+}
+
 function downloadArrayBuffer(buf: ArrayBuffer, filename: string) {
   const blob = new Blob([buf], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -160,11 +150,77 @@ function downloadArrayBuffer(buf: ArrayBuffer, filename: string) {
  */
 function getTurnoFromPeriod(period: any): "T1" | "T2" {
   const s = String(period || "").trim();
-  // pega as 2 primeiras casas da hora inicial "HH"
+  // pega a hora inicial "HH"
   const m = s.match(/(\d{1,2})\s*:\s*\d{2}/);
   const h = m ? Number(m[1]) : NaN;
   if (!Number.isFinite(h)) return "T2";
   return h >= 7 && h < 19 ? "T1" : "T2";
+}
+
+// ====== preservar dados existentes: achar/atualizar por data ======
+
+function asYMDFromCell(v: any): string | null {
+  if (!v) return null;
+  if (v instanceof Date && !Number.isNaN(v.getTime())) return ymd(v);
+
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) return ymd(d);
+
+  return null;
+}
+
+function findRowByDate(ws: XLSX.WorkSheet, dateCol: number, startRow: number, targetYMD: string): number | null {
+  const ref = ws["!ref"];
+  if (!ref) return null;
+  const rng = XLSX.utils.decode_range(ref);
+  // rng.e.r é 0-based; converte pra 1-based no loop
+  for (let r = startRow; r <= rng.e.r + 1; r++) {
+    const got = asYMDFromCell(getCellValue(ws, r, dateCol));
+    if (got === targetYMD) return r;
+  }
+  return null;
+}
+
+function appendRowIndex(ws: XLSX.WorkSheet, minRow: number): number {
+  const ref = ws["!ref"];
+  if (!ref) return minRow;
+  const rng = XLSX.utils.decode_range(ref);
+  return Math.max(minRow, rng.e.r + 2); // +2 porque rng.e.r é 0-based e queremos próxima linha 1-based
+}
+
+function normStr(v: any) {
+  return String(v ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
+function stopKeyFromSheet(ws: XLSX.WorkSheet, row: number) {
+  // Paradas no template: (pelo seu export) colunas:
+  // 1 Data turno, 2 Turno, 3 Data início, 4 Data fim, 5 Hora início, 6 Hora fim, 7 Equip, 8 Tipo, 9 Ativ, 10 Desc, 11 Tempo
+  const dTurno = asYMDFromCell(getCellValue(ws, row, 1)) || "";
+  const hi = normStr(getCellValue(ws, row, 5));
+  const hf = normStr(getCellValue(ws, row, 6));
+  const eq = normStr(getCellValue(ws, row, 7));
+  const tipo = normStr(getCellValue(ws, row, 8));
+  const ativ = normStr(getCellValue(ws, row, 9));
+  const desc = normStr(getCellValue(ws, row, 10));
+  return `${dTurno}|${hi}|${hf}|${eq}|${tipo}|${ativ}|${desc}`;
+}
+
+function buildExistingStopKeySet(ws: XLSX.WorkSheet, startRow: number) {
+  const set = new Set<string>();
+  const ref = ws["!ref"];
+  if (!ref) return set;
+  const rng = XLSX.utils.decode_range(ref);
+  for (let r = startRow; r <= rng.e.r + 1; r++) {
+    const maybe = stopKeyFromSheet(ws, r);
+    if (maybe.replace(/\|/g, "").trim()) set.add(maybe);
+  }
+  return set;
 }
 
 export default function Exportar() {
@@ -179,17 +235,23 @@ export default function Exportar() {
     setBusy(true);
 
     try {
-      // 1) carrega TEMPLATE do public
-      const tplRes = await fetch("/BASE_PLANTA.xlsx", { cache: "no-store" });
-      if (!tplRes.ok) throw new Error("Não achei /BASE_PLANTA.xlsx em public/");
+      // ✅ usa BASE_URL (ajuda em deploy com base path) e evita cache
+      const tplUrl = new URL("BASE_PLANTA.xlsx", (import.meta as any).env?.BASE_URL || "/").toString();
+      const tplRes = await fetch(tplUrl, { cache: "no-store" });
+      if (!tplRes.ok) throw new Error(`Não achei template em ${tplUrl} (${tplRes.status})`);
       const tplBuf = await tplRes.arrayBuffer();
 
-      // 2) lê workbook
+      // sanity: xlsx começa com "PK"
+      const head = new Uint8Array(tplBuf.slice(0, 2));
+      if (!(head[0] === 0x50 && head[1] === 0x4b)) {
+        throw new Error(`Template não parece XLSX (conteúdo não é ZIP). Verifique rotas/arquivo em public.`);
+      }
+
       const wb = XLSX.read(tplBuf, { type: "array", cellDates: true });
 
       const days = dateRange(fromDay, toDay);
 
-      // 3) puxa dados por dia
+      // ====== baixa dados ======
       const plantDays: PlantDay[] = [];
       const allStops: StopItem[] = [];
       const allHor: HoriItem[] = [];
@@ -221,8 +283,11 @@ export default function Exportar() {
       }
 
       // ===================== ABA: Paradas =====================
+      // ✅ NÃO limpa nada; só anexa no final (com dedupe)
       const wsParadas = getOrCreateSheet(wb, "Paradas");
-      clearSheetValues(wsParadas, 2);
+      const paradasStartRow = 2;
+
+      const existingStopKeys = buildExistingStopKeySet(wsParadas, paradasStartRow);
 
       allStops.sort((a, b) => {
         const sa = pick(a, ["start_at", "inicio", "start", "data_inicio", "dt_inicio"]);
@@ -232,7 +297,8 @@ export default function Exportar() {
         return da - db;
       });
 
-      let rPar = 2;
+      let rPar = appendRowIndex(wsParadas, paradasStartRow);
+
       for (const s of allStops) {
         const day = pick(s, ["day", "data_turno", "data", "shift_day"]) || null;
         const turno =
@@ -261,6 +327,13 @@ export default function Exportar() {
         else if (start.date)
           dTurno = new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate());
 
+        const key = `${asYMDFromCell(dTurno) || ""}|${normStr(start.hhmm)}|${normStr(end.hhmm)}|${normStr(
+          equip
+        )}|${normStr(tipo)}|${normStr(ativ)}|${normStr(desc)}`;
+
+        if (existingStopKeys.has(key)) continue;
+        existingStopKeys.add(key);
+
         setCell(wsParadas, rPar, 1, dTurno);
         setCell(wsParadas, rPar, 2, String(turno || ""));
         setCell(
@@ -287,8 +360,9 @@ export default function Exportar() {
       }
 
       // ===================== ABA: HORÍMETROS =====================
+      // ✅ NÃO limpa; atualiza a linha do dia (ou cria no final)
       const wsHor = getOrCreateSheet(wb, "HORÍMETROS");
-      clearSheetValues(wsHor, 2);
+      const horStartRow = 2;
 
       const horByDay = new Map<string, HoriItem[]>();
       for (const h of allHor) {
@@ -300,7 +374,6 @@ export default function Exportar() {
         horByDay.set(key, arr);
       }
 
-      let rHor = 2;
       for (const d of days) {
         const list = horByDay.get(d) || [];
         const byEq = new Map<string, { ini: number | null; fim: number | null; turno: any }>();
@@ -330,34 +403,36 @@ export default function Exportar() {
         const hTr = (x: any) =>
           x?.ini != null && x?.fim != null ? Math.round((x.fim - x.ini) * 100) / 100 : "";
 
-        setCell(wsHor, rHor, 1, dt);
-        setCell(wsHor, rHor, 2, bt01?.ini ?? "");
-        setCell(wsHor, rHor, 3, bt01?.fim ?? "");
-        setCell(wsHor, rHor, 4, bt02?.ini ?? "");
-        setCell(wsHor, rHor, 5, bt02?.fim ?? "");
-        setCell(wsHor, rHor, 6, pn01?.ini ?? "");
-        setCell(wsHor, rHor, 7, pn01?.fim ?? "");
-        setCell(wsHor, rHor, 8, pn02?.ini ?? "");
-        setCell(wsHor, rHor, 9, pn02?.fim ?? "");
+        let rowIdx = findRowByDate(wsHor, 1, horStartRow, d);
+        if (!rowIdx) rowIdx = appendRowIndex(wsHor, horStartRow);
+
+        setCell(wsHor, rowIdx, 1, dt);
+        setCell(wsHor, rowIdx, 2, bt01?.ini ?? "");
+        setCell(wsHor, rowIdx, 3, bt01?.fim ?? "");
+        setCell(wsHor, rowIdx, 4, bt02?.ini ?? "");
+        setCell(wsHor, rowIdx, 5, bt02?.fim ?? "");
+        setCell(wsHor, rowIdx, 6, pn01?.ini ?? "");
+        setCell(wsHor, rowIdx, 7, pn01?.fim ?? "");
+        setCell(wsHor, rowIdx, 8, pn02?.ini ?? "");
+        setCell(wsHor, rowIdx, 9, pn02?.fim ?? "");
 
         const t = bt01?.turno ?? bt02?.turno ?? pn01?.turno ?? pn02?.turno ?? "";
-        setCell(wsHor, rHor, 10, t ? String(t) : "");
+        setCell(wsHor, rowIdx, 10, t ? String(t) : "");
 
-        setCell(wsHor, rHor, 11, hTr(bt01));
-        setCell(wsHor, rHor, 12, hTr(bt02));
-        setCell(wsHor, rHor, 13, hTr(pn01));
-        setCell(wsHor, rHor, 14, hTr(pn02));
-
-        rHor++;
+        setCell(wsHor, rowIdx, 11, hTr(bt01));
+        setCell(wsHor, rowIdx, 12, hTr(bt02));
+        setCell(wsHor, rowIdx, 13, hTr(pn01));
+        setCell(wsHor, rowIdx, 14, hTr(pn02));
       }
 
       // ===================== ABA: PRODUÇÃO (por turno) =====================
-      // Seu template (print) usa "Planilha1" com colunas:
+      // ✅ NÃO limpa; atualiza a linha do dia (ou cria no final)
+      // Seu template usa "Planilha1" com colunas:
       // A Data | B Meta diaria | C Produção 1º T | D Produção 2º T | E Total produzido (fórmula)
       const wsProd = getOrCreateSheet(wb, "Planilha1");
-      clearSheetValues(wsProd, 2);
+      const prodStartRow = 2;
 
-      const prodByDay = new Map<string, { t1: number; t2: number; obs: string }>();
+      const prodByDay = new Map<string, { t1: number; t2: number }>();
       for (const pd of plantDays) {
         let t1 = 0;
         let t2 = 0;
@@ -369,24 +444,24 @@ export default function Exportar() {
           else t2 += ton;
         }
 
-        prodByDay.set(pd.day, { t1, t2, obs: String(pd.obs || "") });
+        prodByDay.set(pd.day, { t1, t2 });
       }
 
-      let rProd = 2;
       for (const d of days) {
         const dt = parseISODate(d);
-        const v = prodByDay.get(d) || { t1: 0, t2: 0, obs: "" };
+        const v = prodByDay.get(d) || { t1: 0, t2: 0 };
 
-        setCell(wsProd, rProd, 1, dt);       // A = Data
-        // B = Meta diaria -> deixa como está no template (não sobrescreve)
-        setCell(wsProd, rProd, 3, v.t1 || ""); // C = Produção 1º Turno (07–19)
-        setCell(wsProd, rProd, 4, v.t2 || ""); // D = Produção 2º Turno (19–07)
-        // E = Total produzido -> fórmula do template (não sobrescreve)
+        let rowIdx = findRowByDate(wsProd, 1, prodStartRow, d);
+        if (!rowIdx) rowIdx = appendRowIndex(wsProd, prodStartRow);
 
-        rProd++;
+        setCell(wsProd, rowIdx, 1, dt);           // A = Data
+        // B = Meta diaria -> NÃO mexe (mantém o que já existe no template)
+        setCell(wsProd, rowIdx, 3, v.t1 || "");   // C = Produção 1º Turno (07–19)
+        setCell(wsProd, rowIdx, 4, v.t2 || "");   // D = Produção 2º Turno (19–07)
+        // E = Total produzido -> NÃO mexe (fórmula do template)
       }
 
-      // 7) salva
+      // ====== salva ======
       const outBuf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
       const fileName =
         fromDay === toDay
@@ -407,7 +482,7 @@ export default function Exportar() {
       <div>
         <div className="mp-chip">Utilitários</div>
         <div className="mp-page-title">Exportar Excel</div>
-        <div className="mp-page-sub">Exportar no padrão do seu BASE_PLANTA.xlsx.</div>
+        <div className="mp-page-sub">Exportar no padrão do seu BASE_PLANTA.xlsx (preservando dados existentes).</div>
       </div>
 
       <div style={{ height: 16 }} />
@@ -415,7 +490,7 @@ export default function Exportar() {
       <div className="mp-card">
         <div className="mp-card-h">
           <b>Exportação</b>
-          <span className="mp-help">Gera arquivo preenchendo as abas do template</span>
+          <span className="mp-help">Atualiza Produção/Horímetros por data e anexa Paradas sem apagar o que já existe</span>
         </div>
 
         <div className="mp-card-b">
