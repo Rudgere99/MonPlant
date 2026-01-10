@@ -9,14 +9,7 @@ function ymd(d: Date) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-function br(d: Date) {
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
 function parseISODate(s: string) {
-  // "2026-01-07"
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1);
 }
@@ -37,30 +30,35 @@ function dateRange(fromYMD: string, toYMD: string) {
   return out;
 }
 
-function authHeaders() {
-  const t = localStorage.getItem("mp_token");
-  return t ? { Authorization: `Bearer ${t}` } : {};
+/** ✅ SEMPRE retorna um objeto "string -> string" */
+function authHeaders(): Record<string, string> {
+  const keys = ["mp_token", "token", "access_token", "auth_token"];
+  for (const k of keys) {
+    const v = (localStorage.getItem(k) || "").trim();
+    if (v) return { Authorization: `Bearer ${v}` };
+  }
+  return {};
 }
 
 async function apiGet<T>(path: string): Promise<T> {
-  const r = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders(),
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...authHeaders(),
+  };
+
+  const r = await fetch(`${API_BASE}${path}`, { headers });
   if (!r.ok) {
-    const txt = await r.text();
+    const txt = await r.text().catch(() => "");
     throw new Error(`${r.status} ${r.statusText} - ${txt}`);
   }
   return (await r.json()) as T;
 }
 
-// -------- tipos tolerantes (aceitam variações do backend) ----------
+// -------- tipos tolerantes ----------
 type PlantRow = { period: string; ton: number | null; freq: number | null };
 type PlantDay = { day: string; obs?: string | null; rows: PlantRow[] };
 
-type StopItem = any; // backend pode variar, então vamos mapear por "tentativas"
+type StopItem = any;
 type HoriItem = any;
 
 function pick(obj: any, keys: string[]) {
@@ -71,7 +69,6 @@ function pick(obj: any, keys: string[]) {
 }
 
 function toDateTimeParts(v: any) {
-  // aceita "2026-01-07T10:00:00", "2026-01-07 10:00:00", Date, etc
   if (!v) return { date: null as Date | null, hhmm: "" };
   const d = v instanceof Date ? v : new Date(String(v));
   if (Number.isNaN(d.getTime())) return { date: null as Date | null, hhmm: "" };
@@ -86,7 +83,7 @@ function hoursDiff(start: any, end: any) {
   if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
   const ms = b.getTime() - a.getTime();
   if (ms <= 0) return 0;
-  return Math.round((ms / 3600000) * 100) / 100; // 2 casas
+  return Math.round((ms / 3600000) * 100) / 100;
 }
 
 function getOrCreateSheet(wb: XLSX.WorkBook, name: string) {
@@ -107,7 +104,6 @@ function clearSheetValues(ws: XLSX.WorkSheet, startRow: number) {
     for (let c = rng.s.c; c <= rng.e.c; c++) {
       const addr = XLSX.utils.encode_cell({ r, c });
       if (ws[addr]) {
-        // mantém célula/estilo, zera valor
         ws[addr].v = undefined as any;
         ws[addr].w = undefined as any;
       }
@@ -116,7 +112,6 @@ function clearSheetValues(ws: XLSX.WorkSheet, startRow: number) {
 }
 
 function setCell(ws: XLSX.WorkSheet, r1: number, c1: number, value: any) {
-  // r1,c1 = 1-based
   const addr = XLSX.utils.encode_cell({ r: r1 - 1, c: c1 - 1 });
   ws[addr] = ws[addr] || ({ t: "s", v: "" } as any);
 
@@ -166,6 +161,7 @@ export default function Exportar() {
   async function handleExport() {
     setMsg("");
     setBusy(true);
+
     try {
       // 1) carrega TEMPLATE do public
       const tplRes = await fetch("/BASE_PLANTA.xlsx");
@@ -199,7 +195,7 @@ export default function Exportar() {
           // ok
         }
 
-        // Horímetros do dia (se seu backend usa outro endpoint, ajuste aqui)
+        // Horímetros do dia
         try {
           const hh = await apiGet<any[]>(`/api/horimetros?day=${d}`);
           for (const h of hh || []) allHor.push(h);
@@ -208,25 +204,10 @@ export default function Exportar() {
         }
       }
 
-      // ============================================================
-      // 4) ABA: PARADAS (template: cabeçalho na linha 1, dados na 2)
-      // Colunas do template (11):
-      // 1 Data do turno
-      // 2 Turno
-      // 3 Data Início
-      // 4 Data fim
-      // 5 Hora Início
-      // 6 Hora Fim
-      // 7 Equipamento
-      // 8 Tipo de Parada
-      // 9 Atividade
-      // 10 Descrição detalhada da parada
-      // 11 Tempo Parada(h)
-      // ============================================================
+      // ===================== ABA: Paradas =====================
       const wsParadas = getOrCreateSheet(wb, "Paradas");
       clearSheetValues(wsParadas, 2);
 
-      // ordena por data/hora início (quando existir)
       allStops.sort((a, b) => {
         const sa = pick(a, ["start_at", "inicio", "start", "data_inicio", "dt_inicio"]);
         const sb = pick(b, ["start_at", "inicio", "start", "data_inicio", "dt_inicio"]);
@@ -238,7 +219,6 @@ export default function Exportar() {
       let rPar = 2;
       for (const s of allStops) {
         const day = pick(s, ["day", "data_turno", "data", "shift_day"]) || null;
-
         const turno =
           pick(s, ["turno", "shift", "turn", "turno_nome"]) ||
           pick(s, ["turno_num", "shift_num"]) ||
@@ -250,23 +230,15 @@ export default function Exportar() {
         const start = toDateTimeParts(startV);
         const end = toDateTimeParts(endV);
 
-        const equip =
-          pick(s, ["equipamento", "equipment", "eq", "tag", "planta"]) || "";
-
-        const tipo =
-          pick(s, ["tipo", "tipo_parada", "stop_type", "type"]) || "";
-
-        const ativ =
-          pick(s, ["atividade", "activity"]) || "";
-
-        const desc =
-          pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "";
+        const equip = pick(s, ["equipamento", "equipment", "eq", "tag", "planta"]) || "";
+        const tipo = pick(s, ["tipo", "tipo_parada", "stop_type", "type"]) || "";
+        const ativ = pick(s, ["atividade", "activity"]) || "";
+        const desc = pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "";
 
         const tempo =
           pick(s, ["tempo_h", "tempo_parada_h", "duration_h", "duracao_h"]) ??
           (startV && endV ? hoursDiff(startV, endV) : null);
 
-        // Data do turno (Date)
         let dTurno: Date | null = null;
         if (typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)) dTurno = parseISODate(day);
         else if (start.date) dTurno = new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate());
@@ -286,28 +258,10 @@ export default function Exportar() {
         rPar++;
       }
 
-      // ============================================================
-      // 5) ABA: HORÍMETROS (template: cabeçalho na linha 1, dados na 2)
-      // Colunas do template:
-      // 1 DATA
-      // 2 HE INCIAL - BRITADOR.P
-      // 3 HE FINAL - BRITADOR.P
-      // 4 HE INICIAL - BRITADOR.S
-      // 5 HE FINAL - BRITADOR.S
-      // 6 HE INICIAL - PNR01
-      // 7 HE FINAL - PNR01
-      // 8 HE INICIAL - PNR02
-      // 9 HE FINAL - PNR02
-      // 10 Turno
-      // 11 h. Tr BT01
-      // 12 h. Tr BT02
-      // 13 h. Tr PN01
-      // 14 h. Tr PN02
-      // ============================================================
+      // ===================== ABA: HORÍMETROS =====================
       const wsHor = getOrCreateSheet(wb, "HORÍMETROS");
       clearSheetValues(wsHor, 2);
 
-      // agrupa por dia
       const horByDay = new Map<string, HoriItem[]>();
       for (const h of allHor) {
         const d = pick(h, ["day", "data", "data_turno"]);
@@ -321,18 +275,13 @@ export default function Exportar() {
       let rHor = 2;
       for (const d of days) {
         const list = horByDay.get(d) || [];
-
-        // mapeia por equipamento
         const byEq = new Map<string, { ini: number | null; fim: number | null; turno: any }>();
 
         for (const h of list) {
-          const eq =
-            String(pick(h, ["equipamento", "equipment", "eq", "tag"]) || "").toUpperCase();
-
+          const eq = String(pick(h, ["equipamento", "equipment", "eq", "tag"]) || "").toUpperCase();
           const ini = Number(pick(h, ["horimetro_ini", "ini", "inicial", "start"]) ?? NaN);
           const fim = Number(pick(h, ["horimetro_fim", "fim", "final", "end"]) ?? NaN);
           const turno = pick(h, ["turno", "shift", "turn"]);
-
           if (!eq) continue;
           byEq.set(eq, {
             ini: Number.isFinite(ini) ? ini : null,
@@ -343,37 +292,26 @@ export default function Exportar() {
 
         const dt = parseISODate(d);
 
-        // ajuste de aliases de tag (se seu sistema usa BT-01 etc)
-        const bt01 = byEq.get("BT-01") || byEq.get("BT01") || byEq.get("BT001") || null;
-        const bt02 = byEq.get("BT-02") || byEq.get("BT02") || byEq.get("BT002") || null;
-        const pn01 = byEq.get("PN-01") || byEq.get("PN01") || byEq.get("PNR001") || null;
-        const pn02 = byEq.get("PN-02") || byEq.get("PN02") || byEq.get("PNR002") || null;
+        const bt01 = byEq.get("BT-01") || byEq.get("BT01") || null;
+        const bt02 = byEq.get("BT-02") || byEq.get("BT02") || null;
+        const pn01 = byEq.get("PN-01") || byEq.get("PN01") || null;
+        const pn02 = byEq.get("PN-02") || byEq.get("PN02") || null;
 
-        // Colunas 2-9 (inic/final) – seguindo o template:
-        // BRITADOR.P = BT01
+        const hTr = (x: any) =>
+          x?.ini != null && x?.fim != null ? Math.round((x.fim - x.ini) * 100) / 100 : "";
+
         setCell(wsHor, rHor, 1, dt);
         setCell(wsHor, rHor, 2, bt01?.ini ?? "");
         setCell(wsHor, rHor, 3, bt01?.fim ?? "");
-
-        // BRITADOR.S = BT02
         setCell(wsHor, rHor, 4, bt02?.ini ?? "");
         setCell(wsHor, rHor, 5, bt02?.fim ?? "");
-
-        // PNR01 = PN01
         setCell(wsHor, rHor, 6, pn01?.ini ?? "");
         setCell(wsHor, rHor, 7, pn01?.fim ?? "");
-
-        // PNR02 = PN02
         setCell(wsHor, rHor, 8, pn02?.ini ?? "");
         setCell(wsHor, rHor, 9, pn02?.fim ?? "");
 
-        // turno (se existir)
         const t = bt01?.turno ?? bt02?.turno ?? pn01?.turno ?? pn02?.turno ?? "";
         setCell(wsHor, rHor, 10, t ? String(t) : "");
-
-        // horas trabalhadas = fim - ini
-        const hTr = (x: any) =>
-          x?.ini != null && x?.fim != null ? Math.round((x.fim - x.ini) * 100) / 100 : "";
 
         setCell(wsHor, rHor, 11, hTr(bt01));
         setCell(wsHor, rHor, 12, hTr(bt02));
@@ -383,18 +321,10 @@ export default function Exportar() {
         rHor++;
       }
 
-      // ============================================================
-      // 6) ABA: PRODUÇÃO (template: cabeçalho na linha 2, dados na 3)
-      // Colunas do template:
-      // B = Data
-      // C = Meta diaria
-      // D = Produção da Planta
-      // E = Observação (no seu exemplo tem texto nessa região)
-      // ============================================================
+      // ===================== ABA: PRODUÇÃO =====================
       const wsProd = getOrCreateSheet(wb, "PRODUÇÃO");
       clearSheetValues(wsProd, 3);
 
-      // map day -> total
       const prodMap = new Map<string, { total: number; obs: string }>();
       for (const pd of plantDays) {
         const total = (pd.rows || []).reduce((acc, r) => acc + (Number(r.ton) || 0), 0);
@@ -406,22 +336,15 @@ export default function Exportar() {
         const dt = parseISODate(d);
         const v = prodMap.get(d) || { total: 0, obs: "" };
 
-        // coluna B (2) = Data
-        setCell(wsProd, rProd, 2, dt);
-
-        // coluna C (3) Meta diaria (deixa vazio; no template você pode ter fórmula/meta)
-        setCell(wsProd, rProd, 3, "");
-
-        // coluna D (4) Produção da Planta
-        setCell(wsProd, rProd, 4, v.total || "");
-
-        // coluna E (5) Observação
-        setCell(wsProd, rProd, 5, v.obs || "");
+        setCell(wsProd, rProd, 2, dt);      // B = Data
+        setCell(wsProd, rProd, 3, "");      // C = Meta diaria (deixa template/fórmula)
+        setCell(wsProd, rProd, 4, v.total || ""); // D = Produção
+        setCell(wsProd, rProd, 5, v.obs || "");   // E = Observação
 
         rProd++;
       }
 
-      // 7) salva arquivo
+      // 7) salva
       const outBuf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
       const fileName =
         fromDay === toDay
@@ -457,24 +380,12 @@ export default function Exportar() {
           <div className="mp-grid-2" style={{ gap: 12 }}>
             <div>
               <div className="mp-help">Data inicial</div>
-              <input
-                className="mp-input"
-                type="date"
-                value={fromDay}
-                onChange={(e) => setFromDay(e.target.value)}
-                disabled={busy}
-              />
+              <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={busy} />
             </div>
 
             <div>
               <div className="mp-help">Data final</div>
-              <input
-                className="mp-input"
-                type="date"
-                value={toDay}
-                onChange={(e) => setToDay(e.target.value)}
-                disabled={busy}
-              />
+              <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={busy} />
             </div>
           </div>
 
@@ -489,7 +400,7 @@ export default function Exportar() {
 
           <div style={{ height: 8 }} />
           <div className="mp-help">
-            Obs.: coloque o template em <b>public/BASE_PLANTA.xlsx</b>.
+            Template em <b>public/BASE_PLANTA.xlsx</b>
           </div>
         </div>
       </div>
