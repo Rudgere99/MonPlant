@@ -3,21 +3,19 @@ import * as XLSX from "xlsx";
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "";
 
+/* ===================== Datas ===================== */
 function ymd(d: Date) {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+
 function parseISODate(s: string) {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1);
 }
-function addDays(d: Date, n: number) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
+
 function dateRange(fromYMD: string, toYMD: string) {
   const a = parseISODate(fromYMD);
   const b = parseISODate(toYMD);
@@ -25,12 +23,12 @@ function dateRange(fromYMD: string, toYMD: string) {
   let cur = new Date(a);
   while (cur <= b) {
     out.push(ymd(cur));
-    cur = addDays(cur, 1);
+    cur.setDate(cur.getDate() + 1);
   }
   return out;
 }
 
-/** ✅ SEMPRE retorna um objeto "string -> string" */
+/* ===================== API ===================== */
 function authHeaders(): Record<string, string> {
   const keys = ["mp_token", "token", "access_token", "auth_token"];
   for (const k of keys) {
@@ -54,36 +52,19 @@ async function apiGet<T>(path: string): Promise<T> {
   return (await r.json()) as T;
 }
 
-// -------- tipos tolerantes ----------
+/* ===================== Tipos ===================== */
 type PlantRow = { period: string; ton: number | null; freq: number | null };
 type PlantDay = { day: string; obs?: string | null; rows: PlantRow[] };
 
 type StopItem = any;
 type HoriItem = any;
 
+/* ===================== Helpers ===================== */
 function pick(obj: any, keys: string[]) {
   for (const k of keys) {
     if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
   }
   return null;
-}
-
-function toDateTimeParts(v: any) {
-  if (!v) return { date: null as Date | null, hhmm: "" };
-  const d = v instanceof Date ? v : new Date(String(v));
-  if (Number.isNaN(d.getTime())) return { date: null as Date | null, hhmm: "" };
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return { date: d, hhmm: `${hh}:${mm}` };
-}
-
-function hoursDiff(start: any, end: any) {
-  const a = new Date(String(start));
-  const b = new Date(String(end));
-  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
-  const ms = b.getTime() - a.getTime();
-  if (ms <= 0) return 0;
-  return Math.round((ms / 3600000) * 100) / 100;
 }
 
 function getOrCreateSheet(wb: XLSX.WorkBook, name: string) {
@@ -141,12 +122,11 @@ function downloadArrayBuffer(buf: ArrayBuffer, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+/* ===================== Turnos ===================== */
 /**
- * Turnos:
- * - T1: 07:00–19:00
- * - T2: 19:00–07:00
- *
- * period esperado tipo: "07:00-08:00" (ou variações com espaços/traços)
+ * period esperado tipo: "07:00-08:00" (ou variações)
+ * T1: 07:00–19:00
+ * T2: 19:00–07:00
  */
 function getTurnoFromPeriod(period: any): "T1" | "T2" {
   const s = String(period || "").trim();
@@ -156,15 +136,53 @@ function getTurnoFromPeriod(period: any): "T1" | "T2" {
   return h >= 7 && h < 19 ? "T1" : "T2";
 }
 
-// ====== preservar dados existentes: achar/atualizar por data ======
-
+/* ===================== Datas Excel (CORRIGIDO) ===================== */
+/**
+ * Lê datas do Excel que podem vir como:
+ * - Date (ok)
+ * - número serial do Excel (ex: 45567)
+ * - string "dd/mm/yyyy"
+ * - string "yyyy-mm-dd"
+ */
 function asYMDFromCell(v: any): string | null {
-  if (!v) return null;
+  if (v === null || v === undefined || v === "") return null;
+
+  // Date
   if (v instanceof Date && !Number.isNaN(v.getTime())) return ymd(v);
 
+  // Serial Excel (número)
+  if (typeof v === "number" && Number.isFinite(v)) {
+    const dc = XLSX.SSF.parse_date_code(v);
+    if (dc && dc.y && dc.m && dc.d) {
+      const dt = new Date(dc.y, dc.m - 1, dc.d);
+      if (!Number.isNaN(dt.getTime())) return ymd(dt);
+    }
+  }
+
   const s = String(v).trim();
+
+  // yyyy-mm-dd
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
+  // dd/mm/yyyy
+  const m1 = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m1) {
+    const dd = Number(m1[1]);
+    const mm = Number(m1[2]);
+    const yyyy = Number(m1[3]);
+    return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+  }
+
+  // dd-mm-yyyy
+  const m2 = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (m2) {
+    const dd = Number(m2[1]);
+    const mm = Number(m2[2]);
+    const yyyy = Number(m2[3]);
+    return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+  }
+
+  // fallback (ISO com hora etc.)
   const d = new Date(s);
   if (!Number.isNaN(d.getTime())) return ymd(d);
 
@@ -188,11 +206,23 @@ function findRowByDate(
   return null;
 }
 
-function appendRowIndex(ws: XLSX.WorkSheet, minRow: number): number {
-  const ref = ws["!ref"];
-  if (!ref) return minRow;
-  const rng = XLSX.utils.decode_range(ref);
-  return Math.max(minRow, rng.e.r + 2);
+/* ===================== Paradas (dedupe) ===================== */
+function toDateTimeParts(v: any) {
+  if (!v) return { date: null as Date | null, hhmm: "" };
+  const d = v instanceof Date ? v : new Date(String(v));
+  if (Number.isNaN(d.getTime())) return { date: null as Date | null, hhmm: "" };
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return { date: d, hhmm: `${hh}:${mm}` };
+}
+
+function hoursDiff(start: any, end: any) {
+  const a = new Date(String(start));
+  const b = new Date(String(end));
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  const ms = b.getTime() - a.getTime();
+  if (ms <= 0) return 0;
+  return Math.round((ms / 3600000) * 100) / 100;
 }
 
 function normStr(v: any) {
@@ -202,29 +232,34 @@ function normStr(v: any) {
     .toUpperCase();
 }
 
-function stopKeyFromSheet(ws: XLSX.WorkSheet, row: number) {
-  const dTurno = asYMDFromCell(getCellValue(ws, row, 1)) || "";
-  const hi = normStr(getCellValue(ws, row, 5));
-  const hf = normStr(getCellValue(ws, row, 6));
-  const eq = normStr(getCellValue(ws, row, 7));
-  const tipo = normStr(getCellValue(ws, row, 8));
-  const ativ = normStr(getCellValue(ws, row, 9));
-  const desc = normStr(getCellValue(ws, row, 10));
-  return `${dTurno}|${hi}|${hf}|${eq}|${tipo}|${ativ}|${desc}`;
-}
-
 function buildExistingStopKeySet(ws: XLSX.WorkSheet, startRow: number) {
   const set = new Set<string>();
   const ref = ws["!ref"];
   if (!ref) return set;
   const rng = XLSX.utils.decode_range(ref);
+
   for (let r = startRow; r <= rng.e.r + 1; r++) {
-    const key = stopKeyFromSheet(ws, r);
+    const dTurno = asYMDFromCell(getCellValue(ws, r, 1)) || "";
+    const hi = normStr(getCellValue(ws, r, 5));
+    const hf = normStr(getCellValue(ws, r, 6));
+    const eq = normStr(getCellValue(ws, r, 7));
+    const tipo = normStr(getCellValue(ws, r, 8));
+    const ativ = normStr(getCellValue(ws, r, 9));
+    const desc = normStr(getCellValue(ws, r, 10));
+    const key = `${dTurno}|${hi}|${hf}|${eq}|${tipo}|${ativ}|${desc}`;
     if (key.replace(/\|/g, "").trim()) set.add(key);
   }
   return set;
 }
 
+function appendRowIndex(ws: XLSX.WorkSheet, minRow: number): number {
+  const ref = ws["!ref"];
+  if (!ref) return minRow;
+  const rng = XLSX.utils.decode_range(ref);
+  return Math.max(minRow, rng.e.r + 2);
+}
+
+/* ===================== Componente ===================== */
 export default function Exportar() {
   const today = useMemo(() => ymd(new Date()), []);
   const [fromDay, setFromDay] = useState(today);
@@ -237,7 +272,6 @@ export default function Exportar() {
     setBusy(true);
 
     try {
-      // ✅ CORRIGIDO: nada de new URL / BASE_URL — pega do public direto
       const tplRes = await fetch("/BASE_PLANTA.xlsx", { cache: "no-store" });
       if (!tplRes.ok) {
         throw new Error("Não achei template em /BASE_PLANTA.xlsx (confira public/BASE_PLANTA.xlsx)");
@@ -247,7 +281,7 @@ export default function Exportar() {
       // sanity: xlsx começa com "PK"
       const head = new Uint8Array(tplBuf.slice(0, 2));
       if (!(head[0] === 0x50 && head[1] === 0x4b)) {
-        throw new Error("Template não é XLSX válido (veio HTML/erro). Verifique Vercel routes e public/.");
+        throw new Error("Template não é XLSX válido (veio HTML/erro).");
       }
 
       const wb = XLSX.read(tplBuf, { type: "array", cellDates: true });
@@ -260,7 +294,6 @@ export default function Exportar() {
       const allHor: HoriItem[] = [];
 
       for (const d of days) {
-        // Produção do dia
         try {
           const pd = await apiGet<PlantDay>(`/api/plant-production/${d}`);
           plantDays.push(pd);
@@ -268,28 +301,127 @@ export default function Exportar() {
           plantDays.push({ day: d, obs: "", rows: [] });
         }
 
-        // Paradas do dia
         try {
           const st = await apiGet<any[]>(`/api/stops?day=${d}`);
           for (const s of st || []) allStops.push(s);
-        } catch {
-          // ok
-        }
+        } catch {}
 
-        // Horímetros do dia
         try {
           const hh = await apiGet<any[]>(`/api/horimetros?day=${d}`);
           for (const h of hh || []) allHor.push(h);
-        } catch {
-          // ok
+        } catch {}
+      }
+
+      // ===================== ABA: PRODUÇÃO (Planilha1) =====================
+      // NÃO cria linha: só preenche se a data já existir (mantém padrão)
+      const wsProd = getOrCreateSheet(wb, "Planilha1");
+      const prodStartRow = 2;
+
+      const prodByDay = new Map<string, { t1: number; t2: number }>();
+      for (const pd of plantDays) {
+        let t1 = 0;
+        let t2 = 0;
+        for (const row of pd.rows || []) {
+          const ton = Number(row.ton) || 0;
+          const turno = getTurnoFromPeriod(row.period);
+          if (turno === "T1") t1 += ton;
+          else t2 += ton;
         }
+        prodByDay.set(pd.day, { t1, t2 });
+      }
+
+      let prodMiss = 0;
+      for (const d of days) {
+        const v = prodByDay.get(d) || { t1: 0, t2: 0 };
+        const rowIdx = findRowByDate(wsProd, 1, prodStartRow, d);
+        if (!rowIdx) {
+          prodMiss++;
+          continue;
+        }
+        // C e D
+        setCell(wsProd, rowIdx, 3, v.t1 || "");
+        setCell(wsProd, rowIdx, 4, v.t2 || "");
+        // B (meta) e E (total) ficam do template
+      }
+
+      // ===================== ABA: HORÍMETROS =====================
+      // NÃO cria linha: só preenche se a data já existir (mantém padrão)
+      const wsHor = getOrCreateSheet(wb, "HORÍMETROS");
+      const horStartRow = 2;
+
+      const horByDay = new Map<string, HoriItem[]>();
+      for (const h of allHor) {
+        const d = pick(h, ["day", "data", "data_turno"]);
+        if (!d) continue;
+        const key = String(d).slice(0, 10);
+        const arr = horByDay.get(key) || [];
+        arr.push(h);
+        horByDay.set(key, arr);
+      }
+
+      let horMiss = 0;
+      for (const d of days) {
+        const rowIdx = findRowByDate(wsHor, 1, horStartRow, d);
+        if (!rowIdx) {
+          horMiss++;
+          continue;
+        }
+
+        const list = horByDay.get(d) || [];
+        const byEq = new Map<string, { ini: number | null; fim: number | null; turno: any }>();
+
+        for (const h of list) {
+          const eq = String(pick(h, ["equipamento", "equipment", "eq", "tag"]) || "")
+            .toUpperCase()
+            .trim();
+          const ini = Number(pick(h, ["horimetro_ini", "ini", "inicial", "start"]) ?? NaN);
+          const fim = Number(pick(h, ["horimetro_fim", "fim", "final", "end"]) ?? NaN);
+          const turno = pick(h, ["turno", "shift", "turn"]);
+          if (!eq) continue;
+          byEq.set(eq, {
+            ini: Number.isFinite(ini) ? ini : null,
+            fim: Number.isFinite(fim) ? fim : null,
+            turno,
+          });
+        }
+
+        const bt01 = byEq.get("BT-01") || byEq.get("BT01") || null;
+        const bt02 = byEq.get("BT-02") || byEq.get("BT02") || null;
+        const pn01 = byEq.get("PN-01") || byEq.get("PN01") || null;
+        const pn02 = byEq.get("PN-02") || byEq.get("PN02") || null;
+
+        const hTr = (x: any) => (x?.ini != null && x?.fim != null ? Math.round((x.fim - x.ini) * 100) / 100 : "");
+
+        // Colunas do seu template (pela imagem):
+        // A Data
+        // B/C BT01 ini/fim
+        // D/E BT02 ini/fim (se você usa, senão fica)
+        // F/G PN01 ini/fim
+        // H/I PN02 ini/fim
+        // J Turno
+        // K/L/M/N h.Tr ...
+        setCell(wsHor, rowIdx, 2, bt01?.ini ?? "");
+        setCell(wsHor, rowIdx, 3, bt01?.fim ?? "");
+        setCell(wsHor, rowIdx, 4, bt02?.ini ?? "");
+        setCell(wsHor, rowIdx, 5, bt02?.fim ?? "");
+        setCell(wsHor, rowIdx, 6, pn01?.ini ?? "");
+        setCell(wsHor, rowIdx, 7, pn01?.fim ?? "");
+        setCell(wsHor, rowIdx, 8, pn02?.ini ?? "");
+        setCell(wsHor, rowIdx, 9, pn02?.fim ?? "");
+
+        const t = bt01?.turno ?? bt02?.turno ?? pn01?.turno ?? pn02?.turno ?? "";
+        setCell(wsHor, rowIdx, 10, t ? String(t) : "");
+
+        setCell(wsHor, rowIdx, 11, hTr(bt01));
+        setCell(wsHor, rowIdx, 12, hTr(bt02));
+        setCell(wsHor, rowIdx, 13, hTr(pn01));
+        setCell(wsHor, rowIdx, 14, hTr(pn02));
       }
 
       // ===================== ABA: Paradas =====================
-      // ✅ NÃO limpa nada; só anexa no final (com dedupe)
+      // Mantém padrão: só anexa no final e deduplica
       const wsParadas = getOrCreateSheet(wb, "Paradas");
       const paradasStartRow = 2;
-
       const existingStopKeys = buildExistingStopKeySet(wsParadas, paradasStartRow);
 
       allStops.sort((a, b) => {
@@ -318,8 +450,7 @@ export default function Exportar() {
         const equip = pick(s, ["equipamento", "equipment", "eq", "tag", "planta"]) || "";
         const tipo = pick(s, ["tipo", "tipo_parada", "stop_type", "type"]) || "";
         const ativ = pick(s, ["atividade", "activity"]) || "";
-        const desc =
-          pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "";
+        const desc = pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "";
 
         const tempo =
           pick(s, ["tempo_h", "tempo_parada_h", "duration_h", "duracao_h"]) ??
@@ -327,8 +458,7 @@ export default function Exportar() {
 
         let dTurno: Date | null = null;
         if (typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)) dTurno = parseISODate(day);
-        else if (start.date)
-          dTurno = new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate());
+        else if (start.date) dTurno = new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate());
 
         const key = `${asYMDFromCell(dTurno) || ""}|${normStr(start.hhmm)}|${normStr(end.hhmm)}|${normStr(
           equip
@@ -337,20 +467,11 @@ export default function Exportar() {
         if (existingStopKeys.has(key)) continue;
         existingStopKeys.add(key);
 
+        // colunas conforme seu export anterior
         setCell(wsParadas, rPar, 1, dTurno);
         setCell(wsParadas, rPar, 2, String(turno || ""));
-        setCell(
-          wsParadas,
-          rPar,
-          3,
-          start.date ? new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate()) : ""
-        );
-        setCell(
-          wsParadas,
-          rPar,
-          4,
-          end.date ? new Date(end.date.getFullYear(), end.date.getMonth(), end.date.getDate()) : ""
-        );
+        setCell(wsParadas, rPar, 3, start.date ? new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate()) : "");
+        setCell(wsParadas, rPar, 4, end.date ? new Date(end.date.getFullYear(), end.date.getMonth(), end.date.getDate()) : "");
         setCell(wsParadas, rPar, 5, start.hhmm || "");
         setCell(wsParadas, rPar, 6, end.hhmm || "");
         setCell(wsParadas, rPar, 7, equip);
@@ -362,117 +483,19 @@ export default function Exportar() {
         rPar++;
       }
 
-      // ===================== ABA: HORÍMETROS =====================
-      // ✅ NÃO limpa; atualiza a linha do dia (ou cria no final)
-      const wsHor = getOrCreateSheet(wb, "HORÍMETROS");
-      const horStartRow = 2;
-
-      const horByDay = new Map<string, HoriItem[]>();
-      for (const h of allHor) {
-        const d = pick(h, ["day", "data", "data_turno"]);
-        if (!d) continue;
-        const key = String(d).slice(0, 10);
-        const arr = horByDay.get(key) || [];
-        arr.push(h);
-        horByDay.set(key, arr);
-      }
-
-      for (const d of days) {
-        const list = horByDay.get(d) || [];
-        const byEq = new Map<string, { ini: number | null; fim: number | null; turno: any }>();
-
-        for (const h of list) {
-          const eq = String(pick(h, ["equipamento", "equipment", "eq", "tag"]) || "")
-            .toUpperCase()
-            .trim();
-          const ini = Number(pick(h, ["horimetro_ini", "ini", "inicial", "start"]) ?? NaN);
-          const fim = Number(pick(h, ["horimetro_fim", "fim", "final", "end"]) ?? NaN);
-          const turno = pick(h, ["turno", "shift", "turn"]);
-          if (!eq) continue;
-          byEq.set(eq, {
-            ini: Number.isFinite(ini) ? ini : null,
-            fim: Number.isFinite(fim) ? fim : null,
-            turno,
-          });
-        }
-
-        const dt = parseISODate(d);
-
-        const bt01 = byEq.get("BT-01") || byEq.get("BT01") || null;
-        const bt02 = byEq.get("BT-02") || byEq.get("BT02") || null;
-        const pn01 = byEq.get("PN-01") || byEq.get("PN01") || null;
-        const pn02 = byEq.get("PN-02") || byEq.get("PN02") || null;
-
-        const hTr = (x: any) =>
-          x?.ini != null && x?.fim != null ? Math.round((x.fim - x.ini) * 100) / 100 : "";
-
-        let rowIdx = findRowByDate(wsHor, 1, horStartRow, d);
-        if (!rowIdx) rowIdx = appendRowIndex(wsHor, horStartRow);
-
-        setCell(wsHor, rowIdx, 1, dt);
-        setCell(wsHor, rowIdx, 2, bt01?.ini ?? "");
-        setCell(wsHor, rowIdx, 3, bt01?.fim ?? "");
-        setCell(wsHor, rowIdx, 4, bt02?.ini ?? "");
-        setCell(wsHor, rowIdx, 5, bt02?.fim ?? "");
-        setCell(wsHor, rowIdx, 6, pn01?.ini ?? "");
-        setCell(wsHor, rowIdx, 7, pn01?.fim ?? "");
-        setCell(wsHor, rowIdx, 8, pn02?.ini ?? "");
-        setCell(wsHor, rowIdx, 9, pn02?.fim ?? "");
-
-        const t = bt01?.turno ?? bt02?.turno ?? pn01?.turno ?? pn02?.turno ?? "";
-        setCell(wsHor, rowIdx, 10, t ? String(t) : "");
-
-        setCell(wsHor, rowIdx, 11, hTr(bt01));
-        setCell(wsHor, rowIdx, 12, hTr(bt02));
-        setCell(wsHor, rowIdx, 13, hTr(pn01));
-        setCell(wsHor, rowIdx, 14, hTr(pn02));
-      }
-
-      // ===================== ABA: PRODUÇÃO (por turno) =====================
-      // ✅ NÃO limpa; atualiza a linha do dia (ou cria no final)
-      // Template "Planilha1":
-      // A Data | B Meta diaria | C Produção 1º T | D Produção 2º T | E Total produzido (fórmula)
-      const wsProd = getOrCreateSheet(wb, "Planilha1");
-      const prodStartRow = 2;
-
-      const prodByDay = new Map<string, { t1: number; t2: number }>();
-      for (const pd of plantDays) {
-        let t1 = 0;
-        let t2 = 0;
-
-        for (const row of pd.rows || []) {
-          const ton = Number(row.ton) || 0;
-          const turno = getTurnoFromPeriod(row.period);
-          if (turno === "T1") t1 += ton;
-          else t2 += ton;
-        }
-
-        prodByDay.set(pd.day, { t1, t2 });
-      }
-
-      for (const d of days) {
-        const dt = parseISODate(d);
-        const v = prodByDay.get(d) || { t1: 0, t2: 0 };
-
-        let rowIdx = findRowByDate(wsProd, 1, prodStartRow, d);
-        if (!rowIdx) rowIdx = appendRowIndex(wsProd, prodStartRow);
-
-        setCell(wsProd, rowIdx, 1, dt);           // A = Data
-        // B = Meta diaria -> NÃO mexe
-        setCell(wsProd, rowIdx, 3, v.t1 || "");   // C = Produção 1º T
-        setCell(wsProd, rowIdx, 4, v.t2 || "");   // D = Produção 2º T
-        // E = Total produzido -> NÃO mexe
-      }
-
       // ====== salva ======
       const outBuf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
       const fileName =
-        fromDay === toDay
-          ? `BASE_PLANTA_${fromDay}.xlsx`
-          : `BASE_PLANTA_${fromDay}_a_${toDay}.xlsx`;
+        fromDay === toDay ? `BASE_PLANTA_${fromDay}.xlsx` : `BASE_PLANTA_${fromDay}_a_${toDay}.xlsx`;
 
       downloadArrayBuffer(outBuf, fileName);
-      setMsg(`✅ Exportado: ${fileName}`);
+
+      const extra =
+        (prodMiss || horMiss)
+          ? ` (Datas não encontradas no template: Produção=${prodMiss}, Horímetros=${horMiss})`
+          : "";
+
+      setMsg(`✅ Exportado: ${fileName}${extra}`);
     } catch (e: any) {
       setMsg(`❌ ${e?.message || String(e)}`);
     } finally {
@@ -485,9 +508,7 @@ export default function Exportar() {
       <div>
         <div className="mp-chip">Utilitários</div>
         <div className="mp-page-title">Exportar Excel</div>
-        <div className="mp-page-sub">
-          Exportar no padrão do seu BASE_PLANTA.xlsx (preservando dados existentes).
-        </div>
+        <div className="mp-page-sub">Mantém o template e só injeta os números (padrão idêntico).</div>
       </div>
 
       <div style={{ height: 16 }} />
@@ -495,33 +516,19 @@ export default function Exportar() {
       <div className="mp-card">
         <div className="mp-card-h">
           <b>Exportação</b>
-          <span className="mp-help">
-            Atualiza Produção/Horímetros por data e anexa Paradas sem apagar o que já existe
-          </span>
+          <span className="mp-help">Produção por turno (07-19 / 19-07) + Horímetros + Paradas</span>
         </div>
 
         <div className="mp-card-b">
           <div className="mp-grid-2" style={{ gap: 12 }}>
             <div>
               <div className="mp-help">Data inicial</div>
-              <input
-                className="mp-input"
-                type="date"
-                value={fromDay}
-                onChange={(e) => setFromDay(e.target.value)}
-                disabled={busy}
-              />
+              <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={busy} />
             </div>
 
             <div>
               <div className="mp-help">Data final</div>
-              <input
-                className="mp-input"
-                type="date"
-                value={toDay}
-                onChange={(e) => setToDay(e.target.value)}
-                disabled={busy}
-              />
+              <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={busy} />
             </div>
           </div>
 
