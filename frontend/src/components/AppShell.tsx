@@ -83,10 +83,10 @@ function getGroupFromPath(pathname: string) {
   return hit?.group ?? "";
 }
 
-function ShellLogo({ onClick }: { onClick?: () => void }) {
+function ShellLogo({ onClick, to }: { onClick?: () => void; to?: string }) {
   return (
     <Link
-      to="/dashboard"
+      to={to || "/dashboard"}
       onClick={onClick}
       style={{
         display: "flex",
@@ -135,6 +135,7 @@ function ShellLogo({ onClick }: { onClick?: () => void }) {
     </Link>
   );
 }
+
 
 export function AppShell() {
   const { logout, user } = useAuth() as any;
