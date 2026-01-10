@@ -198,27 +198,28 @@ function findLastNonEmptyRow(ws: XLSX.WorkSheet, col: number, startRow: number) 
   return last;
 }
 
+function findFirstEmptyRow(ws: XLSX.WorkSheet, dateCol: number, startRow: number) {
+  const ref = ws["!ref"];
+  if (!ref) return startRow;
+
+  const rng = XLSX.utils.decode_range(ref);
+  for (let r = startRow; r <= rng.e.r + 1; r++) {
+    const v = getCellValue(ws, r, dateCol);
+    if (v === undefined || v === null || String(v).trim() === "") return r;
+  }
+  return null; // tabela cheia
+}
+
 /* ===================== Formula row shifting (clone behavior) ===================== */
-/**
- * Excel when you copy/paste a row, it updates relative refs.
- * We simulate it by shifting row numbers in refs inside formulas.
- * This is a "good enough" shifter for typical formulas: A1, $A1, A$1, $A$1.
- */
 function shiftFormulaRows(formula: string, rowDelta: number) {
-  // Match cell refs like $A$1, A$1, $A1, A1, and also ranges A1:B5 etc.
-  // We shift only the row part if it is NOT absolute ($1 stays $1).
   return formula.replace(/(\$?[A-Z]{1,3})(\$?)(\d+)/g, (m, col, rowAbs, rowNum) => {
-    if (rowAbs === "$") return `${col}${rowAbs}${rowNum}`; // absolute row stays
+    if (rowAbs === "$") return `${col}${rowAbs}${rowNum}`;
     const n = Number(rowNum);
     if (!Number.isFinite(n)) return m;
     return `${col}${n + rowDelta}`;
   });
 }
 
-/**
- * Clone a whole row (cells across columns) from srcRow to dstRow,
- * copying style, number formats, formulas, etc. and adjusting formulas by rowDelta.
- */
 function cloneRow(ws: XLSX.WorkSheet, srcRow: number, dstRow: number) {
   const ref = ws["!ref"];
   if (!ref) return;
@@ -232,9 +233,7 @@ function cloneRow(ws: XLSX.WorkSheet, srcRow: number, dstRow: number) {
     const srcCell = ws[srcAddr];
     if (!srcCell) continue;
 
-    // Deep-ish copy
     const copied: any = { ...srcCell };
-    // If formula exists, shift
     if (copied.f && typeof copied.f === "string") {
       copied.f = shiftFormulaRows(copied.f, rowDelta);
     }
@@ -243,7 +242,6 @@ function cloneRow(ws: XLSX.WorkSheet, srcRow: number, dstRow: number) {
     ensureRef(ws, dstRow, c0 + 1);
   }
 
-  // Preserve row height if present
   (ws as any)["!rows"] = (ws as any)["!rows"] || [];
   if ((ws as any)["!rows"][srcRow - 1]) {
     (ws as any)["!rows"][dstRow - 1] = { ...(ws as any)["!rows"][srcRow - 1] };
@@ -259,7 +257,7 @@ function getTurnoFromPeriod(period: any): "T1" | "T2" {
   return h >= 7 && h < 19 ? "T1" : "T2";
 }
 
-/* ===================== Paradas (dedupe + append clonando) ===================== */
+/* ===================== Paradas (dedupe) ===================== */
 function toDateTimeParts(v: any) {
   if (!v) return { date: null as Date | null, hhmm: "" };
   const d = v instanceof Date ? v : new Date(String(v));
@@ -357,12 +355,9 @@ export default function Exportar() {
       }
 
       /* ===================== PLANILHA1 (Produção) ===================== */
-      // Estrutura do seu template:
-      // A Data | B Meta diaria | C Produção 1ºT | D Produção 2ºT | E Total produzido (fórmula)
       const wsProd = getOrCreateSheet(wb, "Planilha1");
       const prodStartRow = 2;
 
-      // Mapa produção por dia
       const prodByDay = new Map<string, { t1: number; t2: number }>();
       for (const pd of plantDays) {
         let t1 = 0,
@@ -374,37 +369,27 @@ export default function Exportar() {
         prodByDay.set(pd.day, { t1, t2 });
       }
 
-      // Append: só adiciona se a data ainda não existir
-      let lastProdRow = findLastNonEmptyRow(wsProd, 1, prodStartRow);
-      if (lastProdRow < prodStartRow) lastProdRow = prodStartRow;
-
+      // Preenche DENTRO da tabela (mantém estilo/zebra/filtros automaticamente).
+      // Se a data já existe, atualiza a linha; se não existir, usa a primeira linha vazia da tabela.
       for (const d of days) {
-        const exists = findRowByDate(wsProd, 1, prodStartRow, d);
-        if (exists) continue;
-
-        const srcRow = lastProdRow;        // última linha existente (modelo)
-        const dstRow = lastProdRow + 1;    // nova linha no final
-        cloneRow(wsProd, srcRow, dstRow);
-
-        // Escreve a DATA no padrão (mantém formato pela célula clonada)
-        setCell(wsProd, dstRow, 1, parseISODate(d));
-
         const v = prodByDay.get(d) || { t1: 0, t2: 0 };
-        setCell(wsProd, dstRow, 3, v.t1 || "");
-        setCell(wsProd, dstRow, 4, v.t2 || "");
 
-        lastProdRow = dstRow;
+        const rowIdx =
+          findRowByDate(wsProd, 1, prodStartRow, d) ??
+          findFirstEmptyRow(wsProd, 1, prodStartRow);
+
+        if (!rowIdx) {
+          throw new Error(
+            "A tabela de PRODUÇÃO no template acabou. No Excel: clique na tabela → Design da Tabela → Redimensionar Tabela (aumente as linhas)."
+          );
+        }
+
+        setCell(wsProd, rowIdx, 1, parseISODate(d));
+        setCell(wsProd, rowIdx, 3, v.t1 || "");
+        setCell(wsProd, rowIdx, 4, v.t2 || "");
       }
 
       /* ===================== HORÍMETROS ===================== */
-      // Pela sua planilha:
-      // A Data
-      // B/C BT01 ini/fim
-      // D/E BT02 ini/fim
-      // F/G PN01 ini/fim
-      // H/I PN02 ini/fim
-      // J Turno
-      // K..N h.Tr... (geralmente fórmula)
       const wsHor = getOrCreateSheet(wb, "HORÍMETROS");
       const horStartRow = 2;
 
@@ -418,21 +403,20 @@ export default function Exportar() {
         horByDay.set(key, arr);
       }
 
-      let lastHorRow = findLastNonEmptyRow(wsHor, 1, horStartRow);
-      if (lastHorRow < horStartRow) lastHorRow = horStartRow;
-
+      // Preenche DENTRO da tabela (mantém estilo/zebra/filtros automaticamente).
       for (const d of days) {
-        const exists = findRowByDate(wsHor, 1, horStartRow, d);
-        if (exists) continue;
+        const rowIdx =
+          findRowByDate(wsHor, 1, horStartRow, d) ??
+          findFirstEmptyRow(wsHor, 1, horStartRow);
 
-        const srcRow = lastHorRow;
-        const dstRow = lastHorRow + 1;
-        cloneRow(wsHor, srcRow, dstRow);
+        if (!rowIdx) {
+          throw new Error(
+            "A tabela de HORÍMETROS no template acabou. No Excel: clique na tabela → Design da Tabela → Redimensionar Tabela (aumente as linhas)."
+          );
+        }
 
-        // Data
-        setCell(wsHor, dstRow, 1, parseISODate(d));
+        setCell(wsHor, rowIdx, 1, parseISODate(d));
 
-        // Agrupa por equipamento
         const list = horByDay.get(d) || [];
         const byEq = new Map<string, { ini: number | null; fim: number | null; turno: any }>();
 
@@ -456,31 +440,25 @@ export default function Exportar() {
         const pn01 = byEq.get("PN-01") || byEq.get("PN01") || null;
         const pn02 = byEq.get("PN-02") || byEq.get("PN02") || null;
 
-        setCell(wsHor, dstRow, 2, bt01?.ini ?? "");
-        setCell(wsHor, dstRow, 3, bt01?.fim ?? "");
-        setCell(wsHor, dstRow, 4, bt02?.ini ?? "");
-        setCell(wsHor, dstRow, 5, bt02?.fim ?? "");
-        setCell(wsHor, dstRow, 6, pn01?.ini ?? "");
-        setCell(wsHor, dstRow, 7, pn01?.fim ?? "");
-        setCell(wsHor, dstRow, 8, pn02?.ini ?? "");
-        setCell(wsHor, dstRow, 9, pn02?.fim ?? "");
+        // Valores (ini/fim/turno). Colunas h.Tr ficam com as fórmulas do template.
+        setCell(wsHor, rowIdx, 2, bt01?.ini ?? "");
+        setCell(wsHor, rowIdx, 3, bt01?.fim ?? "");
+        setCell(wsHor, rowIdx, 4, bt02?.ini ?? "");
+        setCell(wsHor, rowIdx, 5, bt02?.fim ?? "");
+        setCell(wsHor, rowIdx, 6, pn01?.ini ?? "");
+        setCell(wsHor, rowIdx, 7, pn01?.fim ?? "");
+        setCell(wsHor, rowIdx, 8, pn02?.ini ?? "");
+        setCell(wsHor, rowIdx, 9, pn02?.fim ?? "");
 
         const t = bt01?.turno ?? bt02?.turno ?? pn01?.turno ?? pn02?.turno ?? "";
-        setCell(wsHor, dstRow, 10, t ? String(t) : "");
-
-        // IMPORTANTÍSSIMO:
-        // NÃO escreve nas colunas h.Tr (K..N) aqui.
-        // Elas ficam com as fórmulas clonadas e funcionando sem #REF!
-        lastHorRow = dstRow;
+        setCell(wsHor, rowIdx, 10, t ? String(t) : "");
       }
 
       /* ===================== PARADAS ===================== */
-      // Append no final clonando a última linha para manter estilo
       const wsPar = getOrCreateSheet(wb, "Paradas");
       const parStartRow = 2;
       const existingKeys = buildExistingStopKeySet(wsPar, parStartRow);
 
-      // ordenar por início
       allStops.sort((a, b) => {
         const sa = pick(a, ["start_at", "inicio", "start", "data_inicio", "dt_inicio"]);
         const sb = pick(b, ["start_at", "inicio", "start", "data_inicio", "dt_inicio"]);
@@ -488,9 +466,6 @@ export default function Exportar() {
         const db = sb ? new Date(String(sb)).getTime() : 0;
         return da - db;
       });
-
-      let lastParRow = findLastNonEmptyRow(wsPar, 1, parStartRow);
-      if (lastParRow < parStartRow) lastParRow = parStartRow;
 
       for (const s of allStops) {
         const day = pick(s, ["day", "data_turno", "data", "shift_day"]) || null;
@@ -525,26 +500,24 @@ export default function Exportar() {
         if (existingKeys.has(key)) continue;
         existingKeys.add(key);
 
-        const srcRow = lastParRow;
-        const dstRow = lastParRow + 1;
-        cloneRow(wsPar, srcRow, dstRow);
+        const rowIdx = findFirstEmptyRow(wsPar, 1, parStartRow);
+        if (!rowIdx) {
+          throw new Error(
+            "A tabela de PARADAS no template acabou. No Excel: clique na tabela → Design da Tabela → Redimensionar Tabela (aumente as linhas)."
+          );
+        }
 
-        // Colunas do seu template Paradas:
-        // 1 Data turno | 2 Turno | 3 Data início | 4 Data fim | 5 Hora início | 6 Hora fim
-        // 7 Equipamento | 8 Tipo | 9 Atividade | 10 Descrição | 11 Tempo(h)
-        setCell(wsPar, dstRow, 1, dTurno);
-        setCell(wsPar, dstRow, 2, String(turno || ""));
-        setCell(wsPar, dstRow, 3, start.date ? new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate()) : "");
-        setCell(wsPar, dstRow, 4, end.date ? new Date(end.date.getFullYear(), end.date.getMonth(), end.date.getDate()) : "");
-        setCell(wsPar, dstRow, 5, start.hhmm || "");
-        setCell(wsPar, dstRow, 6, end.hhmm || "");
-        setCell(wsPar, dstRow, 7, equip);
-        setCell(wsPar, dstRow, 8, tipo);
-        setCell(wsPar, dstRow, 9, ativ);
-        setCell(wsPar, dstRow, 10, desc);
-        setCell(wsPar, dstRow, 11, tempo ?? "");
-
-        lastParRow = dstRow;
+        setCell(wsPar, rowIdx, 1, dTurno);
+        setCell(wsPar, rowIdx, 2, String(turno || ""));
+        setCell(wsPar, rowIdx, 3, start.date ? new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate()) : "");
+        setCell(wsPar, rowIdx, 4, end.date ? new Date(end.date.getFullYear(), end.date.getMonth(), end.date.getDate()) : "");
+        setCell(wsPar, rowIdx, 5, start.hhmm || "");
+        setCell(wsPar, rowIdx, 6, end.hhmm || "");
+        setCell(wsPar, rowIdx, 7, equip);
+        setCell(wsPar, rowIdx, 8, tipo);
+        setCell(wsPar, rowIdx, 9, ativ);
+        setCell(wsPar, rowIdx, 10, desc);
+        setCell(wsPar, rowIdx, 11, tempo ?? "");
       }
 
       /* ===================== Save ===================== */
@@ -567,7 +540,7 @@ export default function Exportar() {
         <div className="mp-chip">Utilitários</div>
         <div className="mp-page-title">Exportar Excel</div>
         <div className="mp-page-sub">
-          Append no final clonando a última linha (mantém estilo e fórmulas do template).
+          Preenche dentro das TABELAS do Excel (mantém estilo/zebra/filtros automaticamente).
         </div>
       </div>
 
