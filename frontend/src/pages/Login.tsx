@@ -61,11 +61,9 @@ export default function Login() {
 
       if (!data?.token) throw new Error("Resposta inválida do servidor (sem token)");
 
-      // ✅ padrão do projeto
       localStorage.setItem("mp_token", data.token);
       if (data.user) localStorage.setItem("mp_user", JSON.stringify(data.user));
 
-      // ✅ AuthProvider
       setToken(data.token);
 
       nav("/dashboard");
@@ -78,7 +76,7 @@ export default function Login() {
 
   return (
     <>
-      {/* ✅ FUNDO ANIMADO FULLSCREEN (MINERAÇÃO VIBE) */}
+      {/* ✅ FUNDO ANIMADO FULLSCREEN */}
       <div
         aria-hidden
         style={{
@@ -89,7 +87,6 @@ export default function Login() {
           overflow: "hidden",
         }}
       >
-        {/* Base glow */}
         <div
           style={{
             position: "absolute",
@@ -101,7 +98,6 @@ export default function Login() {
           }}
         />
 
-        {/* Subtle grid */}
         <div
           style={{
             position: "absolute",
@@ -116,7 +112,6 @@ export default function Login() {
           }}
         />
 
-        {/* “Correias/esteiras” diagonais */}
         <div
           className="mp-bg-belt-1"
           style={{
@@ -150,10 +145,8 @@ export default function Login() {
           }}
         />
 
-        {/* Partículas (minério/poeira) */}
         <div className="mp-bg-dust" style={{ position: "absolute", inset: 0, opacity: 0.75 }} />
 
-        {/* Vinheta */}
         <div
           style={{
             position: "absolute",
@@ -163,8 +156,18 @@ export default function Login() {
         />
       </div>
 
-      {/* ✅ CONTEÚDO (LOGIN) */}
-      <div className="min-h-screen w-full flex items-center justify-center px-4 py-10" style={{ position: "relative", zIndex: 1 }}>
+      {/* ✅ CONTEÚDO CENTRALIZADO (GRID) */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          minHeight: "100vh",
+          width: "100%",
+          display: "grid",
+          placeItems: "center",
+          padding: 16, // só uma folga nas bordas no mobile
+        }}
+      >
         <div className="mp-card" style={{ width: 420, maxWidth: "100%" }}>
           <div className="mp-card-h">
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
