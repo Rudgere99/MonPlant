@@ -8,6 +8,8 @@ import PlantProduction from "../pages/PlantProduction";
 import Horimetros from "../pages/Horimetros";
 import Paradas from "../pages/Paradas";
 import Exportar from "../pages/Exportar";
+import DevLogs from "../pages/Devlogs";
+import DevUsers from "../pages/DevUsers";
 
 import PlantProductionDayView from "../pages/PlantProductionDayView";
 import Last7DaysView from "../pages/Last7DaysView";
@@ -30,7 +32,8 @@ export function AppRoutes() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="dashboard/producao-dia" element={<PlantProductionDayView />} />
         <Route path="dashboard/ultimos-7" element={<Last7DaysView />} />
-
+        <Route path="logs" element={<DevLogs />} />
+        <Route path="devusers" element={<DevUsers />} />
         <Route path="producao-planta" element={<PlantProduction />} />
         <Route path="horimetros" element={<Horimetros />} />
         <Route path="paradas" element={<Paradas />} />
