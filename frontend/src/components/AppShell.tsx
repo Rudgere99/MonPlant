@@ -83,10 +83,10 @@ function getGroupFromPath(pathname: string) {
   return hit?.group ?? "";
 }
 
-function ShellLogo({ onClick, to }: { onClick?: () => void; to: string }) {
+function ShellLogo({ onClick }: { onClick?: () => void }) {
   return (
     <Link
-      to={to}
+      to="/dashboard"
       onClick={onClick}
       style={{
         display: "flex",
@@ -97,26 +97,38 @@ function ShellLogo({ onClick, to }: { onClick?: () => void; to: string }) {
         minWidth: 0,
       }}
     >
-<div
-  style={{
-    height: 40,
-    width: 40,
-    borderRadius: 14,
-    display: "grid",
-    placeItems: "center",
-    background: "rgba(255,159,26,12)",
-    border: "1px solid rgba(255,159,26,18)",
-    fontWeight: 950,
-    letterSpacing: 0.5,
-    color: "rgba(255,255,255,92)",
-    boxShadow: "0 16px 40px rgba(0,0,0,45)",
-  }}
->
-  MP
-</div>
+      <div
+        style={{
+          height: 40,
+          width: 40,
+          borderRadius: 14,
+          overflow: "hidden",
+          border: "1px solid rgba(255,255,255,0.12)",
+          boxShadow: "0 16px 40px rgba(0,0,0,0.45)",
+          background: "rgba(255,255,255,0.06)",
+          flex: "0 0 auto",
+        }}
+      >
+        <img
+          src="/logo-monplant.png"
+          alt="MonPlant"
+          style={{ height: "100%", width: "100%", objectFit: "cover", display: "block" }}
+        />
+      </div>
 
+      <div style={{ lineHeight: 1.1, minWidth: 0 }}>
+        <div
+          style={{
+            fontWeight: 950,
+            letterSpacing: -0.2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          MonPlant
         </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,55)", fontWeight: 800 }}>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 800 }}>
           Operação • Produção
         </div>
       </div>
