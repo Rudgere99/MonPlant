@@ -305,7 +305,7 @@ export default function Dashboard() {
     <div className="mp-container">
       {/* TOP BAR */}
       <div style={topBar}>
-        <input style={searchBox} placeholder="Search here..." disabled value="" onChange={() => {}} />
+        
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ ...subStyle, marginRight: 6 }}>Data</span>
