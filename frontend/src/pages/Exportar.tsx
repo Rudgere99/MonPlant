@@ -150,7 +150,6 @@ function downloadArrayBuffer(buf: ArrayBuffer, filename: string) {
  */
 function getTurnoFromPeriod(period: any): "T1" | "T2" {
   const s = String(period || "").trim();
-  // pega a hora inicial "HH"
   const m = s.match(/(\d{1,2})\s*:\s*\d{2}/);
   const h = m ? Number(m[1]) : NaN;
   if (!Number.isFinite(h)) return "T2";
@@ -172,11 +171,16 @@ function asYMDFromCell(v: any): string | null {
   return null;
 }
 
-function findRowByDate(ws: XLSX.WorkSheet, dateCol: number, startRow: number, targetYMD: string): number | null {
+function findRowByDate(
+  ws: XLSX.WorkSheet,
+  dateCol: number,
+  startRow: number,
+  targetYMD: string
+): number | null {
   const ref = ws["!ref"];
   if (!ref) return null;
   const rng = XLSX.utils.decode_range(ref);
-  // rng.e.r é 0-based; converte pra 1-based no loop
+
   for (let r = startRow; r <= rng.e.r + 1; r++) {
     const got = asYMDFromCell(getCellValue(ws, r, dateCol));
     if (got === targetYMD) return r;
@@ -188,7 +192,7 @@ function appendRowIndex(ws: XLSX.WorkSheet, minRow: number): number {
   const ref = ws["!ref"];
   if (!ref) return minRow;
   const rng = XLSX.utils.decode_range(ref);
-  return Math.max(minRow, rng.e.r + 2); // +2 porque rng.e.r é 0-based e queremos próxima linha 1-based
+  return Math.max(minRow, rng.e.r + 2);
 }
 
 function normStr(v: any) {
@@ -199,8 +203,6 @@ function normStr(v: any) {
 }
 
 function stopKeyFromSheet(ws: XLSX.WorkSheet, row: number) {
-  // Paradas no template: (pelo seu export) colunas:
-  // 1 Data turno, 2 Turno, 3 Data início, 4 Data fim, 5 Hora início, 6 Hora fim, 7 Equip, 8 Tipo, 9 Ativ, 10 Desc, 11 Tempo
   const dTurno = asYMDFromCell(getCellValue(ws, row, 1)) || "";
   const hi = normStr(getCellValue(ws, row, 5));
   const hf = normStr(getCellValue(ws, row, 6));
@@ -217,8 +219,8 @@ function buildExistingStopKeySet(ws: XLSX.WorkSheet, startRow: number) {
   if (!ref) return set;
   const rng = XLSX.utils.decode_range(ref);
   for (let r = startRow; r <= rng.e.r + 1; r++) {
-    const maybe = stopKeyFromSheet(ws, r);
-    if (maybe.replace(/\|/g, "").trim()) set.add(maybe);
+    const key = stopKeyFromSheet(ws, r);
+    if (key.replace(/\|/g, "").trim()) set.add(key);
   }
   return set;
 }
@@ -235,16 +237,17 @@ export default function Exportar() {
     setBusy(true);
 
     try {
-      // ✅ usa BASE_URL (ajuda em deploy com base path) e evita cache
-      const tplUrl = new URL("BASE_PLANTA.xlsx", (import.meta as any).env?.BASE_URL || "/").toString();
-      const tplRes = await fetch(tplUrl, { cache: "no-store" });
-      if (!tplRes.ok) throw new Error(`Não achei template em ${tplUrl} (${tplRes.status})`);
+      // ✅ CORRIGIDO: nada de new URL / BASE_URL — pega do public direto
+      const tplRes = await fetch("/BASE_PLANTA.xlsx", { cache: "no-store" });
+      if (!tplRes.ok) {
+        throw new Error("Não achei template em /BASE_PLANTA.xlsx (confira public/BASE_PLANTA.xlsx)");
+      }
       const tplBuf = await tplRes.arrayBuffer();
 
       // sanity: xlsx começa com "PK"
       const head = new Uint8Array(tplBuf.slice(0, 2));
       if (!(head[0] === 0x50 && head[1] === 0x4b)) {
-        throw new Error(`Template não parece XLSX (conteúdo não é ZIP). Verifique rotas/arquivo em public.`);
+        throw new Error("Template não é XLSX válido (veio HTML/erro). Verifique Vercel routes e public/.");
       }
 
       const wb = XLSX.read(tplBuf, { type: "array", cellDates: true });
@@ -427,7 +430,7 @@ export default function Exportar() {
 
       // ===================== ABA: PRODUÇÃO (por turno) =====================
       // ✅ NÃO limpa; atualiza a linha do dia (ou cria no final)
-      // Seu template usa "Planilha1" com colunas:
+      // Template "Planilha1":
       // A Data | B Meta diaria | C Produção 1º T | D Produção 2º T | E Total produzido (fórmula)
       const wsProd = getOrCreateSheet(wb, "Planilha1");
       const prodStartRow = 2;
@@ -455,10 +458,10 @@ export default function Exportar() {
         if (!rowIdx) rowIdx = appendRowIndex(wsProd, prodStartRow);
 
         setCell(wsProd, rowIdx, 1, dt);           // A = Data
-        // B = Meta diaria -> NÃO mexe (mantém o que já existe no template)
-        setCell(wsProd, rowIdx, 3, v.t1 || "");   // C = Produção 1º Turno (07–19)
-        setCell(wsProd, rowIdx, 4, v.t2 || "");   // D = Produção 2º Turno (19–07)
-        // E = Total produzido -> NÃO mexe (fórmula do template)
+        // B = Meta diaria -> NÃO mexe
+        setCell(wsProd, rowIdx, 3, v.t1 || "");   // C = Produção 1º T
+        setCell(wsProd, rowIdx, 4, v.t2 || "");   // D = Produção 2º T
+        // E = Total produzido -> NÃO mexe
       }
 
       // ====== salva ======
@@ -482,7 +485,9 @@ export default function Exportar() {
       <div>
         <div className="mp-chip">Utilitários</div>
         <div className="mp-page-title">Exportar Excel</div>
-        <div className="mp-page-sub">Exportar no padrão do seu BASE_PLANTA.xlsx (preservando dados existentes).</div>
+        <div className="mp-page-sub">
+          Exportar no padrão do seu BASE_PLANTA.xlsx (preservando dados existentes).
+        </div>
       </div>
 
       <div style={{ height: 16 }} />
@@ -490,7 +495,9 @@ export default function Exportar() {
       <div className="mp-card">
         <div className="mp-card-h">
           <b>Exportação</b>
-          <span className="mp-help">Atualiza Produção/Horímetros por data e anexa Paradas sem apagar o que já existe</span>
+          <span className="mp-help">
+            Atualiza Produção/Horímetros por data e anexa Paradas sem apagar o que já existe
+          </span>
         </div>
 
         <div className="mp-card-b">
