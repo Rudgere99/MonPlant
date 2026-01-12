@@ -61,10 +61,13 @@ def is_dev(dev_key: Optional[str]) -> bool:
 
 def block_retro(d: date, dev_key: Optional[str] = None):
     """
-    Regra:
-      - Bloqueia somente se for dia ANTERIOR ao "hoje" no Brasil
-      - EXCETO: permite editar "ontem" durante uma janela após meia-noite (ex.: 01:00)
+    Regra (Brasil):
+      - Bloqueia somente se for dia ANTERIOR ao "hoje"
+      - EXCETO: permite editar "ontem" até um horário limite (útil para turno 19:00-07:00)
       - DEV: se X-Dev-Key bater, não bloqueia nada
+
+    Configure no Railway (opcional):
+      - RETRO_ALLOW_UNTIL_HOUR (default 7)  -> permite editar ontem até HH:59
     """
     if is_dev(dev_key):
         return
@@ -73,11 +76,12 @@ def block_retro(d: date, dev_key: Optional[str] = None):
     if d >= tdy:
         return
 
-    # tolerância: após virar o dia, ainda pode editar "ontem" por X minutos
     n = now_local()
-    grace_minutes = int(os.getenv("RETRO_GRACE_MINUTES") or "60")  # padrão 60 min
+
+    # ✅ janela para "ontem" (turno noturno cruzando meia-noite)
+    allow_until_hour = int(os.getenv("RETRO_ALLOW_UNTIL_HOUR") or "7")  # 07:00
     if d == (tdy - timedelta(days=1)):
-        if n.hour == 0 and n.minute < grace_minutes:
+        if n.hour <= allow_until_hour:
             return
 
     raise HTTPException(status_code=403, detail="Dia anterior não pode ser editado.")
@@ -979,12 +983,35 @@ def create_horimetro(
 
 @app.get("/api/horimetros")
 def list_horimetros(
+    day: Optional[date] = Query(None),
     equipamento: Optional[str] = None,
     limit: int = Query(200, ge=1, le=2000),
     owner_id: str = Depends(require_owner_id),
 ):
     with get_conn() as conn, conn.cursor() as cur:
-        if equipamento:
+        if day and equipamento:
+            cur.execute(
+                """
+                select *
+                from public.bv_horimetros
+                where owner_id=%s and day=%s and equipamento=%s
+                order by created_at desc
+                limit %s
+                """,
+                (owner_id, day, equipamento, limit),
+            )
+        elif day:
+            cur.execute(
+                """
+                select *
+                from public.bv_horimetros
+                where owner_id=%s and day=%s
+                order by created_at desc
+                limit %s
+                """,
+                (owner_id, day, limit),
+            )
+        elif equipamento:
             cur.execute(
                 """
                 select *
