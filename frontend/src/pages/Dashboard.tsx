@@ -511,7 +511,7 @@ export default function Dashboard() {
                     wrapperStyle={{ color: "rgba(255,255,255,0.78)", fontWeight: 900 }}
                   />
 
-                  <Bar yAxisId="left" dataKey="ton" fill="#22c55e" radius={[10, 10, 0, 0]} maxBarSize={38}>
+                  <Bar yAxisId="left" dataKey="ton" fill="#0000FF" radius={[10, 10, 0, 0]} maxBarSize={38}>
                     <LabelList dataKey="ton" content={BarValueLabel} />
                   </Bar>
 
