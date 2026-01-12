@@ -148,6 +148,15 @@ export function AppRoutes() {
             </RequireRole>
           }
         />
+
+        <Route
+  path="historico"
+  element={
+    <RequireRole>
+      <Historico />
+    </RequireRole>
+  }
+  />
         <Route
           path="exportar"
           element={
