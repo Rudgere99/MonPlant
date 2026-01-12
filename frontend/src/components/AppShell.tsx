@@ -38,6 +38,8 @@ const nav: NavItem[] = [
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
   { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
+  { to: "/historico", label: "Histórico", icon: History, group: "Operação" },
+
 ];
 
 
