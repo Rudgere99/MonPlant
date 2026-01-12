@@ -15,6 +15,7 @@ import {
   X,
   Search,
   ChevronRight,
+  History,
 } from "lucide-react";
 
 type NavItem = {
@@ -37,9 +38,8 @@ const nav: NavItem[] = [
   { to: "/producao-planta", label: "Produção da Planta", icon: Factory, group: "Produção" },
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
-  { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
   { to: "/historico", label: "Histórico", icon: History, group: "Operação" },
-
+  { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
 ];
 
 
