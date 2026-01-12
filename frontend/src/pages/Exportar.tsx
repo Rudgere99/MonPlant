@@ -9,6 +9,24 @@ function ymd(d: Date) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+function normEq(v: any) {
+  const s = String(v || "")
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, "") // remove spaces
+    .replace(/_/g, "-");
+  // canonical forms: remove hyphens for matching
+  return s.replace(/-/g, "");
+}
+
+function normTurno(v: any) {
+  const s = String(v ?? "").toLowerCase();
+  if (!s) return "";
+  if (s.includes("2")) return "2";
+  if (s.includes("1")) return "1";
+  return "";
+}
+
 function parseISODate(s: string) {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1);
@@ -284,63 +302,95 @@ export default function Exportar() {
       const wsHor = getOrCreateSheet(wb, "HORÍMETROS");
       clearSheetValues(wsHor, 2);
 
-      const horByDay = new Map<string, HoriItem[]>();
+      const horByKey = new Map<string, HoriItem[]>();
       for (const h of allHor) {
         const d = pick(h, ["day", "data", "data_turno"]);
         if (!d) continue;
-        const key = String(d).slice(0, 10);
-        const arr = horByDay.get(key) || [];
+        const dayKey = String(d).slice(0, 10);
+        const t = normTurno(pick(h, ["turno", "shift", "turn"]));
+        const key = `${dayKey}|${t || "?"}`;
+        const arr = horByKey.get(key) || [];
         arr.push(h);
-        horByDay.set(key, arr);
+        horByKey.set(key, arr);
       }
 
       let rHor = 2;
+
+      // escreve horímetros em linhas por TURNO (quando existir). Se não existir no dia, escreve só a data (linha vazia).
       for (const d of days) {
-        const list = horByDay.get(d) || [];
-        const byEq = new Map<string, { ini: number | null; fim: number | null; turno: any }>();
-
-        for (const h of list) {
-          const eq = String(pick(h, ["equipamento", "equipment", "eq", "tag"]) || "").toUpperCase();
-          const ini = Number(pick(h, ["horimetro_ini", "ini", "inicial", "start"]) ?? NaN);
-          const fim = Number(pick(h, ["horimetro_fim", "fim", "final", "end"]) ?? NaN);
-          const turno = pick(h, ["turno", "shift", "turn"]);
-          if (!eq) continue;
-          byEq.set(eq, {
-            ini: Number.isFinite(ini) ? ini : null,
-            fim: Number.isFinite(fim) ? fim : null,
-            turno,
-          });
-        }
-
         const dt = parseISODate(d);
 
-        const bt01 = byEq.get("BT-01") || byEq.get("BT01") || null;
-        const bt02 = byEq.get("BT-02") || byEq.get("BT02") || null;
-        const pn01 = byEq.get("PN-01") || byEq.get("PN01") || null;
-        const pn02 = byEq.get("PN-02") || byEq.get("PN02") || null;
+        const buckets = (["1", "2", "?"] as const)
+          .map((t) => ({ t, list: horByKey.get(`${d}|${t}`) || [] }))
+          .filter((x) => x.list.length);
 
-        const hTr = (x: any) =>
-          x?.ini != null && x?.fim != null ? Math.round((x.fim - x.ini) * 100) / 100 : "";
+        if (!buckets.length) {
+          setCell(wsHor, rHor, 1, dt);
+          rHor++;
+          continue;
+        }
 
-        setCell(wsHor, rHor, 1, dt);
-        setCell(wsHor, rHor, 2, bt01?.ini ?? "");
-        setCell(wsHor, rHor, 3, bt01?.fim ?? "");
-        setCell(wsHor, rHor, 4, bt02?.ini ?? "");
-        setCell(wsHor, rHor, 5, bt02?.fim ?? "");
-        setCell(wsHor, rHor, 6, pn01?.ini ?? "");
-        setCell(wsHor, rHor, 7, pn01?.fim ?? "");
-        setCell(wsHor, rHor, 8, pn02?.ini ?? "");
-        setCell(wsHor, rHor, 9, pn02?.fim ?? "");
+        for (const bucket of buckets) {
+          const list = bucket.list;
+          const byEq = new Map<string, { ini: number | null; fim: number | null; turno: any }>();
 
-        const t = bt01?.turno ?? bt02?.turno ?? pn01?.turno ?? pn02?.turno ?? "";
-        setCell(wsHor, rHor, 10, t ? String(t) : "");
+          for (const h of list) {
+            const eqRaw = pick(h, ["equipamento", "equipment", "eq", "tag"]);
+            const eq = normEq(eqRaw);
 
-        setCell(wsHor, rHor, 11, hTr(bt01));
-        setCell(wsHor, rHor, 12, hTr(bt02));
-        setCell(wsHor, rHor, 13, hTr(pn01));
-        setCell(wsHor, rHor, 14, hTr(pn02));
+            const ini = Number(pick(h, ["horimetro_ini", "ini", "inicial", "start"]) ?? NaN);
+            const fim = Number(pick(h, ["horimetro_fim", "fim", "final", "end"]) ?? NaN);
+            const turno = pick(h, ["turno", "shift", "turn"]);
 
-        rHor++;
+            if (!eq) continue;
+
+            // Se por acaso vier duplicado do mesmo equipamento no mesmo turno,
+            // guardamos o que tiver ini/fim válidos.
+            const cur = byEq.get(eq);
+            const next = {
+              ini: Number.isFinite(ini) ? ini : null,
+              fim: Number.isFinite(fim) ? fim : null,
+              turno,
+            };
+            if (!cur) byEq.set(eq, next);
+            else {
+              byEq.set(eq, {
+                ini: cur.ini ?? next.ini,
+                fim: cur.fim ?? next.fim,
+                turno: cur.turno ?? next.turno,
+              });
+            }
+          }
+
+          const bt01 = byEq.get("BT01") || null;
+          const bt02 = byEq.get("BT02") || null;
+          const pn01 = byEq.get("PN01") || null;
+          const pn02 = byEq.get("PN02") || null;
+
+          const hTr = (x: any) =>
+            x?.ini != null && x?.fim != null ? Math.round((x.fim - x.ini) * 100) / 100 : "";
+
+          setCell(wsHor, rHor, 1, dt);
+          setCell(wsHor, rHor, 2, bt01?.ini ?? "");
+          setCell(wsHor, rHor, 3, bt01?.fim ?? "");
+          setCell(wsHor, rHor, 4, bt02?.ini ?? "");
+          setCell(wsHor, rHor, 5, bt02?.fim ?? "");
+          setCell(wsHor, rHor, 6, pn01?.ini ?? "");
+          setCell(wsHor, rHor, 7, pn01?.fim ?? "");
+          setCell(wsHor, rHor, 8, pn02?.ini ?? "");
+          setCell(wsHor, rHor, 9, pn02?.fim ?? "");
+
+          // turno: se vier no registro, usa, senão usa bucket ("1"/"2"/"?")
+          const t = bt01?.turno ?? bt02?.turno ?? pn01?.turno ?? pn02?.turno ?? bucket.t;
+          setCell(wsHor, rHor, 10, t ? String(t) : "");
+
+          setCell(wsHor, rHor, 11, hTr(bt01));
+          setCell(wsHor, rHor, 12, hTr(bt02));
+          setCell(wsHor, rHor, 13, hTr(pn01));
+          setCell(wsHor, rHor, 14, hTr(pn02));
+
+          rHor++;
+        }
       }
 
       // ===================== ABA: PRODUÇÃO =====================
