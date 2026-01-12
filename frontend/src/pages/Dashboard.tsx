@@ -14,6 +14,9 @@ import {
   RadialBar,
   BarChart,
   Bar,
+  ComposedChart,
+  Legend,
+  LabelList,
 } from "recharts";
 
 /* ===================== helpers ===================== */
@@ -55,6 +58,46 @@ function fmtBR0(n: number) {
 }
 function fmtBR1(n: number) {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+
+/* ===== chart labels ===== */
+function BarValueLabel(props: any) {
+  const { x, y, width, value } = props;
+  const v = Number(value) || 0;
+  if (!v) return null;
+  const cx = (x || 0) + (width || 0) / 2;
+  return (
+    <text
+      x={cx}
+      y={(y || 0) - 8}
+      textAnchor="middle"
+      fill="rgba(255,255,255,0.92)"
+      fontSize={12}
+      fontWeight={900}
+      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
+    >
+      {fmtBR1(v)}
+    </text>
+  );
+}
+
+function FreqPointLabel(props: any) {
+  const { x, y, value } = props;
+  const v = Math.round(Number(value) || 0);
+  if (!Number.isFinite(v) || v <= 0) return null;
+  return (
+    <text
+      x={x}
+      y={(y || 0) - 12}
+      textAnchor="middle"
+      fill="rgba(255,255,255,0.92)"
+      fontSize={12}
+      fontWeight={900}
+      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
+    >
+      {v}%
+    </text>
+  );
+}
 }
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
@@ -385,7 +428,7 @@ export default function Dashboard() {
           <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/plant-production")}>
             <div style={headerStyle}>
               <div>
-                <div style={titleStyle}>Produção Horária (Ton/H)</div>
+                <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
                 <div style={subStyle}>
                   Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t
                 </div>
@@ -403,15 +446,26 @@ export default function Dashboard() {
 
             <div style={{ height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={hourlySeries} margin={{ top: 8, right: 18, left: 0, bottom: 0 }}>
+                <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                   <XAxis dataKey="period" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
                   <YAxis
+                    yAxisId="left"
                     tickFormatter={(v) => fmtBR0(Number(v) || 0)}
                     tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                   />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, 100]}
+                    tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
+                    tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                  />
                   <Tooltip
-                    formatter={(v: any) => fmtBR1(Number(v) || 0)}
+                    formatter={(v: any, name: any) => {
+                      if (name === "freq") return `${fmtBR0(Number(v) || 0)}%`;
+                      return fmtBR1(Number(v) || 0);
+                    }}
                     contentStyle={{
                       background: "rgba(0,0,0,0.86)",
                       border: "1px solid rgba(255,255,255,0.12)",
@@ -420,8 +474,30 @@ export default function Dashboard() {
                     }}
                     labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                   />
-                  <Line type="monotone" dataKey="ton" stroke="#ff9f1a" strokeWidth={3} dot={false} />
-                </LineChart>
+                  <Legend
+                    verticalAlign="bottom"
+                    height={30}
+                    iconType="circle"
+                    formatter={(value) => (value === "freq" ? "Frequência (%)" : value === "ton" ? "Ton/H" : value)}
+                    wrapperStyle={{ color: "rgba(255,255,255,0.78)", fontWeight: 900 }}
+                  />
+
+                  <Bar yAxisId="left" dataKey="ton" fill="#22c55e" radius={[10, 10, 0, 0]} maxBarSize={38}>
+                    <LabelList dataKey="ton" content={BarValueLabel} />
+                  </Bar>
+
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="freq"
+                    stroke="#ff9f1a"
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 5 }}
+                  >
+                    <LabelList dataKey="freq" content={FreqPointLabel} />
+                  </Line>
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
