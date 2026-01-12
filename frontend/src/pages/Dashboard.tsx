@@ -102,6 +102,35 @@ function FreqPointLabel(props: any) {
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
+// ==== Labels do gráfico (iguais ao Devlogs) ====
+const BarValueLabel = (props: any) => {
+  const { x, y, width, value } = props || {};
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return null;
+  const cx = (Number(x) || 0) + (Number(width) || 0) / 2;
+  const cy = (Number(y) || 0) - 10;
+  const label = n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  return (
+    <text x={cx} y={cy} textAnchor="middle" fill="rgba(255,255,255,0.9)" fontSize={13} fontWeight={900}>
+      {label}
+    </text>
+  );
+};
+
+const FreqPointLabel = (props: any) => {
+  const { x, y, value } = props || {};
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return null;
+  const cx = Number(x) || 0;
+  const cy = (Number(y) || 0) - 14;
+  const label = `${Math.round(n)}%`;
+  return (
+    <text x={cx} y={cy} textAnchor="middle" fill="rgba(255,255,255,0.9)" fontSize={13} fontWeight={900}>
+      {label}
+    </text>
+  );
+};
+
 function authHeaders(): Record<string, string> {
   const keys = ["mp_token", "token", "access_token", "auth_token"];
   for (const k of keys) {
