@@ -508,7 +508,7 @@ export default function Dashboard() {
                     height={30}
                     iconType="circle"
                     formatter={(value) => (value === "freq" ? "Frequência (%)" : value === "ton" ? "Ton/H" : value)}
-                    wrapperStyle={{ color: "rgba(255,255,255,0.78)", fontWeight: 900 }}
+                    wrapperStyle={{ color: "#00CCFF", fontWeight: 900 }}
                   />
 
                   <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={38}>
