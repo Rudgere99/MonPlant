@@ -662,7 +662,7 @@ export default function Dashboard() {
           <div style={{ ...cardBase, padding: 14 }}>
             <div style={headerStyle}>
               <div>
-                <div style={titleStyle}>Taxa</div>
+                <div style={titleStyle}>Taxa Média</div>
                 <div style={subStyle}>Freq% últimas horas</div>
               </div>
               <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>
