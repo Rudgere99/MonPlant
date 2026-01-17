@@ -48,7 +48,6 @@ type UserRole = "apontador" | "controlador" | "dev";
 
 function getRole(user: any, devKey: string | null): UserRole {
   if (devKey === "RAG2026") return "dev";
-
   const t = String(user?.user_type || "").toLowerCase();
   if (t === "dev") return "dev";
   if (t === "controlador") return "controlador";
@@ -57,13 +56,11 @@ function getRole(user: any, devKey: string | null): UserRole {
 
 function canAccess(role: UserRole, path: string) {
   if (role === "dev") return true;
-
   if (path.startsWith("/dev") || path.startsWith("/dashboard/producao-dia")) return false;
 
   if (role === "apontador") {
     return path.startsWith("/producao-planta") || path.startsWith("/paradas");
   }
-
   return true;
 }
 
@@ -102,6 +99,7 @@ function ShellLogo({
         color: "white",
         minWidth: 0,
         justifyContent: collapsed ? "center" : "flex-start",
+        overflow: "hidden", // ✅ evita “vazar” e sobrepor no modo mini
       }}
       title="MonPlant"
     >
@@ -182,7 +180,6 @@ export function AppShell() {
 
   const sideW = sideCollapsed ? 86 : 300;
 
-  // glass escuro
   const cardGlass: React.CSSProperties = {
     borderRadius: 22,
     border: "1px solid rgba(255,255,255,0.10)",
@@ -313,15 +310,26 @@ export function AppShell() {
             style={{
               ...cardGlass,
               height: "calc(100vh - 28px)",
-              padding: 14,
+              padding: 12,
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
+              minHeight: 0, // ✅ crítico: evita sobreposição e permite scroll correto
             }}
           >
-            {/* topo sidebar: logo + toggle */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            {/* topo sidebar: logo + toggle (fixo) */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                flex: "0 0 auto",
+                minHeight: 52, // ✅ impede o menu de “invadir” o topo
+              }}
+            >
               <ShellLogo to={defaultPathFor(role)} collapsed={sideCollapsed} />
+
               <button
                 onClick={() => setSideCollapsed((v) => !v)}
                 aria-label={sideCollapsed ? "Expandir menu" : "Minimizar menu"}
@@ -336,6 +344,7 @@ export function AppShell() {
                   color: "white",
                   display: "grid",
                   placeItems: "center",
+                  flex: "0 0 auto",
                 }}
               >
                 {sideCollapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
@@ -356,6 +365,7 @@ export function AppShell() {
                   gap: 10,
                   padding: "0 12px",
                   color: "rgba(255,255,255,0.70)",
+                  flex: "0 0 auto",
                 }}
                 title="placeholder visual"
               >
@@ -387,100 +397,137 @@ export function AppShell() {
                   letterSpacing: 1,
                   color: "rgba(255,255,255,.40)",
                   textTransform: "uppercase",
+                  flex: "0 0 auto",
                 }}
               >
                 Menu
               </div>
             ) : null}
 
-            <nav style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-              {filteredNav.map((i) => {
-                const Icon = i.icon;
+            {/* ✅ Área rolável do menu (evita encavalar com logout) */}
+            <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
+              <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {filteredNav.map((i) => {
+                  const Icon = i.icon;
 
-                if (sideCollapsed) {
-                  // modo mini: só ícone
+                  if (sideCollapsed) {
+                    // modo mini: só ícone
+                    return (
+                      <NavLink
+                        key={i.to}
+                        to={i.to}
+                        className={({ isActive }) => (isActive ? "mp-navlink-active" : "")}
+                        title={i.label}
+                        style={({ isActive }) => ({
+                          height: 52,
+                          borderRadius: 16,
+                          border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
+                          background: isActive ? "rgba(255,159,26,.08)" : "transparent",
+                          textDecoration: "none",
+                          color: "white",
+                          display: "grid",
+                          placeItems: "center",
+                          overflow: "hidden",
+                          flex: "0 0 auto",
+                        })}
+                      >
+                        <span
+                          style={{
+                            height: 40,
+                            width: 40,
+                            borderRadius: 14,
+                            display: "grid",
+                            placeItems: "center",
+                            background: "rgba(255,255,255,.06)",
+                            border: "1px solid rgba(255,255,255,.10)",
+                          }}
+                        >
+                          <Icon size={18} />
+                        </span>
+                      </NavLink>
+                    );
+                  }
+
+                  // modo normal: ícone + texto
                   return (
                     <NavLink
                       key={i.to}
                       to={i.to}
                       className={({ isActive }) => (isActive ? "mp-navlink-active" : "")}
-                      title={i.label}
                       style={({ isActive }) => ({
-                        height: 52,
-                        borderRadius: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "10px 10px",
+                        borderRadius: 14,
                         border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
                         background: isActive ? "rgba(255,159,26,.08)" : "transparent",
                         textDecoration: "none",
                         color: "white",
-                        display: "grid",
-                        placeItems: "center",
+                        overflow: "hidden",
+                        flex: "0 0 auto",
                       })}
                     >
-                      <span
-                        style={{
-                          height: 40,
-                          width: 40,
-                          borderRadius: 14,
-                          display: "grid",
-                          placeItems: "center",
-                          background: "rgba(255,255,255,.06)",
-                          border: "1px solid rgba(255,255,255,.10)",
-                        }}
-                      >
-                        <Icon size={18} />
-                      </span>
+                      {({ isActive }) => (
+                        <>
+                          <span
+                            style={{
+                              height: 36,
+                              width: 36,
+                              borderRadius: 12,
+                              display: "grid",
+                              placeItems: "center",
+                              background: isActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,.06)",
+                              border:
+                                "1px solid " + (isActive ? "rgba(255,159,26,.20)" : "rgba(255,255,255,.10)"),
+                              flex: "0 0 auto",
+                            }}
+                          >
+                            <Icon size={18} />
+                          </span>
+                          <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
+                            <div
+                              style={{
+                                fontWeight: 900,
+                                color: "rgba(255,255,255,.92)",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {i.label}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 850,
+                                color: "rgba(255,255,255,.45)",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {i.group || "—"}
+                            </div>
+                          </div>
+                          <ChevronRight size={16} style={{ opacity: isActive ? 0.9 : 0.35, flex: "0 0 auto" }} />
+                        </>
+                      )}
                     </NavLink>
                   );
-                }
+                })}
+              </nav>
+            </div>
 
-                // modo normal: ícone + texto
-                return (
-                  <NavLink
-                    key={i.to}
-                    to={i.to}
-                    className={({ isActive }) => (isActive ? "mp-navlink-active" : "")}
-                    style={({ isActive }) => ({
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "10px 10px",
-                      borderRadius: 14,
-                      border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
-                      background: isActive ? "rgba(255,159,26,.08)" : "transparent",
-                      textDecoration: "none",
-                      color: "white",
-                    })}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <span
-                          style={{
-                            height: 36,
-                            width: 36,
-                            borderRadius: 12,
-                            display: "grid",
-                            placeItems: "center",
-                            background: isActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,.06)",
-                            border: "1px solid " + (isActive ? "rgba(255,159,26,.20)" : "rgba(255,255,255,.10)"),
-                          }}
-                        >
-                          <Icon size={18} />
-                        </span>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
-                          <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
-                            {i.group || "—"}
-                          </div>
-                        </div>
-                        <ChevronRight size={16} style={{ opacity: isActive ? 0.9 : 0.35 }} />
-                      </>
-                    )}
-                  </NavLink>
-                );
-              })}
-            </nav>
-
-            <div style={{ marginTop: "auto", borderTop: "1px solid rgba(255,255,255,0.10)", paddingTop: 12 }}>
+            {/* ✅ Rodapé fixo (não é invadido pelo menu) */}
+            <div
+              style={{
+                marginTop: 12,
+                borderTop: "1px solid rgba(255,255,255,0.10)",
+                paddingTop: 12,
+                flex: "0 0 auto",
+              }}
+            >
               <button
                 onClick={handleLogout}
                 style={{
@@ -705,7 +752,7 @@ export function AppShell() {
             <Menu size={18} />
           </button>
 
-          {/* título leve (opcional, sem barra) */}
+          {/* título leve (sem barra superior) */}
           <div
             style={{
               padding: "16px 14px 0 14px",
