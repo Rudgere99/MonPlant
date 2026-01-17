@@ -63,34 +63,42 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-// Normaliza períodos do backend para "HH-HH" (ex.: "01-02").
-// Aceita: "01-02", "01:00-02:00", "01:00–02:00", "1-2", etc.
+/**
+ * Normaliza period do backend para "HH-HH"
+ * Aceita: "00-01", "0-1", "00:00-01:00", "00:00–01:00", "00:00 — 01:00"
+ */
 function normalizePeriod(period: string): string {
-  const s = String(period || "").trim();
-  if (!s) return s;
+  const s0 = String(period || "").trim();
+  if (!s0) return s0;
 
-  // tenta capturar 2 horas no começo e no fim
-  const m = s.match(/(\d{1,2})\D+(\d{1,2})\s*$/);
-  if (m) {
-    const a = Math.max(0, Math.min(23, Number(m[1])));
-    const bRaw = Number(m[2]);
-    // permite 24 no final (23-24)
-    const b = Math.max(0, Math.min(24, bRaw));
-    return `${pad2(a)}-${pad2(b)}`;
+  const s = s0.replace(/–|—/g, "-");
+  const parts = s.split("-").map((x) => x.trim()).filter(Boolean);
+
+  if (parts.length >= 2) {
+    const h1m = parts[0].match(/^(\d{1,2})/); // pega só a hora (antes de :)
+    const h2m = parts[1].match(/^(\d{1,2})/);
+
+    if (h1m && h2m) {
+      const h1 = Math.max(0, Math.min(23, Number(h1m[1])));
+      const h2raw = Number(h2m[1]);
+      const h2 = Math.max(0, Math.min(24, h2raw)); // permite 24 no final
+      return `${pad2(h1)}-${pad2(h2)}`;
+    }
   }
 
-  return s;
+  const m = s.match(/^(\d{1,2})\s*-\s*(\d{1,2})$/);
+  if (m) return `${pad2(Number(m[1]))}-${pad2(Number(m[2]))}`;
+
+  return s0;
 }
 
-// Gera sempre as 24 horas no eixo X: 00-01 ... 23-24
+/** Cria sempre as 24 horas: 00-01 ... 23-24 e mescla com rows */
 function buildHourlyGrid(rows: { period: string; ton: number; freq: number }[]) {
   const map = new Map<string, { ton: number; freq: number }>();
 
   for (const r of rows) {
     const key = normalizePeriod(r.period);
     const prev = map.get(key);
-
-    // se vier duplicado, soma tonelagem e pega a maior frequência (mais seguro pro indicador)
     const ton = (prev?.ton || 0) + (Number(r.ton) || 0);
     const freq = Math.max(prev?.freq || 0, Number(r.freq) || 0);
     map.set(key, { ton, freq });
@@ -107,7 +115,7 @@ function buildHourlyGrid(rows: { period: string; ton: number; freq: number }[]) 
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
-// ==== Labels do gráfico (iguais ao Devlogs) ====
+// ==== Labels do gráfico ====
 const BarValueLabel = (props: any) => {
   const { x, y, width, value } = props || {};
   const n = Number(value);
@@ -243,7 +251,6 @@ export default function Dashboard() {
   }, [day]);
 
   /* ===================== computed ===================== */
-
   const totalTonDay = useMemo(() => {
     const rows = prodDay?.rows || [];
     let sum = 0;
@@ -256,6 +263,7 @@ export default function Dashboard() {
     return Math.max(0, Math.min(100, (totalTonDay / META_DIA) * 100));
   }, [totalTonDay]);
 
+  // ✅ AQUI: normaliza + garante 24 horas + mantém produção
   const hourlySeries = useMemo(() => {
     const rows = prodDay?.rows || [];
     const data = rows.map((r) => ({
@@ -263,7 +271,6 @@ export default function Dashboard() {
       ton: parseBRNumber(r.ton),
       freq: parseBRNumber(r.freq),
     }));
-    // garante sempre as 24 horas no eixo X (00-01 ... 23-24)
     return buildHourlyGrid(data);
   }, [prodDay]);
 
@@ -470,7 +477,11 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                  <XAxis dataKey="period" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
+                  <XAxis
+                    dataKey="period"
+                    interval={0}
+                    tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
+                  />
                   <YAxis
                     yAxisId="left"
                     tickFormatter={(v) => fmtBR0(Number(v) || 0)}
@@ -642,7 +653,9 @@ export default function Dashboard() {
               <div style={{ position: "absolute", left: 0, right: 0, top: 86, textAlign: "center", pointerEvents: "none" }}>
                 <div style={{ fontSize: 34, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMeta)}%</div>
                 <div style={{ ...subStyle, marginTop: 4 }}>Atingimento</div>
-                <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>{fmtBR0(totalTonDay)} t</div>
+                <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                  {fmtBR0(totalTonDay)} t
+                </div>
               </div>
             </div>
           </div>
@@ -654,14 +667,7 @@ export default function Dashboard() {
                 <div style={titleStyle}>Taxa Média</div>
                 <div style={subStyle}>Freq% últimas horas</div>
               </div>
-              <span
-                style={{
-                  ...smallPill,
-                  borderColor: "rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.06)",
-                  height: 32,
-                }}
-              >
+              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>
                 {fmtBR0(levelAvg)}%
               </span>
             </div>
@@ -674,11 +680,7 @@ export default function Dashboard() {
                   <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                   <Tooltip
                     formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
-                    contentStyle={{
-                      background: "rgba(0,0,0,0.86)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 14,
-                    }}
+                    contentStyle={{ background: "rgba(0,0,0,0.86)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}
                     labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                   />
                   <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a" />
@@ -694,14 +696,7 @@ export default function Dashboard() {
                 <div style={titleStyle}>Média/Hora</div>
                 <div style={subStyle}>Média de produção por hora</div>
               </div>
-              <span
-                style={{
-                  ...smallPill,
-                  borderColor: "rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.06)",
-                  height: 32,
-                }}
-              >
+              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>
                 {fmtBR1(avgTonPerHour)} t/h
               </span>
             </div>
@@ -710,15 +705,11 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                  <XAxis dataKey="period" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                  <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                   <YAxis hide />
                   <Tooltip
                     formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
-                    contentStyle={{
-                      background: "rgba(0,0,0,0.86)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 14,
-                    }}
+                    contentStyle={{ background: "rgba(0,0,0,0.86)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}
                     labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                   />
                   <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
