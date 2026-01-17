@@ -479,7 +479,7 @@ export default function Dashboard() {
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                   <XAxis
                     dataKey="period"
-                    interval={0}
+                    interval={1}
                     tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
                   />
                   <YAxis
