@@ -58,7 +58,6 @@ function fmtBR0(n: number) {
 }
 function fmtBR1(n: number) {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
-}).format(n);
 
 /* ===== chart labels ===== */
 function BarValueLabel(props: any) {
@@ -105,27 +104,14 @@ const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:80
 
 // ==== Labels do gráfico (iguais ao Devlogs) ====
 const BarValueLabel = (props: any) => {
-  const { x, y, width, value, index } = props || {};
+  const { x, y, width, value } = props || {};
   const n = Number(value);
   if (!Number.isFinite(n) || n === 0) return null;
-
   const cx = (Number(x) || 0) + (Number(width) || 0) / 2;
-
-  // Stagger labels to reduce overlaps when bars are close
-  const dy = (Number(index) || 0) % 2 === 0 ? 10 : 22;
-  const cy = (Number(y) || 0) - dy;
-
+  const cy = (Number(y) || 0) - 10;
   const label = n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
   return (
-    <text
-      x={cx}
-      y={cy}
-      textAnchor="middle"
-      fill="rgba(255,255,255,0.92)"
-      fontSize={12}
-      fontWeight={900}
-      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
-    >
+    <text x={cx} y={cy} textAnchor="middle" fill="rgba(255,255,255,0.9)" fontSize={13} fontWeight={900}>
       {label}
     </text>
   );
@@ -489,25 +475,9 @@ export default function Dashboard() {
 
             <div style={{ height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={hourlySeries} margin={{ top: 18, right: 26, left: 0, bottom: 18 }}>
+                <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="period"
-                    interval={0}
-                    minTickGap={0}
-                    tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
-                    tickFormatter={(v: any) => {
-                      const s = String(v || "");
-                      const clean = s.replace(/:00/g, "").trim(); // 02:00-03:00 -> 02-03
-                      const parts = clean.split("-");
-                      if (parts.length === 2) {
-                        const a = parts[0].trim().padStart(2, "0");
-                        const b = parts[1].trim().padStart(2, "0");
-                        return `${a}-${b}`;
-                      }
-                      return clean;
-                    }}
-                  />
+                  <XAxis dataKey="period" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
                   <YAxis
                     yAxisId="left"
                     tickFormatter={(v) => fmtBR0(Number(v) || 0)}
