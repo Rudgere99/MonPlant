@@ -4,7 +4,6 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -58,46 +57,52 @@ function fmtBR0(n: number) {
 }
 function fmtBR1(n: number) {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
-
-/* ===== chart labels ===== */
-function BarValueLabel(props: any) {
-  const { x, y, width, value } = props;
-  const v = Number(value) || 0;
-  if (!v) return null;
-  const cx = (x || 0) + (width || 0) / 2;
-  return (
-    <text
-      x={cx}
-      y={(y || 0) - 8}
-      textAnchor="middle"
-      fill="rgba(255,255,255,0.92)"
-      fontSize={12}
-      fontWeight={900}
-      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
-    >
-      {fmtBR1(v)}
-    </text>
-  );
 }
 
-function FreqPointLabel(props: any) {
-  const { x, y, value } = props;
-  const v = Math.round(Number(value) || 0);
-  if (!Number.isFinite(v) || v <= 0) return null;
-  return (
-    <text
-      x={x}
-      y={(y || 0) - 12}
-      textAnchor="middle"
-      fill="rgba(255,255,255,0.92)"
-      fontSize={12}
-      fontWeight={900}
-      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
-    >
-      {v}%
-    </text>
-  );
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
 }
+
+// Normaliza períodos do backend para "HH-HH" (ex.: "01-02").
+// Aceita: "01-02", "01:00-02:00", "01:00–02:00", "1-2", etc.
+function normalizePeriod(period: string): string {
+  const s = String(period || "").trim();
+  if (!s) return s;
+
+  // tenta capturar 2 horas no começo e no fim
+  const m = s.match(/(\d{1,2})\D+(\d{1,2})\s*$/);
+  if (m) {
+    const a = Math.max(0, Math.min(23, Number(m[1])));
+    const bRaw = Number(m[2]);
+    // permite 24 no final (23-24)
+    const b = Math.max(0, Math.min(24, bRaw));
+    return `${pad2(a)}-${pad2(b)}`;
+  }
+
+  return s;
+}
+
+// Gera sempre as 24 horas no eixo X: 00-01 ... 23-24
+function buildHourlyGrid(rows: { period: string; ton: number; freq: number }[]) {
+  const map = new Map<string, { ton: number; freq: number }>();
+
+  for (const r of rows) {
+    const key = normalizePeriod(r.period);
+    const prev = map.get(key);
+
+    // se vier duplicado, soma tonelagem e pega a maior frequência (mais seguro pro indicador)
+    const ton = (prev?.ton || 0) + (Number(r.ton) || 0);
+    const freq = Math.max(prev?.freq || 0, Number(r.freq) || 0);
+    map.set(key, { ton, freq });
+  }
+
+  const result: { period: string; ton: number; freq: number }[] = [];
+  for (let h = 0; h < 24; h++) {
+    const label = `${pad2(h)}-${pad2(h + 1)}`;
+    const found = map.get(label);
+    result.push({ period: label, ton: found?.ton ?? 0, freq: found?.freq ?? 0 });
+  }
+  return result;
 }
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
@@ -254,12 +259,12 @@ export default function Dashboard() {
   const hourlySeries = useMemo(() => {
     const rows = prodDay?.rows || [];
     const data = rows.map((r) => ({
-      period: r.period,
+      period: normalizePeriod(r.period),
       ton: parseBRNumber(r.ton),
       freq: parseBRNumber(r.freq),
     }));
-    data.sort((a, b) => a.period.localeCompare(b.period));
-    return data;
+    // garante sempre as 24 horas no eixo X (00-01 ... 23-24)
+    return buildHourlyGrid(data);
   }, [prodDay]);
 
   const avgTonPerHour = useMemo(() => {
@@ -350,16 +355,6 @@ export default function Dashboard() {
     marginTop: 10,
   };
 
-  const searchBox: React.CSSProperties = {
-    height: 42,
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(0,0,0,0.25)",
-    padding: "0 14px",
-    color: "rgba(255,255,255,0.85)",
-    outline: "none",
-  };
-
   const smallPill: React.CSSProperties = {
     height: 36,
     borderRadius: 999,
@@ -377,8 +372,6 @@ export default function Dashboard() {
     <div className="mp-container">
       {/* TOP BAR */}
       <div style={topBar}>
-        
-
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ ...subStyle, marginRight: 6 }}>Data</span>
           <input
@@ -580,9 +573,7 @@ export default function Dashboard() {
                       </div>
                       <div>
                         <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
-                          {row
-                            ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}`
-                            : "—"}
+                          {row ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}` : "—"}
                         </div>
                         <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
                           {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
@@ -651,9 +642,7 @@ export default function Dashboard() {
               <div style={{ position: "absolute", left: 0, right: 0, top: 86, textAlign: "center", pointerEvents: "none" }}>
                 <div style={{ fontSize: 34, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMeta)}%</div>
                 <div style={{ ...subStyle, marginTop: 4 }}>Atingimento</div>
-                <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
-                  {fmtBR0(totalTonDay)} t
-                </div>
+                <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>{fmtBR0(totalTonDay)} t</div>
               </div>
             </div>
           </div>
@@ -665,7 +654,14 @@ export default function Dashboard() {
                 <div style={titleStyle}>Taxa Média</div>
                 <div style={subStyle}>Freq% últimas horas</div>
               </div>
-              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>
+              <span
+                style={{
+                  ...smallPill,
+                  borderColor: "rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.06)",
+                  height: 32,
+                }}
+              >
                 {fmtBR0(levelAvg)}%
               </span>
             </div>
@@ -678,7 +674,11 @@ export default function Dashboard() {
                   <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                   <Tooltip
                     formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
-                    contentStyle={{ background: "rgba(0,0,0,0.86)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}
+                    contentStyle={{
+                      background: "rgba(0,0,0,0.86)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 14,
+                    }}
                     labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                   />
                   <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a" />
@@ -694,7 +694,14 @@ export default function Dashboard() {
                 <div style={titleStyle}>Média/Hora</div>
                 <div style={subStyle}>Média de produção por hora</div>
               </div>
-              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>
+              <span
+                style={{
+                  ...smallPill,
+                  borderColor: "rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.06)",
+                  height: 32,
+                }}
+              >
                 {fmtBR1(avgTonPerHour)} t/h
               </span>
             </div>
@@ -707,7 +714,11 @@ export default function Dashboard() {
                   <YAxis hide />
                   <Tooltip
                     formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
-                    contentStyle={{ background: "rgba(0,0,0,0.86)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}
+                    contentStyle={{
+                      background: "rgba(0,0,0,0.86)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 14,
+                    }}
                     labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                   />
                   <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
