@@ -112,8 +112,13 @@ function calcTempoParadaH(dataIni: string, horaIni: string, dataFim: string, hor
   return ms / 3600000;
 }
 
+// Mostra tempo em horas no formato decimal.
+// Ex.: 8 minutos = 0,13 h (não 0,1 h)
 function fmtH1(n: number) {
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
 }
 
 /* ===================== page ===================== */
