@@ -232,9 +232,10 @@ export function AppShell() {
           pointerEvents: "none",
           zIndex: 0,
           background:
-            "radial-gradient(1200px 700px at 20% 20%, rgba(255,159,26,0.12), transparent 60%)," +
-            "radial-gradient(900px 600px at 80% 30%, rgba(34,197,94,0.10), transparent 55%)," +
-            "radial-gradient(900px 700px at 50% 90%, rgba(59,130,246,0.08), transparent 55%)",
+            // fundo dark/cool (sem esmeralda) — mantém o mesmo “padrão” visual
+            "radial-gradient(1200px 700px at 18% 22%, rgba(255,159,26,0.10), transparent 60%)," +
+            "radial-gradient(900px 600px at 82% 28%, rgba(56,189,248,0.10), transparent 55%)," +
+            "radial-gradient(900px 700px at 50% 90%, rgba(148,163,184,0.06), transparent 55%)",
         }}
       />
       <div
