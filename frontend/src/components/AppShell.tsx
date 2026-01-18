@@ -18,6 +18,7 @@ import {
   History,
   ChevronsLeft,
   ChevronsRight,
+  User as UserIcon,
 } from "lucide-react";
 
 type NavItem = {
@@ -70,7 +71,7 @@ function defaultPathFor(role: UserRole) {
 
 function getTitleFromPath(pathname: string) {
   const hit = nav.find((n) => pathname.startsWith(n.to));
-  return hit?.label ?? "MonPlant";
+  return hit?.label ?? "Dashboard";
 }
 
 function getGroupFromPath(pathname: string) {
@@ -78,15 +79,44 @@ function getGroupFromPath(pathname: string) {
   return hit?.group ?? "";
 }
 
-function ShellLogo({
+/** ===== USER DISPLAY (nome no lugar do "MonPlant") ===== */
+function getUserDisplay(user: any) {
+  const name =
+    user?.name ||
+    user?.full_name ||
+    user?.username ||
+    user?.display_name ||
+    user?.nome ||
+    "";
+
+  const email = user?.email || user?.user_email || "";
+
+  const label = String(name || email || "Usuário").trim();
+  return label || "Usuário";
+}
+
+function getInitials(label: string) {
+  const clean = String(label || "").trim();
+  if (!clean) return "U";
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+/** ===== topo da sidebar SEM LOGO (mostra usuário) ===== */
+function ShellUser({
   onClick,
   to,
   collapsed,
+  userLabel,
 }: {
   onClick?: () => void;
   to?: string;
   collapsed?: boolean;
+  userLabel: string;
 }) {
+  const initials = getInitials(userLabel);
+
   return (
     <Link
       to={to || "/dashboard"}
@@ -99,10 +129,11 @@ function ShellLogo({
         color: "white",
         minWidth: 0,
         justifyContent: collapsed ? "center" : "flex-start",
-        overflow: "hidden", // ✅ evita “vazar” e sobrepor no modo mini
+        overflow: "hidden",
       }}
-      title="MonPlant"
+      title={userLabel}
     >
+      {/* Badge do usuário (substitui a logo) */}
       <div
         style={{
           height: 40,
@@ -112,14 +143,15 @@ function ShellLogo({
           border: "1px solid rgba(255,255,255,0.12)",
           boxShadow: "0 16px 40px rgba(0,0,0,0.45)",
           background: "rgba(255,255,255,0.06)",
+          display: "grid",
+          placeItems: "center",
           flex: "0 0 auto",
+          fontWeight: 950,
+          letterSpacing: -0.2,
+          color: "rgba(255,255,255,0.90)",
         }}
       >
-        <img
-          src="/logo-monplant.png"
-          alt="MonPlant"
-          style={{ height: "100%", width: "100%", objectFit: "cover", display: "block" }}
-        />
+        {collapsed ? initials : <UserIcon size={18} />}
       </div>
 
       {!collapsed ? (
@@ -133,7 +165,7 @@ function ShellLogo({
               textOverflow: "ellipsis",
             }}
           >
-            MonPlant
+            {userLabel}
           </div>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 800 }}>
             Operação • Produção
@@ -165,6 +197,8 @@ export function AppShell() {
 
   const role = useMemo(() => getRole(user, devKey), [user, devKey]);
   const isDev = role === "dev";
+
+  const userLabel = useMemo(() => getUserDisplay(user), [user]);
 
   const filteredNav = useMemo(() => {
     return nav.filter((i) => {
@@ -314,10 +348,10 @@ export function AppShell() {
               display: "flex",
               flexDirection: "column",
               overflow: "visible",
-              minHeight: 0, // ✅ crítico: evita sobreposição e permite scroll correto
+              minHeight: 0,
             }}
           >
-            {/* topo sidebar: logo + toggle (fixo) */}
+            {/* topo sidebar: usuário + toggle */}
             <div
               style={{
                 display: "flex",
@@ -325,10 +359,14 @@ export function AppShell() {
                 justifyContent: "space-between",
                 gap: 10,
                 flex: "0 0 auto",
-                minHeight: 52, // ✅ impede o menu de “invadir” o topo
+                minHeight: 52,
               }}
             >
-              <ShellLogo to={defaultPathFor(role)} collapsed={sideCollapsed} />
+              <ShellUser
+                to={defaultPathFor(role)}
+                collapsed={sideCollapsed}
+                userLabel={userLabel}
+              />
 
               <button
                 onClick={() => setSideCollapsed((v) => !v)}
@@ -404,14 +442,13 @@ export function AppShell() {
               </div>
             ) : null}
 
-            {/* ✅ Área rolável do menu (evita encavalar com logout) */}
+            {/* Área rolável do menu */}
             <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
               <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {filteredNav.map((i) => {
                   const Icon = i.icon;
 
                   if (sideCollapsed) {
-                    // modo mini: só ícone
                     return (
                       <NavLink
                         key={i.to}
@@ -448,7 +485,6 @@ export function AppShell() {
                     );
                   }
 
-                  // modo normal: ícone + texto
                   return (
                     <NavLink
                       key={i.to}
@@ -519,7 +555,7 @@ export function AppShell() {
               </nav>
             </div>
 
-            {/* ✅ Rodapé fixo (não é invadido pelo menu) */}
+            {/* Rodapé */}
             <div
               style={{
                 marginTop: 12,
@@ -551,7 +587,7 @@ export function AppShell() {
 
               {!sideCollapsed ? (
                 <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
-                  v1 • MonPlant
+                  v1
                 </div>
               ) : null}
             </div>
@@ -582,7 +618,11 @@ export function AppShell() {
             >
               <div style={{ ...cardGlass, padding: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                  <ShellLogo to={defaultPathFor(role)} onClick={() => setMobileOpen(false)} />
+                  <ShellUser
+                    to={defaultPathFor(role)}
+                    onClick={() => setMobileOpen(false)}
+                    userLabel={userLabel}
+                  />
                   <button
                     onClick={() => setMobileOpen(false)}
                     style={{
@@ -715,7 +755,7 @@ export function AppShell() {
                   </button>
 
                   <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
-                    v1 • MonPlant
+                    v1
                   </div>
                 </div>
               </div>
@@ -725,7 +765,7 @@ export function AppShell() {
 
         {/* ===== Main (sem topbar) ===== */}
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          {/* Mobile FAB (substitui a topbar) */}
+          {/* Mobile FAB */}
           <button
             onClick={() => setMobileOpen(true)}
             className="mp-mobile-fab"
@@ -752,7 +792,7 @@ export function AppShell() {
             <Menu size={18} />
           </button>
 
-          {/* título leve (sem barra superior) */}
+          {/* título leve */}
           <div
             style={{
               padding: "16px 14px 0 14px",
