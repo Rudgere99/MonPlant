@@ -488,7 +488,8 @@ export default function Dashboard() {
 
   const modalBody: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "280px 1fr",
+    // ✅ seletor em estilo "sidebar" (rail estreito) + preview largo
+    gridTemplateColumns: "92px 1fr",
     gap: 14,
     padding: 14,
     minHeight: 0,
@@ -586,71 +587,56 @@ export default function Dashboard() {
 
             <div style={modalBody}>
               {/* left: selector */}
-              <div style={{ ...panel, overflow: "auto" }}>
-                <div style={{ fontWeight: 350, marginBottom: 10, color: "rgba(255,255,255,0.9)" }}>
+              <div style={{ ...panel, overflow: "auto", padding: 10 }}>
+                <div style={{ fontWeight: 950, marginBottom: 10, color: "rgba(255,255,255,0.9)", paddingLeft: 4 }}>
                   Selecionar
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {/* ✅ estilo AppShell: rail estreito com ícones (um em cima do outro) */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
                   {exportItems.map((it) => {
                     const Icon = it.icon;
                     const on = !!exportSel[it.key];
-
                     return (
                       <button
                         key={it.key}
                         onClick={() => setExportSel((s) => ({ ...s, [it.key]: !on }))}
                         title={`${it.label} • ${it.hint}`}
                         style={{
-                          height: 56,
-                          width: "100%",
-                          borderRadius: 16,
+                          width: 64,
+                          height: 64,
+                          borderRadius: 18,
                           border: "1px solid " + (on ? "rgba(255,159,26,0.30)" : "rgba(255,255,255,0.10)"),
                           background: on ? "rgba(255,159,26,0.12)" : "rgba(255,255,255,0.04)",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 12,
-                          padding: "0 14px",
+                          display: "grid",
+                          placeItems: "center",
                           cursor: "pointer",
                           color: "rgba(255,255,255,0.92)",
-                          textAlign: "left",
+                          padding: 0,
                         }}
                       >
-                        <span
-                          style={{
-                            width: 34,
-                            height: 34,
-                            borderRadius: 12,
-                            display: "grid",
-                            placeItems: "center",
-                            border: "1px solid " + (on ? "rgba(255,159,26,0.25)" : "rgba(255,255,255,0.10)"),
-                            background: on ? "rgba(255,159,26,0.10)" : "rgba(0,0,0,0.18)",
-                            flex: "0 0 auto",
-                          }}
-                        >
-                          <Icon size={18} />
-                        </span>
-
-                        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.05 }}>
-                          <div
+                        <div style={{ display: "grid", placeItems: "center", gap: 6 }}>
+                          <span
                             style={{
-                              fontSize: 13,
-                              fontWeight: 950,
-                              color: on ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.75)",
+                              width: 40,
+                              height: 40,
+                              borderRadius: 16,
+                              display: "grid",
+                              placeItems: "center",
+                              border: "1px solid " + (on ? "rgba(255,159,26,0.28)" : "rgba(255,255,255,0.10)"),
+                              background: on ? "rgba(255,159,26,0.10)" : "rgba(0,0,0,0.18)",
                             }}
                           >
-                            {it.label}
-                          </div>
-                          <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.45)" }}>
-                            {it.hint}
-                          </div>
+                            <Icon size={20} />
+                          </span>
                         </div>
                       </button>
                     );
                   })}
                 </div>
 
-                <div style={{ marginTop: 12, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                <div style={{ marginTop: 12, fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.45)", padding: "0 4px" }}>
+                  Dica: passe o mouse para ver o nome.
                 </div>
               </div>
 
@@ -695,7 +681,7 @@ export default function Dashboard() {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
                     {/* PRODUÇÃO HORÁRIA (grande) */}
                     {exportSel.prod_horaria ? (
-                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 8" }}>
+                      <div style={{ ...cardBase, padding: 16, gridColumn: "span 12" }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
@@ -720,7 +706,7 @@ export default function Dashboard() {
                           </span>
                         </div>
 
-                        <div style={{ height: 380 }}>
+                        <div style={{ height: 420 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -902,7 +888,7 @@ export default function Dashboard() {
 
                     {/* ÚLTIMOS 7 DIAS (compacto) */}
                     {exportSel.ultimos_7 ? (
-                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 4" }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 6" }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Últimos 7 dias</div>
@@ -934,7 +920,7 @@ export default function Dashboard() {
 
                     {/* HOJE (largo) */}
                     {exportSel.hoje_cards ? (
-                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 8" }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 6" }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Hoje</div>
@@ -970,7 +956,7 @@ export default function Dashboard() {
 
                     {/* HORÍMETROS (largo) */}
                     {exportSel.horimetros_top ? (
-                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 8" }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Horímetros</div>
