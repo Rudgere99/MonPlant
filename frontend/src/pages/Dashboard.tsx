@@ -766,7 +766,7 @@ export default function Dashboard() {
 
                     {/* TAXA (compacto) */}
                     {exportSel.taxa ? (
-                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 4" }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 4", minHeight: 310 }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Taxa Média</div>
@@ -789,7 +789,8 @@ export default function Dashboard() {
                           </span>
                         </div>
 
-                        <div style={{ height: 180 }}>
+                        {/* mesma altura dos cards da linha (grid alinhado) */}
+                        <div style={{ height: 190 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -813,7 +814,7 @@ export default function Dashboard() {
 
                     {/* META (compacto) */}
                     {exportSel.meta_dia ? (
-                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 4" }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 4", minHeight: 310 }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Produção do dia</div>
@@ -821,14 +822,15 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        <div style={{ height: 200, position: "relative" }}>
+                        {/* mesma altura dos cards da linha (grid alinhado) */}
+                        <div style={{ height: 190, position: "relative" }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
                               <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
                             </RadialBarChart>
                           </ResponsiveContainer>
 
-                          <div style={{ position: "absolute", left: 0, right: 0, top: 86, textAlign: "center", pointerEvents: "none" }}>
+                          <div style={{ position: "absolute", left: 0, right: 0, top: 78, textAlign: "center", pointerEvents: "none" }}>
                             <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMeta)}%</div>
                             <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
                             <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
@@ -841,7 +843,7 @@ export default function Dashboard() {
 
                     {/* MÉDIA/HORA (compacto) */}
                     {exportSel.media_hora ? (
-                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 4" }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 4", minHeight: 310 }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Média/Hora</div>
@@ -864,7 +866,8 @@ export default function Dashboard() {
                           </span>
                         </div>
 
-                        <div style={{ height: 140 }}>
+                        {/* mesma altura dos cards da linha (grid alinhado) */}
+                        <div style={{ height: 190 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -888,7 +891,7 @@ export default function Dashboard() {
 
                     {/* ÚLTIMOS 7 DIAS (compacto) */}
                     {exportSel.ultimos_7 ? (
-                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 6" }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 6", minHeight: 270 }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Últimos 7 dias</div>
@@ -896,7 +899,7 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        <div style={{ height: 160 }}>
+                        <div style={{ height: 180 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -920,7 +923,7 @@ export default function Dashboard() {
 
                     {/* HOJE (largo) */}
                     {exportSel.hoje_cards ? (
-                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 6" }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 6", minHeight: 270 }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Hoje</div>
