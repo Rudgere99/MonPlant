@@ -179,29 +179,6 @@ const FreqPointLabel = (props: any) => {
   );
 };
 
-// ==== Tick do gráfico "Últimos 7 dias" (mostra dia + acumulado) ====
-const Last7Tick = (props: any) => {
-  const { x, y, payload } = props || {};
-  const day = String(payload?.value ?? "");
-  const total = Number(payload?.payload?.total ?? 0);
-
-  return (
-    <text
-      x={x}
-      y={y}
-      textAnchor="middle"
-      fill="rgba(255,255,255,0.55)"
-      fontSize={12}
-      fontWeight={800}
-    >
-      <tspan x={x} dy="0">{day}</tspan>
-      <tspan x={x} dy="14" fill="rgba(255,255,255,0.80)" fontWeight={900}>
-        {fmtBR0(total)}
-      </tspan>
-    </text>
-  );
-};
-
 function authHeaders(): Record<string, string> {
   const keys = ["mp_token", "token", "access_token", "auth_token"];
   for (const k of keys) {
@@ -447,6 +424,12 @@ export default function Dashboard() {
   }, [levelBars]);
 
   const gaugeData = useMemo(() => [{ name: "meta", value: pctMeta, fill: "#ff9f1a" }], [pctMeta]);
+
+  // ✅ Evita colapso do maior valor na borda do gráfico (respiro mínimo de +120 Ton/H)
+  const tonYAxisDomain = useMemo<[number, number]>(() => {
+    const maxTon = Math.max(...(hourlySeries || []).map((r) => Number(r.ton) || 0), 0);
+    return [0, maxTon + 120];
+  }, [hourlySeries]);
 
   /* ===================== styles ===================== */
   const cardBase: React.CSSProperties = {
@@ -750,11 +733,12 @@ export default function Dashboard() {
 
                         <div style={{ height: 420 }}>
                           <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
+                            <ComposedChart data={hourlySeries} margin={{ top: 32, right: 26, left: 0, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                               <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis
                                 yAxisId="left"
+                                domain={tonYAxisDomain}
                                 tickFormatter={(v) => fmtBR0(Number(v) || 0)}
                                 tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                               />
@@ -942,7 +926,7 @@ export default function Dashboard() {
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="day" height={38} tick={<Last7Tick />} />
+                              <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
                               <YAxis hide />
                               <Tooltip
                                 formatter={(v: any) => fmtBR0(Number(v) || 0)}
@@ -1106,11 +1090,12 @@ export default function Dashboard() {
 
           <div style={{ height: 420 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
+              <ComposedChart data={hourlySeries} margin={{ top: 32, right: 26, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                 <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <YAxis
                   yAxisId="left"
+                  domain={tonYAxisDomain}
                   tickFormatter={(v) => fmtBR0(Number(v) || 0)}
                   tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                 />
@@ -1294,7 +1279,7 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="day" height={38} tick={<Last7Tick />} />
+                <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
                 <YAxis hide />
                 <Tooltip
                   formatter={(v: any) => fmtBR0(Number(v) || 0)}
