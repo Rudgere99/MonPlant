@@ -169,6 +169,25 @@ const TonLabel = (props: any) => {
   );
 };
 
+const CustomTick = (props: any) => {
+  const { x, y, payload } = props;
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={14}
+        textAnchor="middle"
+        fill="rgba(255,255,255,0.75)"
+        fontSize={12}
+        fontWeight={700}
+      >
+        {periodShort(String(payload?.value || ""))}
+      </text>
+    </g>
+  );
+};
+
 /* ===================== component ===================== */
 
 export default function PlantProductionDayView() {
@@ -355,13 +374,16 @@ export default function PlantProductionDayView() {
 
         <div className="mp-card-b" style={{ height: 420 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 42, right: 18, left: 10, bottom: 22 }}>
+            <ComposedChart data={chartData} margin={{ top: 52, right: 24, bottom: 30, left: 10 }}>
               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
 
               <XAxis
                 dataKey="period"
-                tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12, fontWeight: 800 }}
-                tickFormatter={(v) => periodShort(String(v))}
+                tick={<CustomTick />}
+                interval={1}
+                height={44}
+                axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
               />
 
               <YAxis
@@ -399,7 +421,15 @@ export default function PlantProductionDayView() {
 
               <Legend wrapperStyle={{ color: "rgba(255,255,255,0.75)" }} />
 
-              <Bar yAxisId="ton" dataKey="ton" name="Ton/H" fill="#22c55e" radius={[6, 6, 0, 0]} barSize={22}>
+              <Bar
+                yAxisId="ton"
+                dataKey="ton"
+                name="Ton/H"
+                fill="#00D6FF"
+                radius={[10, 10, 0, 0]}
+                barSize={28}
+                maxBarSize={34}
+              >
                 <LabelList dataKey="ton" content={<TonLabel />} />
               </Bar>
 
@@ -408,13 +438,13 @@ export default function PlantProductionDayView() {
                 type="monotone"
                 dataKey="freq"
                 name="Frequência (%)"
-                stroke="#f59e0b"
+                stroke="#FFA31A"
                 strokeWidth={3}
                 connectNulls={false}
                 dot={(p: any) => {
                   if (p?.payload?.freq === null || p?.payload?.freq === undefined) return null;
                   return (
-                    <circle cx={p.cx} cy={p.cy} r={4} fill="#f59e0b" stroke="rgba(0,0,0,.6)" strokeWidth={2} />
+                    <circle cx={p.cx} cy={p.cy} r={4} fill="#FFA31A" stroke="rgba(0,0,0,.6)" strokeWidth={2} />
                   );
                 }}
                 activeDot={{ r: 6 }}
