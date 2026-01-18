@@ -425,6 +425,12 @@ export default function Dashboard() {
 
   const gaugeData = useMemo(() => [{ name: "meta", value: pctMeta, fill: "#ff9f1a" }], [pctMeta]);
 
+  // ✅ Evita colapso do maior valor na borda do gráfico (respiro mínimo de +120 Ton/H)
+  const tonYAxisDomain = useMemo<[number, number]>(() => {
+    const maxTon = Math.max(...(hourlySeries || []).map((r) => Number(r.ton) || 0), 0);
+    return [0, maxTon + 120];
+  }, [hourlySeries]);
+
   /* ===================== styles ===================== */
   const cardBase: React.CSSProperties = {
     borderRadius: 18,
@@ -727,11 +733,12 @@ export default function Dashboard() {
 
                         <div style={{ height: 420 }}>
                           <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
+                            <ComposedChart data={hourlySeries} margin={{ top: 32, right: 26, left: 0, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                               <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis
                                 yAxisId="left"
+                                domain={tonYAxisDomain}
                                 tickFormatter={(v) => fmtBR0(Number(v) || 0)}
                                 tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                               />
@@ -1083,11 +1090,12 @@ export default function Dashboard() {
 
           <div style={{ height: 420 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
+              <ComposedChart data={hourlySeries} margin={{ top: 32, right: 26, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                 <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <YAxis
                   yAxisId="left"
+                  domain={tonYAxisDomain}
                   tickFormatter={(v) => fmtBR0(Number(v) || 0)}
                   tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                 />
