@@ -1,222 +1,166 @@
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  margin: 0;
-  padding: 0;
-  min-height: 100vh;
-  background: #0B0F14;
-  color: #E5E7EB;
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-button {
-  font-family: inherit;
-  cursor: pointer;
-}
-
-input,
-select,
-textarea {
-  background: #111827;
-  color: #E5E7EB;
-  border: 1px solid #1F2937;
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: #22C55E;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-thumb {
-  background: #1F2937;
-  border-radius: 4px;
-}
-
 /* =========================
-   MonPlant — Dark BI UI
+   MonPlant – Global Styles
+   Dark premium (export style)
    ========================= */
 
 :root{
   --bg: #0b0f14;
-  --panel: rgba(255,255,255,.04);
-  --panel2: rgba(255,255,255,.06);
+
+  --panel: rgba(255,255,255,.045);
+  --panel2: rgba(255,255,255,.065);
+
   --stroke: rgba(255,255,255,.10);
-  --stroke2: rgba(255,255,255,.14);
-  --text: rgba(255,255,255,.92);
-  --muted: rgba(255,255,255,.62);
-  --muted2: rgba(255,255,255,.45);
-  --brand: #34d399; /* emerald */
-  --brand2: rgba(52,211,153,.16);
+  --stroke2: rgba(255,255,255,.16);
+
+  --text: rgba(255,255,255,.94);
+  --muted: rgba(255,255,255,.60);
+  --muted2: rgba(255,255,255,.42);
+
+  /* Accent âmbar (igual export/gráficos) */
+  --brand: #f59e0b;
+  --brand2: rgba(245,158,11,.18);
+
   --danger: #fb7185;
+
+  /* extras úteis */
+  --shadow: 0 30px 80px rgba(0,0,0,.55);
+  --radius: 18px;
 }
 
-html, body {
-  background: radial-gradient(1200px 600px at 20% 0%, rgba(52,211,153,.10), transparent 60%),
-              radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,.08), transparent 55%),
-              var(--bg);
+*{ box-sizing: border-box; }
+
+html, body{
+  height: 100%;
+}
+
+body{
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  background:
+    radial-gradient(1200px 600px at 20% 0%, rgba(245,158,11,.10), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(59,130,246,.06), transparent 55%),
+    var(--bg);
   color: var(--text);
 }
 
-* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+a{ color: inherit; }
 
-a { color: inherit; text-decoration: none; }
+/* ============ Common UI ============ */
 
-/* scroll */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,.10); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.16); }
-
-/* Layout helpers */
-.mp-container { max-width: 1400px; margin: 0 auto; }
-.mp-page-title { font-size: 34px; font-weight: 900; letter-spacing: .2px; }
-.mp-page-sub { margin-top: 6px; color: var(--muted); font-size: 13px; }
-
-/* Card */
 .mp-card{
-  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+  border-radius: var(--radius);
   border: 1px solid var(--stroke);
-  border-radius: 18px;
-  box-shadow: 0 12px 30px rgba(0,0,0,.35);
+  background: rgba(14,18,22,.78);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
 }
-.mp-card-h{
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--stroke);
-  display:flex; align-items:center; justify-content:space-between; gap: 10px;
+
+.mp-card-soft{
+  border-radius: var(--radius);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.04);
 }
-.mp-card-b{ padding: 16px; }
+
+.mp-divider{
+  height: 1px;
+  background: rgba(255,255,255,.10);
+}
+
+/* Chips / badges (Online, Atualizado etc.) */
 .mp-chip{
-  display:inline-flex; align-items:center; gap:8px;
-  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px;
   border-radius: 999px;
+
   background: var(--brand2);
-  border: 1px solid rgba(52,211,153,.20);
-  color: rgba(167,243,208,.95);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .4px;
-  text-transform: uppercase;
+  border: 1px solid rgba(245,158,11,.30);
+  color: rgba(255,237,213,.95);
+  font-weight: 900;
 }
 
 /* Buttons */
 .mp-btn{
-  height: 38px;
+  height: 40px;
   padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.06);
-  color: var(--text);
-  font-weight: 800;
-  font-size: 13px;
-  display:inline-flex; align-items:center; justify-content:center; gap: 8px;
-  transition: .15s ease;
-}
-.mp-btn:hover{ background: rgba(255,255,255,.09); border-color: var(--stroke2); }
-.mp-btn:active{ transform: translateY(1px); }
-
-.mp-btn-primary{
-  border-color: rgba(52,211,153,.30);
-  background: rgba(52,211,153,.14);
-}
-.mp-btn-primary:hover{ background: rgba(52,211,153,.20); }
-
-.mp-btn-danger{
-  border-color: rgba(251,113,133,.30);
-  background: rgba(251,113,133,.14);
-}
-.mp-btn-danger:hover{ background: rgba(251,113,133,.20); }
-
-/* Inputs */
-.mp-label{ font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
-.mp-input, .mp-textarea, .mp-select{
-  width: 100%;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid var(--stroke);
   background: rgba(255,255,255,.04);
   color: var(--text);
-  padding: 10px 12px;
-  outline: none;
+  font-weight: 900;
+  cursor: pointer;
   transition: .15s ease;
 }
-.mp-input{ height: 40px; }
-.mp-textarea{ min-height: 88px; resize: vertical; }
-.mp-input::placeholder, .mp-textarea::placeholder{ color: rgba(255,255,255,.30); }
-.mp-input:focus, .mp-textarea:focus, .mp-select:focus{
-  border-color: rgba(52,211,153,.35);
-  box-shadow: 0 0 0 4px rgba(52,211,153,.10);
+.mp-btn:hover{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.16);
 }
 
-/* Tables/grid form */
-.mp-grid{
-  display:grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
+.mp-btn-primary{
+  border-color: rgba(245,158,11,.40);
+  background: rgba(245,158,11,.18);
 }
-@media (min-width: 1024px){
-  .mp-grid{ grid-template-columns: 1.15fr .85fr; }
-}
-
-.mp-form-grid{
-  display:grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-@media (min-width: 1024px){
-  .mp-form-grid{ grid-template-columns: 1fr 1fr; gap: 14px; }
+.mp-btn-primary:hover{
+  background: rgba(245,158,11,.26);
+  border-color: rgba(245,158,11,.55);
 }
 
-.mp-row{
-  display:grid;
-  grid-template-columns: 120px 1fr 1fr;
-  gap: 10px;
-  align-items:center;
-  padding: 8px 10px;
+.mp-btn-danger{
+  border-color: rgba(251,113,133,.35);
+  background: rgba(251,113,133,.16);
+}
+.mp-btn-danger:hover{
+  background: rgba(251,113,133,.22);
+  border-color: rgba(251,113,133,.55);
+}
+
+/* Inputs */
+.mp-input,
+.mp-textarea,
+.mp-select{
+  width: 100%;
   border-radius: 14px;
   border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.03);
+  background: rgba(0,0,0,.22);
+  color: var(--text);
+  outline: none;
+  padding: 10px 12px;
+  font-weight: 850;
 }
-.mp-row:hover{ background: rgba(255,255,255,.05); }
-.mp-row .mp-faixa{ font-weight: 900; letter-spacing: .2px; color: rgba(255,255,255,.85); }
 
-/* Small helper text */
-.mp-help{ color: var(--muted2); font-size: 12px; }
-.mp-error{
-  margin-top: 8px;
-  color: rgba(251,113,133,.95);
+.mp-input::placeholder,
+.mp-textarea::placeholder{
+  color: rgba(255,255,255,.45);
   font-weight: 800;
-  font-size: 12px;
 }
 
-@keyframes mpPulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.28;
-  }
-  50% {
-    transform: scale(1.06);
-    opacity: 0.45;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0.28;
-  }
+.mp-input:focus,
+.mp-textarea:focus,
+.mp-select:focus{
+  border-color: rgba(245,158,11,.45);
+  box-shadow: 0 0 0 4px rgba(245,158,11,.14);
 }
 
-.mp-offroad-pulse {
-  animation: mpPulse 6s ease-in-out infinite;
+/* Text helpers */
+.mp-muted{ color: var(--muted); }
+.mp-muted2{ color: var(--muted2); }
+
+/* Scrollbar (webkit) */
+*::-webkit-scrollbar{ width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.10);
+  border: 2px solid rgba(0,0,0,0);
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover{
+  background: rgba(255,255,255,.16);
+}
+
+/* Recharts tooltip polish (optional) */
+.recharts-tooltip-wrapper{
+  outline: none !important;
 }
