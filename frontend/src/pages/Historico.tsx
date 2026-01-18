@@ -64,7 +64,7 @@ function badgeStyle(kind: "ok" | "warn" | "muted" = "muted") {
     letterSpacing: 0.2,
     border: "1px solid rgba(255,255,255,0.10)",
   };
-	if (kind === "ok") return { ...base, background: "rgba(0,204,255,0.14)", color: "rgba(255,255,255,0.92)" };
+  if (kind === "ok") return { ...base, background: "rgba(34,197,94,0.14)", color: "rgba(255,255,255,0.92)" };
   if (kind === "warn") return { ...base, background: "rgba(255,159,26,0.16)", color: "rgba(255,255,255,0.92)" };
   return { ...base, background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.78)" };
 }

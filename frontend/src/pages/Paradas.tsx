@@ -112,8 +112,13 @@ function calcTempoParadaH(dataIni: string, horaIni: string, dataFim: string, hor
   return ms / 3600000;
 }
 
+// Mostra tempo em horas no formato decimal.
+// Ex.: 8 minutos = 0,13 h (não 0,1 h)
 function fmtH1(n: number) {
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
 }
 
 /* ===================== page ===================== */
@@ -336,7 +341,7 @@ export default function Paradas() {
           border-radius: 18px;
           border: 1px solid rgba(255,255,255,.10);
           background:
-	            radial-gradient(1200px 420px at 10% 0%, rgba(0,204,255,.08), transparent 55%),
+            radial-gradient(1200px 420px at 10% 0%, rgba(34,197,94,.10), transparent 55%),
             radial-gradient(900px 380px at 90% 20%, rgba(59,130,246,.07), transparent 55%),
             linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
           box-shadow:
@@ -398,7 +403,7 @@ export default function Paradas() {
           position:absolute;
           inset:0;
           background:
-	            radial-gradient(500px 120px at 20% 0%, rgba(0,204,255,.10), transparent 60%);
+            radial-gradient(500px 120px at 20% 0%, rgba(34,197,94,.12), transparent 60%);
           opacity: .9;
           pointer-events: none;
         }
@@ -422,8 +427,8 @@ export default function Paradas() {
           right: 10px;
           padding: 4px 10px;
           border-radius: 999px;
-	          background: rgba(0,204,255,.12);
-	          border: 1px solid rgba(0,204,255,.26);
+          background: rgba(34,197,94,.14);
+          border: 1px solid rgba(34,197,94,.30);
           color: rgba(255,255,255,.92);
           font-weight: 900;
           font-size: 12px;
