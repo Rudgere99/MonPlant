@@ -890,7 +890,7 @@ export default function Dashboard() {
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <Tooltip
                                 formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
@@ -901,7 +901,20 @@ export default function Dashboard() {
                                 }}
                                 labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                               />
-                              <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a" />
+                              <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a">
+                                <LabelList
+                                  dataKey="freq"
+                                  position="center"
+                                  formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
+                                  style={{
+                                    fill: "rgba(255,255,255,0.95)",
+                                    fontWeight: 900,
+                                    fontSize: 12,
+                                    textShadow: "0 1px 2px rgba(0,0,0,.55)",
+                                    pointerEvents: "none",
+                                  }}
+                                />
+                              </Bar>
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -1315,7 +1328,7 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <Tooltip
                   formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
@@ -1326,7 +1339,20 @@ export default function Dashboard() {
                   }}
                   labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                 />
-                <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a" />
+                <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a">
+                  <LabelList
+                    dataKey="freq"
+                    position="center"
+                    formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
+                    style={{
+                      fill: "rgba(255,255,255,0.95)",
+                      fontWeight: 900,
+                      fontSize: 12,
+                      textShadow: "0 1px 2px rgba(0,0,0,.55)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
