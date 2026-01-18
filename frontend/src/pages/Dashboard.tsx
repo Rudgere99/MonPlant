@@ -587,7 +587,7 @@ export default function Dashboard() {
             <div style={modalBody}>
               {/* left: selector */}
               <div style={{ ...panel, overflow: "auto" }}>
-                <div style={{ fontWeight: 750, marginBottom: 10, color: "rgba(255,255,255,0.9)" }}>
+                <div style={{ fontWeight: 350, marginBottom: 10, color: "rgba(255,255,255,0.9)" }}>
                   Selecionar
                 </div>
 
