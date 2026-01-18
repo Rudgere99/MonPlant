@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import html2canvas from "html2canvas";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -194,6 +195,15 @@ type HorimetroRow = {
 const EQ_BT01 = "BT-01";
 const EQS_TOP_PRODUCTS = ["BT-02", "PN-02", "PN-01", "EH-08"] as const;
 
+type ExportKey =
+  | "prod_horaria"
+  | "taxa"
+  | "meta_dia"
+  | "media_hora"
+  | "ultimos_7"
+  | "hoje_cards"
+  | "horimetros_top";
+
 export default function Dashboard() {
   const nav = useNavigate();
   const [day, setDay] = useState<string>(isoTodayLocal());
@@ -208,6 +218,20 @@ export default function Dashboard() {
 
   const POLL_MS = 10_000;
   const META_DIA = 8000;
+
+  // ===== Export UI =====
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement | null>(null);
+
+  const [exportSel, setExportSel] = useState<Record<ExportKey, boolean>>({
+    prod_horaria: true,
+    taxa: true,
+    meta_dia: true,
+    media_hora: true,
+    ultimos_7: true,
+    hoje_cards: true,
+    horimetros_top: true,
+  });
 
   async function loadAll() {
     setLoading(true);
@@ -263,7 +287,6 @@ export default function Dashboard() {
     return Math.max(0, Math.min(100, (totalTonDay / META_DIA) * 100));
   }, [totalTonDay]);
 
-  // ✅ AQUI: normaliza + garante 24 horas + mantém produção
   const hourlySeries = useMemo(() => {
     const rows = prodDay?.rows || [];
     const data = rows.map((r) => ({
@@ -356,7 +379,7 @@ export default function Dashboard() {
 
   const topBar: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "1fr auto auto",
+    gridTemplateColumns: "1fr auto auto auto",
     gap: 12,
     alignItems: "center",
     marginTop: 10,
@@ -375,6 +398,86 @@ export default function Dashboard() {
     color: "rgba(255,255,255,0.88)",
   };
 
+  const modalOverlay: React.CSSProperties = {
+    position: "fixed",
+    inset: 0,
+    zIndex: 200,
+    background: "rgba(0,0,0,0.65)",
+    backdropFilter: "blur(8px)",
+    display: "grid",
+    placeItems: "center",
+    padding: 14,
+  };
+
+  const modalCard: React.CSSProperties = {
+    width: "min(1200px, 96vw)",
+    maxHeight: "92vh",
+    borderRadius: 22,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(14,18,22,0.86)",
+    boxShadow: "0 30px 90px rgba(0,0,0,0.70)",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+  };
+
+  const modalHeader: React.CSSProperties = {
+    padding: 14,
+    borderBottom: "1px solid rgba(255,255,255,0.10)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  };
+
+  const modalBody: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "340px 1fr",
+    gap: 14,
+    padding: 14,
+    minHeight: 0,
+    flex: 1,
+  };
+
+  const panel: React.CSSProperties = {
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(0,0,0,0.22)",
+    padding: 12,
+    minHeight: 0,
+  };
+
+  async function exportJPEG() {
+    const el = exportRef.current;
+    if (!el) return;
+
+    // garante que o canvas pegue o fundo
+    const canvas = await html2canvas(el, {
+      backgroundColor: "#0b0f14",
+      scale: Math.min(2, window.devicePixelRatio || 1.5),
+      useCORS: true,
+    });
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `monplant_export_${day}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // Registro de blocos exportáveis (auto-adaptável)
+  const exportItems: { key: ExportKey; label: string; hint: string }[] = [
+    { key: "prod_horaria", label: "Produção por hora (Ton/H + Frequência)", hint: "Gráfico principal" },
+    { key: "taxa", label: "Taxa Média (Freq%)", hint: "Barras (últimas horas)" },
+    { key: "meta_dia", label: "Produção do dia vs Meta", hint: "Gauge" },
+    { key: "media_hora", label: "Média/Hora", hint: "Mini área" },
+    { key: "ultimos_7", label: "Últimos 7 dias", hint: "Área (total por dia)" },
+    { key: "hoje_cards", label: "Hoje (cards)", hint: "Última Parada, Total de Paradas, Horímetro BT-01" },
+    { key: "horimetros_top", label: "Horímetros (BT-02/PN-02/PN-01/EH-08)", hint: "Cards por equipamento" },
+  ];
+
   return (
     <div className="mp-container">
       {/* TOP BAR */}
@@ -392,6 +495,11 @@ export default function Dashboard() {
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={smallPill}>{loading ? "Atualizando..." : err ? "Erro" : "Online"}</span>
+
+          <button className="mp-btn" onClick={() => setExportOpen(true)} style={{ height: 42 }}>
+            Exportar
+          </button>
+
           <button className="mp-btn mp-btn-primary" onClick={loadAll} disabled={loading} style={{ height: 42 }}>
             Atualizar
           </button>
@@ -402,7 +510,424 @@ export default function Dashboard() {
         Dashboard • {brDate(day)} {err ? `• ${err}` : "• tempo real"}
       </div>
 
-      {/* GRID */}
+      {/* MODAL EXPORT */}
+      {exportOpen ? (
+        <div style={modalOverlay} onClick={() => setExportOpen(false)}>
+          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+            <div style={modalHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 950, fontSize: 16, color: "rgba(255,255,255,0.92)" }}>
+                  Exportação • {brDate(day)}
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                  Marque o que vai aparecer e clique em “Exportar JPEG”.
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <button className="mp-btn" style={{ height: 38 }} onClick={() => setExportSel((s) => {
+                  const allOn: any = {};
+                  exportItems.forEach(it => (allOn[it.key] = true));
+                  return allOn;
+                })}>
+                  Marcar tudo
+                </button>
+
+                <button className="mp-btn" style={{ height: 38 }} onClick={() => setExportSel((s) => {
+                  const allOff: any = {};
+                  exportItems.forEach(it => (allOff[it.key] = false));
+                  return allOff;
+                })}>
+                  Limpar
+                </button>
+
+                <button className="mp-btn mp-btn-primary" style={{ height: 38 }} onClick={exportJPEG}>
+                  Exportar JPEG
+                </button>
+
+                <button className="mp-btn" style={{ height: 38 }} onClick={() => setExportOpen(false)}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            <div style={modalBody}>
+              {/* left: checkboxes */}
+              <div style={{ ...panel, overflow: "auto" }}>
+                <div style={{ fontWeight: 950, marginBottom: 10, color: "rgba(255,255,255,0.9)" }}>
+                  Selecionar blocos
+                </div>
+
+                <div style={{ display: "grid", gap: 10 }}>
+                  {exportItems.map((it) => (
+                    <label
+                      key={it.key}
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        alignItems: "flex-start",
+                        padding: 10,
+                        borderRadius: 14,
+                        border: "1px solid rgba(255,255,255,0.10)",
+                        background: "rgba(255,255,255,0.04)",
+                        cursor: "pointer",
+                        userSelect: "none",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!exportSel[it.key]}
+                        onChange={(e) =>
+                          setExportSel((s) => ({
+                            ...s,
+                            [it.key]: e.target.checked,
+                          }))
+                        }
+                        style={{ marginTop: 3 }}
+                      />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>{it.label}</div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>{it.hint}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: 12, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                  Dica: o layout do preview se ajusta automaticamente conforme você marca/desmarca.
+                </div>
+              </div>
+
+              {/* right: preview (capturado) */}
+              <div style={{ ...panel, overflow: "auto" }}>
+                <div
+                  ref={exportRef}
+                  style={{
+                    borderRadius: 18,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "#0b0f14",
+                    padding: 14,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 950, fontSize: 16, color: "rgba(255,255,255,0.92)" }}>
+                        MonPlant • Dashboard
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                        {brDate(day)} • Exportação
+                      </div>
+                    </div>
+                    <div style={{ ...smallPill, height: 32, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)" }}>
+                      {loading ? "Atualizando..." : err ? "Erro" : "Online"}
+                    </div>
+                  </div>
+
+                  {/* GRID adaptável */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+                      gap: 14,
+                      alignItems: "stretch",
+                    }}
+                  >
+                    {/* Produção horária */}
+                    {exportSel.prod_horaria ? (
+                      <div style={{ ...cardBase, padding: 14 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
+                            <div style={subStyle}>
+                              Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t
+                            </div>
+                          </div>
+                          <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)" }}>
+                            {prodDay?.updated_at ? "Atualizado" : "—"}
+                          </span>
+                        </div>
+
+                        <div style={{ height: 280 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
+                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                              <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <YAxis yAxisId="left" tickFormatter={(v) => fmtBR0(Number(v) || 0)} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
+                              <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
+                              <Tooltip
+                                formatter={(v: any, name: any) => (name === "freq" ? `${fmtBR0(Number(v) || 0)}%` : fmtBR1(Number(v) || 0))}
+                                contentStyle={{
+                                  background: "rgba(0,0,0,0.86)",
+                                  border: "1px solid rgba(255,255,255,0.12)",
+                                  borderRadius: 14,
+                                  boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
+                                }}
+                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                              />
+                              <Legend
+                                verticalAlign="bottom"
+                                height={30}
+                                iconType="circle"
+                                formatter={(value) => (value === "freq" ? "Frequência (%)" : value === "ton" ? "Ton/H" : value)}
+                                wrapperStyle={{ color: "#00CCFF", fontWeight: 900 }}
+                              />
+
+                              <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={38}>
+                                <LabelList dataKey="ton" content={BarValueLabel} />
+                              </Bar>
+
+                              <Line yAxisId="right" type="monotone" dataKey="freq" stroke="#ff9f1a" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 5 }}>
+                                <LabelList dataKey="freq" content={FreqPointLabel} />
+                              </Line>
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Taxa */}
+                    {exportSel.taxa ? (
+                      <div style={{ ...cardBase, padding: 14 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Taxa Média</div>
+                            <div style={subStyle}>Freq% últimas horas</div>
+                          </div>
+                          <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>
+                            {fmtBR0(levelAvg)}%
+                          </span>
+                        </div>
+
+                        <div style={{ height: 190 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
+                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                              <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <Tooltip
+                                formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
+                                contentStyle={{ background: "rgba(0,0,0,0.86)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}
+                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                              />
+                              <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Meta do dia */}
+                    {exportSel.meta_dia ? (
+                      <div style={{ ...cardBase, padding: 14 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Produção do dia</div>
+                            <div style={subStyle}>Meta: {fmtBR0(META_DIA)} t</div>
+                          </div>
+                        </div>
+
+                        <div style={{ height: 220, position: "relative" }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
+                              <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
+                            </RadialBarChart>
+                          </ResponsiveContainer>
+
+                          <div style={{ position: "absolute", left: 0, right: 0, top: 90, textAlign: "center", pointerEvents: "none" }}>
+                            <div style={{ fontSize: 34, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMeta)}%</div>
+                            <div style={{ ...subStyle, marginTop: 4 }}>Atingimento</div>
+                            <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                              {fmtBR0(totalTonDay)} t
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Média/Hora */}
+                    {exportSel.media_hora ? (
+                      <div style={{ ...cardBase, padding: 14 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Média/Hora</div>
+                            <div style={subStyle}>Média de produção por hora</div>
+                          </div>
+                          <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>
+                            {fmtBR1(avgTonPerHour)} t/h
+                          </span>
+                        </div>
+
+                        <div style={{ height: 160 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                              <XAxis dataKey="period" interval={3} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <YAxis hide />
+                              <Tooltip
+                                formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
+                                contentStyle={{ background: "rgba(0,0,0,0.86)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}
+                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                              />
+                              <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                          Considera somente horas preenchidas (Ton/H &gt; 0).
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Últimos 7 dias */}
+                    {exportSel.ultimos_7 ? (
+                      <div style={{ ...cardBase, padding: 14 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Últimos 7 dias</div>
+                            <div style={subStyle}>Total por dia</div>
+                          </div>
+                        </div>
+
+                        <div style={{ height: 200 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                              <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
+                              <YAxis hide />
+                              <Tooltip
+                                formatter={(v: any) => fmtBR0(Number(v) || 0)}
+                                contentStyle={{
+                                  background: "rgba(0,0,0,0.86)",
+                                  border: "1px solid rgba(255,255,255,0.12)",
+                                  borderRadius: 14,
+                                }}
+                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                              />
+                              <Area type="monotone" dataKey="total" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Hoje (3 cards) */}
+                    {exportSel.hoje_cards ? (
+                      <div style={{ ...cardBase, padding: 14 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Hoje</div>
+                            <div style={subStyle}>Resumo • Paradas + Horímetro</div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                          <MiniStat
+                            icon="⏸"
+                            title="Última Parada"
+                            value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
+                            sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
+                          />
+                          <MiniStat icon="📌" title="Total de Paradas" value={String(totalStops)} sub={`Dia ${brDate(day)}`} />
+                          <MiniStat
+                            icon="⏱"
+                            title="Último Horímetro (BT-01)"
+                            value={
+                              lastHorimetroBT01
+                                ? `${fmtBR1(lastHorimetroBT01.horimetro_ini)} → ${fmtBR1(lastHorimetroBT01.horimetro_fim)}`
+                                : "—"
+                            }
+                            sub={
+                              lastHorimetroBT01
+                                ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
+                                : "Sem registros"
+                            }
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Horímetros top */}
+                    {exportSel.horimetros_top ? (
+                      <div style={{ ...cardBase, padding: 14 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Horímetros</div>
+                            <div style={subStyle}>BT-02 • PN-02 • PN-01 • EH-08</div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gap: 10 }}>
+                          {topProductsHorimetros.map(({ eq, row }) => (
+                            <div
+                              key={eq}
+                              style={{
+                                borderRadius: 16,
+                                border: "1px solid rgba(255,255,255,0.10)",
+                                background: "rgba(0,0,0,0.18)",
+                                padding: 12,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 10,
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <div
+                                  style={{
+                                    width: 52,
+                                    height: 34,
+                                    borderRadius: 12,
+                                    border: "1px solid rgba(255,159,26,0.20)",
+                                    background: "rgba(255,159,26,0.10)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: 12,
+                                    fontWeight: 950,
+                                    color: "rgba(255,255,255,0.85)",
+                                  }}
+                                >
+                                  {eq}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
+                                    {row ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}` : "—"}
+                                  </div>
+                                  <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                                    {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,0.55)" }}>
+                                {row?.equipamento ?? ""}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <style>{`
+              @media (max-width: 980px) {
+                .mp-container { padding-bottom: 80px; }
+              }
+              @media (max-width: 900px) {
+                /* modal em 1 coluna no mobile */
+                div[style*="grid-template-columns: 340px 1fr"] {
+                  grid-template-columns: 1fr !important;
+                }
+              }
+            `}</style>
+          </div>
+        </div>
+      ) : null}
+
+      {/* GRID ORIGINAL */}
       <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14 }}>
         {/* LEFT */}
         <div style={{ gridColumn: "span 9 / span 9", display: "grid", gap: 14 }}>
@@ -462,13 +987,7 @@ export default function Dashboard() {
                   Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t
                 </div>
               </div>
-              <span
-                style={{
-                  ...smallPill,
-                  borderColor: "rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.06)",
-                }}
-              >
+              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)" }}>
                 {prodDay?.updated_at ? "Atualizado" : "—"}
               </span>
             </div>
@@ -477,28 +996,11 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="period"
-                    interval={1}
-                    tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
-                  />
-                  <YAxis
-                    yAxisId="left"
-                    tickFormatter={(v) => fmtBR0(Number(v) || 0)}
-                    tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    domain={[0, 100]}
-                    tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
-                    tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
-                  />
+                  <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                  <YAxis yAxisId="left" tickFormatter={(v) => fmtBR0(Number(v) || 0)} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
+                  <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
                   <Tooltip
-                    formatter={(v: any, name: any) => {
-                      if (name === "freq") return `${fmtBR0(Number(v) || 0)}%`;
-                      return fmtBR1(Number(v) || 0);
-                    }}
+                    formatter={(v: any, name: any) => (name === "freq" ? `${fmtBR0(Number(v) || 0)}%` : fmtBR1(Number(v) || 0))}
                     contentStyle={{
                       background: "rgba(0,0,0,0.86)",
                       border: "1px solid rgba(255,255,255,0.12)",
@@ -514,20 +1016,10 @@ export default function Dashboard() {
                     formatter={(value) => (value === "freq" ? "Frequência (%)" : value === "ton" ? "Ton/H" : value)}
                     wrapperStyle={{ color: "#00CCFF", fontWeight: 900 }}
                   />
-
                   <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={38}>
                     <LabelList dataKey="ton" content={BarValueLabel} />
                   </Bar>
-
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="freq"
-                    stroke="#ff9f1a"
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 5 }}
-                  >
+                  <Line yAxisId="right" type="monotone" dataKey="freq" stroke="#ff9f1a" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 5 }}>
                     <LabelList dataKey="freq" content={FreqPointLabel} />
                   </Line>
                 </ComposedChart>
@@ -676,7 +1168,7 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                  <XAxis dataKey="period" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                  <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                   <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                   <Tooltip
                     formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
