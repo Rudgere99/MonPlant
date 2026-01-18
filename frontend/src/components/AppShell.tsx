@@ -310,7 +310,7 @@ export function AppShell() {
             style={{
               ...cardGlass,
               height: "calc(100vh - 28px)",
-              padding: 8,
+              padding: 4,
               display: "flex",
               flexDirection: "column",
               overflow: "visible",
