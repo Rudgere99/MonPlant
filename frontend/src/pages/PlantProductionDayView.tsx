@@ -359,7 +359,7 @@ export default function PlantProductionDayView() {
           </div>
 
           {err && <div style={{ marginTop: 10, color: "#f87171", fontWeight: 900 }}>{err}</div>}
-          {info && <div style={{ marginTop: 10, color: "#34d399", fontWeight: 900 }}>{info}</div>}
+	      {info && <div style={{ marginTop: 10, color: "#00CCFF", fontWeight: 900 }}>{info}</div>}
         </div>
       </div>
 
