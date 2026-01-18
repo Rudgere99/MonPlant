@@ -651,7 +651,6 @@ export default function Dashboard() {
                 </div>
 
                 <div style={{ marginTop: 12, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
-                  Dica: a área à direita reorganiza automaticamente.
                 </div>
               </div>
 
