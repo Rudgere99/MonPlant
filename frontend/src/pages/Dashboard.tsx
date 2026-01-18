@@ -602,7 +602,7 @@ export default function Dashboard() {
                         onClick={() => setExportSel((s) => ({ ...s, [it.key]: !on }))}
                         title={`${it.label} • ${it.hint}`}
                         style={{
-                          height: 56,
+                          height: 26,
                           width: "100%",
                           borderRadius: 16,
                           border: "1px solid " + (on ? "rgba(255,159,26,0.30)" : "rgba(255,255,255,0.10)"),
