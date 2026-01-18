@@ -335,8 +335,8 @@ export function AppShell() {
                 aria-label={sideCollapsed ? "Expandir menu" : "Minimizar menu"}
                 title={sideCollapsed ? "Expandir" : "Minimizar"}
                 style={{
-                  height: 42,
-                  width: 42,
+                  height: 49,
+                  width: 49,
                   borderRadius: 14,
                   background: "rgba(255,255,255,0.06)",
                   border: "1px solid rgba(255,255,255,0.10)",
