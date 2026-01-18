@@ -310,10 +310,10 @@ export function AppShell() {
             style={{
               ...cardGlass,
               height: "calc(100vh - 28px)",
-              padding: 12,
+              padding: 18,
               display: "flex",
               flexDirection: "column",
-              overflow: "hidden",
+              overflow: "visible",
               minHeight: 0, // ✅ crítico: evita sobreposição e permite scroll correto
             }}
           >
@@ -335,8 +335,8 @@ export function AppShell() {
                 aria-label={sideCollapsed ? "Expandir menu" : "Minimizar menu"}
                 title={sideCollapsed ? "Expandir" : "Minimizar"}
                 style={{
-                  height: 49,
-                  width: 49,
+                  height: 42,
+                  width: 42,
                   borderRadius: 14,
                   background: "rgba(255,255,255,0.06)",
                   border: "1px solid rgba(255,255,255,0.10)",
