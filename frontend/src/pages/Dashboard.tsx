@@ -76,6 +76,9 @@ function pad2(n: number) {
 /**
  * Normaliza period do backend para "HH-HH"
  * Aceita: "00-01", "0-1", "00:00-01:00", "00:00–01:00", "00:00 — 01:00"
+ *
+ * ✅ FIX 23-00:
+ * - Se o segundo horário vier como "00", tratamos como "24" para bater com o grid 23-24.
  */
 function normalizePeriod(period: string): string {
   const s0 = String(period || "").trim();
@@ -94,13 +97,18 @@ function normalizePeriod(period: string): string {
     if (h1m && h2m) {
       const h1 = Math.max(0, Math.min(23, Number(h1m[1])));
       const h2raw = Number(h2m[1]);
-      const h2 = Math.max(0, Math.min(24, h2raw));
+      const h2 = h2raw === 0 ? 24 : Math.max(0, Math.min(24, h2raw));
       return `${pad2(h1)}-${pad2(h2)}`;
     }
   }
 
   const m = s.match(/^(\d{1,2})\s*-\s*(\d{1,2})$/);
-  if (m) return `${pad2(Number(m[1]))}-${pad2(Number(m[2]))}`;
+  if (m) {
+    const h1 = Number(m[1]);
+    const h2raw = Number(m[2]);
+    const h2 = h2raw === 0 ? 24 : h2raw;
+    return `${pad2(h1)}-${pad2(h2)}`;
+  }
 
   return s0;
 }
@@ -119,7 +127,7 @@ function buildHourlyGrid(rows: { period: string; ton: number; freq: number }[]) 
 
   const result: { period: string; ton: number; freq: number }[] = [];
   for (let h = 0; h < 24; h++) {
-    const label = `${pad2(h)}-${pad2(h + 1)}`;
+    const label = `${pad2(h)}-${pad2(h + 1)}`; // 23-24
     const found = map.get(label);
     result.push({ period: label, ton: found?.ton ?? 0, freq: found?.freq ?? 0 });
   }
@@ -137,7 +145,14 @@ const BarValueLabel = (props: any) => {
   const cy = (Number(y) || 0) - 10;
   const label = n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
   return (
-    <text x={cx} y={cy} textAnchor="middle" fill="rgba(255,255,255,0.9)" fontSize={13} fontWeight={900}>
+    <text
+      x={cx}
+      y={cy}
+      textAnchor="middle"
+      fill="rgba(255,255,255,0.9)"
+      fontSize={13}
+      fontWeight={900}
+    >
       {label}
     </text>
   );
@@ -151,7 +166,14 @@ const FreqPointLabel = (props: any) => {
   const cy = (Number(y) || 0) - 14;
   const label = `${Math.round(n)}%`;
   return (
-    <text x={cx} y={cy} textAnchor="middle" fill="rgba(255,255,255,0.9)" fontSize={13} fontWeight={900}>
+    <text
+      x={cx}
+      y={cy}
+      textAnchor="middle"
+      fill="rgba(255,255,255,0.9)"
+      fontSize={13}
+      fontWeight={900}
+    >
       {label}
     </text>
   );
@@ -341,7 +363,7 @@ export default function Dashboard() {
     return Math.max(0, Math.min(100, (totalTonDay / META_DIA) * 100));
   }, [totalTonDay]);
 
-  // ✅ normaliza + garante 24 horas + mantém produção
+  // ✅ normaliza + garante 24 horas + inclui 23-00 (mapeado para 23-24)
   const hourlySeries = useMemo(() => {
     const rows = prodDay?.rows || [];
     const data = rows.map((r) => ({
@@ -488,7 +510,6 @@ export default function Dashboard() {
 
   const modalBody: React.CSSProperties = {
     display: "grid",
-    // ✅ seletor em estilo "sidebar" (rail estreito) + preview largo
     gridTemplateColumns: "92px 1fr",
     gap: 14,
     padding: 14,
@@ -585,14 +606,13 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div style={modalBody}>
+            <div style={modalBody} className="mp-export-body">
               {/* left: selector */}
               <div style={{ ...panel, overflow: "auto", padding: 10 }}>
                 <div style={{ fontWeight: 950, marginBottom: 10, color: "rgba(255,255,255,0.9)", paddingLeft: 4 }}>
                   Selecionar
                 </div>
 
-                {/* ✅ estilo AppShell: rail estreito com ícones (um em cima do outro) */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
                   {exportItems.map((it) => {
                     const Icon = it.icon;
@@ -677,7 +697,6 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* preview grid 12 col (produção maior) */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
                     {/* PRODUÇÃO HORÁRIA (grande) */}
                     {exportSel.prod_horaria ? (
@@ -764,7 +783,7 @@ export default function Dashboard() {
                       </div>
                     ) : null}
 
-                    {/* TAXA (compacto) */}
+                    {/* TAXA */}
                     {exportSel.taxa ? (
                       <div style={{ ...cardBase, padding: 14, gridColumn: "span 4", minHeight: 310 }}>
                         <div style={headerStyle}>
@@ -789,7 +808,6 @@ export default function Dashboard() {
                           </span>
                         </div>
 
-                        {/* mesma altura dos cards da linha (grid alinhado) */}
                         <div style={{ height: 190 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
@@ -812,7 +830,7 @@ export default function Dashboard() {
                       </div>
                     ) : null}
 
-                    {/* META (compacto) */}
+                    {/* META */}
                     {exportSel.meta_dia ? (
                       <div style={{ ...cardBase, padding: 14, gridColumn: "span 4", minHeight: 310 }}>
                         <div style={headerStyle}>
@@ -822,7 +840,6 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {/* mesma altura dos cards da linha (grid alinhado) */}
                         <div style={{ height: 190, position: "relative" }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
@@ -841,7 +858,7 @@ export default function Dashboard() {
                       </div>
                     ) : null}
 
-                    {/* MÉDIA/HORA (compacto) */}
+                    {/* MÉDIA */}
                     {exportSel.media_hora ? (
                       <div style={{ ...cardBase, padding: 14, gridColumn: "span 4", minHeight: 310 }}>
                         <div style={headerStyle}>
@@ -859,14 +876,13 @@ export default function Dashboard() {
                               display: "inline-flex",
                               alignItems: "center",
                               fontWeight: 900,
-                              color: "rgba(255,255,255,0.82)" ,
+                              color: "rgba(255,255,255,0.82)",
                             }}
                           >
                             {fmtBR1(avgTonPerHour)} t/h
                           </span>
                         </div>
 
-                        {/* mesma altura dos cards da linha (grid alinhado) */}
                         <div style={{ height: 190 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
@@ -889,7 +905,7 @@ export default function Dashboard() {
                       </div>
                     ) : null}
 
-                    {/* ÚLTIMOS 7 DIAS (compacto) */}
+                    {/* ÚLTIMOS 7 DIAS */}
                     {exportSel.ultimos_7 ? (
                       <div style={{ ...cardBase, padding: 14, gridColumn: "span 6", minHeight: 270 }}>
                         <div style={headerStyle}>
@@ -921,7 +937,7 @@ export default function Dashboard() {
                       </div>
                     ) : null}
 
-                    {/* HOJE (largo) */}
+                    {/* HOJE */}
                     {exportSel.hoje_cards ? (
                       <div style={{ ...cardBase, padding: 14, gridColumn: "span 6", minHeight: 270 }}>
                         <div style={headerStyle}>
@@ -957,7 +973,7 @@ export default function Dashboard() {
                       </div>
                     ) : null}
 
-                    {/* HORÍMETROS (largo) */}
+                    {/* HORÍMETROS */}
                     {exportSel.horimetros_top ? (
                       <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
                         <div style={headerStyle}>
@@ -1009,7 +1025,9 @@ export default function Dashboard() {
                                   </div>
                                 </div>
                               </div>
-                              <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,0.55)" }}>{row?.equipamento ?? ""}</div>
+                              <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,0.55)" }}>
+                                {row?.equipamento ?? ""}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1025,7 +1043,6 @@ export default function Dashboard() {
                 .mp-container { padding-bottom: 80px; }
               }
               @media (max-width: 920px) {
-                /* modal em 1 coluna no mobile */
                 .mp-export-body { grid-template-columns: 1fr !important; }
               }
             `}</style>
@@ -1033,303 +1050,355 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      {/* GRID */}
-      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14 }}>
-        {/* LEFT */}
-        <div style={{ gridColumn: "span 9 / span 9", display: "grid", gap: 14 }}>
-          {/* HOJE */}
-          <div style={{ ...cardBase, padding: 14 }}>
-            <div style={headerStyle}>
-              <div>
-                <div style={titleStyle}>Hoje</div>
-                <div style={subStyle}>Resumo • Paradas + Horímetro</div>
+      {/* ===================== MAIN DASHBOARD GRID (MESMO FORMATO DO EXPORT) ===================== */}
+      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
+        {/* PRODUÇÃO HORÁRIA (12 col) */}
+        <div
+          style={{ ...cardBase, padding: 16, gridColumn: "span 12", cursor: "pointer" }}
+          onClick={() => nav("/plant-production")}
+        >
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
+              <div style={subStyle}>
+                Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t
               </div>
-              <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/paradas")}>
-                Abrir Paradas
-              </button>
             </div>
+            <span
+              style={{
+                height: 32,
+                borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(255,255,255,0.06)",
+                padding: "0 12px",
+                display: "inline-flex",
+                alignItems: "center",
+                fontWeight: 900,
+                color: "rgba(255,255,255,0.82)",
+              }}
+            >
+              {prodDay?.updated_at ? "Atualizado" : "—"}
+            </span>
+          </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-              <MiniStat
-                icon="⏸"
-                title="Última Parada"
-                value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
-                sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
-                onClick={() => nav("/paradas")}
-              />
+          <div style={{ height: 420 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <YAxis
+                  yAxisId="left"
+                  tickFormatter={(v) => fmtBR0(Number(v) || 0)}
+                  tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  domain={[0, 100]}
+                  tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
+                  tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                />
+                <Tooltip
+                  formatter={(v: any, name: any) =>
+                    name === "freq" ? `${fmtBR0(Number(v) || 0)}%` : fmtBR1(Number(v) || 0)
+                  }
+                  contentStyle={{
+                    background: "rgba(0,0,0,0.86)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 14,
+                    boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
+                  }}
+                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                />
+                <Legend
+                  verticalAlign="bottom"
+                  height={30}
+                  iconType="circle"
+                  formatter={(value) => (value === "freq" ? "Frequência (%)" : value === "ton" ? "Ton/H" : value)}
+                  wrapperStyle={{ color: "#00CCFF", fontWeight: 900 }}
+                />
 
-              <MiniStat icon="📌" title="Total de Paradas" value={String(totalStops)} sub={`Dia ${brDate(day)}`} onClick={() => nav("/paradas")} />
+                <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={38}>
+                  <LabelList dataKey="ton" content={BarValueLabel} />
+                </Bar>
 
-              <MiniStat
-                icon="⏱"
-                title="Último Horímetro (BT-01)"
-                value={
-                  lastHorimetroBT01
-                    ? `${fmtBR1(lastHorimetroBT01.horimetro_ini)} → ${fmtBR1(lastHorimetroBT01.horimetro_fim)}`
-                    : "—"
-                }
-                sub={
-                  lastHorimetroBT01
-                    ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
-                    : "Sem registros"
-                }
-                onClick={() => nav("/horimetros")}
-              />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="freq"
+                  stroke="#ff9f1a"
+                  strokeWidth={3}
+                  dot={{ r: 4 }}
+                  activeDot={{ r: 5 }}
+                >
+                  <LabelList dataKey="freq" content={FreqPointLabel} />
+                </Line>
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* TAXA (4 col) */}
+        <div style={{ ...cardBase, padding: 14, gridColumn: "span 4" }}>
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>Taxa Média</div>
+              <div style={subStyle}>Freq% últimas horas</div>
+            </div>
+            <span
+              style={{
+                height: 32,
+                borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(255,255,255,0.06)",
+                padding: "0 12px",
+                display: "inline-flex",
+                alignItems: "center",
+                fontWeight: 900,
+                color: "rgba(255,255,255,0.82)",
+              }}
+            >
+              {fmtBR0(levelAvg)}%
+            </span>
+          </div>
+
+          <div style={{ height: 190 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <Tooltip
+                  formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
+                  contentStyle={{
+                    background: "rgba(0,0,0,0.86)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 14,
+                  }}
+                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                />
+                <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* META (4 col) */}
+        <div style={{ ...cardBase, padding: 14, gridColumn: "span 4", cursor: "pointer" }} onClick={() => nav("/plant-production")}>
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>Produção do dia</div>
+              <div style={subStyle}>Meta: {fmtBR0(META_DIA)} t</div>
             </div>
           </div>
 
-          {/* PRODUÇÃO HORÁRIA */}
-          <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/plant-production")}>
-            <div style={headerStyle}>
-              <div>
-                <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
-                <div style={subStyle}>
-                  Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t
-                </div>
-              </div>
-              <span
-                style={{
-                  height: 36,
-                  borderRadius: 999,
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.06)",
-                  padding: "0 12px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  fontWeight: 900,
-                  color: "rgba(255,255,255,0.82)",
-                }}
-              >
-                {prodDay?.updated_at ? "Atualizado" : "—"}
-              </span>
-            </div>
+          <div style={{ height: 190, position: "relative" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
+                <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
+              </RadialBarChart>
+            </ResponsiveContainer>
 
-            <div style={{ height: 320 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                  <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
-                  <YAxis
-                    yAxisId="left"
-                    tickFormatter={(v) => fmtBR0(Number(v) || 0)}
-                    tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    domain={[0, 100]}
-                    tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
-                    tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
-                  />
-                  <Tooltip
-                    formatter={(v: any, name: any) => (name === "freq" ? `${fmtBR0(Number(v) || 0)}%` : fmtBR1(Number(v) || 0))}
-                    contentStyle={{
-                      background: "rgba(0,0,0,0.86)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 14,
-                      boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
-                    }}
-                    labelStyle={{ color: "rgba(255,255,255,0.86)" }}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    height={30}
-                    iconType="circle"
-                    formatter={(value) => (value === "freq" ? "Frequência (%)" : value === "ton" ? "Ton/H" : value)}
-                    wrapperStyle={{ color: "#00CCFF", fontWeight: 900 }}
-                  />
-
-                  <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={38}>
-                    <LabelList dataKey="ton" content={BarValueLabel} />
-                  </Bar>
-
-                  <Line yAxisId="right" type="monotone" dataKey="freq" stroke="#ff9f1a" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 5 }}>
-                    <LabelList dataKey="freq" content={FreqPointLabel} />
-                  </Line>
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* BOTTOM */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.35fr 1fr", gap: 14 }}>
-            {/* TOP PRODUCTS (horímetros) */}
-            <div style={{ ...cardBase, padding: 14 }}>
-              <div style={headerStyle}>
-                <div>
-                  <div style={titleStyle}>Horímetros</div>
-                  <div style={subStyle}>BT-02 • PN-02 • PN-01 • EH-08</div>
-                </div>
-                <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
-                  Abrir Horímetros
-                </button>
-              </div>
-
-              <div style={{ display: "grid", gap: 10 }}>
-                {topProductsHorimetros.map(({ eq, row }) => (
-                  <div
-                    key={eq}
-                    style={{
-                      borderRadius: 16,
-                      border: "1px solid rgba(255,255,255,0.10)",
-                      background: "rgba(0,0,0,0.18)",
-                      padding: 12,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div
-                        style={{
-                          width: 52,
-                          height: 34,
-                          borderRadius: 12,
-                          border: "1px solid rgba(255,159,26,0.20)",
-                          background: "rgba(255,159,26,0.10)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 12,
-                          fontWeight: 950,
-                          color: "rgba(255,255,255,0.85)",
-                        }}
-                      >
-                        {eq}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
-                          {row ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}` : "—"}
-                        </div>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
-                          {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button className="mp-btn" style={{ height: 34 }} onClick={() => nav("/horimetros")}>
-                      Ver
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* LAST 7 DAYS */}
-            <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/last7days")}>
-              <div style={headerStyle}>
-                <div>
-                  <div style={titleStyle}>Últimos 7 dias</div>
-                  <div style={subStyle}>Total por dia</div>
-                </div>
-              </div>
-
-              <div style={{ height: 200 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                    <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
-                    <YAxis hide />
-                    <Tooltip
-                      formatter={(v: any) => fmtBR0(Number(v) || 0)}
-                      contentStyle={{
-                        background: "rgba(0,0,0,0.86)",
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        borderRadius: 14,
-                      }}
-                      labelStyle={{ color: "rgba(255,255,255,0.86)" }}
-                    />
-                    <Area type="monotone" dataKey="total" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
-                  </AreaChart>
-                </ResponsiveContainer>
+            <div style={{ position: "absolute", left: 0, right: 0, top: 78, textAlign: "center", pointerEvents: "none" }}>
+              <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMeta)}%</div>
+              <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
+              <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                {fmtBR0(totalTonDay)} t
               </div>
             </div>
           </div>
         </div>
 
-        {/* RIGHT */}
-        <div style={{ gridColumn: "span 3 / span 3", display: "grid", gap: 14 }}>
-          {/* GAUGE */}
-          <div style={{ ...cardBase, padding: 14, cursor: "pointer" }} onClick={() => nav("/plant-production")}>
-            <div style={headerStyle}>
-              <div>
-                <div style={titleStyle}>Produção do dia</div>
-                <div style={subStyle}>Meta: {fmtBR0(META_DIA)} t</div>
-              </div>
+        {/* MÉDIA (4 col) */}
+        <div style={{ ...cardBase, padding: 14, gridColumn: "span 4" }}>
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>Média/Hora</div>
+              <div style={subStyle}>Média de produção por hora</div>
             </div>
+            <span
+              style={{
+                height: 32,
+                borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(255,255,255,0.06)",
+                padding: "0 12px",
+                display: "inline-flex",
+                alignItems: "center",
+                fontWeight: 900,
+                color: "rgba(255,255,255,0.82)",
+              }}
+            >
+              {fmtBR1(avgTonPerHour)} t/h
+            </span>
+          </div>
 
-            <div style={{ height: 210, position: "relative" }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
-                  <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
-                </RadialBarChart>
-              </ResponsiveContainer>
+          <div style={{ height: 190 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={3} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <YAxis hide />
+                <Tooltip
+                  formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
+                  contentStyle={{
+                    background: "rgba(0,0,0,0.86)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 14,
+                  }}
+                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                />
+                <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
 
-              <div style={{ position: "absolute", left: 0, right: 0, top: 86, textAlign: "center", pointerEvents: "none" }}>
-                <div style={{ fontSize: 34, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMeta)}%</div>
-                <div style={{ ...subStyle, marginTop: 4 }}>Atingimento</div>
-                <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>{fmtBR0(totalTonDay)} t</div>
-              </div>
+          <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+            Considera somente horas preenchidas (Ton/H &gt; 0).
+          </div>
+        </div>
+
+        {/* ÚLTIMOS 7 DIAS (6 col) */}
+        <div style={{ ...cardBase, padding: 14, gridColumn: "span 6", cursor: "pointer" }} onClick={() => nav("/last7days")}>
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>Últimos 7 dias</div>
+              <div style={subStyle}>Total por dia</div>
             </div>
           </div>
 
-          {/* TAXA */}
-          <div style={{ ...cardBase, padding: 14 }}>
-            <div style={headerStyle}>
-              <div>
-                <div style={titleStyle}>Taxa Média</div>
-                <div style={subStyle}>Freq% últimas horas</div>
-              </div>
-              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>{fmtBR0(levelAvg)}%</span>
+          <div style={{ height: 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
+                <YAxis hide />
+                <Tooltip
+                  formatter={(v: any) => fmtBR0(Number(v) || 0)}
+                  contentStyle={{
+                    background: "rgba(0,0,0,0.86)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 14,
+                  }}
+                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                />
+                <Area type="monotone" dataKey="total" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* HOJE (6 col) */}
+        <div style={{ ...cardBase, padding: 14, gridColumn: "span 6" }}>
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>Hoje</div>
+              <div style={subStyle}>Resumo • Paradas + Horímetro</div>
             </div>
 
-            <div style={{ height: 170 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                  <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
-                  <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
-                  <Tooltip
-                    formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
-                    contentStyle={{ background: "rgba(0,0,0,0.86)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}
-                    labelStyle={{ color: "rgba(255,255,255,0.86)" }}
-                  />
-                  <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a" />
-                </BarChart>
-              </ResponsiveContainer>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/paradas")}>
+                Abrir Paradas
+              </button>
+              <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
+                Abrir Horímetros
+              </button>
             </div>
           </div>
 
-          {/* INSIGHTS */}
-          <div style={{ ...cardBase, padding: 14 }}>
-            <div style={headerStyle}>
-              <div>
-                <div style={titleStyle}>Média/Hora</div>
-                <div style={subStyle}>Média de produção por hora</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            <MiniStat
+              icon="⏸"
+              title="Última Parada"
+              value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
+              sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
+              onClick={() => nav("/paradas")}
+            />
+            <MiniStat
+              icon="📌"
+              title="Total de Paradas"
+              value={String(totalStops)}
+              sub={`Dia ${brDate(day)}`}
+              onClick={() => nav("/paradas")}
+            />
+            <MiniStat
+              icon="⏱"
+              title="Último Horímetro (BT-01)"
+              value={
+                lastHorimetroBT01
+                  ? `${fmtBR1(lastHorimetroBT01.horimetro_ini)} → ${fmtBR1(lastHorimetroBT01.horimetro_fim)}`
+                  : "—"
+              }
+              sub={
+                lastHorimetroBT01
+                  ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
+                  : "Sem registros"
+              }
+              onClick={() => nav("/horimetros")}
+            />
+          </div>
+        </div>
+
+        {/* HORÍMETROS (12 col) */}
+        <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>Horímetros</div>
+              <div style={subStyle}>BT-02 • PN-02 • PN-01 • EH-08</div>
+            </div>
+            <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
+              Abrir Horímetros
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {topProductsHorimetros.map(({ eq, row }) => (
+              <div
+                key={eq}
+                style={{
+                  borderRadius: 16,
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(0,0,0,0.18)",
+                  padding: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{
+                      width: 52,
+                      height: 34,
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,159,26,0.20)",
+                      background: "rgba(255,159,26,0.10)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 12,
+                      fontWeight: 950,
+                      color: "rgba(255,255,255,0.85)",
+                    }}
+                  >
+                    {eq}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
+                      {row ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}` : "—"}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                      {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
+                    </div>
+                  </div>
+                </div>
+
+                <button className="mp-btn" style={{ height: 34 }} onClick={() => nav("/horimetros")}>
+                  Ver
+                </button>
               </div>
-              <span style={{ ...smallPill, borderColor: "rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", height: 32 }}>{fmtBR1(avgTonPerHour)} t/h</span>
-            </div>
-
-            <div style={{ height: 160 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                  <XAxis dataKey="period" interval={3} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
-                  <YAxis hide />
-                  <Tooltip
-                    formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
-                    contentStyle={{ background: "rgba(0,0,0,0.86)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}
-                    labelStyle={{ color: "rgba(255,255,255,0.86)" }}
-                  />
-                  <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
-              Considera somente horas preenchidas (Ton/H &gt; 0).
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -1370,6 +1439,7 @@ function MiniStat({
         (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,159,26,0.22)";
       }}
       onMouseLeave={(e) => {
+        if (!onClick) return;
         (e.currentTarget as HTMLDivElement).style.transform = "translateY(0px)";
         (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,0.10)";
       }}
@@ -1393,7 +1463,9 @@ function MiniStat({
         <div style={{ fontWeight: 900, color: "rgba(255,255,255,0.78)", fontSize: 13 }}>{title}</div>
       </div>
 
-      <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.01, color: "rgba(255,255,255,0.92)" }}>{value}</div>
+      <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.01, color: "rgba(255,255,255,0.92)" }}>
+        {value}
+      </div>
       <div style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>{sub}</div>
     </div>
   );
