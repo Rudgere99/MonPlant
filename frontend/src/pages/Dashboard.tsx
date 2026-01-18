@@ -73,6 +73,33 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
+// ==== Últimos 7 dias: risquinho + valor no ponto da curva ====
+const Last7PointLabel = (props: any) => {
+  const { x, y, value } = props || {};
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+
+  const cx = Number(x) || 0;
+  const cy = Number(y) || 0;
+  const label = fmtBR0(n);
+
+  return (
+    <g>
+      <line x1={cx} y1={cy} x2={cx} y2={cy - 10} stroke="rgba(255,255,255,0.55)" strokeWidth={2} />
+      <text
+        x={cx}
+        y={cy - 14}
+        textAnchor="middle"
+        fill="rgba(255,255,255,0.90)"
+        fontSize={12}
+        fontWeight={950}
+      >
+        {label}
+      </text>
+    </g>
+  );
+};
+
 /**
  * Normaliza period do backend para "HH-HH"
  * Aceita: "00-01", "0-1", "00:00-01:00", "00:00–01:00", "00:00 — 01:00"
@@ -175,29 +202,6 @@ const FreqPointLabel = (props: any) => {
       fontWeight={900}
     >
       {label}
-    </text>
-  );
-};
-
-// ==== Tick do gráfico "Últimos 7 dias" (mostra dia + acumulado) ====
-const Last7Tick = (props: any) => {
-  const { x, y, payload } = props || {};
-  const day = String(payload?.value ?? "");
-  const total = Number(payload?.payload?.total ?? 0);
-
-  return (
-    <text
-      x={x}
-      y={y}
-      textAnchor="middle"
-      fill="rgba(255,255,255,0.55)"
-      fontSize={12}
-      fontWeight={800}
-    >
-      <tspan x={x} dy="0">{day}</tspan>
-      <tspan x={x} dy="14" fill="rgba(255,255,255,0.80)" fontWeight={900}>
-        {fmtBR0(total)}
-      </tspan>
     </text>
   );
 };
@@ -419,78 +423,7 @@ export default function Dashboard() {
     }));
   }, [last7]);
 
-  // Tick do grafico 'Ultimos 7 dias': dia + total (usa index para pegar o total real)
-  const Last7TickInner = (props: any) => {
-    const { x, y, payload } = props || {};
-    const day = String(payload?.value ?? "");
-    const i = Number(payload?.index ?? -1);
-    const total = i >= 0 ? Number((last7Series as any)[i]?.total ?? 0) : 0;
 
-    return (
-      <text
-        x={x}
-        y={y}
-        textAnchor="middle"
-        fill="rgba(255,255,255,0.55)"
-        fontSize={12}
-        fontWeight={800}
-      >
-        <tspan x={x} dy="0">{day}</tspan>
-        <tspan x={x} dy="14" fill="rgba(255,255,255,0.80)" fontWeight={900}>
-          {fmtBR0(total)}
-        </tspan>
-      </text>
-    );
-  };
-
-  // Tick do gráfico "Últimos 7 dias": dia no eixo + marcador + acumulado acima (puxa pelo índice)
-  const last7Tick = (props: any) => {
-    const { x, y, payload } = props || {};
-    const day = String(payload?.value ?? "");
-    const i = Number(payload?.index ?? -1);
-    const total = i >= 0 ? Number(last7Series?.[i]?.total ?? 0) : 0;
-
-    const cx = Number(x) || 0;
-    const cy = Number(y) || 0;
-
-    return (
-      <g>
-        {/* dia */}
-        <text
-          x={cx}
-          y={cy + 12}
-          textAnchor="middle"
-          fill="rgba(255,255,255,0.55)"
-          fontSize={12}
-          fontWeight={800}
-        >
-          {day}
-        </text>
-
-        {/* risquinho no eixo */}
-        <line
-          x1={cx}
-          y1={cy - 2}
-          x2={cx}
-          y2={cy - 12}
-          stroke="rgba(255,255,255,0.28)"
-          strokeWidth={1}
-        />
-
-        {/* acumulado acima */}
-        <text
-          x={cx}
-          y={cy - 16}
-          textAnchor="middle"
-          fill="rgba(255,255,255,0.86)"
-          fontSize={12}
-          fontWeight={900}
-        >
-          {fmtBR0(total)}
-        </text>
-      </g>
-    );
-  };
 
 
   const totalStops = useMemo(() => (stops || []).length, [stops]);
@@ -1023,9 +956,14 @@ export default function Dashboard() {
 
                         <div style={{ height: 180 }}>
                           <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={last7Series} margin={{ top: 8, right: 22, left: -10, bottom: 0 }}>
+                            <AreaChart data={last7Series} margin={{ top: 26, right: 34, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="day" height={46} tick={last7Tick} padding={{ left: 8, right: 18 }} />
+                              <XAxis
+                                dataKey="day"
+                                tickFormatter={(v) => dayLabel(String(v || ""))}
+                                tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
+                                padding={{ left: 10, right: 22 }}
+                              />
                               <YAxis hide />
                               <Tooltip
                                 formatter={(v: any) => fmtBR0(Number(v) || 0)}
@@ -1036,7 +974,17 @@ export default function Dashboard() {
                                 }}
                                 labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                               />
-                              <Area type="monotone" dataKey="total" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+                              <Area
+                                type="monotone"
+                                dataKey="total"
+                                stroke="#ff9f1a"
+                                fill="rgba(255,159,26,0.14)"
+                                strokeWidth={2.5}
+                                dot={{ r: 3, strokeWidth: 2, fill: "#0b1220", stroke: "#ff9f1a" }}
+                                activeDot={{ r: 4, strokeWidth: 2, fill: "#0b1220", stroke: "#ff9f1a" }}
+                              >
+                                <LabelList dataKey="total" content={Last7PointLabel} />
+                              </Area>
                             </AreaChart>
                           </ResponsiveContainer>
                         </div>
@@ -1376,9 +1324,14 @@ export default function Dashboard() {
 
           <div style={{ height: 180 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={last7Series} margin={{ top: 8, right: 22, left: -10, bottom: 0 }}>
+              <AreaChart data={last7Series} margin={{ top: 26, right: 34, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="day" height={46} tick={last7Tick} padding={{ left: 8, right: 18 }} />
+                <XAxis
+                  dataKey="day"
+                  tickFormatter={(v) => dayLabel(String(v || ""))}
+                  tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
+                  padding={{ left: 10, right: 22 }}
+                />
                 <YAxis hide />
                 <Tooltip
                   formatter={(v: any) => fmtBR0(Number(v) || 0)}
@@ -1389,7 +1342,17 @@ export default function Dashboard() {
                   }}
                   labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                 />
-                <Area type="monotone" dataKey="total" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+                <Area
+                  type="monotone"
+                  dataKey="total"
+                  stroke="#ff9f1a"
+                  fill="rgba(255,159,26,0.14)"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, strokeWidth: 2, fill: "#0b1220", stroke: "#ff9f1a" }}
+                  activeDot={{ r: 4, strokeWidth: 2, fill: "#0b1220", stroke: "#ff9f1a" }}
+                >
+                  <LabelList dataKey="total" content={Last7PointLabel} />
+                </Area>
               </AreaChart>
             </ResponsiveContainer>
           </div>
