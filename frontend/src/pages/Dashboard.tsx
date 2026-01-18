@@ -75,11 +75,18 @@ function pad2(n: number) {
 
 // ==== Últimos 7 dias: risquinho + valor no ponto da curva ====
 const Last7PointLabel = (props: any) => {
-  const { x, y, value } = props || {};
+  const { x, y, value, viewBox } = props || {};
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return null;
 
-  const cx = Number(x) || 0;
+  // Recharts pode cortar o primeiro/ultimo label. Clamp dentro do viewBox.
+  const vbX = Number(viewBox?.x) || 0;
+  const vbW = Number(viewBox?.width) || 0;
+  const minX = vbW ? vbX + 18 : -Infinity;
+  const maxX = vbW ? vbX + vbW - 18 : Infinity;
+
+  const rawX = Number(x) || 0;
+  const cx = Math.max(minX, Math.min(maxX, rawX));
   const cy = Number(y) || 0;
   const label = fmtBR0(n);
 
@@ -956,13 +963,13 @@ export default function Dashboard() {
 
                         <div style={{ height: 180 }}>
                           <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={last7Series} margin={{ top: 26, right: 34, left: -10, bottom: 0 }}>
+                            <AreaChart data={last7Series} margin={{ top: 28, right: 44, left: 10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                               <XAxis
                                 dataKey="day"
                                 tickFormatter={(v) => dayLabel(String(v || ""))}
                                 tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
-                                padding={{ left: 10, right: 22 }}
+                                padding={{ left: 26, right: 32 }}
                               />
                               <YAxis hide />
                               <Tooltip
@@ -1324,13 +1331,13 @@ export default function Dashboard() {
 
           <div style={{ height: 180 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={last7Series} margin={{ top: 26, right: 34, left: -10, bottom: 0 }}>
+              <AreaChart data={last7Series} margin={{ top: 28, right: 44, left: 10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="day"
                   tickFormatter={(v) => dayLabel(String(v || ""))}
                   tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
-                  padding={{ left: 10, right: 22 }}
+                padding={{ left: 26, right: 32 }}
                 />
                 <YAxis hide />
                 <Tooltip
