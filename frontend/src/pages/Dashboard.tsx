@@ -591,48 +591,59 @@ export default function Dashboard() {
                   Selecionar
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                  {exportItems.map((it) => {
-                    const Icon = it.icon;
-                    const on = !!exportSel[it.key];
+<div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+  {exportItems.map((it) => {
+    const Icon = it.icon;
+    const on = !!exportSel[it.key];
 
-                    return (
-                      <button
-                        key={it.key}
-                        onClick={() => setExportSel((s) => ({ ...s, [it.key]: !on }))}
-                        title={`${it.label} • ${it.hint}`}
-                        style={{
-                          height: 58,
-                          borderRadius: 16,
-                          border: "1px solid " + (on ? "rgba(255,159,26,0.30)" : "rgba(255,255,255,0.10)"),
-                          background: on ? "rgba(255,159,26,0.12)" : "rgba(255,255,255,0.04)",
-                          display: "grid",
-                          placeItems: "center",
-                          cursor: "pointer",
-                          color: "rgba(255,255,255,0.92)",
-                        }}
-                      >
-                        <div style={{ display: "grid", placeItems: "center", gap: 6 }}>
-                          <Icon size={18} />
-                          <div
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 950,
-                              color: on ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.70)",
-                            }}
-                          >
-                            {it.label}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+    return (
+      <button
+        key={it.key}
+        onClick={() => setExportSel((s) => ({ ...s, [it.key]: !on }))}
+        title={`${it.label} • ${it.hint}`}
+        style={{
+          height: 56,
+          width: "100%",
+          borderRadius: 16,
+          border: "1px solid " + (on ? "rgba(255,159,26,0.30)" : "rgba(255,255,255,0.10)"),
+          background: on ? "rgba(255,159,26,0.12)" : "rgba(255,255,255,0.04)",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "0 14px",
+          cursor: "pointer",
+          color: "rgba(255,255,255,0.92)",
+          textAlign: "left",
+        }}
+      >
+        <span
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 12,
+            display: "grid",
+            placeItems: "center",
+            border: "1px solid " + (on ? "rgba(255,159,26,0.25)" : "rgba(255,255,255,0.10)"),
+            background: on ? "rgba(255,159,26,0.10)" : "rgba(0,0,0,0.18)",
+            flex: "0 0 auto",
+          }}
+        >
+          <Icon size={18} />
+        </span>
 
-                <div style={{ marginTop: 12, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
-                  Dica: a área à direita reorganiza automaticamente.
-                </div>
-              </div>
+        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.05 }}>
+          <div style={{ fontSize: 13, fontWeight: 950, color: on ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.75)" }}>
+            {it.label}
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.45)" }}>
+            {it.hint}
+          </div>
+        </div>
+      </button>
+    );
+  })}
+</div>
+
 
               {/* right: preview (capturado) */}
               <div style={{ ...panel, overflow: "auto" }}>
