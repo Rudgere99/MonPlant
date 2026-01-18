@@ -587,7 +587,7 @@ export default function Dashboard() {
             <div style={modalBody}>
               {/* left: selector */}
               <div style={{ ...panel, overflow: "auto" }}>
-                <div style={{ fontWeight: 950, marginBottom: 10, color: "rgba(255,255,255,0.9)" }}>
+                <div style={{ fontWeight: 750, marginBottom: 10, color: "rgba(255,255,255,0.9)" }}>
                   Selecionar
                 </div>
 
@@ -602,7 +602,7 @@ export default function Dashboard() {
                         onClick={() => setExportSel((s) => ({ ...s, [it.key]: !on }))}
                         title={`${it.label} • ${it.hint}`}
                         style={{
-                          height: 26,
+                          height: 56,
                           width: "100%",
                           borderRadius: 16,
                           border: "1px solid " + (on ? "rgba(255,159,26,0.30)" : "rgba(255,255,255,0.10)"),
