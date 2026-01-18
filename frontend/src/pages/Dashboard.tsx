@@ -9,6 +9,8 @@ import {
   Percent,
   Timer,
   TrendingUp,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -421,6 +423,36 @@ export default function Dashboard() {
     if (!filled.length) return 0;
     const sum = filled.reduce((acc, r) => acc + (Number(r.ton) || 0), 0);
     return sum / filled.length;
+  }, [hourlySeries]);
+
+  // tendência da última hora preenchida vs penúltima (para setinha no card "Média/Hora")
+  const avgHourTrend = useMemo(() => {
+    const filled = (hourlySeries || []).filter((r) => (Number(r.ton) || 0) > 0);
+    if (filled.length < 2) {
+      return {
+        dir: "na" as "up" | "down" | "flat" | "na",
+        delta: 0,
+        lastPeriod: "",
+        prevPeriod: "",
+      };
+    }
+    const prev = filled[filled.length - 2];
+    const last = filled[filled.length - 1];
+    const prevTon = Number(prev?.ton) || 0;
+    const lastTon = Number(last?.ton) || 0;
+    const delta = lastTon - prevTon;
+    const abs = Math.abs(delta);
+
+    // evita piscar por diferenças muito pequenas
+    const EPS = 0.05;
+    const dir: "up" | "down" | "flat" = abs <= EPS ? "flat" : delta > 0 ? "up" : "down";
+
+    return {
+      dir,
+      delta,
+      lastPeriod: String(last?.period || ""),
+      prevPeriod: String(prev?.period || ""),
+    };
   }, [hourlySeries]);
 
   const last7Series = useMemo(() => {
@@ -912,28 +944,83 @@ export default function Dashboard() {
                             <div style={titleStyle}>Média/Hora</div>
                             <div style={subStyle}>Média de produção por hora</div>
                           </div>
-                          <span
-                            style={{
-                              height: 32,
-                              borderRadius: 999,
-                              border: "1px solid rgba(255,255,255,0.12)",
-                              background: "rgba(255,255,255,0.06)",
-                              padding: "0 12px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              fontWeight: 900,
-                              color: "rgba(255,255,255,0.82)",
-                            }}
-                          >
-                            {fmtBR1(avgTonPerHour)} t/h
-                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span
+                              style={{
+                                height: 32,
+                                borderRadius: 999,
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                background: "rgba(255,255,255,0.06)",
+                                padding: "0 12px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                fontWeight: 900,
+                                color: "rgba(255,255,255,0.82)",
+                              }}
+                            >
+                              {fmtBR1(avgTonPerHour)} t/h
+                            </span>
+
+                            <span
+                              title={
+                                avgHourTrend.dir === "na"
+                                  ? "Sem comparação (precisa de pelo menos 2 horas preenchidas)"
+                                  : `Comparação: ${avgHourTrend.prevPeriod} → ${avgHourTrend.lastPeriod}`
+                              }
+                              style={{
+                                height: 32,
+                                borderRadius: 999,
+                                border:
+                                  avgHourTrend.dir === "up"
+                                    ? "1px solid rgba(34,197,94,0.40)"
+                                    : avgHourTrend.dir === "down"
+                                      ? "1px solid rgba(239,68,68,0.40)"
+                                      : "1px solid rgba(255,255,255,0.12)",
+                                background:
+                                  avgHourTrend.dir === "up"
+                                    ? "rgba(34,197,94,0.14)"
+                                    : avgHourTrend.dir === "down"
+                                      ? "rgba(239,68,68,0.14)"
+                                      : "rgba(255,255,255,0.06)",
+                                padding: "0 10px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                fontWeight: 950,
+                                color:
+                                  avgHourTrend.dir === "up"
+                                    ? "rgba(34,197,94,0.95)"
+                                    : avgHourTrend.dir === "down"
+                                      ? "rgba(239,68,68,0.95)"
+                                      : "rgba(255,255,255,0.75)",
+                              }}
+                            >
+                              {avgHourTrend.dir === "up" ? (
+                                <TrendingUp size={16} />
+                              ) : avgHourTrend.dir === "down" ? (
+                                <TrendingDown size={16} />
+                              ) : (
+                                <Minus size={16} />
+                              )}
+
+                              {avgHourTrend.dir === "na" ? (
+                                "—"
+                              ) : avgHourTrend.dir === "flat" ? (
+                                "0"
+                              ) : avgHourTrend.delta > 0 ? (
+                                `+${fmtBR1(Math.abs(avgHourTrend.delta))}`
+                              ) : (
+                                `-${fmtBR1(Math.abs(avgHourTrend.delta))}`
+                              )}
+                            </span>
+                          </div>
                         </div>
 
                         <div style={{ height: 190 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <XAxis dataKey="period" interval={3} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis hide />
                               <Tooltip
                                 formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
@@ -1278,21 +1365,76 @@ export default function Dashboard() {
               <div style={titleStyle}>Média/Hora</div>
               <div style={subStyle}>Média de produção por hora</div>
             </div>
-            <span
-              style={{
-                height: 32,
-                borderRadius: 999,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(255,255,255,0.06)",
-                padding: "0 12px",
-                display: "inline-flex",
-                alignItems: "center",
-                fontWeight: 900,
-                color: "rgba(255,255,255,0.82)",
-              }}
-            >
-              {fmtBR1(avgTonPerHour)} t/h
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span
+                style={{
+                  height: 32,
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.06)",
+                  padding: "0 12px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  fontWeight: 900,
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
+                {fmtBR1(avgTonPerHour)} t/h
+              </span>
+
+              <span
+                title={
+                  avgHourTrend.dir === "na"
+                    ? "Sem comparação (precisa de pelo menos 2 horas preenchidas)"
+                    : `Comparação: ${avgHourTrend.prevPeriod} → ${avgHourTrend.lastPeriod}`
+                }
+                style={{
+                  height: 32,
+                  borderRadius: 999,
+                  border:
+                    avgHourTrend.dir === "up"
+                      ? "1px solid rgba(34,197,94,0.40)"
+                      : avgHourTrend.dir === "down"
+                        ? "1px solid rgba(239,68,68,0.40)"
+                        : "1px solid rgba(255,255,255,0.12)",
+                  background:
+                    avgHourTrend.dir === "up"
+                      ? "rgba(34,197,94,0.14)"
+                      : avgHourTrend.dir === "down"
+                        ? "rgba(239,68,68,0.14)"
+                        : "rgba(255,255,255,0.06)",
+                  padding: "0 10px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontWeight: 950,
+                  color:
+                    avgHourTrend.dir === "up"
+                      ? "rgba(34,197,94,0.95)"
+                      : avgHourTrend.dir === "down"
+                        ? "rgba(239,68,68,0.95)"
+                        : "rgba(255,255,255,0.75)",
+                }}
+              >
+                {avgHourTrend.dir === "up" ? (
+                  <TrendingUp size={16} />
+                ) : avgHourTrend.dir === "down" ? (
+                  <TrendingDown size={16} />
+                ) : (
+                  <Minus size={16} />
+                )}
+
+                {avgHourTrend.dir === "na" ? (
+                  "—"
+                ) : avgHourTrend.dir === "flat" ? (
+                  "0"
+                ) : avgHourTrend.delta > 0 ? (
+                  `+${fmtBR1(Math.abs(avgHourTrend.delta))}`
+                ) : (
+                  `-${fmtBR1(Math.abs(avgHourTrend.delta))}`
+                )}
+              </span>
+            </div>
           </div>
 
           <div style={{ height: 190 }}>
