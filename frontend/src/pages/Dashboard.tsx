@@ -443,28 +443,52 @@ export default function Dashboard() {
     );
   };
 
-
-  // Tick do gráfico "Últimos 7 dias": mostra dia + acumulado (puxa pelo índice)
+  // Tick do gráfico "Últimos 7 dias": dia no eixo + marcador + acumulado acima (puxa pelo índice)
   const last7Tick = (props: any) => {
     const { x, y, payload } = props || {};
     const day = String(payload?.value ?? "");
     const i = Number(payload?.index ?? -1);
     const total = i >= 0 ? Number(last7Series?.[i]?.total ?? 0) : 0;
 
+    const cx = Number(x) || 0;
+    const cy = Number(y) || 0;
+
     return (
-      <text
-        x={x}
-        y={y}
-        textAnchor="middle"
-        fill="rgba(255,255,255,0.55)"
-        fontSize={12}
-        fontWeight={800}
-      >
-        <tspan x={x} dy="0">{day}</tspan>
-        <tspan x={x} dy="14" fill="rgba(255,255,255,0.80)" fontWeight={900}>
+      <g>
+        {/* dia */}
+        <text
+          x={cx}
+          y={cy + 12}
+          textAnchor="middle"
+          fill="rgba(255,255,255,0.55)"
+          fontSize={12}
+          fontWeight={800}
+        >
+          {day}
+        </text>
+
+        {/* risquinho no eixo */}
+        <line
+          x1={cx}
+          y1={cy - 2}
+          x2={cx}
+          y2={cy - 12}
+          stroke="rgba(255,255,255,0.28)"
+          strokeWidth={1}
+        />
+
+        {/* acumulado acima */}
+        <text
+          x={cx}
+          y={cy - 16}
+          textAnchor="middle"
+          fill="rgba(255,255,255,0.86)"
+          fontSize={12}
+          fontWeight={900}
+        >
           {fmtBR0(total)}
-        </tspan>
-      </text>
+        </text>
+      </g>
     );
   };
 
@@ -999,9 +1023,9 @@ export default function Dashboard() {
 
                         <div style={{ height: 180 }}>
                           <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+                            <AreaChart data={last7Series} margin={{ top: 8, right: 22, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="day" height={38} tick={last7Tick} />
+                              <XAxis dataKey="day" height={46} tick={last7Tick} padding={{ left: 8, right: 18 }} />
                               <YAxis hide />
                               <Tooltip
                                 formatter={(v: any) => fmtBR0(Number(v) || 0)}
@@ -1352,9 +1376,9 @@ export default function Dashboard() {
 
           <div style={{ height: 180 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+              <AreaChart data={last7Series} margin={{ top: 8, right: 22, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="day" height={38} tick={last7Tick} />
+                <XAxis dataKey="day" height={46} tick={last7Tick} padding={{ left: 8, right: 18 }} />
                 <YAxis hide />
                 <Tooltip
                   formatter={(v: any) => fmtBR0(Number(v) || 0)}
