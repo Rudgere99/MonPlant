@@ -729,7 +729,7 @@ export default function Dashboard() {
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis
                                 yAxisId="left"
                                 tickFormatter={(v) => fmtBR0(Number(v) || 0)}
