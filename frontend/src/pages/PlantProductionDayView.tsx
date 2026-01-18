@@ -354,85 +354,75 @@ export default function PlantProductionDayView() {
         </div>
 
         <div className="mp-card-b" style={{ height: 420 }}>
-         <ResponsiveContainer width="100%" height="100%">
-  <ComposedChart data={chartData} margin={{ top: 52, right: 24, bottom: 30, left: 10 }}>
-    <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 42, right: 18, left: 10, bottom: 22 }}>
+              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
 
-    <XAxis
-      dataKey="period"
-      tick={<CustomTick />}
-      interval={1}
-      height={44}
-      axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-      tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-    />
+              <XAxis
+                dataKey="period"
+                tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12, fontWeight: 800 }}
+                tickFormatter={(v) => periodShort(String(v))}
+              />
 
-    <YAxis
-      yAxisId="ton"
-      tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
-      axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-      tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-    />
+              <YAxis
+                yAxisId="ton"
+                tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+              />
 
-    <YAxis
-      yAxisId="freq"
-      orientation="right"
-      domain={[0, 100]}
-      tickFormatter={(v) => `${v}%`}
-      tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
-      axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-      tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-    />
+              <YAxis
+                yAxisId="freq"
+                orientation="right"
+                domain={[0, 100]}
+                tickFormatter={(v) => `${v}%`}
+                tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+              />
 
-    <Tooltip
-      formatter={(value: any, name: any) => {
-        if (value === null || value === undefined) return ["—", name];
-        if (name === "Frequência (%)") return [`${fmtBR0(Number(value))}%`, name];
-        if (name === "Ton/H") return [fmtBR1(Number(value)), name];
-        return [String(value), name];
-      }}
-      labelFormatter={(label) => `Faixa: ${label}`}
-      contentStyle={{
-        background: "rgba(0,0,0,0.86)",
-        border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: 12,
-      }}
-      labelStyle={{ color: "rgba(255,255,255,0.85)", fontWeight: 900 }}
-    />
+              <Tooltip
+                formatter={(value: any, name: any) => {
+                  if (value === null || value === undefined) return ["—", name];
+                  if (name === "Frequência (%)") return [`${fmtBR0(Number(value))}%`, name];
+                  if (name === "Ton/H") return [fmtBR1(Number(value)), name];
+                  return [String(value), name];
+                }}
+                labelFormatter={(label) => `Faixa: ${label}`}
+                contentStyle={{
+                  background: "rgba(0,0,0,0.86)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 12,
+                }}
+                labelStyle={{ color: "rgba(255,255,255,0.85)", fontWeight: 900 }}
+              />
 
-    <Legend wrapperStyle={{ color: "rgba(255,255,255,0.75)" }} />
+              <Legend wrapperStyle={{ color: "rgba(255,255,255,0.75)" }} />
 
-    <Bar
-      yAxisId="ton"
-      dataKey="ton"
-      name="Ton/H"
-      fill="#00D6FF"
-      radius={[10, 10, 0, 0]}
-      barSize={28}
-      maxBarSize={34}
-    >
-      <LabelList dataKey="ton" content={<TonLabel />} />
-    </Bar>
+              <Bar yAxisId="ton" dataKey="ton" name="Ton/H" fill="#22c55e" radius={[6, 6, 0, 0]} barSize={22}>
+                <LabelList dataKey="ton" content={<TonLabel />} />
+              </Bar>
 
-    <Line
-      yAxisId="freq"
-      type="monotone"
-      dataKey="freq"
-      name="Frequência (%)"
-      stroke="#FFA31A"
-      strokeWidth={3}
-      connectNulls={false}
-      dot={(p: any) => {
-        if (p?.payload?.freq === null || p?.payload?.freq === undefined) return null;
-        return <circle cx={p.cx} cy={p.cy} r={4} fill="#FFA31A" stroke="rgba(0,0,0,.6)" strokeWidth={2} />;
-      }}
-      activeDot={{ r: 6 }}
-    >
-      <LabelList dataKey="freq" content={<FreqLabel />} />
-    </Line>
-  </ComposedChart>
-</ResponsiveContainer>
-
+              <Line
+                yAxisId="freq"
+                type="monotone"
+                dataKey="freq"
+                name="Frequência (%)"
+                stroke="#f59e0b"
+                strokeWidth={3}
+                connectNulls={false}
+                dot={(p: any) => {
+                  if (p?.payload?.freq === null || p?.payload?.freq === undefined) return null;
+                  return (
+                    <circle cx={p.cx} cy={p.cy} r={4} fill="#f59e0b" stroke="rgba(0,0,0,.6)" strokeWidth={2} />
+                  );
+                }}
+                activeDot={{ r: 6 }}
+              >
+                <LabelList dataKey="freq" content={<FreqLabel />} />
+              </Line>
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
