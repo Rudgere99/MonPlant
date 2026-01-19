@@ -184,7 +184,7 @@ const FreqPointLabel = (props: any) => {
 
 // Label do gráfico "Últimos 7 dias": risquinho no ponto + valor acima (com clamp nas bordas)
 const Last7PointLabel = (props: any) => {
-  const { x, y, value, viewBox } = props || {};
+  const { x, y, cx: _cx, cy: _cy, width, height, value, viewBox } = props || {};
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return null;
 
@@ -192,19 +192,23 @@ const Last7PointLabel = (props: any) => {
   const pad = 22; // garante que 1º/último não fiquem "comidos"
   const minX = (Number(vb.x) || 0) + pad;
   const maxX = (Number(vb.x) || 0) + (Number(vb.width) || 0) - pad;
-  const cx0 = Number(x) || 0;
-  const cx = Math.max(minX, Math.min(maxX, cx0));
+  // Em LabelList, "x" pode vir como canto esquerdo do label.
+  // Preferimos coordenadas do ponto (cx/cy) quando disponíveis.
+  const cx0 = Number(_cx) || ((Number(x) || 0) + (Number(width) || 0) / 2);
+  const cy0 = Number(_cy) || ((Number(y) || 0) + (Number(height) || 0) / 2);
 
-  const cy0 = Number(y) || 0;
+  // Clamp só do TEXTO (pra não cortar nas bordas). O risquinho fica no ponto (bolinha).
+  const textX = Math.max(minX, Math.min(maxX, cx0));
+
   const tickTop = cy0 - 12;
   const textY = cy0 - 18;
   const label = fmtBR0(n);
 
   return (
     <g>
-      <line x1={cx} y1={cy0 - 2} x2={cx} y2={tickTop} stroke="rgba(255,255,255,0.45)" strokeWidth={1.2} />
+      <line x1={cx0} y1={cy0 - 2} x2={cx0} y2={tickTop} stroke="rgba(255,255,255,0.45)" strokeWidth={1.2} />
       <text
-        x={cx}
+        x={textX}
         y={textY}
         textAnchor="middle"
         fill="rgba(255,255,255,0.90)"
