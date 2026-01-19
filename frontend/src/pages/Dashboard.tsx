@@ -28,6 +28,7 @@ import {
   ComposedChart,
   Legend,
   LabelList,
+  ReferenceLine,
 } from "recharts";
 
 /* ===================== helpers ===================== */
@@ -74,40 +75,6 @@ function fmtBR1(n: number) {
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
-
-// ==== Últimos 7 dias: risquinho + valor no ponto da curva ====
-const Last7PointLabel = (props: any) => {
-  const { x, y, value, viewBox } = props || {};
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return null;
-
-  // Recharts pode cortar o primeiro/ultimo label. Clamp dentro do viewBox.
-  const vbX = Number(viewBox?.x) || 0;
-  const vbW = Number(viewBox?.width) || 0;
-  const minX = vbW ? vbX + 18 : -Infinity;
-  const maxX = vbW ? vbX + vbW - 18 : Infinity;
-
-  const rawX = Number(x) || 0;
-  const cx = Math.max(minX, Math.min(maxX, rawX));
-  const cy = Number(y) || 0;
-  const label = fmtBR0(n);
-
-  return (
-    <g>
-      <line x1={cx} y1={cy} x2={cx} y2={cy - 10} stroke="rgba(255,255,255,0.55)" strokeWidth={2} />
-      <text
-        x={cx}
-        y={cy - 14}
-        textAnchor="middle"
-        fill="rgba(255,255,255,0.90)"
-        fontSize={12}
-        fontWeight={950}
-      >
-        {label}
-      </text>
-    </g>
-  );
-};
 
 /**
  * Normaliza period do backend para "HH-HH"
@@ -411,12 +378,10 @@ export default function Dashboard() {
   }, [prodDay]);
 
   // ✅ garante respiro no eixo Y (Ton/H): maior valor + 120
-  const tonYAxisDomain = useMemo(() => {
+  const tonDomain = useMemo(() => {
     const maxTon = Math.max(...(hourlySeries || []).map((r) => Number(r.ton) || 0), 0);
-    const top = Math.max(120, maxTon + 120);
-    return [0, top] as [number, number];
+    return [0, Math.max(120, maxTon + 120)] as [number, number];
   }, [hourlySeries]);
-
 
   const avgTonPerHour = useMemo(() => {
     const filled = (hourlySeries || []).filter((r) => (Number(r.ton) || 0) > 0);
@@ -425,7 +390,16 @@ export default function Dashboard() {
     return sum / filled.length;
   }, [hourlySeries]);
 
-  // tendência da última hora preenchida vs penúltima (para setinha no card "Média/Hora")
+  const EXPECTED_TON_H = 363;
+
+  // garante que as linhas (esperada e media real) sempre aparecam no mini-grafico
+  const miniTonDomain = useMemo(() => {
+    const maxTon = Math.max(...(hourlySeries || []).map((r) => Number(r.ton) || 0), 0);
+    const maxRef = Math.max(maxTon, EXPECTED_TON_H, Number(avgTonPerHour) || 0);
+    return [0, Math.max(120, maxRef + 120)] as [number, number];
+  }, [hourlySeries, avgTonPerHour]);
+
+  // tendência da última hora preenchida vs penúltima (seta no card "Média/Hora")
   const avgHourTrend = useMemo(() => {
     const filled = (hourlySeries || []).filter((r) => (Number(r.ton) || 0) > 0);
     if (filled.length < 2) {
@@ -436,16 +410,15 @@ export default function Dashboard() {
         prevPeriod: "",
       };
     }
+
     const prev = filled[filled.length - 2];
     const last = filled[filled.length - 1];
     const prevTon = Number(prev?.ton) || 0;
     const lastTon = Number(last?.ton) || 0;
     const delta = lastTon - prevTon;
-    const abs = Math.abs(delta);
 
-    // evita piscar por diferenças muito pequenas
-    const EPS = 0.05;
-    const dir: "up" | "down" | "flat" = abs <= EPS ? "flat" : delta > 0 ? "up" : "down";
+    const EPS = 0.05; // evita piscar com diferenças minúsculas
+    const dir: "up" | "down" | "flat" = Math.abs(delta) <= EPS ? "flat" : delta > 0 ? "up" : "down";
 
     return {
       dir,
@@ -461,9 +434,6 @@ export default function Dashboard() {
       total: Number(x.total_ton) || 0,
     }));
   }, [last7]);
-
-
-
 
   const totalStops = useMemo(() => (stops || []).length, [stops]);
 
@@ -809,7 +779,7 @@ export default function Dashboard() {
                               <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis
                                 yAxisId="left"
-                                domain={tonYAxisDomain}
+                                domain={tonDomain}
                                 tickFormatter={(v) => fmtBR0(Number(v) || 0)}
                                 tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                               />
@@ -1016,15 +986,13 @@ export default function Dashboard() {
                                 <Minus size={16} />
                               )}
 
-                              {avgHourTrend.dir === "na" ? (
-                                "—"
-                              ) : avgHourTrend.dir === "flat" ? (
-                                "0"
-                              ) : avgHourTrend.delta > 0 ? (
-                                `+${fmtBR1(Math.abs(avgHourTrend.delta))}`
-                              ) : (
-                                `-${fmtBR1(Math.abs(avgHourTrend.delta))}`
-                              )}
+                              {avgHourTrend.dir === "na"
+                                ? "—"
+                                : avgHourTrend.dir === "flat"
+                                  ? "0"
+                                  : avgHourTrend.delta > 0
+                                    ? `+${fmtBR1(Math.abs(avgHourTrend.delta))}`
+                                    : `-${fmtBR1(Math.abs(avgHourTrend.delta))}`}
                             </span>
                           </div>
                         </div>
@@ -1034,7 +1002,7 @@ export default function Dashboard() {
                             <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                               <XAxis dataKey="period" interval={3} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
-                              <YAxis hide />
+                              <YAxis domain={miniTonDomain} hide />
                               <Tooltip
                                 formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
                                 contentStyle={{
@@ -1044,9 +1012,35 @@ export default function Dashboard() {
                                 }}
                                 labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                               />
+                              <ReferenceLine y={EXPECTED_TON_H} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeDasharray="6 6" />
+                              <ReferenceLine y={avgTonPerHour} stroke="#00CCFF" strokeWidth={2} strokeDasharray="4 4" />
                               <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
                             </AreaChart>
                           </ResponsiveContainer>
+                        </div>
+
+                        {/* legenda (igual padrão do gráfico de produção) */}
+                        <div
+                          style={{
+                            marginTop: 8,
+                            display: "flex",
+                            gap: 14,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 12,
+                            fontWeight: 900,
+                            color: "rgba(255,255,255,0.72)",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 18, borderTop: "2px dashed rgba(255,255,255,0.40)" }} />
+                            <span>Esperada: {fmtBR0(EXPECTED_TON_H)} t/h</span>
+                          </div>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 18, borderTop: "2px dashed #00CCFF" }} />
+                            <span>Média real: {fmtBR1(avgTonPerHour)} t/h</span>
+                          </div>
                         </div>
                       </div>
                     ) : null}
@@ -1063,14 +1057,9 @@ export default function Dashboard() {
 
                         <div style={{ height: 180 }}>
                           <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={last7Series} margin={{ top: 28, right: 44, left: 10, bottom: 0 }}>
+                            <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis
-                                dataKey="day"
-                                tickFormatter={(v) => dayLabel(String(v || ""))}
-                                tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
-                                padding={{ left: 26, right: 32 }}
-                              />
+                              <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
                               <YAxis hide />
                               <Tooltip
                                 formatter={(v: any) => fmtBR0(Number(v) || 0)}
@@ -1081,17 +1070,7 @@ export default function Dashboard() {
                                 }}
                                 labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                               />
-                              <Area
-                                type="monotone"
-                                dataKey="total"
-                                stroke="#ff9f1a"
-                                fill="rgba(255,159,26,0.14)"
-                                strokeWidth={2.5}
-                                dot={{ r: 3, strokeWidth: 2, fill: "#0b1220", stroke: "#ff9f1a" }}
-                                activeDot={{ r: 4, strokeWidth: 2, fill: "#0b1220", stroke: "#ff9f1a" }}
-                              >
-                                <LabelList dataKey="total" content={Last7PointLabel} />
-                              </Area>
+                              <Area type="monotone" dataKey="total" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
                             </AreaChart>
                           </ResponsiveContainer>
                         </div>
@@ -1246,10 +1225,10 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={1} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <YAxis
                   yAxisId="left"
-                  domain={tonYAxisDomain}
+                  domain={tonDomain}
                   tickFormatter={(v) => fmtBR0(Number(v) || 0)}
                   tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                 />
@@ -1450,15 +1429,13 @@ export default function Dashboard() {
                   <Minus size={16} />
                 )}
 
-                {avgHourTrend.dir === "na" ? (
-                  "—"
-                ) : avgHourTrend.dir === "flat" ? (
-                  "0"
-                ) : avgHourTrend.delta > 0 ? (
-                  `+${fmtBR1(Math.abs(avgHourTrend.delta))}`
-                ) : (
-                  `-${fmtBR1(Math.abs(avgHourTrend.delta))}`
-                )}
+                {avgHourTrend.dir === "na"
+                  ? "—"
+                  : avgHourTrend.dir === "flat"
+                    ? "0"
+                    : avgHourTrend.delta > 0
+                      ? `+${fmtBR1(Math.abs(avgHourTrend.delta))}`
+                      : `-${fmtBR1(Math.abs(avgHourTrend.delta))}`}
               </span>
             </div>
           </div>
@@ -1468,7 +1445,7 @@ export default function Dashboard() {
               <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                 <XAxis dataKey="period" interval={3} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
-                <YAxis hide />
+                <YAxis domain={miniTonDomain} hide />
                 <Tooltip
                   formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
                   contentStyle={{
@@ -1478,9 +1455,35 @@ export default function Dashboard() {
                   }}
                   labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                 />
+                <ReferenceLine y={EXPECTED_TON_H} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeDasharray="6 6" />
+                <ReferenceLine y={avgTonPerHour} stroke="#00CCFF" strokeWidth={2} strokeDasharray="4 4" />
                 <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* legenda (igual padrão do gráfico de produção) */}
+          <div
+            style={{
+              marginTop: 8,
+              display: "flex",
+              gap: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              fontWeight: 900,
+              color: "rgba(255,255,255,0.72)",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 18, borderTop: "2px dashed rgba(255,255,255,0.40)" }} />
+              <span>Esperada: {fmtBR0(EXPECTED_TON_H)} t/h</span>
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 18, borderTop: "2px dashed #00CCFF" }} />
+              <span>Média real: {fmtBR1(avgTonPerHour)} t/h</span>
+            </div>
           </div>
 
           <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
@@ -1499,14 +1502,9 @@ export default function Dashboard() {
 
           <div style={{ height: 180 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={last7Series} margin={{ top: 28, right: 44, left: 10, bottom: 0 }}>
+              <AreaChart data={last7Series} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="day"
-                  tickFormatter={(v) => dayLabel(String(v || ""))}
-                  tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
-                padding={{ left: 26, right: 32 }}
-                />
+                <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} />
                 <YAxis hide />
                 <Tooltip
                   formatter={(v: any) => fmtBR0(Number(v) || 0)}
@@ -1517,17 +1515,7 @@ export default function Dashboard() {
                   }}
                   labelStyle={{ color: "rgba(255,255,255,0.86)" }}
                 />
-                <Area
-                  type="monotone"
-                  dataKey="total"
-                  stroke="#ff9f1a"
-                  fill="rgba(255,159,26,0.14)"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, strokeWidth: 2, fill: "#0b1220", stroke: "#ff9f1a" }}
-                  activeDot={{ r: 4, strokeWidth: 2, fill: "#0b1220", stroke: "#ff9f1a" }}
-                >
-                  <LabelList dataKey="total" content={Last7PointLabel} />
-                </Area>
+                <Area type="monotone" dataKey="total" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
