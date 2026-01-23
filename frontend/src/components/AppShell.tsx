@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { useAuth } from "../auth/AuthProvider";
 import {
   LayoutDashboard,
+  BarChart3,
   Code2,
   Factory,
   Timer,
@@ -16,7 +17,6 @@ import {
   Search,
   ChevronRight,
   History,
-  CalendarDays,
   ChevronsLeft,
   ChevronsRight,
   User as UserIcon,
@@ -31,7 +31,8 @@ type NavItem = {
 };
 
 const nav: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Visão geral" },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard,
+  BarChart3, group: "Visão geral" },
 
   // ===== DEV =====
   { to: "/dashboard/producao-dia", label: "Dev Dash", icon: Code2, group: "Desenvolvimento", devOnly: true },
@@ -43,8 +44,9 @@ const nav: NavItem[] = [
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
   { to: "/historico", label: "Histórico", icon: History, group: "Operação" },
-  { to: "/metas", label: "Metas do mês", icon: CalendarDays, group: "Configurações" },
-  { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
+    { to: "/statisticas", label: "Estatísticas", icon: BarChart3, group: "Configurações" },
+  { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
+{ to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
 ];
 
 type UserRole = "apontador" | "controlador" | "dev";
