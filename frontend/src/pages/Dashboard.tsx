@@ -130,7 +130,7 @@ function buildHourlyGrid(rows: { period: string; ton: number; freq: number }[]) 
 
   const result: { period: string; ton: number; freq: number }[] = [];
   for (let h = 0; h < 24; h++) {
-    const label = `${pad2(h)}-${pad2(h + 1)}`; // 23-24
+    const label = `${pad2(h)}-${pad2((h + 1) % 24)}`; // 23-00
     const found = map.get(label);
     result.push({ period: label, ton: found?.ton ?? 0, freq: found?.freq ?? 0 });
   }
@@ -194,8 +194,8 @@ const Last7PointLabel = (props: any) => {
   const maxX = (Number(vb.x) || 0) + (Number(vb.width) || 0) - pad;
   // Em LabelList, "x" pode vir como canto esquerdo do label.
   // Preferimos coordenadas do ponto (cx/cy) quando disponíveis.
-  const cx0 = Number(_cx) || ((Number(x) || 0) + (Number(width) || 0) / 2);
-  const cy0 = Number(_cy) || ((Number(y) || 0) + (Number(height) || 0) / 2);
+  const cx0 = Number.isFinite(Number(x)) ? Number(x) : Number(_cx) || ((Number(x) || 0) + (Number(width) || 0) / 2);
+  const cy0 = Number.isFinite(Number(y)) ? Number(y) : Number(_cy) || ((Number(y) || 0) + (Number(height) || 0) / 2);
 
   // Clamp só do TEXTO (pra não cortar nas bordas). O risquinho fica no ponto (bolinha).
   const textX = Math.max(minX, Math.min(maxX, cx0));
@@ -243,6 +243,8 @@ async function apiGet<T>(path: string): Promise<T> {
 type PlantHourRow = { period: string; ton?: any; freq?: any };
 type PlantDayPayload = { day: string; obs?: string | null; rows: PlantHourRow[]; updated_at?: string | null };
 type Last7Item = { day: string; total_ton: number };
+
+type GoalDay = { day: string; meta_ton: number | null; discount_hours: number | null; updated_at?: string | null };
 
 type StopRow = {
   id: number;
@@ -295,7 +297,22 @@ export default function Dashboard() {
   const [lastByEq, setLastByEq] = useState<Record<string, HorimetroRow | null>>({});
 
   const POLL_MS = 10_000;
-  const META_DIA = 8000;
+
+  // ===== metas (dinâmicas por dia/mês) =====
+  const WORK_HOURS_BASE = 22; // horas de produção do dia (base)
+  const [metaDia, setMetaDia] = useState<number>(8000);
+  const [discountHours, setDiscountHours] = useState<number>(2); // almoço / paradas programadas
+
+  const metaHorasTrabalhadas = useMemo(() => {
+    const v = Math.max(0, WORK_HOURS_BASE - (discountHours || 0));
+    return v;
+  }, [discountHours]);
+
+  const metaHoraEsperada = useMemo(() => {
+    if (!metaDia || metaDia <= 0) return 0;
+    if (!metaHorasTrabalhadas || metaHorasTrabalhadas <= 0) return 0;
+    return metaDia / metaHorasTrabalhadas;
+  }, [metaDia, metaHorasTrabalhadas]);
 
   // ===== export modal =====
   const [exportOpen, setExportOpen] = useState(false);
@@ -360,6 +377,21 @@ export default function Dashboard() {
         return { day, rows: [], obs: "" } as PlantDayPayload;
       });
 
+      // metas do dia (se não existir, mantém defaults)
+      const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`).catch(() => null as any);
+      if (g && typeof g === "object") {
+        const mdRaw = (g as any).meta_ton;
+        const dhRaw = (g as any).discount_hours;
+        if (mdRaw !== null && mdRaw !== undefined) {
+          const md = Number(mdRaw);
+          if (!Number.isNaN(md)) setMetaDia(md);
+        }
+        if (dhRaw !== null && dhRaw !== undefined) {
+          const dh = Number(dhRaw);
+          if (!Number.isNaN(dh)) setDiscountHours(dh);
+        }
+      }
+
       const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
       const ps = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`).catch(() => []);
       const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`).catch(() => []);
@@ -401,8 +433,8 @@ export default function Dashboard() {
   }, [prodDay]);
 
   const pctMeta = useMemo(() => {
-    if (META_DIA <= 0) return 0;
-    return Math.max(0, Math.min(100, (totalTonDay / META_DIA) * 100));
+    if (metaDia <= 0) return 0;
+    return Math.max(0, Math.min(100, (totalTonDay / metaDia) * 100));
   }, [totalTonDay]);
 
   // ✅ normaliza + garante 24 horas + inclui 23-00 (mapeado para 23-24)
@@ -429,7 +461,7 @@ export default function Dashboard() {
     return sum / filled.length;
   }, [hourlySeries]);
 
-  const EXPECTED_TON_H = 363;
+  const EXPECTED_TON_H = metaHoraEsperada;
 
   // garante que as linhas (esperada e media real) sempre aparecam no mini-grafico
   const miniTonDomain = useMemo(() => {
@@ -899,7 +931,7 @@ export default function Dashboard() {
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <Tooltip
                                 formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
@@ -936,7 +968,7 @@ export default function Dashboard() {
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Produção do dia</div>
-                            <div style={subStyle}>Meta: {fmtBR0(META_DIA)} t</div>
+                            <div style={subStyle}>Meta: {fmtBR0(metaDia)} t</div>
                           </div>
                         </div>
 
@@ -1040,7 +1072,7 @@ export default function Dashboard() {
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={3} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
                               <YAxis domain={miniTonDomain} hide />
                               <Tooltip
                                 formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
@@ -1362,7 +1394,7 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <Tooltip
                   formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
@@ -1397,7 +1429,7 @@ export default function Dashboard() {
           <div style={headerStyle}>
             <div>
               <div style={titleStyle}>Produção do dia</div>
-              <div style={subStyle}>Meta: {fmtBR0(META_DIA)} t</div>
+              <div style={subStyle}>Meta: {fmtBR0(metaDia)} t</div>
             </div>
           </div>
 
@@ -1499,7 +1531,7 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={3} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
                 <YAxis domain={miniTonDomain} hide />
                 <Tooltip
                   formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
