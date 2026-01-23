@@ -148,6 +148,7 @@ export default function Statistics() {
 
   const headerPct = data?.attainment_pct ?? 0;
   const headerDeltaTon = data?.delta_ton ?? 0;
+  const headerDeltaPct = data?.delta_pct ?? 0;
 
   const pctBadge = useMemo(() => {
     const pct = headerPct || 0;
@@ -233,8 +234,8 @@ export default function Statistics() {
             {headerDeltaTon >= 0 ? "+" : "-"}{fmtBR0(Math.abs(headerDeltaTon))} t
           </div>
           <div style={{ marginTop: 10, color: "rgba(255,255,255,.55)", fontWeight: 850 }}>
-            {data?.delta_pct >= 0 ? "Acima" : "Abaixo"}:{" "}
-            <span style={{ color: "rgba(255,255,255,.92)", fontWeight: 950 }}>{fmtPct1(Math.abs(data?.delta_pct || 0))}</span>
+            {headerDeltaPct >= 0 ? "Acima" : "Abaixo"}:{" "}
+            <span style={{ color: "rgba(255,255,255,.92)", fontWeight: 950 }}>{fmtPct1(Math.abs(headerDeltaPct))}</span>
           </div>
         </div>
 
