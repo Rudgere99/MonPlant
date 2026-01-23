@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
@@ -20,6 +19,9 @@ import { useAuth } from "../auth/AuthProvider";
 
 type StopKV = { type?: string; equipment?: string; hours?: number };
 
+// ✅ opcional: se o backend mandar o cruzamento (equipamento x tipo)
+type StopEqType = { equipment?: string; type?: string; hours?: number };
+
 type DailyRow = {
   day: string; // YYYY-MM-DD
   produced_ton?: number;
@@ -39,16 +41,37 @@ type StatsMonth = {
   attainment_pct?: number;
   delta_ton?: number;
   delta_pct?: number;
+
+  // dias
   days?: {
     produced_days?: number;
     programmed_stop_days?: number;
     maintenance_stop_days?: number;
   };
+
   best_day?: { day: string; produced_ton?: number; meta_ton?: number; attainment_pct?: number };
   worst_day?: { day: string; produced_ton?: number; meta_ton?: number; attainment_pct?: number };
-  kpis?: { freq_avg_pct?: number; avg_ton_per_hour?: number };
+
+  kpis?: {
+    freq_avg_pct?: number;
+    avg_ton_per_hour?: number;
+  };
+
   shift?: { t1_ton?: number; t2_ton?: number };
-  stops?: { by_type?: StopKV[]; by_equipment?: StopKV[] };
+
+  stops?: {
+    by_type?: StopKV[];
+    by_equipment?: StopKV[];
+    // ✅ opcional
+    by_equipment_type?: StopEqType[];
+  };
+
+  // ✅ opcional: se o backend mandar horas trabalhadas por equipamento no mês
+  worked_hours?: {
+    total_hours?: number;
+    by_equipment?: { equipment?: string; hours?: number }[];
+  };
+
   series?: { daily?: DailyRow[] };
 };
 
@@ -157,8 +180,8 @@ function StatusChip({ ok, label }: { ok: boolean; label: string }) {
 
 function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: number }) {
   const maxV = Math.max(producedTon, metaTon, 1);
-  const leftH = Math.max(8, Math.round((producedTon / maxV) * 100));
-  const rightH = Math.max(8, Math.round((metaTon / maxV) * 100));
+  const leftH = Math.max(10, Math.round((producedTon / maxV) * 100));
+  const rightH = Math.max(10, Math.round((metaTon / maxV) * 100));
 
   const barBase: React.CSSProperties = {
     width: "100%",
@@ -184,7 +207,7 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
         padding: 14,
         position: "relative",
         overflow: "hidden",
-        minHeight: 92,
+        minHeight: 96,
         gridColumn: "span 2",
       }}
     >
@@ -199,7 +222,7 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
       <div style={{ position: "relative" }}>
         <div style={{ fontSize: 12, fontWeight: 900, color: COLORS.sub }}>Meta do mês x Produção do mês</div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 8px 1fr", gap: 12, alignItems: "end", height: 88, marginTop: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 8px 1fr", gap: 12, alignItems: "end", height: 90, marginTop: 10 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, fontSize: 12 }}>Produzido</div>
             <div
@@ -238,11 +261,13 @@ function MetricCard({
   value,
   sub,
   ok,
+  chip,
 }: {
   title: string;
   value: string;
   sub: string;
   ok: boolean;
+  chip?: React.ReactNode;
 }) {
   return (
     <div
@@ -255,16 +280,14 @@ function MetricCard({
         padding: 14,
         position: "relative",
         overflow: "hidden",
-        minHeight: 92,
+        minHeight: 96,
       }}
     >
       <div
         style={{
           position: "absolute",
           inset: -30,
-          background: `radial-gradient(600px 180px at 20% 20%, ${
-            ok ? "rgba(34,197,94,0.18)" : "rgba(251,113,133,0.18)"
-          }, transparent 55%)`,
+          background: `radial-gradient(600px 180px at 20% 20%, ${ok ? "rgba(34,197,94,0.18)" : "rgba(251,113,133,0.18)"}, transparent 55%)`,
           pointerEvents: "none",
         }}
       />
@@ -276,7 +299,7 @@ function MetricCard({
               {value}
             </div>
           </div>
-          <StatusChip ok={ok} label={ok ? "Acima" : "Abaixo"} />
+          {chip ? chip : <StatusChip ok={ok} label={ok ? "Acima" : "Abaixo"} />}
         </div>
         <div style={{ marginTop: 8, fontSize: 12, fontWeight: 850, color: COLORS.sub }}>{sub}</div>
       </div>
@@ -362,16 +385,11 @@ export default function Statistics() {
       const produced = Number(d.produced_ton || 0);
       const meta = Number(d.meta_ton || 0);
       const pct = meta > 0 ? (produced / meta) * 100 : 0;
-      return {
-        day: ymdToDM(d.day),
-        produced,
-        meta,
-        pct,
-      };
+      return { day: ymdToDM(d.day), produced, meta, pct };
     });
   }, [daily]);
 
-  // datas no eixo: não embolar
+  // estilo de eixos / tooltip
   const xTick = { fill: "rgba(255,255,255,0.55)", fontSize: 11 } as const;
   const yTick = { fill: "rgba(255,255,255,0.55)", fontSize: 11 } as const;
 
@@ -395,26 +413,70 @@ export default function Statistics() {
 
   const okProj = projection.projected_pct >= 100;
 
+  // turnos (mês)
+  const t1Month = Number(data?.shift?.t1_ton || 0);
+  const t2Month = Number(data?.shift?.t2_ton || 0);
   const shiftPie = useMemo(() => {
-    const t1 = Number(data?.shift?.t1_ton || 0);
-    const t2 = Number(data?.shift?.t2_ton || 0);
-    const s = t1 + t2;
+    const s = t1Month + t2Month;
     if (s <= 0) return [];
     return [
-      { name: "Turno 1 (07–19)", value: t1 },
-      { name: "Turno 2 (19–07)", value: t2 },
+      { name: "Turno 1 (07–19)", value: t1Month },
+      { name: "Turno 2 (19–07)", value: t2Month },
     ];
-  }, [data]);
+  }, [t1Month, t2Month]);
 
-  const stopsByType = useMemo(() => (data?.stops?.by_type || []).map((x) => ({ name: x.type || "—", hours: Number(x.hours || 0) })), [data]);
+  // paradas
+  const stopsByType = useMemo(
+    () => (data?.stops?.by_type || []).map((x) => ({ name: x.type || "—", hours: Number(x.hours || 0) })),
+    [data]
+  );
+
   const stopsByEq = useMemo(
     () => (data?.stops?.by_equipment || []).map((x) => ({ name: x.equipment || "—", hours: Number(x.hours || 0) })).slice(0, 10),
     [data]
   );
 
+  const totalStopHours = useMemo(() => stopsByType.reduce((a, b) => a + (Number(b.hours) || 0), 0), [stopsByType]);
+
+  // dias
   const producedDays = useMemo(() => data?.days?.produced_days ?? daily.filter((d) => (d.produced_ton || 0) > 0).length, [data, daily]);
   const programmedStopDays = useMemo(() => data?.days?.programmed_stop_days ?? daily.filter((d) => (d.meta_ton || 0) === 0).length, [data, daily]);
   const maintDays = useMemo(() => data?.days?.maintenance_stop_days ?? daily.filter((d) => (d.maintenance_hours || 0) > 0).length, [data, daily]);
+
+  // KPIs operacionais
+  const freqAvg = Number(data?.kpis?.freq_avg_pct || 0);
+  const avgTonH = Number(data?.kpis?.avg_ton_per_hour || 0);
+
+  // ✅ horas trabalhadas (estimado) — fallback se o backend não tiver
+  // prioridade: data.worked_hours.total_hours
+  const workedHours = useMemo(() => {
+    const raw = Number(data?.worked_hours?.total_hours);
+    if (Number.isFinite(raw) && raw > 0) return raw;
+
+    // estimativa: produção do mês / média t/h
+    if (avgTonH > 0 && prodMonth > 0) return prodMonth / avgTonH;
+
+    // fallback 2: soma diária (produced / avg_ton_per_hour)
+    const sum = daily.reduce((acc, d) => {
+      const p = Number(d.produced_ton || 0);
+      const a = Number(d.avg_ton_per_hour || 0);
+      if (p > 0 && a > 0) return acc + p / a;
+      return acc;
+    }, 0);
+    return sum;
+  }, [data, avgTonH, prodMonth, daily]);
+
+  // ✅ métrica extra plausível (executiva): disponibilidade (%)
+  // disponibilidade = 1 - (horas paradas / horas trabalhadas estimadas)
+  const availabilityPct = useMemo(() => {
+    const wh = workedHours;
+    if (!wh || wh <= 0) return 0;
+    const v = (1 - totalStopHours / wh) * 100;
+    if (!Number.isFinite(v)) return 0;
+    return Math.max(0, Math.min(100, v));
+  }, [workedHours, totalStopHours]);
+
+  const okAvail = availabilityPct >= 85; // referência executiva (ajuste se quiser)
 
   return (
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -436,6 +498,7 @@ export default function Statistics() {
         <div style={{ minWidth: 0 }}>
           <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Relatórios • Estatísticas</div>
           <div style={{ marginTop: 4, fontSize: 26, fontWeight: 980, color: COLORS.text, letterSpacing: -0.4 }}>Estatísticas do mês</div>
+
           <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
             <div style={{ color: COLORS.sub, fontWeight: 900 }}>Mês</div>
             <input
@@ -459,6 +522,7 @@ export default function Statistics() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" }}>
+          {/* delta (t e %) */}
           <div
             style={{
               height: 34,
@@ -496,14 +560,14 @@ export default function Statistics() {
         </div>
       </div>
 
-      {/* KPI topo (mais empresarial) */}
+      {/* KPI topo (executivo) */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 14 }}>
         <MonthBars producedTon={prodMonth} metaTon={metaMonth} />
 
         <MetricCard
           title="Atingimento"
           value={fmtPct(attainmentPct, 0)}
-          sub={okAtt ? `+${fmtBR1(attainmentPct - 100)}% acima` : `${fmtBR1(100 - attainmentPct)}% abaixo`}
+          sub={okAtt ? `+${fmtBR1(attainmentPct - 100)}% acima da meta` : `${fmtBR1(100 - attainmentPct)}% abaixo da meta`}
           ok={okAtt}
         />
 
@@ -511,7 +575,45 @@ export default function Statistics() {
           title="Projeção (run-rate)"
           value={`${fmtBR0(projection.projected_ton)} t`}
           sub={`Projeção do mês: ${fmtPct(projection.projected_pct, 0)}`}
-          ok={okProj}
+          ok={projection.projected_pct >= 100}
+        />
+
+        <MetricCard
+          title="Disponibilidade (mês)"
+          value={fmtPct(availabilityPct, 0)}
+          sub={`Paradas: ${fmtBR1(totalStopHours)} h • Horas (estimado): ${fmtBR1(workedHours)} h`}
+          ok={okAvail}
+          chip={<StatusChip ok={okAvail} label={okAvail ? "Boa" : "Atenção"} />}
+        />
+      </div>
+
+      {/* Turnos + KPIs rápidos */}
+      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+        <MetricCard
+          title="Turno 1 (mês)"
+          value={`${fmtBR0(t1Month)} t`}
+          sub={`Participação: ${t1Month + t2Month > 0 ? fmtPct((t1Month / (t1Month + t2Month)) * 100, 0) : "0%"}`}
+          ok={true}
+          chip={<div />}
+        />
+        <MetricCard
+          title="Turno 2 (mês)"
+          value={`${fmtBR0(t2Month)} t`}
+          sub={`Participação: ${t1Month + t2Month > 0 ? fmtPct((t2Month / (t1Month + t2Month)) * 100, 0) : "0%"}`}
+          ok={true}
+          chip={<div />}
+        />
+        <MetricCard
+          title="Frequência média"
+          value={fmtPct(freqAvg, 0)}
+          sub="Média agregada do mês"
+          ok={freqAvg >= 85}
+        />
+        <MetricCard
+          title="Produção média (t/h)"
+          value={`${fmtBR0(avgTonH)} t/h`}
+          sub="Média agregada do mês"
+          ok={avgTonH > 0}
         />
       </div>
 
@@ -519,7 +621,7 @@ export default function Statistics() {
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1.15fr 0.85fr" }}>
         <Card
           title="Produção diária x Meta diária"
-          sub="Meta varia por dia (inclui dias com meta 0)"
+          sub="Com % do dia no mesmo gráfico (executivo)"
           right={
             <div style={{ display: "flex", gap: 12, alignItems: "center", color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
@@ -538,15 +640,7 @@ export default function Statistics() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={dailySeries} margin={{ top: 16, right: 22, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="day"
-                  interval="preserveStartEnd"
-                  minTickGap={18}
-                  angle={-30}
-                  textAnchor="end"
-                  height={54}
-                  tick={xTick}
-                />
+                <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={18} angle={-30} textAnchor="end" height={54} tick={xTick} />
                 <YAxis tick={yTick} />
                 <Tooltip
                   contentStyle={tooltipStyle}
@@ -566,6 +660,7 @@ export default function Statistics() {
             </ResponsiveContainer>
           </div>
 
+          {/* cards de dias (executivo) */}
           <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
             <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
               <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Dias produzidos</div>
@@ -586,15 +681,15 @@ export default function Statistics() {
             </div>
 
             <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
-              <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Status</div>
-              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{loading ? "…" : err ? "!" : "OK"}</div>
-              <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Fonte: /api/stats/month</div>
+              <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Horas trabalhadas</div>
+              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{fmtBR1(workedHours)} h</div>
+              <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>{data?.worked_hours?.total_hours ? "Horímetro" : "Estimado"}</div>
             </div>
           </div>
         </Card>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <Card title="Turnos" sub="Participação na produção do mês">
+          <Card title="Turnos" sub="Produção do mês por turno">
             <div style={{ height: 220, minHeight: 220 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -610,31 +705,16 @@ export default function Statistics() {
             </div>
           </Card>
 
-          <Card title="KPIs operacionais" sub="Médias agregadas do mês">
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-              <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
-                <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Frequência média</div>
-                <div style={{ marginTop: 6, fontWeight: 980, fontSize: 30, color: COLORS.text }}>{fmtPct(Number(data?.kpis?.freq_avg_pct || 0), 0)}</div>
-                <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Média das horas válidas</div>
-              </div>
-              <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
-                <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Média de produção/h</div>
-                <div style={{ marginTop: 6, fontWeight: 980, fontSize: 30, color: COLORS.text }}>
-                  {fmtBR0(Number(data?.kpis?.avg_ton_per_hour || 0))} t/h
-                </div>
-                <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Apenas horas preenchidas</div>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+          <Card title="Melhor / Pior dia" sub="Performance do mês (produção em t)">
+            <div style={{ display: "grid", gap: 10 }}>
               <div style={{ borderRadius: 16, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.18)", padding: 12 }}>
-                <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Melhor dia</div>
+                <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Dia com maior desempenho</div>
                 <div style={{ marginTop: 4, color: COLORS.text, fontWeight: 980 }}>
                   {data?.best_day?.day ? `${ymdToDM(data.best_day.day)} • ${fmtBR0(Number(data.best_day.produced_ton || 0))} t` : "—"}
                 </div>
               </div>
               <div style={{ borderRadius: 16, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.18)", padding: 12 }}>
-                <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Pior dia</div>
+                <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Dia com menor desempenho</div>
                 <div style={{ marginTop: 4, color: COLORS.text, fontWeight: 980 }}>
                   {data?.worst_day?.day ? `${ymdToDM(data.worst_day.day)} • ${fmtBR0(Number(data.worst_day.produced_ton || 0))} t` : "—"}
                 </div>
@@ -644,9 +724,9 @@ export default function Statistics() {
         </div>
       </div>
 
-      {/* Paradas */}
+      {/* Paradas (executivo) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <Card title="Paradas por tipo" sub="Horas paradas agregadas no mês">
+        <Card title="Paradas por tipo" sub="Horas paradas agregadas no mês (apontamentos)">
           <div style={{ height: 280, minHeight: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stopsByType} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
