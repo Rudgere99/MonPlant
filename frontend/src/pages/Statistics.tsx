@@ -460,6 +460,17 @@ export default function Statistics() {
     ];
   }, [t1Month, t2Month]);
 
+
+  const shiftTotal = useMemo(() => t1Month + t2Month, [t1Month, t2Month]);
+
+  const shiftLegend = useMemo(() => {
+    if (shiftTotal <= 0) return [] as { key: string; name: string; value: number; pct: number; color: string }[];
+    return [
+      { key: "T1", name: "Turno 1 (07–19)", value: t1Month, pct: (t1Month / shiftTotal) * 100, color: COLORS.cyan },
+      { key: "T2", name: "Turno 2 (19–07)", value: t2Month, pct: (t2Month / shiftTotal) * 100, color: COLORS.orange },
+    ];
+  }, [shiftTotal, t1Month, t2Month]);
+
   const stopsByType = useMemo(
     () => (data?.stops?.by_type || []).map((x) => ({ name: x.type || "—", hours: Number(x.hours || 0) })),
     [data]
@@ -709,18 +720,91 @@ export default function Statistics() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <Card title="Turnos" sub="Produção do mês por turno">
-            <div style={{ height: 220, minHeight: 220 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={shiftPie} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={2}>
-                    {(shiftPie || []).map((_, idx) => (
-                      <Cell key={idx} fill={idx === 0 ? COLORS.cyan : COLORS.orange} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR0(Number(v || 0))} t`, "Produção"]} />
-                  <Legend wrapperStyle={{ color: "rgba(255,255,255,0.70)", fontWeight: 850, fontSize: 12 }} />
-                </PieChart>
-              </ResponsiveContainer>
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 12, alignItems: "center" }}>
+              <div style={{ height: 420, minHeight: 420 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={shiftPie}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={62}
+                      outerRadius={95}
+                      paddingAngle={2}
+                      labelLine={false}
+                      label={({ value }: any) => {
+                        const v = Number(value || 0);
+                        const pct = shiftTotal > 0 ? (v / shiftTotal) * 100 : 0;
+                        if (!v) return "";
+                        return `${fmtBR0(v)}t • ${fmtPct(pct, 0)}`;
+                      }}
+                    >
+                      {(shiftPie || []).map((_, idx) => (
+                        <Cell key={idx} fill={idx === 0 ? COLORS.cyan : COLORS.orange} />
+                      ))}
+                    </Pie>
+
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      formatter={(v: any) => {
+                        const n = Number(v || 0);
+                        const pct = shiftTotal > 0 ? (n / shiftTotal) * 100 : 0;
+                        return [`${fmtBR0(n)} t • ${fmtPct(pct, 1)}`, "Turno"];
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {shiftLegend.map((it) => (
+                  <div
+                    key={it.key}
+                    style={{
+                      borderRadius: 16,
+                      border: `1px solid ${COLORS.stroke}`,
+                      background: "rgba(0,0,0,0.18)",
+                      padding: 12,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: 999,
+                            background: it.color,
+                            display: "inline-block",
+                            flex: "0 0 auto",
+                          }}
+                        />
+                        <div
+                          style={{
+                            color: "rgba(255,255,255,0.80)",
+                            fontWeight: 950,
+                            fontSize: 12,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                          title={it.name}
+                        >
+                          {it.name}
+                        </div>
+                      </div>
+
+                      <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, whiteSpace: "nowrap" }}>
+                        {fmtBR0(it.value)}t
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 6, color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>
+                      {fmtPct(it.pct, 0)} do mês
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </Card>
 
@@ -795,11 +879,11 @@ export default function Statistics() {
       {/* Novos: número de paradas por período + horas por descrição */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Card title="Número de paradas por período" sub="Contagem por hora (ex.: 07-08, 08-09)">
-          <div style={{ height: 260, minHeight: 260 }}>
+          <div style={{ height: 520, minHeight: 520 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stopsCountByPeriod} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={0} tick={xTick} />
+                <XAxis dataKey="period" interval={0} angle={-35} textAnchor="end" height={70} tick={xTick} />
                 <YAxis tick={yTick} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR0(Number(v || 0))}`, "Paradas"]} />
                 <Bar dataKey="count" fill={COLORS.slate as any} radius={[10, 10, 0, 0]}>
@@ -818,10 +902,10 @@ export default function Statistics() {
         <Card title="Horas paradas por descrição" sub="Top 12 descrições (campo Descrição do apontamento)">
           <div style={{ height: 260, minHeight: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stopsByDesc} layout="vertical" margin={{ top: 6, right: 16, left: 14, bottom: 6 }}>
+              <BarChart data={stopsByDesc} layout="vertical" margin={{ top: 6, right: 16, left: 22, bottom: 6 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
                 <XAxis type="number" tick={yTick} />
-                <YAxis type="category" dataKey="name" width={140} tick={xTick} />
+                <YAxis type="category" dataKey="name" width={220} tick={xTick} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
                 <Bar dataKey="hours" fill={COLORS.orange} radius={[10, 10, 10, 10]}>
                   <LabelList
