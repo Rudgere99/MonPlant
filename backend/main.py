@@ -21,7 +21,23 @@ app = FastAPI(title="MonPlant API", version="1.0.0")
 # =========================
 # CORS
 # =========================
-ALLOWED_ORIGINS = ["*"]  # depois você trava na URL do Vercel
+# Defina CORS_ORIGINS no Railway (separado por vírgula) para produção.
+# Ex: CORS_ORIGINS=https://mon-plant.vercel.app,https://monplant-production.up.railway.app
+default_origins = [
+    "https://mon-plant.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+_env = (os.getenv("CORS_ORIGINS") or "").strip()
+if _env:
+    ALLOWED_ORIGINS = [o.strip() for o in _env.split(",") if o.strip()]
+else:
+    ALLOWED_ORIGINS = default_origins
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -1104,74 +1120,241 @@ def delete_horimetro(
 
 
 # =========================
-# Statistics (Month)
+# Metas (por dia / mês) — NÃO bloqueia dias anteriores
 # =========================
-def _parse_ym(ym: str) -> tuple[date, date]:
-    m = re.match(r"^(\d{4})-(\d{2})$", (ym or "").strip())
-    if not m:
-        raise HTTPException(status_code=400, detail="Formato inválido. Use YYYY-MM.")
-    y = int(m.group(1))
-    mo = int(m.group(2))
-    start = date(y, mo, 1)
-    if mo == 12:
-        end = date(y + 1, 1, 1)
-    else:
-        end = date(y, mo + 1, 1)
-    return start, end
 
-def _period_start_hour(period: str) -> Optional[int]:
-    # aceita "07-08", "07:00-08:00", "07:00–08:00"
-    if not period:
-        return None
-    s = str(period)
-    m = re.match(r"^\s*(\d{1,2})", s)
-    if not m:
-        return None
-    h = int(m.group(1))
-    if h < 0 or h > 23:
-        return None
-    return h
+class GoalDayIn(BaseModel):
+    meta_ton: float = Field(0, ge=0)
+    discount_hours: float = Field(2, ge=0, le=24)
 
-@app.get("/api/stats/month/{ym}")
-def stats_month(ym: str, owner_id: str = Depends(require_owner_id)):
-    start, end = _parse_ym(ym)
+class GoalDayOut(BaseModel):
+    day: date
+    meta_ton: float
+    discount_hours: float
 
-    # garante tabela de metas (caso ainda não exista no banco)
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            create table if not exists public.bv_goals_daily(
-              owner_id text not null,
-              day date not null,
-              meta_ton numeric(18,2) not null default 0,
-              discount_hours numeric(10,2) not null default 2,
-              updated_at timestamptz not null default now(),
-              primary key(owner_id, day)
-            );
-            """
-        )
+class GoalMonthIn(BaseModel):
+    days: List[GoalDayOut]
+
+class GoalMonthOut(BaseModel):
+    month: str
+    total_month_ton: float
+    days: List[GoalDayOut]
+
+
+
+def _col(r, key: str, idx: int):
+    """Compat: aceita RealDictCursor (dict) ou cursor tuple."""
+    try:
+        if isinstance(r, dict):
+            return r.get(key)
+    except Exception:
+        pass
+    try:
+        return r[idx]
+    except Exception:
+        return None
+
+
+def _ensure_goals_table():
+    ddl = """
+    CREATE TABLE IF NOT EXISTS public.bv_goals_daily(
+      owner_id TEXT NOT NULL,
+      day DATE NOT NULL,
+      meta_ton NUMERIC(18,2) NOT NULL DEFAULT 0,
+      discount_hours NUMERIC(10,2) NOT NULL DEFAULT 2,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(owner_id, day)
+    );
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(ddl)
         conn.commit()
 
-    # ===== metas do mês
-    goals: Dict[str, Dict[str, float]] = {}
+@app.on_event("startup")
+def _startup_goals():
+    try:
+        _ensure_goals_table()
+    except Exception:
+        # não derruba a API por causa de DDL
+        pass
+
+def _parse_yyyy_mm(s: str) -> date:
+    if not re.fullmatch(r"\d{4}-\d{2}", s or ""):
+        raise HTTPException(status_code=400, detail="month deve ser YYYY-MM")
+    y, m = s.split("-")
+    y = int(y); m = int(m)
+    if m < 1 or m > 12:
+        raise HTTPException(status_code=400, detail="month inválido")
+    return date(y, m, 1)
+
+def _month_range(first: date):
+    # [first, next_month)
+    if first.month == 12:
+        nxt = date(first.year + 1, 1, 1)
+    else:
+        nxt = date(first.year, first.month + 1, 1)
+    return first, nxt
+
+@app.get("/api/goals/day/{day}", response_model=GoalDayOut)
+def goals_get_day(day: date, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT meta_ton, discount_hours
+                     FROM public.bv_goals_daily
+                     WHERE owner_id=%s AND day=%s""",
+                (owner_id, day),
+            )
+            row = cur.fetchone()
+    if not row:
+        return GoalDayOut(day=day, meta_ton=0.0, discount_hours=2.0)
+    return GoalDayOut(day=day, meta_ton=float(_col(row,'meta_ton',0) or 0), discount_hours=float(_col(row,'discount_hours',1) or 0))
+
+@app.put("/api/goals/day/{day}", response_model=GoalDayOut)
+def goals_put_day(day: date, body: GoalDayIn, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO public.bv_goals_daily(owner_id, day, meta_ton, discount_hours)
+                     VALUES(%s,%s,%s,%s)
+                     ON CONFLICT (owner_id, day)
+                     DO UPDATE SET meta_ton=EXCLUDED.meta_ton,
+                                   discount_hours=EXCLUDED.discount_hours,
+                                   updated_at=NOW()""",
+                (owner_id, day, body.meta_ton, body.discount_hours),
+            )
+        conn.commit()
+    return GoalDayOut(day=day, meta_ton=float(body.meta_ton), discount_hours=float(body.discount_hours))
+
+@app.get("/api/goals/month/{month}", response_model=GoalMonthOut)
+def goals_get_month(month: str, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    first = _parse_yyyy_mm(month)
+    a, b = _month_range(first)
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT day, meta_ton, discount_hours
+                     FROM public.bv_goals_daily
+                     WHERE owner_id=%s AND day >= %s AND day < %s
+                     ORDER BY day ASC""",
+                (owner_id, a, b),
+            )
+            rows = cur.fetchall() or []
+
+    days = [GoalDayOut(day=_col(r,'day',0), meta_ton=float(_col(r,'meta_ton',1) or 0), discount_hours=float(_col(r,'discount_hours',2) or 0)) for r in rows]
+    total_month = float(sum(d.meta_ton for d in days))
+    return GoalMonthOut(month=month, total_month_ton=total_month, days=days)
+
+@app.put("/api/goals/month/{month}", response_model=GoalMonthOut)
+def goals_put_month(month: str, body: GoalMonthIn, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    first = _parse_yyyy_mm(month)
+    a, b = _month_range(first)
+
+    # valida: só aceita dias dentro do mês
+    for d in body.days:
+        if d.day < a or d.day >= b:
+            raise HTTPException(status_code=400, detail=f"Dia {d.day} fora do mês {month}")
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            for d in body.days:
+                cur.execute(
+                    """INSERT INTO public.bv_goals_daily(owner_id, day, meta_ton, discount_hours)
+                         VALUES(%s,%s,%s,%s)
+                         ON CONFLICT (owner_id, day)
+                         DO UPDATE SET meta_ton=EXCLUDED.meta_ton,
+                                       discount_hours=EXCLUDED.discount_hours,
+                                       updated_at=NOW()""",
+                    (owner_id, d.day, d.meta_ton, d.discount_hours),
+                )
+        conn.commit()
+
+    # retorna consolidado
+    return goals_get_month(month, owner_id)
+
+
+# =========================
+# Estatísticas do mês (macro)
+# =========================
+
+def _period_start_hour(p: str) -> Optional[int]:
+    """
+    Extrai hora inicial do período.
+    Aceita: "HH:00-HH:00" (padrão do banco) e também "HH:00-HH:00" com espaços.
+    """
+    if not p:
+        return None
+    s = p.strip()
+    m = re.match(r"^(\d{2}):\d{2}\s*-\s*\d{2}:\d{2}$", s)
+    if not m:
+        # tenta formatos antigos tipo "00-01"
+        m2 = re.match(r"^(\d{2})-(\d{2})$", re.sub(r"\s+", "", s))
+        if m2:
+            try:
+                return int(m2.group(1))
+            except Exception:
+                return None
+        return None
+    try:
+        h = int(m.group(1))
+        return h if 0 <= h <= 23 else None
+    except Exception:
+        return None
+
+
+def _turno_by_hour(h: int) -> int:
+    """
+    Regra A (confirmada):
+      Turno 1: 07:00-19:00  (horas 07..18)
+      Turno 2: 19:00-07:00  (horas 19..23 e 00..06)
+    """
+    return 1 if (7 <= h <= 18) else 2
+
+
+@app.get("/api/stats/month/{month}")
+def stats_month(month: str, owner_id: str = Depends(require_owner_id)):
+    """
+    Retorna estatísticas do mês (meta diária variável + produção + paradas + horímetros).
+    month: "YYYY-MM"
+    """
+    _ensure_goals_table()
+
+    first = _parse_yyyy_mm(month)
+    a, b = _month_range(first)
+
+    # -------- Goals (metas diárias) --------
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
             select day, meta_ton, discount_hours
             from public.bv_goals_daily
             where owner_id=%s and day >= %s and day < %s
+            order by day asc
             """,
-            (owner_id, start, end),
+            (owner_id, a, b),
         )
-        rows = cur.fetchall() or []
-        for r in rows:
-            d = str(r["day"])
-            goals[d] = {
-                "meta_ton": float(r.get("meta_ton") or 0),
-                "discount_hours": float(r.get("discount_hours") or 0),
-            }
+        goal_rows = cur.fetchall() or []
 
-    # ===== produção por período (para calcular turno, freq, média/h)
+    goals_by_day: Dict[str, Dict[str, float]] = {}
+    meta_month_ton = 0.0
+    programmed_stop_days = 0
+
+    for r in goal_rows:
+        d = _col(r, "day", 0)
+        meta = float(_col(r, "meta_ton", 1) or 0)
+        disc = float(_col(r, "discount_hours", 2) or 0)
+        ds = str(d)
+        goals_by_day[ds] = {"meta_ton": meta, "discount_hours": disc}
+        meta_month_ton += meta
+        if meta == 0:
+            programmed_stop_days += 1
+
+    # -------- Production rows (por hora) --------
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -1179,58 +1362,67 @@ def stats_month(ym: str, owner_id: str = Depends(require_owner_id)):
             from public.bv_plant_production_rows
             where owner_id=%s and day >= %s and day < %s
             """,
-            (owner_id, start, end),
+            (owner_id, a, b),
         )
         prod_rows = cur.fetchall() or []
 
-    # acumuladores por dia
-    day_agg: Dict[str, Dict[str, Any]] = {}
-    total_month_ton = 0.0
-    total_month_hours = 0.0
-    freq_vals = []
+    # agregações por dia
+    day_prod: Dict[str, Dict[str, float]] = {}
+    # métricas globais
+    produced_month_ton = 0.0
+    freq_sum = 0.0
+    freq_cnt = 0
+    prod_hours_cnt = 0  # quantidade de períodos com ton > 0 (para média t/h simples)
     t1_month = 0.0
     t2_month = 0.0
 
     for r in prod_rows:
-        d = str(r["day"])
-        p = str(r.get("period") or "")
-        ton = float(r.get("ton") or 0)
-        freq = float(r.get("freq") or 0)
+        d = _col(r, "day", 0)
+        ds = str(d)
+        ton = float(_col(r, "ton", 2) or 0)
+        freq = _col(r, "freq", 3)
+        period = _col(r, "period", 1)
 
-        if d not in day_agg:
-            day_agg[d] = {
+        if ds not in day_prod:
+            day_prod[ds] = {
                 "produced_ton": 0.0,
-                "hours_worked": 0,
-                "freq_sum": 0.0,
-                "freq_cnt": 0,
                 "t1_ton": 0.0,
                 "t2_ton": 0.0,
+                "freq_sum": 0.0,
+                "freq_cnt": 0,
+                "hours_cnt": 0,
             }
 
         if ton and ton > 0:
-            day_agg[d]["produced_ton"] += ton
-            total_month_ton += ton
+            day_prod[ds]["produced_ton"] += ton
+            produced_month_ton += ton
+            day_prod[ds]["hours_cnt"] += 1
+            prod_hours_cnt += 1
 
-            # considera hora trabalhada quando Ton/H > 0
-            day_agg[d]["hours_worked"] += 1
-            total_month_hours += 1
+            h = _period_start_hour(str(period) if period is not None else "")
+            if h is not None:
+                t = _turno_by_hour(h)
+                if t == 1:
+                    day_prod[ds]["t1_ton"] += ton
+                    t1_month += ton
+                else:
+                    day_prod[ds]["t2_ton"] += ton
+                    t2_month += ton
 
-            # turno A: Turno1=07-19, Turno2=19-07
-            h0 = _period_start_hour(p)
-            if h0 is not None and 7 <= h0 <= 18:
-                day_agg[d]["t1_ton"] += ton
-                t1_month += ton
-            else:
-                day_agg[d]["t2_ton"] += ton
-                t2_month += ton
+        if freq is not None:
+            try:
+                fv = float(freq)
+                if fv > 0:  # ignora 0/None (opcional)
+                    day_prod[ds]["freq_sum"] += fv
+                    day_prod[ds]["freq_cnt"] += 1
+                    freq_sum += fv
+                    freq_cnt += 1
+            except Exception:
+                pass
 
-        # freq média (somente horas preenchidas)
-        if ton and ton > 0 and freq is not None:
-            day_agg[d]["freq_sum"] += freq
-            day_agg[d]["freq_cnt"] += 1
-            freq_vals.append(freq)
+    produced_days = sum(1 for ds, v in day_prod.items() if (v.get("produced_ton", 0) or 0) > 0)
 
-    # ===== paradas
+    # -------- Stops --------
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -1238,29 +1430,32 @@ def stats_month(ym: str, owner_id: str = Depends(require_owner_id)):
             from public.bv_stops
             where owner_id=%s and day >= %s and day < %s
             """,
-            (owner_id, start, end),
+            (owner_id, a, b),
         )
         stop_rows = cur.fetchall() or []
 
     stops_by_type: Dict[str, float] = {}
     stops_by_eq: Dict[str, float] = {}
-    day_stop_h: Dict[str, float] = {}
     maint_days_set = set()
 
     for r in stop_rows:
-        d = str(r["day"])
-        eq = str(r.get("equipamento") or "—")
-        tp = str(r.get("tipo_parada") or "—")
-        h = float(r.get("tempo_parada_h") or 0)
+        d = _col(r, "day", 0)
+        ds = str(d)
+        eq = str(_col(r, "equipamento", 1) or "").strip() or "—"
+        tp = str(_col(r, "tipo_parada", 2) or "").strip() or "—"
+        h = float(_col(r, "tempo_parada_h", 3) or 0)
 
-        day_stop_h[d] = day_stop_h.get(d, 0.0) + h
         stops_by_type[tp] = stops_by_type.get(tp, 0.0) + h
         stops_by_eq[eq] = stops_by_eq.get(eq, 0.0) + h
 
         if "manut" in tp.lower():
-            maint_days_set.add(d)
+            # considera dia de manutenção se tiver >= 0.5h no dia (ajustável)
+            if h >= 0.5:
+                maint_days_set.add(ds)
 
-    # ===== horímetros (horas trabalhadas)
+    maintenance_stop_days = len(maint_days_set)
+
+    # -------- Horímetros (horas trabalhadas) --------
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -1268,101 +1463,117 @@ def stats_month(ym: str, owner_id: str = Depends(require_owner_id)):
             from public.bv_horimetros
             where owner_id=%s and day >= %s and day < %s
             """,
-            (owner_id, start, end),
+            (owner_id, a, b),
         )
         h_rows = cur.fetchall() or []
 
-    h_by_eq: Dict[str, float] = {}
+    hours_by_eq: Dict[str, float] = {}
+    total_work_hours = 0.0
+
     for r in h_rows:
-        eq = str(r.get("equipamento") or "—")
-        ini = float(r.get("horimetro_ini") or 0)
-        fim = float(r.get("horimetro_fim") or 0)
-        delta = max(0.0, fim - ini)
-        h_by_eq[eq] = h_by_eq.get(eq, 0.0) + delta
+        eq = str(_col(r, "equipamento", 0) or "").strip() or "—"
+        ini = parse_float(_col(r, "horimetro_ini", 1))
+        fim = parse_float(_col(r, "horimetro_fim", 2))
+        if ini is None or fim is None:
+            continue
+        delta = max(0.0, float(fim) - float(ini))
+        hours_by_eq[eq] = hours_by_eq.get(eq, 0.0) + delta
+        total_work_hours += delta
 
-    horimetros_list = [{"equipment": k, "hours": float(v)} for k, v in sorted(h_by_eq.items(), key=lambda kv: kv[1], reverse=True)]
+    # -------- KPIs (mês) --------
+    attainment_pct = (produced_month_ton / meta_month_ton * 100.0) if meta_month_ton > 0 else (100.0 if produced_month_ton > 0 else 0.0)
+    delta_ton = produced_month_ton - meta_month_ton
+    delta_pct = (attainment_pct - 100.0) if meta_month_ton > 0 else 0.0
 
-    # ===== metas e KPIs do mês
-    meta_month = sum(g["meta_ton"] for g in goals.values()) if goals else 0.0
-    produced_month = total_month_ton
-    attainment = (produced_month / meta_month * 100.0) if meta_month > 0 else (100.0 if produced_month > 0 else 0.0)
-    delta_ton = produced_month - meta_month
-    delta_pct = (delta_ton / meta_month * 100.0) if meta_month > 0 else 0.0
+    freq_avg_pct = (freq_sum / freq_cnt) if freq_cnt > 0 else 0.0
+    avg_ton_per_hour = (produced_month_ton / prod_hours_cnt) if prod_hours_cnt > 0 else 0.0
 
-    produced_days = len([d for d, a in day_agg.items() if a["produced_ton"] > 0])
-    programmed_stop_days = len([d for d, g in goals.items() if float(g.get("meta_ton") or 0) == 0])
-
-    freq_avg = (sum(freq_vals) / len(freq_vals)) if freq_vals else 0.0
-    avg_tph_month = (produced_month / total_month_hours) if total_month_hours > 0 else 0.0
-
-    # melhor/pior dia (considerando produced_ton > 0)
-    best_day = None
-    worst_day = None
-    prod_days = [(d, a["produced_ton"]) for d, a in day_agg.items() if a["produced_ton"] > 0]
-    if prod_days:
-        d_best = max(prod_days, key=lambda x: x[1])[0]
-        d_worst = min(prod_days, key=lambda x: x[1])[0]
-        for dd in [d_best, d_worst]:
-            meta_d = float(goals.get(dd, {}).get("meta_ton") or 0)
-            prod_d = float(day_agg[dd]["produced_ton"])
-            att_d = (prod_d / meta_d * 100.0) if meta_d > 0 else (100.0 if prod_d > 0 else 0.0)
-            item = {"day": dd, "produced_ton": prod_d, "meta_ton": meta_d, "attainment_pct": att_d}
-            if dd == d_best:
-                best_day = item
-            if dd == d_worst:
-                worst_day = item
-
-    # série diária (para gráficos)
+    # -------- Series (por dia) --------
+    # Lista de todos os dias do mês (para gráfico bonito)
     daily_series = []
-    # inclui todos os dias do mês que aparecerem em goals ou produção
-    all_days = sorted(set(list(goals.keys()) + list(day_agg.keys())))
-    for d in all_days:
-        prod_d = float(day_agg.get(d, {}).get("produced_ton") or 0)
-        meta_d = float(goals.get(d, {}).get("meta_ton") or 0)
-        att_d = (prod_d / meta_d * 100.0) if meta_d > 0 else (100.0 if prod_d > 0 else 0.0)
-
-        freq_cnt = int(day_agg.get(d, {}).get("freq_cnt") or 0)
-        freq_sum = float(day_agg.get(d, {}).get("freq_sum") or 0)
-        freq_d = (freq_sum / freq_cnt) if freq_cnt > 0 else 0.0
-
-        hrs = float(day_agg.get(d, {}).get("hours_worked") or 0)
-        avg_tph_d = (prod_d / hrs) if hrs > 0 else 0.0
+    cur_day = a
+    while cur_day < b:
+        ds = str(cur_day)
+        meta = goals_by_day.get(ds, {}).get("meta_ton", 0.0)
+        disc = goals_by_day.get(ds, {}).get("discount_hours", 2.0)
+        prod = day_prod.get(ds, {})
+        produced = float(prod.get("produced_ton", 0.0) or 0.0)
+        t1 = float(prod.get("t1_ton", 0.0) or 0.0)
+        t2 = float(prod.get("t2_ton", 0.0) or 0.0)
+        fcnt = int(prod.get("freq_cnt", 0) or 0)
+        fsum = float(prod.get("freq_sum", 0.0) or 0.0)
+        freq_day = (fsum / fcnt) if fcnt > 0 else 0.0
+        hcnt = int(prod.get("hours_cnt", 0) or 0)
+        avg_h = (produced / hcnt) if hcnt > 0 else 0.0
 
         daily_series.append(
             {
-                "day": d,
-                "produced_ton": prod_d,
-                "meta_ton": meta_d,
-                "attainment_pct": att_d,
-                "freq_avg_pct": freq_d,
-                "avg_ton_per_hour": avg_tph_d,
-                "t1_ton": float(day_agg.get(d, {}).get("t1_ton") or 0),
-                "t2_ton": float(day_agg.get(d, {}).get("t2_ton") or 0),
-                "stopped_h": float(day_stop_h.get(d, 0.0)),
+                "day": ds,
+                "meta_ton": meta,
+                "discount_hours": disc,
+                "produced_ton": produced,
+                "attainment_pct": (produced / meta * 100.0) if meta > 0 else (100.0 if produced > 0 else 0.0),
+                "t1_ton": t1,
+                "t2_ton": t2,
+                "freq_avg": freq_day,
+                "avg_ton_per_hour": avg_h,
             }
         )
+        cur_day = cur_day + timedelta(days=1)
+
+    # best / worst (considera apenas dias com meta > 0 ou com produção)
+    candidates = [d for d in daily_series if (d["meta_ton"] > 0 or d["produced_ton"] > 0)]
+    best_day = None
+    worst_day = None
+    if candidates:
+        best_day = max(candidates, key=lambda x: x["attainment_pct"])
+        worst_day = min(candidates, key=lambda x: x["attainment_pct"])
 
     # stops lists
-    by_type_list = [{"type": k, "hours": float(v)} for k, v in sorted(stops_by_type.items(), key=lambda kv: kv[1], reverse=True)]
-    by_eq_list = [{"equipment": k, "hours": float(v)} for k, v in sorted(stops_by_eq.items(), key=lambda kv: kv[1], reverse=True)]
+    by_type_list = [{"type": k, "hours": round(v, 2)} for k, v in sorted(stops_by_type.items(), key=lambda kv: kv[1], reverse=True)]
+    by_eq_list = [{"equipment": k, "hours": round(v, 2)} for k, v in sorted(stops_by_eq.items(), key=lambda kv: kv[1], reverse=True)]
+
+    hours_by_eq_list = [{"equipment": k, "hours": round(v, 2)} for k, v in sorted(hours_by_eq.items(), key=lambda kv: kv[1], reverse=True)]
 
     return {
-        "month": ym,
-        "meta_month_ton": float(meta_month),
-        "produced_month_ton": float(produced_month),
-        "attainment_pct": float(attainment),
-        "delta_ton": float(delta_ton),
-        "delta_pct": float(delta_pct),
+        "month": month,
+        "meta_month_ton": round(meta_month_ton, 2),
+        "produced_month_ton": round(produced_month_ton, 2),
+        "attainment_pct": round(attainment_pct, 2),
+        "delta_ton": round(delta_ton, 2),
+        "delta_pct": round(delta_pct, 2),
+
         "days": {
             "produced_days": int(produced_days),
             "programmed_stop_days": int(programmed_stop_days),
-            "maintenance_stop_days": int(len(maint_days_set)),
+            "maintenance_stop_days": int(maintenance_stop_days),
         },
+
         "best_day": best_day,
         "worst_day": worst_day,
-        "kpis": {"freq_avg_pct": float(freq_avg), "avg_ton_per_hour": float(avg_tph_month)},
-        "shift": {"t1_ton": float(t1_month), "t2_ton": float(t2_month)},
-        "stops": {"by_type": by_type_list, "by_equipment": by_eq_list},
-        "horimetros": horimetros_list,
-        "series": {"daily": daily_series},
+
+        "kpis": {
+            "freq_avg_pct": round(freq_avg_pct, 2),
+            "avg_ton_per_hour": round(avg_ton_per_hour, 2),
+        },
+
+        "shift": {
+            "t1_ton": round(t1_month, 2),
+            "t2_ton": round(t2_month, 2),
+        },
+
+        "stops": {
+            "by_type": by_type_list,
+            "by_equipment": by_eq_list,
+        },
+
+        "hours_worked": {
+            "total_hours": round(total_work_hours, 2),
+            "by_equipment": hours_by_eq_list,
+        },
+
+        "series": {
+            "daily": daily_series,
+        },
     }
+
