@@ -14,6 +14,7 @@ import {
   LineChart,
   Line,
   Legend,
+  ReferenceArea,
 } from "recharts";
 import { useAuth } from "../auth/AuthProvider";
 
@@ -296,13 +297,16 @@ function MetricCard({
   sub,
   ok,
   chip,
+  tone = "normal",
 }: {
   title: string;
   value: string;
   sub: string;
   ok: boolean;
   chip?: React.ReactNode;
+  tone?: "normal" | "low";
 }) {
+  const isLow = tone === "low";
   return (
     <div
       style={{
@@ -322,8 +326,9 @@ function MetricCard({
           position: "absolute",
           inset: -30,
           background: `radial-gradient(600px 180px at 20% 20%, ${
-            ok ? "rgba(34,197,94,0.18)" : "rgba(251,113,133,0.18)"
+            ok ? "rgba(34,197,94,0.14)" : "rgba(251,113,133,0.14)"
           }, transparent 55%)`,
+          opacity: isLow ? 0.6 : 1,
           pointerEvents: "none",
         }}
       />
@@ -334,7 +339,7 @@ function MetricCard({
             <div
               style={{
                 marginTop: 6,
-                fontSize: 28,
+                fontSize: isLow ? 24 : 28,
                 fontWeight: 980,
                 color: COLORS.text,
                 letterSpacing: -0.4,
@@ -348,6 +353,40 @@ function MetricCard({
         </div>
         {/* sub = uma única linha (sem redundância) */}
         <div style={{ marginTop: 8, fontSize: 12, fontWeight: 900, color: COLORS.sub }}>{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+function MiniLegend() {
+  const itemStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: `1px solid ${COLORS.stroke}`,
+    background: "rgba(255,255,255,0.04)",
+    color: "rgba(255,255,255,0.78)",
+    fontWeight: 900,
+    fontSize: 12,
+    whiteSpace: "nowrap",
+  };
+
+  const dot = (bg: string) => (
+    <span style={{ width: 10, height: 10, borderRadius: 999, background: bg, display: "inline-block" }} />
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div style={itemStyle} title="Indicador acima do alvo/esperado">
+        {dot("rgba(34,197,94,0.95)")} Acima
+      </div>
+      <div style={itemStyle} title="Indicador abaixo do alvo/esperado">
+        {dot("rgba(251,113,133,0.95)")} Abaixo
+      </div>
+      <div style={itemStyle} title="Indicador em atenção">
+        {dot("rgba(255,159,26,0.95)")} Atenção
       </div>
     </div>
   );
@@ -455,7 +494,8 @@ export default function Statistics() {
       const produced = Number(d.produced_ton || 0);
       const meta = Number(d.meta_ton || 0);
       const pct = meta > 0 ? (produced / meta) * 100 : 0;
-      return { day: ymdToDM(d.day), produced, meta, pct };
+      const noProd = meta > 0 && produced <= 0;
+      return { day: ymdToDM(d.day), produced, meta, pct, noProd };
     });
   }, [daily]);
 
@@ -590,6 +630,26 @@ export default function Statistics() {
   }, [totalWorkedHours, totalStopHours]);
 
   const okAvail = availabilityPct >= 85;
+
+  const microInsight = useMemo(() => {
+    if (totalStopHours <= 0.01) return "";
+    const tA = stopsByType?.[0];
+    const tB = stopsByType?.[1];
+    const dA = stopsByDesc?.[0];
+
+    const pct = (h?: number) => {
+      const v = Number(h || 0);
+      return totalStopHours > 0 ? Math.round((v / totalStopHours) * 100) : 0;
+    };
+
+    const parts: string[] = [];
+    if (tA) parts.push(`${tA.name} (${pct(tA.hours)}%)`);
+    if (tB) parts.push(`${tB.name} (${pct(tB.hours)}%)`);
+
+    const head = parts.length ? `Principais perdas: ${parts.join(" e ")}.` : "";
+    const cause = dA ? ` Causa líder: ${dA.name} (${pct(dA.hours)}%).` : "";
+    return (head + cause).trim();
+  }, [totalStopHours, stopsByType, stopsByDesc]);
 
   return (
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -731,6 +791,7 @@ export default function Statistics() {
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
         <MetricCard
           title="Atingimento"
+          tone="low"
           value={fmtPct(attainmentPct, 0)}
           sub={`${okAtt ? "🟢" : "🔴"} ${okAtt ? "Acima da meta" : "Abaixo da meta"} • (${deltaTon >= 0 ? "+" : "-"}${fmtBR0(Math.abs(deltaTon))} t)`}
           ok={okAtt}
@@ -739,7 +800,7 @@ export default function Statistics() {
         <MetricCard
           title="Projeção (run-rate)"
           value={`${fmtBR0(projection.projected_ton)} t`}
-          sub={`${projection.projected_pct >= 100 ? "🟢" : "🔴"} Projeção do mês: ${fmtPct(projection.projected_pct, 0)}`}
+          sub={`${projection.projected_pct >= 100 ? "🟢" : "🔴"} Projeção do mês: ${fmtPct(projection.projected_pct, 0)} • Mantido o ritmo atual (dias produtivos)`}
           ok={projection.projected_pct >= 100}
         />
 
@@ -755,7 +816,25 @@ export default function Statistics() {
         <MetricCard title="Produção média" value={`${fmtBR0(avgTonH)} t/h`} sub="⛏ Média agregada do mês" ok={avgTonH > 0} />
       </div>
 
-      <SectionHeader icon="⛏" title="Diagnóstico Operacional" sub="produção diária, turnos, horímetros e paradas" />
+      {/* Micro-insights + legenda global */}
+      <div
+        style={{
+          borderRadius: 18,
+          border: `1px solid ${COLORS.stroke}`,
+          background: "rgba(0,0,0,0.18)",
+          padding: 12,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900, fontSize: 12, minWidth: 0 }}>
+          {microInsight ? `💡 ${microInsight}` : "💡 Insights: sem paradas registradas no período."}
+        </div>
+        <MiniLegend />
+      </div>
 
       <SectionHeader icon="🧭" title="Diagnóstico Operacional" sub="produção diária, turnos, horímetros e paradas" />
 
@@ -769,7 +848,10 @@ export default function Statistics() {
                 <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={18} angle={-30} textAnchor="end" height={54} tick={xTick} />
                 <YAxis tick={yTick} />
                 <Tooltip content={<DailyTooltip />} />
-                <Line type="monotone" dataKey="meta" stroke={COLORS.slate} strokeWidth={2} dot={false} />
+                {dailySeries.filter((d: any) => d.noProd).map((d: any) => (
+                  <ReferenceArea key={d.day} x1={d.day} x2={d.day} fill="rgba(255,255,255,0.035)" />
+                ))}
+                <Line type="monotone" dataKey="meta" stroke="rgba(148,163,184,0.45)" strokeWidth={1.2} strokeDasharray="6 6" dot={false} />
                 <Line type="monotone" dataKey="produced" stroke={COLORS.cyan} strokeWidth={3} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -967,7 +1049,7 @@ export default function Statistics() {
       {/* Número de paradas por período + horas por descrição */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Card title="Número de paradas por período" sub="Contagem por hora (ex.: 07-08, 08-09)">
-          <div style={{ height: 460, minHeight: 460 }}>
+          <div style={{ height: 360, minHeight: 360 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stopsCountByPeriod} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
