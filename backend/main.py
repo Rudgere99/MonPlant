@@ -18,34 +18,26 @@ from auth_dep import require_owner_id
 
 app = FastAPI(title="MonPlant API", version="1.0.0")
 
-# -------------------- CORS --------------------
-# Vercel (prod) + localhost (dev). Você pode sobrescrever via env CORS_ORIGINS (separado por vírgula).
-_default_origins = [
+# =========================
+# CORS
+# =========================
+# Defina CORS_ORIGINS no Railway (separado por vírgula) para produção.
+# Ex: CORS_ORIGINS=https://mon-plant.vercel.app,https://monplant-production.up.railway.app
+default_origins = [
+    "https://mon-plant.vercel.app",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://mon-plant.vercel.app",
-    "https://monplant.vercel.app",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
-_env_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
-ALLOW_ORIGINS = _env_origins or _default_origins
+_env = (os.getenv("CORS_ORIGINS") or "").strip()
+if _env:
+    ALLOWED_ORIGINS = [o.strip() for o in _env.split(",") if o.strip()]
+else:
+    ALLOWED_ORIGINS = default_origins
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOW_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
-# ----------------------------------------------
-
-
-# =========================
-# CORS
-# =========================
-ALLOWED_ORIGINS = ["*"]  # depois você trava na URL do Vercel
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -1125,3 +1117,147 @@ def delete_horimetro(
     )
 
     return {"ok": True}
+
+
+# =========================
+# Metas (por dia / mês) — NÃO bloqueia dias anteriores
+# =========================
+
+class GoalDayIn(BaseModel):
+    meta_ton: float = Field(0, ge=0)
+    discount_hours: float = Field(2, ge=0, le=24)
+
+class GoalDayOut(BaseModel):
+    day: date
+    meta_ton: float
+    discount_hours: float
+
+class GoalMonthIn(BaseModel):
+    days: List[GoalDayOut]
+
+class GoalMonthOut(BaseModel):
+    month: str
+    total_month_ton: float
+    days: List[GoalDayOut]
+
+def _ensure_goals_table():
+    ddl = """
+    CREATE TABLE IF NOT EXISTS public.bv_goals_daily(
+      owner_id TEXT NOT NULL,
+      day DATE NOT NULL,
+      meta_ton NUMERIC(18,2) NOT NULL DEFAULT 0,
+      discount_hours NUMERIC(10,2) NOT NULL DEFAULT 2,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(owner_id, day)
+    );
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(ddl)
+        conn.commit()
+
+@app.on_event("startup")
+def _startup_goals():
+    try:
+        _ensure_goals_table()
+    except Exception:
+        # não derruba a API por causa de DDL
+        pass
+
+def _parse_yyyy_mm(s: str) -> date:
+    if not re.fullmatch(r"\d{4}-\d{2}", s or ""):
+        raise HTTPException(status_code=400, detail="month deve ser YYYY-MM")
+    y, m = s.split("-")
+    y = int(y); m = int(m)
+    if m < 1 or m > 12:
+        raise HTTPException(status_code=400, detail="month inválido")
+    return date(y, m, 1)
+
+def _month_range(first: date):
+    # [first, next_month)
+    if first.month == 12:
+        nxt = date(first.year + 1, 1, 1)
+    else:
+        nxt = date(first.year, first.month + 1, 1)
+    return first, nxt
+
+@app.get("/api/goals/day/{day}", response_model=GoalDayOut)
+def goals_get_day(day: date, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT meta_ton, discount_hours
+                     FROM public.bv_goals_daily
+                     WHERE owner_id=%s AND day=%s""",
+                (owner_id, day),
+            )
+            row = cur.fetchone()
+    if not row:
+        return GoalDayOut(day=day, meta_ton=0.0, discount_hours=2.0)
+    return GoalDayOut(day=day, meta_ton=float(row[0] or 0), discount_hours=float(row[1] or 0))
+
+@app.put("/api/goals/day/{day}", response_model=GoalDayOut)
+def goals_put_day(day: date, body: GoalDayIn, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO public.bv_goals_daily(owner_id, day, meta_ton, discount_hours)
+                     VALUES(%s,%s,%s,%s)
+                     ON CONFLICT (owner_id, day)
+                     DO UPDATE SET meta_ton=EXCLUDED.meta_ton,
+                                   discount_hours=EXCLUDED.discount_hours,
+                                   updated_at=NOW()""",
+                (owner_id, day, body.meta_ton, body.discount_hours),
+            )
+        conn.commit()
+    return GoalDayOut(day=day, meta_ton=float(body.meta_ton), discount_hours=float(body.discount_hours))
+
+@app.get("/api/goals/month/{month}", response_model=GoalMonthOut)
+def goals_get_month(month: str, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    first = _parse_yyyy_mm(month)
+    a, b = _month_range(first)
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT day, meta_ton, discount_hours
+                     FROM public.bv_goals_daily
+                     WHERE owner_id=%s AND day >= %s AND day < %s
+                     ORDER BY day ASC""",
+                (owner_id, a, b),
+            )
+            rows = cur.fetchall() or []
+
+    days = [GoalDayOut(day=r[0], meta_ton=float(r[1] or 0), discount_hours=float(r[2] or 0)) for r in rows]
+    total_month = float(sum(d.meta_ton for d in days))
+    return GoalMonthOut(month=month, total_month_ton=total_month, days=days)
+
+@app.put("/api/goals/month/{month}", response_model=GoalMonthOut)
+def goals_put_month(month: str, body: GoalMonthIn, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    first = _parse_yyyy_mm(month)
+    a, b = _month_range(first)
+
+    # valida: só aceita dias dentro do mês
+    for d in body.days:
+        if d.day < a or d.day >= b:
+            raise HTTPException(status_code=400, detail=f"Dia {d.day} fora do mês {month}")
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            for d in body.days:
+                cur.execute(
+                    """INSERT INTO public.bv_goals_daily(owner_id, day, meta_ton, discount_hours)
+                         VALUES(%s,%s,%s,%s)
+                         ON CONFLICT (owner_id, day)
+                         DO UPDATE SET meta_ton=EXCLUDED.meta_ton,
+                                       discount_hours=EXCLUDED.discount_hours,
+                                       updated_at=NOW()""",
+                    (owner_id, d.day, d.meta_ton, d.discount_hours),
+                )
+        conn.commit()
+
+    # retorna consolidado
+    return goals_get_month(month, owner_id)
