@@ -31,8 +31,7 @@ type NavItem = {
 };
 
 const nav: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard,
-  BarChart3, group: "Visão geral" },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Visão geral" },
 
   // ===== DEV =====
   { to: "/dashboard/producao-dia", label: "Dev Dash", icon: Code2, group: "Desenvolvimento", devOnly: true },
