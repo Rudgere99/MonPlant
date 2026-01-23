@@ -432,10 +432,19 @@ export default function Dashboard() {
     return sum;
   }, [prodDay]);
 
-  const pctMeta = useMemo(() => {
+  const pctMetaRaw = useMemo(() => {
     if (metaDia <= 0) return 0;
-    return Math.max(0, Math.min(100, (totalTonDay / metaDia) * 100));
-  }, [totalTonDay]);
+    return (totalTonDay / metaDia) * 100;
+  }, [totalTonDay, metaDia]);
+
+  // Gauge não passa de 100% (visual), mas o texto mostra o valor real (ex: 120%)
+  const pctMetaGauge = useMemo(() => {
+    return Math.max(0, Math.min(100, pctMetaRaw));
+  }, [pctMetaRaw]);
+
+  const pctMetaOver = useMemo(() => {
+    return pctMetaRaw > 100 ? pctMetaRaw - 100 : 0;
+  }, [pctMetaRaw]);
 
   // ✅ normaliza + garante 24 horas + inclui 23-00 (mapeado para 23-24)
   const hourlySeries = useMemo(() => {
@@ -541,7 +550,7 @@ export default function Dashboard() {
     return s / levelBars.length;
   }, [levelBars]);
 
-  const gaugeData = useMemo(() => [{ name: "meta", value: pctMeta, fill: "#ff9f1a" }], [pctMeta]);
+  const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff9f1a" }], [pctMetaGauge]);
 
   /* ===================== styles ===================== */
   const cardBase: React.CSSProperties = {
@@ -980,8 +989,13 @@ export default function Dashboard() {
                           </ResponsiveContainer>
 
                           <div style={{ position: "absolute", left: 0, right: 0, top: 78, textAlign: "center", pointerEvents: "none" }}>
-                            <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMeta)}%</div>
+                            <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMetaRaw)}%</div>
                             <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
+                            {pctMetaOver > 0 ? (
+                              <div style={{ marginTop: 4, fontWeight: 900, color: "rgba(34,197,94,0.95)" }}>
+                                +{fmtBR0(pctMetaOver)}% acima
+                              </div>
+                            ) : null}
                             <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
                               {fmtBR0(totalTonDay)} t
                             </div>
@@ -1072,7 +1086,7 @@ export default function Dashboard() {
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
+                              <XAxis dataKey="period" interval={2} tickMargin={10} angle={-35} textAnchor="end" height={34} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
                               <YAxis domain={miniTonDomain} hide />
                               <Tooltip
                                 formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
@@ -1441,8 +1455,13 @@ export default function Dashboard() {
             </ResponsiveContainer>
 
             <div style={{ position: "absolute", left: 0, right: 0, top: 78, textAlign: "center", pointerEvents: "none" }}>
-              <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMeta)}%</div>
+              <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMetaRaw)}%</div>
               <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
+                            {pctMetaOver > 0 ? (
+                              <div style={{ marginTop: 4, fontWeight: 900, color: "rgba(34,197,94,0.95)" }}>
+                                +{fmtBR0(pctMetaOver)}% acima
+                              </div>
+                            ) : null}
               <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
                 {fmtBR0(totalTonDay)} t
               </div>
@@ -1531,7 +1550,7 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
+                <XAxis dataKey="period" interval={2} tickMargin={10} angle={-35} textAnchor="end" height={34} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
                 <YAxis domain={miniTonDomain} hide />
                 <Tooltip
                   formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
