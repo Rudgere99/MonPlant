@@ -1426,7 +1426,7 @@ def stats_month(month: str, owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select day, equipamento, tipo_parada, tempo_parada_h
+            select day, equipamento, tipo_parada, descricao, hora_inicio, tempo_parada_h
             from public.bv_stops
             where owner_id=%s and day >= %s and day < %s
             """,
@@ -1436,17 +1436,33 @@ def stats_month(month: str, owner_id: str = Depends(require_owner_id)):
 
     stops_by_type: Dict[str, float] = {}
     stops_by_eq: Dict[str, float] = {}
+    stops_by_desc: Dict[str, float] = {}
+    stops_count_by_period: Dict[str, int] = {}
     maint_days_set = set()
 
     for r in stop_rows:
         d = _col(r, "day", 0)
         ds = str(d)
+
         eq = str(_col(r, "equipamento", 1) or "").strip() or "—"
         tp = str(_col(r, "tipo_parada", 2) or "").strip() or "—"
-        h = float(_col(r, "tempo_parada_h", 3) or 0)
+        desc = str(_col(r, "descricao", 3) or "").strip() or "—"
+        hora_ini = str(_col(r, "hora_inicio", 4) or "").strip()
+        h = float(_col(r, "tempo_parada_h", 5) or 0)
 
         stops_by_type[tp] = stops_by_type.get(tp, 0.0) + h
         stops_by_eq[eq] = stops_by_eq.get(eq, 0.0) + h
+        stops_by_desc[desc] = stops_by_desc.get(desc, 0.0) + h
+
+        # contagem por período HH-HH usando hora_inicio
+        try:
+            hh = int(hora_ini.split(":")[0]) if hora_ini else None
+        except Exception:
+            hh = None
+        if hh is not None and 0 <= hh <= 23:
+            nxt = (hh + 1) % 24
+            period = f"{hh:02d}-{nxt:02d}"
+            stops_count_by_period[period] = stops_count_by_period.get(period, 0) + 1
 
         if "manut" in tp.lower():
             # considera dia de manutenção se tiver >= 0.5h no dia (ajustável)
@@ -1565,6 +1581,14 @@ def stats_month(month: str, owner_id: str = Depends(require_owner_id)):
         "stops": {
             "by_type": by_type_list,
             "by_equipment": by_eq_list,
+            "by_description": [
+                {"description": k, "hours": round(v, 2)}
+                for k, v in sorted(stops_by_desc.items(), key=lambda kv: kv[1], reverse=True)
+            ],
+            "count_by_period": [
+                {"period": k, "count": int(v)}
+                for k, v in sorted(stops_count_by_period.items(), key=lambda kv: kv[0])
+            ],
         },
 
         "hours_worked": {
