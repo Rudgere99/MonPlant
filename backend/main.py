@@ -1140,6 +1140,21 @@ class GoalMonthOut(BaseModel):
     total_month_ton: float
     days: List[GoalDayOut]
 
+
+
+def _col(r, key: str, idx: int):
+    """Compat: aceita RealDictCursor (dict) ou cursor tuple."""
+    try:
+        if isinstance(r, dict):
+            return r.get(key)
+    except Exception:
+        pass
+    try:
+        return r[idx]
+    except Exception:
+        return None
+
+
 def _ensure_goals_table():
     ddl = """
     CREATE TABLE IF NOT EXISTS public.bv_goals_daily(
@@ -1195,7 +1210,7 @@ def goals_get_day(day: date, owner_id: str = Depends(require_owner_id)):
             row = cur.fetchone()
     if not row:
         return GoalDayOut(day=day, meta_ton=0.0, discount_hours=2.0)
-    return GoalDayOut(day=day, meta_ton=float(row[0] or 0), discount_hours=float(row[1] or 0))
+    return GoalDayOut(day=day, meta_ton=float(_col(row,'meta_ton',0) or 0), discount_hours=float(_col(row,'discount_hours',1) or 0))
 
 @app.put("/api/goals/day/{day}", response_model=GoalDayOut)
 def goals_put_day(day: date, body: GoalDayIn, owner_id: str = Depends(require_owner_id)):
@@ -1230,7 +1245,7 @@ def goals_get_month(month: str, owner_id: str = Depends(require_owner_id)):
             )
             rows = cur.fetchall() or []
 
-    days = [GoalDayOut(day=r[0], meta_ton=float(r[1] or 0), discount_hours=float(r[2] or 0)) for r in rows]
+    days = [GoalDayOut(day=_col(r,'day',0), meta_ton=float(_col(r,'meta_ton',1) or 0), discount_hours=float(_col(r,'discount_hours',2) or 0)) for r in rows]
     total_month = float(sum(d.meta_ton for d in days))
     return GoalMonthOut(month=month, total_month_ton=total_month, days=days)
 
