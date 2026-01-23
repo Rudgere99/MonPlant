@@ -21,7 +21,18 @@ app = FastAPI(title="MonPlant API", version="1.0.0")
 # =========================
 # CORS
 # =========================
-ALLOWED_ORIGINS = ["*"]  # depois você trava na URL do Vercel
+# IMPORTANTE:
+# - Quando allow_credentials=True, NÃO pode usar allow_origins=['*'].
+#   Caso contrário o navegador bloqueia e o FastAPI não envia Access-Control-Allow-Origin.
+# - Inclua aqui o(s) domínio(s) do Vercel e seus ambientes locais.
+ALLOWED_ORIGINS = [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "https://mon-plant.vercel.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -29,6 +40,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # =========================
 # Helpers
