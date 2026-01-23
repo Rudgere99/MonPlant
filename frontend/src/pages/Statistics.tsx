@@ -155,18 +155,10 @@ function StatusChip({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-
 function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: number }) {
-  // Meta = referência (100%). Produzido "enche" conforme se aproxima.
-  const base = Math.max(metaTon, 1);
-
-  // Permite ultrapassar até 120% (para mostrar acima da meta).
-  const producedPctRaw = (producedTon / base) * 100;
-  const producedPct = Math.min(Math.max(producedPctRaw, 0), 120);
-
-  const H = 96; // altura útil (px) das barras
-  const producedH = Math.max(12, Math.round((producedPct / 100) * H));
-  const metaH = H;
+  const maxV = Math.max(producedTon, metaTon, 1);
+  const leftH = Math.max(8, Math.round((producedTon / maxV) * 100));
+  const rightH = Math.max(8, Math.round((metaTon / maxV) * 100));
 
   const barBase: React.CSSProperties = {
     width: "100%",
@@ -192,7 +184,7 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
         padding: 14,
         position: "relative",
         overflow: "hidden",
-        minHeight: 120,
+        minHeight: 92,
         gridColumn: "span 2",
       }}
     >
@@ -204,62 +196,37 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
           pointerEvents: "none",
         }}
       />
-
       <div style={{ position: "relative" }}>
         <div style={{ fontSize: 12, fontWeight: 900, color: COLORS.sub }}>Meta do mês x Produção do mês</div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 8px 1fr",
-            gap: 12,
-            alignItems: "end",
-            height: H + 34,
-            marginTop: 10,
-          }}
-        >
-          {/* Produzido (esquerda) */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 8px 1fr", gap: 12, alignItems: "end", height: 88, marginTop: 10 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, fontSize: 12 }}>
-              Produzido • {fmtPct(producedPctRaw, 0)}
-            </div>
+            <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, fontSize: 12 }}>Produzido</div>
             <div
               style={{
                 ...barBase,
-                height: producedH,
+                height: `${leftH}%`,
                 background: "linear-gradient(180deg, rgba(255,159,26,0.96), rgba(255,159,26,0.55))",
-                boxShadow: producedPctRaw >= 100 ? "0 0 0 1px rgba(34,197,94,0.20), 0 16px 50px rgba(34,197,94,0.10)" : undefined,
               }}
-              title="Produção do mês"
             >
               <div style={{ fontSize: 22 }}>{fmtBR0(producedTon)} t</div>
             </div>
           </div>
 
-          {/* divisor */}
           <div style={{ width: 2, height: "100%", justifySelf: "center", borderRadius: 999, background: "rgba(255,255,255,0.10)" }} />
 
-          {/* Meta (direita) */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, fontSize: 12, textAlign: "right" }}>Meta</div>
             <div
               style={{
                 ...barBase,
-                height: metaH,
+                height: `${rightH}%`,
                 background: "linear-gradient(180deg, rgba(148,163,184,0.75), rgba(148,163,184,0.35))",
               }}
-              title="Meta do mês"
             >
               <div style={{ fontSize: 22 }}>{fmtBR0(metaTon)} t</div>
             </div>
           </div>
-        </div>
-
-        <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
-            {producedPctRaw >= 100 ? `+${fmtBR0(producedTon - metaTon)} t acima da meta` : `${fmtBR0(metaTon - producedTon)} t para atingir`}
-          </div>
-          <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Referência: meta = 100%</div>
         </div>
       </div>
     </div>
@@ -449,42 +416,6 @@ export default function Statistics() {
   const programmedStopDays = useMemo(() => data?.days?.programmed_stop_days ?? daily.filter((d) => (d.meta_ton || 0) === 0).length, [data, daily]);
   const maintDays = useMemo(() => data?.days?.maintenance_stop_days ?? daily.filter((d) => (d.maintenance_hours || 0) > 0).length, [data, daily]);
 
-  const daysAboveMeta = useMemo(() => {
-    // considera apenas dias com meta > 0
-    return daily.reduce((acc, d) => {
-      const meta = Number(d.meta_ton || 0);
-      const prod = Number(d.produced_ton || 0);
-      if (meta <= 0) return acc;
-      return acc + (prod >= meta ? 1 : 0);
-    }, 0);
-  }, [daily]);
-
-  const top5Days = useMemo(() => {
-    const rows = daily
-      .map((d) => {
-        const meta = Number(d.meta_ton || 0);
-        const prod = Number(d.produced_ton || 0);
-        const pct = meta > 0 ? (prod / meta) * 100 : 0;
-        return { day: d.day, prod, meta, pct };
-      })
-      .filter((r) => r.meta > 0);
-    rows.sort((a, b) => b.pct - a.pct);
-    return rows.slice(0, 5);
-  }, [daily]);
-
-  const bottom5Days = useMemo(() => {
-    const rows = daily
-      .map((d) => {
-        const meta = Number(d.meta_ton || 0);
-        const prod = Number(d.produced_ton || 0);
-        const pct = meta > 0 ? (prod / meta) * 100 : 0;
-        return { day: d.day, prod, meta, pct };
-      })
-      .filter((r) => r.meta > 0);
-    rows.sort((a, b) => a.pct - b.pct);
-    return rows.slice(0, 5);
-  }, [daily]);
-
   return (
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
       {/* Header */}
@@ -643,12 +574,6 @@ export default function Statistics() {
             </div>
 
             <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
-              <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Dias acima da meta</div>
-              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{daysAboveMeta}</div>
-              <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Dias abaixo: {dim - daysAboveMeta}</div>
-            </div>
-
-            <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
               <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Parada programada</div>
               <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{programmedStopDays}</div>
               <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Dias com meta 0</div>
@@ -659,7 +584,12 @@ export default function Statistics() {
               <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{maintDays}</div>
               <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Dias com manutenção</div>
             </div>
-          </div>
+
+            <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
+              <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Status</div>
+              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{loading ? "…" : err ? "!" : "OK"}</div>
+              <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Fonte: /api/stats/month</div>
+            </div>
           </div>
         </Card>
 
@@ -770,95 +700,6 @@ export default function Statistics() {
           </div>
         </Card>
       </div>
-      {/* Top/Bottom 5 dias */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <Card title="Top 5 dias (maior % do dia)" sub="Performance considerando meta diária">
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {top5Days.map((r) => (
-              <div
-                key={r.day}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  padding: 12,
-                  borderRadius: 16,
-                  border: `1px solid ${COLORS.stroke}`,
-                  background: "rgba(0,0,0,0.18)",
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 980, color: COLORS.text }}>{ymdToDM(r.day)}</div>
-                  <div style={{ marginTop: 2, color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
-                    {fmtBR0(r.prod)} t / meta {fmtBR0(r.meta)} t
-                  </div>
-                </div>
-                <div
-                  style={{
-                    height: 34,
-                    padding: "0 12px",
-                    borderRadius: 999,
-                    border: "1px solid rgba(34,197,94,0.28)",
-                    background: "rgba(34,197,94,0.14)",
-                    color: "white",
-                    fontWeight: 980,
-                    display: "grid",
-                    placeItems: "center",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {fmtPct(r.pct, 0)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card title="Bottom 5 dias (menor % do dia)" sub="Pontos de atenção (meta diária)">
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {bottom5Days.map((r) => (
-              <div
-                key={r.day}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  padding: 12,
-                  borderRadius: 16,
-                  border: `1px solid ${COLORS.stroke}`,
-                  background: "rgba(0,0,0,0.18)",
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 980, color: COLORS.text }}>{ymdToDM(r.day)}</div>
-                  <div style={{ marginTop: 2, color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
-                    {fmtBR0(r.prod)} t / meta {fmtBR0(r.meta)} t
-                  </div>
-                </div>
-                <div
-                  style={{
-                    height: 34,
-                    padding: "0 12px",
-                    borderRadius: 999,
-                    border: "1px solid rgba(251,113,133,0.30)",
-                    background: "rgba(251,113,133,0.14)",
-                    color: "white",
-                    fontWeight: 980,
-                    display: "grid",
-                    placeItems: "center",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {fmtPct(r.pct, 0)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
 
       <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
         {err ? `Erro: ${err}` : api ? `Mês ${month} • API ${api}` : "Configure VITE_API_BASE"}
