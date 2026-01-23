@@ -13,6 +13,7 @@ import Horimetros from "../pages/Horimetros";
 import Paradas from "../pages/Paradas";
 import Exportar from "../pages/Exportar";
 import MetasMes from "../pages/MetasMes";
+import Statistics from "../pages/Statistics";
 
 import DevLogs from "../pages/Devlogs";
 import DevUsers from "../pages/DevUsers";
@@ -166,6 +167,15 @@ export function AppRoutes() {
           element={
             <RequireRole>
               <MetasMes />
+            </RequireRole>
+          }
+        />
+
+        <Route
+          path="statisticas"
+          element={
+            <RequireRole>
+              <Statistics />
             </RequireRole>
           }
         />
