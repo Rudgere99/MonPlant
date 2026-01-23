@@ -226,7 +226,6 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
         position: "relative",
         overflow: "hidden",
         minHeight: 96,
-        gridColumn: "span 2",
       }}
     >
       <div
@@ -345,12 +344,37 @@ function MetricCard({
               {value}
             </div>
           </div>
-          {chip ? chip : <StatusChip ok={ok} label={ok ? "Acima" : "Abaixo"} />}
+          {chip ? chip : <StatusChip ok={ok} label={ok ? "🟢 Acima" : "🔴 Abaixo"} />}
         </div>
-        <div style={{ marginTop: 8, fontSize: 12, fontWeight: 850, color: COLORS.sub }}>{sub}</div>
+        {/* sub = uma única linha (sem redundância) */}
+        <div style={{ marginTop: 8, fontSize: 12, fontWeight: 900, color: COLORS.sub }}>{sub}</div>
       </div>
     </div>
   );
+}
+
+function SectionHeader({ icon, title, sub }: { icon: string; title: string; sub?: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginTop: 4 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 980, color: "rgba(255,255,255,0.80)" }}>{icon}</div>
+        <div style={{ fontSize: 14, fontWeight: 980, color: "rgba(255,255,255,0.90)", letterSpacing: -0.2 }}>{title}</div>
+        {sub ? <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12, whiteSpace: "nowrap" }}>• {sub}</div> : null}
+      </div>
+      <div
+        style={{
+          height: 1,
+          flex: 1,
+          background: "linear-gradient(90deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02))",
+          marginTop: 8,
+        }}
+      />
+    </div>
+  );
+}
+
+function unitStyle() {
+  return { fontSize: 12, fontWeight: 950, color: "rgba(255,255,255,0.55)" } as const;
 }
 
 export default function Statistics() {
@@ -446,6 +470,25 @@ export default function Statistics() {
     boxShadow: "0 18px 40px rgba(0,0,0,0.6)",
   } as const;
 
+  const DailyTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const row = payload?.[0]?.payload || {};
+    const produced = Number(row.produced || 0);
+    const meta = Number(row.meta || 0);
+    const pct = meta > 0 ? (produced / meta) * 100 : 0;
+    return (
+      <div style={{ ...tooltipStyle, padding: 12 }}>
+        <div style={{ fontWeight: 980, marginBottom: 6 }}>{`Dia ${label}`}</div>
+        <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Produção</div>
+        <div style={{ fontWeight: 980 }}>{fmtBR0(produced)} t</div>
+        <div style={{ marginTop: 6, color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Meta</div>
+        <div style={{ fontWeight: 980 }}>{fmtBR0(meta)} t</div>
+        <div style={{ marginTop: 6, color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>% do dia</div>
+        <div style={{ fontWeight: 980 }}>{fmtPct(pct, 0)}</div>
+      </div>
+    );
+  };
+
   const projection = useMemo(() => {
     const producedDays = daily.filter((d) => (d.produced_ton || 0) > 0);
     if (!producedDays.length) return { projected_ton: 0, projected_pct: 0 };
@@ -490,10 +533,17 @@ export default function Statistics() {
     [data]
   );
   const stopsByDesc = useMemo(
-    () =>
-      (data?.stops?.by_description || [])
-        .map((x) => ({ name: x.description || "—", hours: Number(x.hours || 0) }))
-        .slice(0, 12),
+    () => {
+      const raw = (data?.stops?.by_description || []).map((x) => ({
+        name: (x.description || "—").trim() || "—",
+        hours: Number(x.hours || 0),
+      }));
+      // Top 8 + "Outros" (reduz densidade visual)
+      const top = raw.slice(0, 8);
+      const rest = raw.slice(8);
+      const otherHours = rest.reduce((a, b) => a + (Number(b.hours) || 0), 0);
+      return otherHours > 0.01 ? [...top, { name: "Outros", hours: otherHours }] : top;
+    },
     [data]
   );
   const stopsCountByPeriod = useMemo(
@@ -624,76 +674,103 @@ export default function Statistics() {
         </div>
       </div>
 
-      {/* KPI topo (executivo) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 14 }}>
-        <MonthBars producedTon={prodMonth} metaTon={metaMonth} />
+      {/* ===================== VISÃO EXECUTIVA ===================== */}
+      <SectionHeader icon="📌" title="Visão Executiva" sub="KPIs do mês" />
 
+      {/* KPI rei + barras meta x produzido */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 14 }}>
+        <div style={{ gridColumn: "span 7" }}>
+          <MonthBars producedTon={prodMonth} metaTon={metaMonth} />
+        </div>
+
+        {/* KPI Rei: Diferença vs Meta */}
+        <div
+          style={{
+            gridColumn: "span 5",
+            borderRadius: 22,
+            border: `1px solid ${COLORS.stroke}`,
+            background: COLORS.bgCard,
+            boxShadow: "0 30px 60px rgba(0,0,0,0.55)",
+            backdropFilter: "blur(14px)",
+            padding: 16,
+            position: "relative",
+            overflow: "hidden",
+            minHeight: 96,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: -30,
+              background: `radial-gradient(650px 220px at 25% 20%, ${
+                okAtt ? "rgba(34,197,94,0.18)" : "rgba(251,113,133,0.18)"
+              }, transparent 55%)`,
+              pointerEvents: "none",
+            }}
+          />
+          <div style={{ position: "relative" }}>
+            <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 10 }}>
+              <div>
+                <div style={{ color: COLORS.sub, fontWeight: 950, fontSize: 12 }}>⭐ KPI principal</div>
+                <div style={{ marginTop: 6, color: COLORS.text, fontWeight: 980, fontSize: 16 }}>Diferença vs Meta</div>
+              </div>
+              <StatusChip ok={okAtt} label={okAtt ? "🟢 Acima" : "🔴 Abaixo"} />
+            </div>
+
+            <div style={{ marginTop: 10, fontSize: 34, fontWeight: 990, color: COLORS.text, letterSpacing: -0.6, lineHeight: 1 }}>
+              {deltaTon >= 0 ? `+${fmtBR0(deltaTon)} t` : `-${fmtBR0(Math.abs(deltaTon))} t`}
+            </div>
+            <div style={{ marginTop: 8, color: COLORS.sub, fontWeight: 920 }}>
+              Atingimento: {fmtPct(attainmentPct, 0)} • {deltaPct >= 0 ? `+${fmtBR1(deltaPct)}%` : `-${fmtBR1(Math.abs(deltaPct))}%`}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* KPIs de suporte */}
+      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
         <MetricCard
           title="Atingimento"
           value={fmtPct(attainmentPct, 0)}
-          sub={okAtt ? `+${fmtBR1(attainmentPct - 100)}% acima da meta` : `${fmtBR1(100 - attainmentPct)}% abaixo da meta`}
+          sub={`${okAtt ? "🟢" : "🔴"} ${okAtt ? "Acima da meta" : "Abaixo da meta"} • (${deltaTon >= 0 ? "+" : "-"}${fmtBR0(Math.abs(deltaTon))} t)`}
           ok={okAtt}
         />
 
         <MetricCard
           title="Projeção (run-rate)"
           value={`${fmtBR0(projection.projected_ton)} t`}
-          sub={`Projeção do mês: ${fmtPct(projection.projected_pct, 0)}`}
+          sub={`${projection.projected_pct >= 100 ? "🟢" : "🔴"} Projeção do mês: ${fmtPct(projection.projected_pct, 0)}`}
           ok={projection.projected_pct >= 100}
         />
 
         <MetricCard
-          title="Disponibilidade (mês)"
+          title="Disponibilidade"
           value={fmtPct(availabilityPct, 0)}
-          sub={`Paradas: ${fmtBR1(totalStopHours)} h • Operado: ${fmtBR1(totalWorkedHours)} h`}
+          sub={`⏱ Paradas: ${fmtBR1(totalStopHours)} h • Operado: ${fmtBR1(totalWorkedHours)} h`}
           ok={okAvail}
           chip={<StatusChip ok={okAvail} label={okAvail ? "Boa" : "Atenção"} />}
         />
+
+        <MetricCard title="Frequência média" value={fmtPct(freqAvg, 0)} sub="📊 Média agregada do mês" ok={freqAvg >= 85} />
+        <MetricCard title="Produção média" value={`${fmtBR0(avgTonH)} t/h`} sub="⛏ Média agregada do mês" ok={avgTonH > 0} />
       </div>
 
-      {/* Turnos + KPIs rápidos */}
-      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
-        <MetricCard
-          title="Turno 1 (mês)"
-          value={`${fmtBR0(t1Month)} t`}
-          sub={`Participação: ${t1Month + t2Month > 0 ? fmtPct((t1Month / (t1Month + t2Month)) * 100, 0) : "0%"}`}
-          ok={true}
-          chip={<div />}
-        />
-        <MetricCard
-          title="Turno 2 (mês)"
-          value={`${fmtBR0(t2Month)} t`}
-          sub={`Participação: ${t1Month + t2Month > 0 ? fmtPct((t2Month / (t1Month + t2Month)) * 100, 0) : "0%"}`}
-          ok={true}
-          chip={<div />}
-        />
-        <MetricCard title="Frequência média" value={fmtPct(freqAvg, 0)} sub="Média agregada do mês" ok={freqAvg >= 85} />
-        <MetricCard title="Produção média (t/h)" value={`${fmtBR0(avgTonH)} t/h`} sub="Média agregada do mês" ok={avgTonH > 0} />
-      </div>
+      <SectionHeader icon="⛏" title="Diagnóstico Operacional" sub="produção diária, turnos, horímetros e paradas" />
+
+      <SectionHeader icon="🧭" title="Diagnóstico Operacional" sub="produção diária, turnos, horímetros e paradas" />
 
       {/* Produção diária + Turnos + Horas operadas */}
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1.15fr 0.85fr" }}>
-        <Card title="Produção diária x Meta diária" sub="Com % do dia no mesmo gráfico (executivo)">
+        <Card title="Produção diária x Meta diária" sub="Produção vs meta (a % aparece no tooltip)">
           <div style={{ height: 320, minHeight: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={dailySeries} margin={{ top: 16, right: 22, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
                 <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={18} angle={-30} textAnchor="end" height={54} tick={xTick} />
                 <YAxis tick={yTick} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(v: any, name: any) => {
-                    const n = Number(v || 0);
-                    if (name === "pct") return [fmtPct(n, 0), "% do dia"];
-                    if (name === "produced") return [`${fmtBR0(n)} t`, "Produção"];
-                    if (name === "meta") return [`${fmtBR0(n)} t`, "Meta"];
-                    return [String(v), String(name)];
-                  }}
-                  labelFormatter={(l) => `Dia ${l}`}
-                />
+                <Tooltip content={<DailyTooltip />} />
                 <Line type="monotone" dataKey="meta" stroke={COLORS.slate} strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="produced" stroke={COLORS.cyan} strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="pct" stroke={COLORS.orange} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -838,6 +915,8 @@ export default function Statistics() {
         </div>
       </div>
 
+      <SectionHeader icon="🛠" title="Paradas" sub="horas por tipo e por equipamento" />
+
       {/* Paradas: horas por tipo e por equipamento */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 14 }}>
         <Card title="Paradas por tipo" sub="Horas paradas agregadas no mês (apontamentos)">
@@ -883,7 +962,9 @@ export default function Statistics() {
         </Card>
       </div>
 
-      {/* Novos: número de paradas por período + horas por descrição */}
+      <SectionHeader icon="📊" title="Frequência e Descrições" sub="paradas por período e principais causas" />
+
+      {/* Número de paradas por período + horas por descrição */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Card title="Número de paradas por período" sub="Contagem por hora (ex.: 07-08, 08-09)">
           <div style={{ height: 460, minHeight: 460 }}>
@@ -906,7 +987,7 @@ export default function Statistics() {
           </div>
         </Card>
 
-        <Card title="Horas paradas por descrição" sub="Top 12 descrições (campo Descrição do apontamento)">
+        <Card title="Horas paradas por descrição" sub="Top 8 + Outros (campo Descrição do apontamento)">
           <div style={{ height: 460, minHeight: 460 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stopsByDesc} layout="vertical" margin={{ top: 6, right: 34, left: 22, bottom: 6 }}>
