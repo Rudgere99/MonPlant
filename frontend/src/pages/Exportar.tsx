@@ -115,6 +115,30 @@ function hoursDiff(start: any, end: any) {
   return Math.round((ms / 3600000) * 100) / 100;
 }
 
+function periodStartHour(p: any): number | null {
+  const s = String(p || "").trim();
+  // aceita "HH:MM-HH:MM" ou "HH:MM - HH:MM" ou "HH-HH"
+  let m = s.match(/^(\d{2}):\d{2}\s*-\s*\d{2}:\d{2}$/);
+  if (m) return Number(m[1]);
+  m = s.replace(/\s+/g, "").match(/^(\d{2})-(\d{2})$/);
+  if (m) return Number(m[1]);
+  return null;
+}
+function turnoByHour(h: number): 1 | 2 {
+  // Regra confirmada no backend:
+  // Turno 1: 07:00-19:00 (07..18)
+  // Turno 2: 19:00-07:00 (19..23 e 00..06)
+  return h >= 7 && h <= 18 ? 1 : 2;
+}
+function eqToPlanta(eqNormNoHyphen: string): string {
+  // Ajuste aqui se você tiver outros tags
+  if (eqNormNoHyphen === "PN01" || eqNormNoHyphen === "PNR01" || eqNormNoHyphen === "PNR001") return "Peneira Pnr001";
+  if (eqNormNoHyphen === "PN02" || eqNormNoHyphen === "PNR02" || eqNormNoHyphen === "PNR002") return "Peneira Pnr002";
+  if (eqNormNoHyphen === "BT01" || eqNormNoHyphen === "BT001") return "Britador Primário";
+  if (eqNormNoHyphen === "BT02" || eqNormNoHyphen === "BT002") return "Britador Secundário";
+  return "";
+}
+
 function getOrCreateSheet(wb: XLSX.WorkBook, name: string) {
   let ws = wb.Sheets[name];
   if (!ws) {
@@ -234,8 +258,14 @@ export default function Exportar() {
       }
 
       // ===================== ABA: Paradas =====================
+      // Mantém a aba simples "Paradas" (que você já usa)
       const wsParadas = getOrCreateSheet(wb, "Paradas");
       clearSheetValues(wsParadas, 2);
+
+      // E também preenche a aba do template "PARADAS TOTAIS" (mais completa)
+      const wsParTot = getOrCreateSheet(wb, "PARADAS TOTAIS");
+      // header do template começa na linha 2 (linha 1 é título/blank)
+      clearSheetValues(wsParTot, 3);
 
       allStops.sort((a, b) => {
         const sa = pick(a, ["start_at", "inicio", "start", "data_inicio", "dt_inicio"]);
@@ -245,7 +275,9 @@ export default function Exportar() {
         return da - db;
       });
 
-      let rPar = 2;
+      let rPar = 2;      // aba "Paradas"
+      let rParTot = 3;   // aba "PARADAS TOTAIS"
+
       for (const s of allStops) {
         const day = pick(s, ["day", "data_turno", "data", "shift_day"]) || null;
         const turno =
@@ -283,6 +315,7 @@ export default function Exportar() {
         if (typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)) dTurno = parseISODate(day);
         else if (start.date) dTurno = new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate());
 
+        // ---- Aba "Paradas" (simples) ----
         setCell(wsParadas, rPar, 1, dTurno);
         setCell(wsParadas, rPar, 2, String(turno || ""));
         setCell(wsParadas, rPar, 3, start.date ? new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate()) : "");
@@ -294,8 +327,31 @@ export default function Exportar() {
         setCell(wsParadas, rPar, 9, ativ);
         setCell(wsParadas, rPar, 10, desc);
         setCell(wsParadas, rPar, 11, tempo ?? "");
-
         rPar++;
+
+        // ---- Aba "PARADAS TOTAIS" (template) ----
+        // Colunas (pela planilha):
+        // B Data Início | C Hora Início | D Planta | E Turno | F Tipo de Parada | G Código da Parada | H Descrição
+        // I Data Fim    | J Hora Fim    | K Tempo Parada (fórmula no template)
+        const eqNormNoHyphen = normEq(equip); // já remove hífen no final
+        const planta = eqToPlanta(eqNormNoHyphen) || "";
+
+        // Tenta manter Turno numérico quando possível
+        const t = normTurno(turno) || "";
+
+        // Hora no formato "HH:MM" (o Excel converte)
+        setCell(wsParTot, rParTot, 2, start.date ? new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate()) : "");
+        setCell(wsParTot, rParTot, 3, start.hhmm || "");
+        setCell(wsParTot, rParTot, 4, planta);
+        setCell(wsParTot, rParTot, 5, t ? Number(t) : "");
+        setCell(wsParTot, rParTot, 6, String(tipo || ""));
+        // Código da Parada: não existe no cadastro do MonPlant hoje -> deixa vazio (não quebra fórmulas)
+        setCell(wsParTot, rParTot, 7, "");
+        setCell(wsParTot, rParTot, 8, String(desc || ""));
+        setCell(wsParTot, rParTot, 9, end.date ? new Date(end.date.getFullYear(), end.date.getMonth(), end.date.getDate()) : "");
+        setCell(wsParTot, rParTot, 10, end.hhmm || "");
+        // Coluna K (tempo) tem fórmula no template; não sobrescreve.
+        rParTot++;
       }
 
       // ===================== ABA: HORÍMETROS =====================
@@ -397,23 +453,65 @@ export default function Exportar() {
       const wsProd = getOrCreateSheet(wb, "PRODUÇÃO");
       clearSheetValues(wsProd, 3);
 
-      const prodMap = new Map<string, { total: number; obs: string }>();
+      // Consolida produção por dia e por turno (regra 07-19 / 19-07)
+      const prodShiftMap = new Map<
+        string,
+        { t1: number; t2: number; total: number; obs: string }
+      >();
+
       for (const pd of plantDays) {
-        const total = (pd.rows || []).reduce((acc, r) => acc + (Number(r.ton) || 0), 0);
-        prodMap.set(pd.day, { total, obs: String(pd.obs || "") });
+        let t1 = 0;
+        let t2 = 0;
+
+        for (const r of pd.rows || []) {
+          const ton = Number((r as any)?.ton) || 0;
+          if (!ton) continue;
+          const h = periodStartHour((r as any)?.period);
+          if (h === null) continue;
+          const t = turnoByHour(h);
+          if (t === 1) t1 += ton;
+          else t2 += ton;
+        }
+
+        const total = Math.round((t1 + t2) * 100) / 100;
+        prodShiftMap.set(pd.day, {
+          t1: Math.round(t1 * 100) / 100,
+          t2: Math.round(t2 * 100) / 100,
+          total,
+          obs: String(pd.obs || ""),
+        });
       }
 
+      // (1) Preenche a aba "PRODUÇÃO" (total por dia)
       let rProd = 3;
       for (const d of days) {
         const dt = parseISODate(d);
-        const v = prodMap.get(d) || { total: 0, obs: "" };
+        const v = prodShiftMap.get(d) || { t1: 0, t2: 0, total: 0, obs: "" };
 
-        setCell(wsProd, rProd, 2, dt);      // B = Data
-        setCell(wsProd, rProd, 3, "");      // C = Meta diaria (deixa template/fórmula)
-        setCell(wsProd, rProd, 4, v.total || ""); // D = Produção
-        setCell(wsProd, rProd, 5, v.obs || "");   // E = Observação
-
+        setCell(wsProd, rProd, 2, dt);              // B = Data
+        setCell(wsProd, rProd, 3, "");              // C = Meta diaria (deixa template/fórmula)
+        setCell(wsProd, rProd, 4, v.total || "");   // D = Produção (Total)
+        setCell(wsProd, rProd, 5, v.obs || "");     // E = Observação
         rProd++;
+      }
+
+      // (2) Preenche a aba "Planilha1" (Produção por Turno + Total)
+      const wsProdTurno = getOrCreateSheet(wb, "Planilha1");
+      clearSheetValues(wsProdTurno, 2);
+
+      let rPT = 2;
+      for (const d of days) {
+        const dt = parseISODate(d);
+        const v = prodShiftMap.get(d) || { t1: 0, t2: 0, total: 0, obs: "" };
+
+        // Colunas:
+        // A Data | B Meta diaria | C Produção 1° T | D Produção 2° T | E Total produzido
+        setCell(wsProdTurno, rPT, 1, dt);
+        setCell(wsProdTurno, rPT, 2, ""); // meta diária fica no template / você pode plugar depois
+        setCell(wsProdTurno, rPT, 3, v.t1 || "");
+        setCell(wsProdTurno, rPT, 4, v.t2 || "");
+        setCell(wsProdTurno, rPT, 5, v.total || "");
+        rPT++;
       }
 
       // 7) salva
