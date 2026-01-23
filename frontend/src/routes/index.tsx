@@ -12,6 +12,7 @@ import PlantProduction from "../pages/PlantProduction";
 import Horimetros from "../pages/Horimetros";
 import Paradas from "../pages/Paradas";
 import Exportar from "../pages/Exportar";
+import MetasMes from "../pages/MetasMes";
 
 import DevLogs from "../pages/Devlogs";
 import DevUsers from "../pages/DevUsers";
@@ -159,6 +160,16 @@ export function AppRoutes() {
     </RequireRole>
   }
   />
+
+        <Route
+          path="metas"
+          element={
+            <RequireRole>
+              <MetasMes />
+            </RequireRole>
+          }
+        />
+
         <Route
           path="exportar"
           element={
