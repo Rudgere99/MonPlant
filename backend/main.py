@@ -817,6 +817,193 @@ def put_plant_day(
     return {"ok": True, "day": str(day)}
 
 
+
+# =========================
+# Goals (Metas por dia / mês)
+# =========================
+# SQL (execute uma vez no Railway):
+#   create table if not exists public.bv_goals_daily(
+#     owner_id text not null,
+#     day date not null,
+#     meta_ton numeric(18,2) not null default 0,
+#     discount_hours numeric(10,2) not null default 2,
+#     updated_at timestamptz not null default now(),
+#     primary key(owner_id, day)
+#   );
+
+class GoalDayIn(BaseModel):
+    meta_ton: float = 0
+    discount_hours: float = 2  # almoço/paradas programadas
+
+
+@app.get("/api/goals/day/{day}")
+def get_goal_day(day: date, owner_id: str = Depends(require_owner_id)):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select day, meta_ton, discount_hours, updated_at
+            from public.bv_goals_daily
+            where owner_id=%s and day=%s
+            """,
+            (owner_id, day),
+        )
+        r = cur.fetchone()
+
+    if not r:
+        return {"day": str(day), "meta_ton": None, "discount_hours": None, "updated_at": None}
+
+    return {
+        "day": str(r["day"]),
+        "meta_ton": float(r["meta_ton"] or 0),
+        "discount_hours": float(r["discount_hours"] or 0),
+        "updated_at": r["updated_at"].isoformat() if r.get("updated_at") else None,
+    }
+
+
+@app.put("/api/goals/day/{day}")
+def put_goal_day(
+    day: date,
+    body: GoalDayIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    block_retro(day, x_dev_key)
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    meta_ton = float(body.meta_ton or 0)
+    discount_hours = float(body.discount_hours or 0)
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into public.bv_goals_daily(owner_id, day, meta_ton, discount_hours, updated_at)
+            values (%s,%s,%s,%s, now())
+            on conflict (owner_id, day)
+            do update set meta_ton=excluded.meta_ton,
+                         discount_hours=excluded.discount_hours,
+                         updated_at=now()
+            """,
+            (owner_id, day, meta_ton, discount_hours),
+        )
+        conn.commit()
+
+    log_action(
+        action="UPDATE_GOAL_DAY",
+        request=request,
+        user_id=user_id,
+        entity="bv_goals_daily",
+        entity_id=str(day),
+        payload={"owner_id": owner_id, "day": str(day), "meta_ton": meta_ton, "discount_hours": discount_hours},
+    )
+
+    return {"ok": True, "day": str(day)}
+
+
+class GoalMonthDay(BaseModel):
+    day: date
+    meta_ton: float = 0
+    discount_hours: float = 2
+
+
+class GoalMonthUpsert(BaseModel):
+    days: List[GoalMonthDay] = Field(default_factory=list)
+
+
+def _parse_ym(ym: str) -> tuple[int, int]:
+    m = re.fullmatch(r"(\d{4})-(\d{2})", (ym or "").strip())
+    if not m:
+        raise HTTPException(status_code=400, detail="month inválido (use YYYY-MM)")
+    y = int(m.group(1))
+    mo = int(m.group(2))
+    if mo < 1 or mo > 12:
+        raise HTTPException(status_code=400, detail="month inválido (use YYYY-MM)")
+    return y, mo
+
+
+@app.get("/api/goals/month/{ym}")
+def get_goals_month(ym: str, owner_id: str = Depends(require_owner_id)):
+    y, mo = _parse_ym(ym)
+    start = date(y, mo, 1)
+    end = (start.replace(day=28) + timedelta(days=4)).replace(day=1)  # 1º dia do mês seguinte
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select day, meta_ton, discount_hours, updated_at
+            from public.bv_goals_daily
+            where owner_id=%s and day >= %s and day < %s
+            order by day
+            """,
+            (owner_id, start, end),
+        )
+        rows = cur.fetchall() or []
+
+    days = [
+        {
+            "day": str(r["day"]),
+            "meta_ton": float(r["meta_ton"] or 0),
+            "discount_hours": float(r["discount_hours"] or 0),
+            "updated_at": r["updated_at"].isoformat() if r.get("updated_at") else None,
+        }
+        for r in rows
+    ]
+    total = sum(d["meta_ton"] for d in days)
+    return {"month": ym, "total_meta_ton": float(total), "days": days}
+
+
+@app.put("/api/goals/month/{ym}")
+def put_goals_month(
+    ym: str,
+    body: GoalMonthUpsert,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    # aplica retro por DIA (mantém regra atual)
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    # valida ym
+    _parse_ym(ym)
+
+    with get_conn() as conn, conn.cursor() as cur:
+        for d in body.days or []:
+            block_retro(d.day, x_dev_key)
+
+            meta_ton = float(d.meta_ton or 0)
+            discount_hours = float(d.discount_hours or 0)
+
+            cur.execute(
+                """
+                insert into public.bv_goals_daily(owner_id, day, meta_ton, discount_hours, updated_at)
+                values (%s,%s,%s,%s, now())
+                on conflict (owner_id, day)
+                do update set meta_ton=excluded.meta_ton,
+                             discount_hours=excluded.discount_hours,
+                             updated_at=now()
+                """,
+                (owner_id, d.day, meta_ton, discount_hours),
+            )
+
+        conn.commit()
+
+    log_action(
+        action="UPDATE_GOALS_MONTH",
+        request=request,
+        user_id=user_id,
+        entity="bv_goals_daily",
+        entity_id=str(ym),
+        payload={"owner_id": owner_id, "month": ym, "days_count": len(body.days or [])},
+    )
+
+    return {"ok": True, "month": ym, "count": len(body.days or [])}
+
+
 # =========================
 # Stops
 # =========================
