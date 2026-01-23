@@ -157,12 +157,16 @@ function StatusChip({ ok, label }: { ok: boolean; label: string }) {
 
 
 function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: number }) {
-  // Barra da meta = 100% (referência). Barra do produzido "enche" conforme se aproxima da meta.
+  // Meta = referência (100%). Produzido "enche" conforme se aproxima.
   const base = Math.max(metaTon, 1);
 
-  // Se passar da meta, permite ultrapassar até 120% para mostrar "acima".
+  // Permite ultrapassar até 120% (para mostrar acima da meta).
   const producedPctRaw = (producedTon / base) * 100;
   const producedPct = Math.min(Math.max(producedPctRaw, 0), 120);
+
+  const H = 96; // altura útil (px) das barras
+  const producedH = Math.max(12, Math.round((producedPct / 100) * H));
+  const metaH = H;
 
   const barBase: React.CSSProperties = {
     width: "100%",
@@ -188,7 +192,7 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
         padding: 14,
         position: "relative",
         overflow: "hidden",
-        minHeight: 110,
+        minHeight: 120,
         gridColumn: "span 2",
       }}
     >
@@ -200,10 +204,20 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
           pointerEvents: "none",
         }}
       />
+
       <div style={{ position: "relative" }}>
         <div style={{ fontSize: 12, fontWeight: 900, color: COLORS.sub }}>Meta do mês x Produção do mês</div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 8px 1fr", gap: 12, alignItems: "end", height: 96, marginTop: 10 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 8px 1fr",
+            gap: 12,
+            alignItems: "end",
+            height: H + 34,
+            marginTop: 10,
+          }}
+        >
           {/* Produzido (esquerda) */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, fontSize: 12 }}>
@@ -212,7 +226,7 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
             <div
               style={{
                 ...barBase,
-                height: `${Math.max(8, producedPct)}%`,
+                height: producedH,
                 background: "linear-gradient(180deg, rgba(255,159,26,0.96), rgba(255,159,26,0.55))",
                 boxShadow: producedPctRaw >= 100 ? "0 0 0 1px rgba(34,197,94,0.20), 0 16px 50px rgba(34,197,94,0.10)" : undefined,
               }}
@@ -231,7 +245,7 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
             <div
               style={{
                 ...barBase,
-                height: "100%",
+                height: metaH,
                 background: "linear-gradient(180deg, rgba(148,163,184,0.75), rgba(148,163,184,0.35))",
               }}
               title="Meta do mês"
@@ -251,8 +265,6 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
     </div>
   );
 }
-
-
 
 function MetricCard({
   title,
