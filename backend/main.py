@@ -772,7 +772,7 @@ def put_plant_day(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(day, x_dev_key)
+    # metas: permitir editar dias anteriores (sem bloqueio retroativo)
 
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
@@ -869,7 +869,7 @@ def put_goal_day(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(day, x_dev_key)
+    # metas: permitir editar dias anteriores (sem bloqueio retroativo)
 
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
@@ -973,7 +973,7 @@ def put_goals_month(
 
     with get_conn() as conn, conn.cursor() as cur:
         for d in body.days or []:
-            block_retro(d.day, x_dev_key)
+            # metas: permitir editar dias anteriores (sem bloqueio retroativo)
 
             meta_ton = float(d.meta_ton or 0)
             discount_hours = float(d.discount_hours or 0)
