@@ -94,6 +94,13 @@ function fmtPct(n: number, digits = 0) {
   const v = Number.isFinite(n) ? n : 0;
   return v.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits }) + "%";
 }
+
+function truncLabel(s: string, max = 28) {
+  const t = (s || "").trim();
+  if (!t) return "—";
+  if (t.length <= max) return t;
+  return t.slice(0, Math.max(0, max - 1)) + "…";
+}
 function ymdToDM(ymd: string) {
   if (!ymd) return "";
   const parts = ymd.split("-");
@@ -832,7 +839,7 @@ export default function Statistics() {
       </div>
 
       {/* Paradas: horas por tipo e por equipamento */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 14 }}>
         <Card title="Paradas por tipo" sub="Horas paradas agregadas no mês (apontamentos)">
           <div style={{ height: 280, minHeight: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -879,9 +886,9 @@ export default function Statistics() {
       {/* Novos: número de paradas por período + horas por descrição */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Card title="Número de paradas por período" sub="Contagem por hora (ex.: 07-08, 08-09)">
-          <div style={{ height: 520, minHeight: 520 }}>
+          <div style={{ height: 460, minHeight: 460 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stopsCountByPeriod} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+              <BarChart data={stopsCountByPeriod} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
                 <XAxis dataKey="period" interval={0} angle={-35} textAnchor="end" height={70} tick={xTick} />
                 <YAxis tick={yTick} />
@@ -900,12 +907,12 @@ export default function Statistics() {
         </Card>
 
         <Card title="Horas paradas por descrição" sub="Top 12 descrições (campo Descrição do apontamento)">
-          <div style={{ height: 260, minHeight: 260 }}>
+          <div style={{ height: 460, minHeight: 460 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stopsByDesc} layout="vertical" margin={{ top: 6, right: 16, left: 22, bottom: 6 }}>
+              <BarChart data={stopsByDesc} layout="vertical" margin={{ top: 6, right: 34, left: 22, bottom: 6 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
                 <XAxis type="number" tick={yTick} />
-                <YAxis type="category" dataKey="name" width={220} tick={xTick} />
+                <YAxis type="category" dataKey="name" width={300} tick={xTick} tickFormatter={(v) => truncLabel(String(v), 34)} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
                 <Bar dataKey="hours" fill={COLORS.orange} radius={[10, 10, 10, 10]}>
                   <LabelList
