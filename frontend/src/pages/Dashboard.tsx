@@ -81,7 +81,8 @@ function pad2(n: number) {
  * Aceita: "00-01", "0-1", "00:00-01:00", "00:00–01:00", "00:00 — 01:00"
  *
  * ✅ FIX 23-00:
- * - Se o segundo horário vier como "00", tratamos como "24" para bater com o grid 23-24.
+ * - O grid do dashboard usa o último período como "23-00" (virada do dia).
+ * - Então NUNCA converta "00" para "24" aqui, senão o dado cai em "23-24" e some do gráfico.
  */
 function normalizePeriod(period: string): string {
   const s0 = String(period || "").trim();
@@ -99,24 +100,22 @@ function normalizePeriod(period: string): string {
 
     if (h1m && h2m) {
       const h1 = Math.max(0, Math.min(23, Number(h1m[1])));
-      const h2raw = Number(h2m[1]);
-      const h2 = h2raw === 0 ? 24 : Math.max(0, Math.min(24, h2raw));
+      const h2 = Math.max(0, Math.min(23, Number(h2m[1]))); // ✅ mantém 00 como 00
       return `${pad2(h1)}-${pad2(h2)}`;
     }
   }
 
   const m = s.match(/^(\d{1,2})\s*-\s*(\d{1,2})$/);
   if (m) {
-    const h1 = Number(m[1]);
-    const h2raw = Number(m[2]);
-    const h2 = h2raw === 0 ? 24 : h2raw;
+    const h1 = Math.max(0, Math.min(23, Number(m[1])));
+    const h2 = Math.max(0, Math.min(23, Number(m[2]))); // ✅ mantém 00 como 00
     return `${pad2(h1)}-${pad2(h2)}`;
   }
 
   return s0;
 }
 
-/** Cria sempre as 24 horas: 00-01 ... 23-24 e mescla com rows */
+/** Cria sempre as 24 horas: 00-01 ... 23-00 (virada) e mescla com rows */
 function buildHourlyGrid(rows: { period: string; ton: number; freq: number }[]) {
   const map = new Map<string, { ton: number; freq: number }>();
 
@@ -446,7 +445,7 @@ export default function Dashboard() {
     return pctMetaRaw > 100 ? pctMetaRaw - 100 : 0;
   }, [pctMetaRaw]);
 
-  // ✅ normaliza + garante 24 horas + inclui 23-00 (mapeado para 23-24)
+  // ✅ normaliza + garante 24 horas + inclui 23-00
   const hourlySeries = useMemo(() => {
     const rows = prodDay?.rows || [];
     const data = rows.map((r) => ({
