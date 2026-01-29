@@ -90,6 +90,48 @@ function periodShort(p: string) {
   return `${(a || "").slice(0, 2)}-${(b || "").slice(0, 2)}`;
 }
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+/* ===================== Calculadora Conchadas helpers ===================== */
+
+type EqAvgMap = Record<string, number>; // equipamento -> média (t)
+
+const LS_EQ_AVG_KEY = "mp_eq_avg_t_per_bucket_v1";
+
+function loadEqAvg(): EqAvgMap {
+  try {
+    const raw = localStorage.getItem(LS_EQ_AVG_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object") return {};
+    const out: EqAvgMap = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const n = Number(v);
+      if (k && Number.isFinite(n) && n > 0) out[k] = n;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveEqAvg(map: EqAvgMap) {
+  try {
+    localStorage.setItem(LS_EQ_AVG_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+function nowBRTime(): string {
+  const d = new Date();
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/* ===================== types ===================== */
+
 type PlantHourRow = {
   period: string;
   ton?: string | number | null;
@@ -195,6 +237,77 @@ export default function PlantProduction() {
   }));
 
   const retro = isRetroDay(day);
+
+  /* ===================== Calculadora state ===================== */
+
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [eqAvgMap, setEqAvgMap] = useState<EqAvgMap>(() => loadEqAvg());
+
+  // lista simples (você pode trocar/expandir depois)
+  const equipmentOptions = useMemo(
+    () => ["EH-08", "EH-05", "EH-04", "PN-01", "PN-02", "BT-01", "BT-02", "PC-201", "PC-203"],
+    []
+  );
+
+  const [calcEq, setCalcEq] = useState<string>(equipmentOptions[0] || "EH-08");
+  const [calcConchadas, setCalcConchadas] = useState<string>("10");
+  const [calcAvg, setCalcAvg] = useState<string>("");
+
+  const [calcObs, setCalcObs] = useState<string>("");
+
+  // quando troca equipamento, preenche média salva (se houver)
+  useEffect(() => {
+    const saved = eqAvgMap[calcEq];
+    if (saved && (!calcAvg || Number(calcAvg) === 0)) {
+      setCalcAvg(String(saved).replace(".", ",")); // deixa amigável pt-BR
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calcEq]);
+
+  const calcTotal = useMemo(() => {
+    const c = parseBRNumber(calcConchadas);
+    const a = parseBRNumber(calcAvg);
+    if (c === null || a === null) return null;
+    return Math.max(0, c) * Math.max(0, a);
+  }, [calcConchadas, calcAvg]);
+
+  function onSaveAvg() {
+    const a = parseBRNumber(calcAvg);
+    if (a === null || a <= 0) {
+      setInfo("Informe um Peso médio válido para salvar.");
+      return;
+    }
+    const next = { ...eqAvgMap, [calcEq]: a };
+    setEqAvgMap(next);
+    saveEqAvg(next);
+    setInfo(`Média do equipamento ${calcEq} salva: ${fmtBR(a)} t/conchada`);
+  }
+
+  function onRegisterCalc() {
+    const c = parseBRNumber(calcConchadas);
+    const a = parseBRNumber(calcAvg);
+    const t = calcTotal;
+
+    if (c === null || a === null || t === null) {
+      setInfo("Preencha Conchadas e Peso médio para registrar.");
+      return;
+    }
+
+    const line = `• [${nowBRTime()}] ${calcEq}: ${fmtBR(c)} conchadas × ${fmtBR(a)} t = ${fmtBR(t)} t${
+      calcObs.trim() ? ` | Obs: ${calcObs.trim()}` : ""
+    }`;
+
+    setPayload((p) => {
+      const prev = (p.obs || "").trim();
+      const nextObs = prev ? `${prev}\n${line}` : line;
+      return { ...p, obs: nextObs };
+    });
+
+    setInfo("Registro adicionado na Observação do dia. Clique em Salvar para gravar.");
+    setCalcOpen(false);
+  }
+
+  /* ===================== rest ===================== */
 
   function normalizeRows(rows: PlantHourRow[]): PlantHourRow[] {
     const map: Record<string, PlantHourRow> = {};
@@ -321,6 +434,67 @@ export default function PlantProduction() {
     return [payload.rows.slice(0, 8), payload.rows.slice(8, 16), payload.rows.slice(16, 24)];
   }, [payload.rows]);
 
+  /* ===================== Modal styles ===================== */
+
+  const overlayStyle: React.CSSProperties = {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.65)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+    zIndex: 9999,
+  };
+
+  const modalStyle: React.CSSProperties = {
+    width: "min(520px, 96vw)",
+    borderRadius: 22,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(14,18,22,0.94)",
+    boxShadow: "0 30px 70px rgba(0,0,0,0.75)",
+    backdropFilter: "blur(12px)",
+    overflow: "hidden",
+  };
+
+  const modalHeader: React.CSSProperties = {
+    padding: "14px 16px",
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  };
+
+  const modalTitle: React.CSSProperties = {
+    fontWeight: 950,
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 16,
+    letterSpacing: -0.2,
+  };
+
+  const modalBody: React.CSSProperties = { padding: 16 };
+
+  const grid2: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  };
+
+  const softCard: React.CSSProperties = {
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.04)",
+    padding: 12,
+  };
+
+  const btnRow: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+    marginTop: 12,
+  };
+
   return (
     <div className="mp-container">
       <div className="mp-page-title">Produção do dia</div>
@@ -359,6 +533,23 @@ export default function PlantProduction() {
             <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
           </div>
 
+          {/* ✅ novo botão Calculadora */}
+          <button
+            className="mp-btn"
+            onClick={() => {
+              setCalcOpen(true);
+              setCalcObs("");
+              // tenta setar média do equipamento se existir
+              const saved = eqAvgMap[calcEq];
+              if (saved) setCalcAvg(String(saved).replace(".", ","));
+            }}
+            disabled={loading}
+            style={{ minWidth: 160 }}
+            title="Calculadora de produção por conchadas"
+          >
+            Calculadora
+          </button>
+
           <button
             className="mp-btn"
             onClick={saveDay}
@@ -374,86 +565,84 @@ export default function PlantProduction() {
         <div className="mp-card-b">
           {/* gráfico */}
           <div style={{ height: 440, width: "100%" }}>
-<ResponsiveContainer width="100%" height="100%">
-  <ComposedChart data={chartData} margin={{ top: 52, right: 24, bottom: 30, left: 10 }}>
-    <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartData} margin={{ top: 52, right: 24, bottom: 30, left: 10 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
 
-    <XAxis
-      dataKey="period"
-      tick={<CustomTick />}
-      interval={1}
-      height={44}
-      axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-      tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-    />
+                <XAxis
+                  dataKey="period"
+                  tick={<CustomTick />}
+                  interval={1}
+                  height={44}
+                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                />
 
-    <YAxis
-      yAxisId="ton"
-      // ✅ deixa automático como no dashboard (se quiser travar, volte pra domain={[0, 600]})
-      tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
-      axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-      tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-    />
+                <YAxis
+                  yAxisId="ton"
+                  tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
+                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                />
 
-    <YAxis
-      yAxisId="freq"
-      orientation="right"
-      domain={[0, 100]}
-      tickFormatter={(v) => `${v}%`}
-      tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
-      axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-      tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
-    />
+                <YAxis
+                  yAxisId="freq"
+                  orientation="right"
+                  domain={[0, 100]}
+                  tickFormatter={(v) => `${v}%`}
+                  tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
+                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                />
 
-    <Tooltip
-      formatter={(value: any, name: any) => {
-        if (value === null || value === undefined || value === "") return ["—", name];
-        if (name === "Frequência (%)") return [`${fmtPct0(Number(value))}%`, name];
-        if (name === "Ton/H") return [fmtBR(Number(value)), name];
-        return [String(value), name];
-      }}
-      labelFormatter={(label) => `Faixa: ${label}`}
-      contentStyle={{
-        background: "rgba(0,0,0,0.86)",
-        border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: 12,
-      }}
-      labelStyle={{ color: "rgba(255,255,255,0.85)", fontWeight: 900 }}
-    />
+                <Tooltip
+                  formatter={(value: any, name: any) => {
+                    if (value === null || value === undefined || value === "") return ["—", name];
+                    if (name === "Frequência (%)") return [`${fmtPct0(Number(value))}%`, name];
+                    if (name === "Ton/H") return [fmtBR(Number(value)), name];
+                    return [String(value), name];
+                  }}
+                  labelFormatter={(label) => `Faixa: ${label}`}
+                  contentStyle={{
+                    background: "rgba(0,0,0,0.86)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 12,
+                  }}
+                  labelStyle={{ color: "rgba(255,255,255,0.85)", fontWeight: 900 }}
+                />
 
-    <Legend wrapperStyle={{ color: "rgba(255,255,255,0.75)" }} />
+                <Legend wrapperStyle={{ color: "rgba(255,255,255,0.75)" }} />
 
-    <Bar
-      yAxisId="ton"
-      dataKey="ton"
-      name="Ton/H"
-      fill="#00D6FF"                 // ✅ igual o azul do dashboard
-      radius={[10, 10, 0, 0]}
-      barSize={28}
-      maxBarSize={34}
-    >
-      <LabelList dataKey="ton" content={<TonLabel />} />
-    </Bar>
+                <Bar
+                  yAxisId="ton"
+                  dataKey="ton"
+                  name="Ton/H"
+                  fill="#00D6FF"
+                  radius={[10, 10, 0, 0]}
+                  barSize={28}
+                  maxBarSize={34}
+                >
+                  <LabelList dataKey="ton" content={<TonLabel />} />
+                </Bar>
 
-    <Line
-      yAxisId="freq"
-      type="monotone"
-      dataKey="freq"
-      name="Frequência (%)"
-      stroke="#FFA31A"               // ✅ laranja do dashboard
-      strokeWidth={3}
-      connectNulls={false}
-      dot={(p: any) => {
-        if (p?.payload?.freq === null || p?.payload?.freq === undefined) return null;
-        return <circle cx={p.cx} cy={p.cy} r={4} fill="#FFA31A" stroke="rgba(0,0,0,.6)" strokeWidth={2} />;
-      }}
-      activeDot={{ r: 6 }}
-    >
-      <LabelList dataKey="freq" content={<FreqLabel />} />
-    </Line>
-  </ComposedChart>
-</ResponsiveContainer>
-
+                <Line
+                  yAxisId="freq"
+                  type="monotone"
+                  dataKey="freq"
+                  name="Frequência (%)"
+                  stroke="#FFA31A"
+                  strokeWidth={3}
+                  connectNulls={false}
+                  dot={(p: any) => {
+                    if (p?.payload?.freq === null || p?.payload?.freq === undefined) return null;
+                    return <circle cx={p.cx} cy={p.cy} r={4} fill="#FFA31A" stroke="rgba(0,0,0,.6)" strokeWidth={2} />;
+                  }}
+                  activeDot={{ r: 6 }}
+                >
+                  <LabelList dataKey="freq" content={<FreqLabel />} />
+                </Line>
+              </ComposedChart>
+            </ResponsiveContainer>
           </div>
 
           {/* observação */}
@@ -558,6 +747,136 @@ export default function PlantProduction() {
           <div style={{ height: 8 }} />
         </div>
       </div>
+
+      {/* ===================== MODAL CALCULADORA ===================== */}
+      {calcOpen ? (
+        <div
+          style={overlayStyle}
+          onClick={() => setCalcOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            style={modalStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={modalHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div style={modalTitle}>Calculadora</div>
+                <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, fontSize: 12 }}>
+                  Conchadas × Média (t)
+                </div>
+              </div>
+
+              <button
+                className="mp-btn"
+                style={{ minWidth: 44, padding: "0 12px" }}
+                onClick={() => setCalcOpen(false)}
+                title="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={modalBody}>
+              <div style={grid2}>
+                <div>
+                  <div className="mp-label">Equipamento de alimentação</div>
+                  <select
+                    className="mp-input"
+                    value={calcEq}
+                    onChange={(e) => setCalcEq(e.target.value)}
+                  >
+                    {equipmentOptions.map((x) => (
+                      <option key={x} value={x}>{x}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <div className="mp-label">Conchadas</div>
+                  <input
+                    className="mp-input"
+                    value={calcConchadas}
+                    onChange={(e) => setCalcConchadas(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="ex: 10"
+                  />
+                </div>
+
+                <div>
+                  <div className="mp-label">Peso médio por conchada (t)</div>
+                  <input
+                    className="mp-input"
+                    value={calcAvg}
+                    onChange={(e) => setCalcAvg(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="ex: 4,2"
+                  />
+                </div>
+
+                <div>
+                  <div className="mp-label">Observação (opcional)</div>
+                  <input
+                    className="mp-input"
+                    value={calcObs}
+                    onChange={(e) => setCalcObs(e.target.value)}
+                    placeholder="Ex.: turno 1 / material fino / etc."
+                  />
+                </div>
+              </div>
+
+              {/* total estimado */}
+              <div style={{ marginTop: 12, ...softCard }}>
+                <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>
+                  TOTAL ESTIMADO
+                </div>
+                <div style={{ marginTop: 6, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 28, lineHeight: 1 }}>
+                  {calcTotal === null ? "—" : `${fmtBR(calcTotal)} t`}
+                </div>
+                <div style={{ marginTop: 4, color: "rgba(255,255,255,0.55)", fontWeight: 850, fontSize: 12 }}>
+                  Conchadas × Média
+                </div>
+              </div>
+
+              <div style={{ marginTop: 12, ...softCard }}>
+                <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>
+                  MÉDIA ATUAL
+                </div>
+                <div style={{ marginTop: 6, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 22 }}>
+                  {parseBRNumber(calcAvg) ? `${fmtBR(parseBRNumber(calcAvg) as number)} t` : "—"}
+                  <span style={{ color: "rgba(255,255,255,0.55)", fontWeight: 850, fontSize: 12, marginLeft: 8 }}>
+                    {calcEq}
+                  </span>
+                </div>
+              </div>
+
+              <div style={btnRow}>
+                <button
+                  className="mp-btn"
+                  onClick={onSaveAvg}
+                  title="Salvar média para este equipamento"
+                >
+                  Salvar média do equipamento
+                </button>
+
+                <button
+                  className="mp-btn"
+                  onClick={onRegisterCalc}
+                  disabled={retro}
+                  title={retro ? "Retroativo bloqueado (não registra)" : "Adicionar registro na Observação do dia"}
+                >
+                  Registrar produção
+                </button>
+              </div>
+
+              <div style={{ marginTop: 10, color: "rgba(255,255,255,0.50)", fontWeight: 800, fontSize: 12 }}>
+                Dica: após registrar, clique em <b>Salvar</b> na página para gravar no sistema.
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
