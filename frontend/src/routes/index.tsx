@@ -5,7 +5,6 @@ import { AppShell } from "../components/AppShell";
 import { useAuth } from "../auth/AuthProvider";
 import Historico from "../pages/Historico";
 
-
 import Login from "../pages/Login";
 import Dashboard from "../pages/Dashboard";
 import PlantProduction from "../pages/PlantProduction";
@@ -14,6 +13,9 @@ import Paradas from "../pages/Paradas";
 import Exportar from "../pages/Exportar";
 import MetasMes from "../pages/MetasMes";
 import Statistics from "../pages/Statistics";
+
+// ✅ NOVO
+import LancamentoParadas from "../pages/LancamentoParadas";
 
 import DevLogs from "../pages/Devlogs";
 import DevUsers from "../pages/DevUsers";
@@ -38,7 +40,12 @@ function canAccess(role: UserRole, path: string) {
   if (path.startsWith("/dev") || path.startsWith("/dashboard/producao-dia")) return false;
 
   if (role === "apontador") {
-    return path.startsWith("/producao-planta") || path.startsWith("/paradas");
+    // ✅ liberado também lançamento de paradas
+    return (
+      path.startsWith("/producao-planta") ||
+      path.startsWith("/paradas") ||
+      path.startsWith("/lancamento-paradas")
+    );
   }
 
   // controlador: tudo exceto dev
@@ -153,14 +160,24 @@ export function AppRoutes() {
           }
         />
 
+        {/* ✅ NOVO */}
         <Route
-  path="historico"
-  element={
-    <RequireRole>
-      <Historico />
-    </RequireRole>
-  }
-  />
+          path="lancamento-paradas"
+          element={
+            <RequireRole>
+              <LancamentoParadas />
+            </RequireRole>
+          }
+        />
+
+        <Route
+          path="historico"
+          element={
+            <RequireRole>
+              <Historico />
+            </RequireRole>
+          }
+        />
 
         <Route
           path="metas"
