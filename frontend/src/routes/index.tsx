@@ -4,6 +4,8 @@ import { RequireAuth } from "../auth/RequireAuth";
 import { AppShell } from "../components/AppShell";
 import { useAuth } from "../auth/AuthProvider";
 import Historico from "../pages/Historico";
+import AppShell from "../components/AppShell";
+
 
 import Login from "../pages/Login";
 import Dashboard from "../pages/Dashboard";
