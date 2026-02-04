@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 
 type Linha = {
-  faixa: string;
-  tempo: string; // minutos (string pra input)
+  faixa: string; // agora vem do select (00:00-01:00 ... 23:00-24:00)
+  tempo: string; // minutos
   tipo: string;
 };
 
@@ -15,6 +15,23 @@ const TIPOS = [
   "Outros",
 ] as const;
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function buildFaixasHoraCheia() {
+  // 00:00–01:00 ... 23:00–24:00
+  const arr: string[] = [];
+  for (let h = 0; h < 24; h++) {
+    const ini = `${pad2(h)}:00`;
+    const fim = h === 23 ? "24:00" : `${pad2(h + 1)}:00`;
+    arr.push(`${ini}–${fim}`);
+  }
+  return arr;
+}
+
+const FAIXAS = buildFaixasHoraCheia();
+
 function toNumberSafe(v: string) {
   const n = Number(String(v || "").replace(",", "."));
   return Number.isFinite(n) ? n : 0;
@@ -22,19 +39,17 @@ function toNumberSafe(v: string) {
 
 export default function LancamentoParadas() {
   const [linhas, setLinhas] = useState<Linha[]>([
-    { faixa: "", tempo: "", tipo: "" },
+    { faixa: FAIXAS[0], tempo: "", tipo: "" },
   ]);
 
-  const totalMin = useMemo(() => {
-    return linhas.reduce((acc, l) => acc + toNumberSafe(l.tempo), 0);
-  }, [linhas]);
+  const totalMin = useMemo(() => linhas.reduce((acc, l) => acc + toNumberSafe(l.tempo), 0), [linhas]);
 
   function setLinha(i: number, patch: Partial<Linha>) {
     setLinhas((prev) => prev.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
   }
 
   function addLinha() {
-    setLinhas((prev) => [...prev, { faixa: "", tempo: "", tipo: "" }]);
+    setLinhas((prev) => [...prev, { faixa: FAIXAS[0], tempo: "", tipo: "" }]);
   }
 
   function removeLinha(i: number) {
@@ -42,19 +57,17 @@ export default function LancamentoParadas() {
   }
 
   function limpar() {
-    setLinhas([{ faixa: "", tempo: "", tipo: "" }]);
+    setLinhas([{ faixa: FAIXAS[0], tempo: "", tipo: "" }]);
   }
 
   function salvar() {
-    // Por enquanto só front (igual você pediu).
-    // Depois a gente liga no backend.
     console.log("Lançamentos:", linhas);
-    alert("Lançamentos prontos (front). Quando quiser, eu integro no backend.");
+    alert("Salvo (front). Quando quiser, integro no backend.");
   }
 
   return (
     <div className="mp-container">
-      {/* Copiando o CSS base da Paradas p/ garantir o mesmo visual */}
+      {/* CSS base (mantém estilo da Paradas) */}
       <style>{`
         .mp-grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:14px; }
         .mp-col-12{ grid-column: span 12 / span 12; }
@@ -87,19 +100,13 @@ export default function LancamentoParadas() {
             <div>
               <div className="mp-chip">Operação</div>
               <div className="mp-page-title">Lançamento de Paradas</div>
-              <div className="mp-page-sub">Tabela rápida • 3 colunas (faixa / tempo / manutenção)</div>
+              <div className="mp-page-sub">Faixa de horário fixa (00:00–24:00) • Tempo (min) • Tipo</div>
             </div>
 
             <div className="mp-row">
-              <button className="mp-btn" onClick={addLinha}>
-                + Linha
-              </button>
-              <button className="mp-btn" onClick={limpar}>
-                Limpar
-              </button>
-              <button className="mp-btn mp-btn-primary" onClick={salvar}>
-                Salvar
-              </button>
+              <button className="mp-btn" onClick={addLinha}>+ Linha</button>
+              <button className="mp-btn" onClick={limpar}>Limpar</button>
+              <button className="mp-btn mp-btn-primary" onClick={salvar}>Salvar</button>
             </div>
           </div>
         </div>
@@ -115,72 +122,69 @@ export default function LancamentoParadas() {
               <table>
                 <thead>
                   <tr>
-                    <th>Faixa de horário</th>
-                    <th>Tempo de parada (min)</th>
-                    <th>Tipo de manutenção</th>
-                    <th></th>
+                    <th style={{ minWidth: 200 }}>Faixa de horário</th>
+                    <th style={{ width: 180 }}>Tempo de parada (min)</th>
+                    <th style={{ minWidth: 240 }}>Tipo de manutenção</th>
+                    <th style={{ width: 110 }}></th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {!linhas.length ? (
-                    <tr>
-                      <td colSpan={4} style={{ color: "rgba(255,255,255,.6)" }}>
-                        Sem linhas.
+                  {linhas.map((l, i) => (
+                    <tr key={i}>
+                      <td>
+                        <select
+                          className="mp-select"
+                          value={l.faixa}
+                          onChange={(e) => setLinha(i, { faixa: e.target.value })}
+                        >
+                          {FAIXAS.map((fx) => (
+                            <option key={fx} value={fx}>
+                              {fx}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      <td>
+                        <input
+                          className="mp-input"
+                          type="number"
+                          placeholder="30"
+                          value={l.tempo}
+                          onChange={(e) => setLinha(i, { tempo: e.target.value })}
+                        />
+                      </td>
+
+                      <td>
+                        <select
+                          className="mp-select"
+                          value={l.tipo}
+                          onChange={(e) => setLinha(i, { tipo: e.target.value })}
+                        >
+                          <option value="">Selecione</option>
+                          {TIPOS.map((x) => (
+                            <option key={x} value={x}>
+                              {x}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      <td>
+                        {linhas.length > 1 ? (
+                          <button className="mp-btn mp-btn-danger" onClick={() => removeLinha(i)}>
+                            Excluir
+                          </button>
+                        ) : null}
                       </td>
                     </tr>
-                  ) : (
-                    linhas.map((l, i) => (
-                      <tr key={i}>
-                        <td style={{ minWidth: 220 }}>
-                          <input
-                            className="mp-input"
-                            placeholder="07:00 – 08:15"
-                            value={l.faixa}
-                            onChange={(e) => setLinha(i, { faixa: e.target.value })}
-                          />
-                        </td>
-
-                        <td style={{ width: 180 }}>
-                          <input
-                            className="mp-input"
-                            type="number"
-                            placeholder="30"
-                            value={l.tempo}
-                            onChange={(e) => setLinha(i, { tempo: e.target.value })}
-                          />
-                        </td>
-
-                        <td style={{ minWidth: 240 }}>
-                          <select
-                            className="mp-select"
-                            value={l.tipo}
-                            onChange={(e) => setLinha(i, { tipo: e.target.value })}
-                          >
-                            <option value="">Selecione</option>
-                            {TIPOS.map((x) => (
-                              <option key={x} value={x}>
-                                {x}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-
-                        <td style={{ width: 110 }}>
-                          {linhas.length > 1 ? (
-                            <button className="mp-btn mp-btn-danger" onClick={() => removeLinha(i)}>
-                              Excluir
-                            </button>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </table>
 
               <div className="mp-help" style={{ marginTop: 10 }}>
-                * “Tempo de parada” em minutos. Depois eu posso transformar isso em horas e integrar com o backend.
+                * Faixa de horário já vem fechada de 00:00–24:00 (hora-cheia). “Tempo” em minutos.
               </div>
             </div>
           </div>
