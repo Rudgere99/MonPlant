@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { RequireAuth } from "../auth/RequireAuth";
-import { AppShell } from "../components/AppShell";
+import AppShell from "../components/AppShell";
 import { useAuth } from "../auth/AuthProvider";
 import Historico from "../pages/Historico";
 
