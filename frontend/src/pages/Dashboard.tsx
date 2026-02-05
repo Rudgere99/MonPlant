@@ -464,7 +464,8 @@ export default function Dashboard() {
 
       const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
       const ps = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`).catch(() => []);
-      const hm = await apiGet<Record<string, string[]>>(`/api/stops/hour-map?day=${encodeURIComponent(day)}`).catch(() => ({}));
+      const hm = await apiGet<Record<string, string[]>>(`/api/stops/hour-map?day=${encodeURIComponent(day)}`)
+        .catch(() => ({} as Record<string, string[]>));
       const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`).catch(() => []);
 
       const map: Record<string, HorimetroRow | null> = {};
@@ -476,7 +477,7 @@ export default function Dashboard() {
       setProdDay(p);
       setLast7(Array.isArray(l7) ? l7 : []);
       setStops(Array.isArray(ps) ? ps : []);
-      setStopsHourMap(hm && typeof hm === 'object' ? hm : {});
+      setStopsHourMap(hm ?? {});
       setLastByEq(map);
     } catch (e: any) {
       setErr(e?.message || "Falha ao carregar dashboard");
