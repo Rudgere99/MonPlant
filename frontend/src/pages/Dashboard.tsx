@@ -180,6 +180,8 @@ const FreqPointLabel = (props: any) => {
     </text>
   );
 
+};
+
 /* ===================== Tooltip (Produção -> Paradas) ===================== */
 type StopTipItem = { equipamento: string; descricao: string };
 
