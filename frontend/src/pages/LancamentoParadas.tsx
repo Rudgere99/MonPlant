@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { PieChart, Pie, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 
 type Tipo = "Mecânica" | "Elétrica" | "Operacional" | "Corretiva" | "Preventiva" | "Outros";
 
@@ -10,6 +10,16 @@ type Row = {
 };
 
 const TIPOS: Tipo[] = ["Mecânica", "Elétrica", "Operacional", "Corretiva", "Preventiva", "Outros"];
+
+const TYPE_COLORS: Record<Tipo, string> = {
+  "Mecânica": "#22d3ee",     // cyan
+  "Elétrica": "#a78bfa",     // violet
+  "Operacional": "#f59e0b",  // amber
+  "Corretiva": "#fb7185",    // rose
+  "Preventiva": "#34d399",   // emerald
+  "Outros": "#94a3b8",       // slate
+};
+
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -26,6 +36,11 @@ function buildHorasFixas(): string[] {
 }
 
 const HORAS = buildHorasFixas();
+
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
 
 function toNumberSafe(v: string) {
   const n = Number(String(v || "").replace(",", "."));
@@ -324,12 +339,29 @@ export default function LancamentoParadas() {
                               className="lp-input"
                               type="number"
                               inputMode="numeric"
-                              placeholder="0"
+                              min={0}
+                              max={60}
+                              placeholder="0-60"
                               value={rows[idx].tempoMin}
-                              onChange={(e) => setRowByIndex(idx, { tempoMin: e.target.value })}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === "") return setRowByIndex(idx, { tempoMin: "" });
+                                const n0 = Number(raw);
+                                const n = clamp(Number.isFinite(n0) ? n0 : 0, 0, 60);
+                                setRowByIndex(idx, { tempoMin: String(n) });
+                              }}
                             />
                           </td>
                           <td>
+                            <div className="lp-selectwrap">
+                            <span
+                              className="lp-dot"
+                              style={{
+                                background: rows[idx].tipo
+                                  ? TYPE_COLORS[rows[idx].tipo as Tipo]
+                                  : "rgba(255,255,255,.18)",
+                              }}
+                            />
                             <select
                               className="lp-select"
                               value={rows[idx].tipo}
@@ -340,6 +372,7 @@ export default function LancamentoParadas() {
                                 <option key={t} value={t}>{t}</option>
                               ))}
                             </select>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -376,12 +409,29 @@ export default function LancamentoParadas() {
                               className="lp-input"
                               type="number"
                               inputMode="numeric"
-                              placeholder="0"
+                              min={0}
+                              max={60}
+                              placeholder="0-60"
                               value={rows[idx].tempoMin}
-                              onChange={(e) => setRowByIndex(idx, { tempoMin: e.target.value })}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === "") return setRowByIndex(idx, { tempoMin: "" });
+                                const n0 = Number(raw);
+                                const n = clamp(Number.isFinite(n0) ? n0 : 0, 0, 60);
+                                setRowByIndex(idx, { tempoMin: String(n) });
+                              }}
                             />
                           </td>
                           <td>
+                            <div className="lp-selectwrap">
+                            <span
+                              className="lp-dot"
+                              style={{
+                                background: rows[idx].tipo
+                                  ? TYPE_COLORS[rows[idx].tipo as Tipo]
+                                  : "rgba(255,255,255,.18)",
+                              }}
+                            />
                             <select
                               className="lp-select"
                               value={rows[idx].tipo}
@@ -392,6 +442,7 @@ export default function LancamentoParadas() {
                                 <option key={t} value={t}>{t}</option>
                               ))}
                             </select>
+                            </div>
                           </td>
                         </tr>
                       );
