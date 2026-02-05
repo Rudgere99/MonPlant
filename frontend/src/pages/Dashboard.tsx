@@ -75,6 +75,76 @@ function fmtBR1(n: number) {
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
+function parseDateTimeLocal(dISO: string, hHM: string): Date | null {
+  if (!dISO || !hHM) return null;
+  const [y, m, d] = dISO.split("-").map(Number);
+  const [hh, mm] = String(hHM).split(":").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, 0, 0);
+}
+
+function periodToRange(dayISO: string, period: string): { start: Date; end: Date } | null {
+  const key = normalizePeriod(period);
+  const m = String(key).match(/^(\d{2})-(\d{2})$/);
+  if (!m) return null;
+
+  const h1 = Number(m[1]);
+  const h2raw = Number(m[2]);
+
+  const base = parseDateTimeLocal(dayISO, "00:00");
+  if (!base) return null;
+
+  // 23-00 = 23:00 até 24:00 (virada)
+  let endHour = h2raw;
+  if (h1 === 23 && h2raw === 0) endHour = 24;
+  else if (endHour <= h1) endHour = h1 + 1;
+
+  const start = new Date(base.getTime() + h1 * 3600000);
+  const end = new Date(base.getTime() + endHour * 3600000);
+  return { start, end };
+}
+
+function buildStopsByPeriod(dayISO: string, stops: StopRow[]) {
+  const out: Record<string, string[]> = {};
+  for (let h = 0; h < 24; h++) {
+    const k = `${pad2(h)}-${pad2((h + 1) % 24)}`; // 23-00
+    out[k] = [];
+  }
+
+  for (const s of stops || []) {
+    const a = parseDateTimeLocal(s.data_inicio, s.hora_inicio);
+    const b = parseDateTimeLocal(s.data_fim, s.hora_fim);
+    if (!a || !b) continue;
+
+    const stopStart = a.getTime();
+    const stopEnd = b.getTime();
+    if (stopEnd <= stopStart) continue;
+
+    const descBase =
+      String(s.descricao || "").trim() ||
+      String(s.atividade || "").trim() ||
+      String(s.tipo_parada || "").trim() ||
+      "Parada";
+
+    const desc = `${String(s.equipamento || "").trim() || "Eq"} • ${descBase}`;
+
+    for (let h = 0; h < 24; h++) {
+      const key = `${pad2(h)}-${pad2((h + 1) % 24)}`;
+      const range = periodToRange(dayISO, key);
+      if (!range) continue;
+
+      const slotStart = range.start.getTime();
+      const slotEnd = range.end.getTime();
+
+      const overlap = stopStart < slotEnd && stopEnd > slotStart;
+      if (overlap) out[key].push(desc);
+    }
+  }
+
+  for (const k of Object.keys(out)) out[k] = Array.from(new Set(out[k]));
+  return out;
+}
+
 
 /**
  * Normaliza period do backend para "HH-HH"
@@ -293,6 +363,7 @@ export default function Dashboard() {
   const [prodDay, setProdDay] = useState<PlantDayPayload | null>(null);
   const [last7, setLast7] = useState<Last7Item[]>([]);
   const [stops, setStops] = useState<StopRow[]>([]);
+  const [stopsHourMap, setStopsHourMap] = useState<Record<string, string[]>>({});
   const [lastByEq, setLastByEq] = useState<Record<string, HorimetroRow | null>>({});
 
   const POLL_MS = 10_000;
@@ -393,6 +464,8 @@ export default function Dashboard() {
 
       const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
       const ps = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`).catch(() => []);
+      const hm = await apiGet<Record<string, string[]>>(`/api/stops/hour-map?day=${encodeURIComponent(day)}`)
+        .catch(() => ({} as Record<string, string[]>));
       const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`).catch(() => []);
 
       const map: Record<string, HorimetroRow | null> = {};
@@ -404,6 +477,7 @@ export default function Dashboard() {
       setProdDay(p);
       setLast7(Array.isArray(l7) ? l7 : []);
       setStops(Array.isArray(ps) ? ps : []);
+      setStopsHourMap(hm ?? {});
       setLastByEq(map);
     } catch (e: any) {
       setErr(e?.message || "Falha ao carregar dashboard");
@@ -455,6 +529,45 @@ export default function Dashboard() {
     }));
     return buildHourlyGrid(data);
   }, [prodDay]);
+  // ✅ Tooltip do gráfico: mostra descrição da parada (se existir) para aquela hora
+  const StopsTooltip = ({ active, label }: any) => {
+    if (!active) return null;
+    const key = normalizePeriod(String(label || ""));
+    const list = (stopsHourMap as any)?.[key] as string[] | undefined;
+
+    return (
+      <div
+        style={{
+          background: "rgba(0,0,0,0.86)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 14,
+          boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
+          padding: "10px 12px",
+          maxWidth: 360,
+        }}
+      >
+        <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950, marginBottom: 6 }}>
+          Hora: {key}
+        </div>
+
+        {list && list.length ? (
+          <div style={{ display: "grid", gap: 6 }}>
+            {list.slice(0, 6).map((t, i) => (
+              <div key={i} style={{ color: "rgba(255,255,255,0.78)", fontWeight: 850, lineHeight: 1.2 }}>
+                • {t}
+              </div>
+            ))}
+            {list.length > 6 ? (
+              <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 850 }}>+ {list.length - 6} outras…</div>
+            ) : null}
+          </div>
+        ) : (
+          <div style={{ color: "rgba(255,255,255,0.62)", fontWeight: 850 }}>Sem parada nesse horário</div>
+        )}
+      </div>
+    );
+  };
+
 
   // ✅ garante respiro no eixo Y (Ton/H): maior valor + 120
   const tonDomain = useMemo(() => {
@@ -869,19 +982,8 @@ export default function Dashboard() {
                                 tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
                                 tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                               />
-                              <Tooltip
-                                formatter={(v: any, name: any) =>
-                                  name === "freq" ? `${fmtBR0(Number(v) || 0)}%` : fmtBR1(Number(v) || 0)
-                                }
-                                contentStyle={{
-                                  background: "rgba(0,0,0,0.86)",
-                                  border: "1px solid rgba(255,255,255,0.12)",
-                                  borderRadius: 14,
-                                  boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
-                                }}
-                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
-                              />
-                              <Legend
+                              <Tooltip content={<StopsTooltip />} />
+<Legend
                                 verticalAlign="bottom"
                                 height={30}
                                 iconType="circle"
@@ -941,16 +1043,8 @@ export default function Dashboard() {
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                               <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
-                              <Tooltip
-                                formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
-                                contentStyle={{
-                                  background: "rgba(0,0,0,0.86)",
-                                  border: "1px solid rgba(255,255,255,0.12)",
-                                  borderRadius: 14,
-                                }}
-                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
-                              />
-                              <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a">
+                              <Tooltip content={<StopsTooltip />} />
+<Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a">
                                 <LabelList
                                   dataKey="freq"
                                   position="center"
@@ -1087,16 +1181,8 @@ export default function Dashboard() {
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                               <XAxis dataKey="period" interval={2} tickMargin={10} angle={-35} textAnchor="end" height={34} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
                               <YAxis domain={miniTonDomain} hide />
-                              <Tooltip
-                                formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
-                                contentStyle={{
-                                  background: "rgba(0,0,0,0.86)",
-                                  border: "1px solid rgba(255,255,255,0.12)",
-                                  borderRadius: 14,
-                                }}
-                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
-                              />
-                              <ReferenceLine y={EXPECTED_TON_H} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeDasharray="6 6" />
+                              <Tooltip content={<StopsTooltip />} />
+<ReferenceLine y={EXPECTED_TON_H} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeDasharray="6 6" />
                               <ReferenceLine y={avgTonPerHour} stroke="#00CCFF" strokeWidth={2} strokeDasharray="4 4" />
                               <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
                             </AreaChart>
@@ -1150,16 +1236,8 @@ export default function Dashboard() {
                                 tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                               />
                               <YAxis hide />
-                              <Tooltip
-                                formatter={(v: any) => fmtBR0(Number(v) || 0)}
-                                contentStyle={{
-                                  background: "rgba(0,0,0,0.86)",
-                                  border: "1px solid rgba(255,255,255,0.12)",
-                                  borderRadius: 14,
-                                }}
-                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
-                              />
-                              <Area
+                              <Tooltip content={<StopsTooltip />} />
+<Area
                                 type="monotone"
                                 dataKey="total"
                                 stroke="#ff9f1a"
