@@ -851,6 +851,111 @@ def list_stops(day: date = Query(...), owner_id: str = Depends(require_owner_id)
         rows = cur.fetchall() or []
     return rows
 
+# =========================
+# Stops (hour-map p/ tooltip do Dashboard)
+# =========================
+def _parse_dt(d_str: str, h_str: str) -> Optional[datetime]:
+    """
+    d_str: "YYYY-MM-DD" (ou date)
+    h_str: "HH:MM" ou "HH:MM:SS"
+    """
+    try:
+        d_raw = str(d_str).strip()
+        d = date.fromisoformat(d_raw)
+        hhmm = str(h_str or "").strip()
+        if not hhmm:
+            return None
+        # aceita HH:MM ou HH:MM:SS
+        if re.fullmatch(r"\d{2}:\d{2}$", hhmm):
+            hhmm = hhmm + ":00"
+        t = datetime.strptime(hhmm, "%H:%M:%S").time()
+        return datetime.combine(d, t)
+    except Exception:
+        return None
+
+
+def _hour_key(h: int) -> str:
+    nxt = (h + 1) % 24
+    return f"{h:02d}-{nxt:02d}"
+
+
+@app.get("/api/stops/hour-map")
+def stops_hour_map(day: date = Query(...), owner_id: str = Depends(require_owner_id)):
+    """
+    Retorna um mapa por hora para o Tooltip do Dashboard:
+      { "15-16": ["15:00-15:40 • EQ • Tipo • Atividade • Descrição", ...], ... }
+
+    Regra:
+      - aparece em toda hora que tiver interseção de tempo
+      - se virar pro próximo horário, aparece também no próximo
+      - corta no limite do dia (00:00-24:00 do dia consultado)
+    """
+    day_start = datetime.combine(day, datetime.min.time())      # 00:00
+    day_end = day_start + timedelta(days=1)                    # 00:00 do dia seguinte
+
+    with get_conn() as conn, conn.cursor() as cur:
+        # pega paradas que encostam no dia (seguro para virada de meia-noite)
+        cur.execute(
+            """
+            select id, data_inicio, hora_inicio, data_fim, hora_fim,
+                   equipamento, tipo_parada, atividade, descricao
+            from public.bv_stops
+            where owner_id=%s
+              and (day=%s or data_inicio=%s or data_fim=%s)
+            order by created_at desc
+            """,
+            (owner_id, day, str(day), str(day)),
+        )
+        rows = cur.fetchall() or []
+
+    out: Dict[str, List[str]] = {_hour_key(h): [] for h in range(24)}
+
+    for r in rows:
+        ini = _parse_dt(r.get("data_inicio"), r.get("hora_inicio"))
+        fim = _parse_dt(r.get("data_fim"), r.get("hora_fim"))
+
+        if not ini or not fim:
+            continue
+
+        if fim <= ini:
+            fim = ini + timedelta(minutes=1)
+
+        # recorta para o dia consultado
+        a = max(ini, day_start)
+        b = min(fim, day_end)
+        if b <= a:
+            continue
+
+        # texto detalhado
+        hi = str(r.get("hora_inicio") or "").strip()
+        hf = str(r.get("hora_fim") or "").strip()
+        eq = str(r.get("equipamento") or "").strip()
+        tp = str(r.get("tipo_parada") or "").strip()
+        atv = str(r.get("atividade") or "").strip()
+        dsc = str(r.get("descricao") or "").strip()
+
+        parts = []
+        if hi and hf:
+            parts.append(f"{hi}-{hf}")
+        if eq:
+            parts.append(eq)
+        if tp:
+            parts.append(tp)
+        if atv:
+            parts.append(atv)
+        if dsc:
+            parts.append(dsc)
+
+        desc = " • ".join(parts) if parts else "Parada"
+
+        for h in range(24):
+            h_start = day_start + timedelta(hours=h)
+            h_end = h_start + timedelta(hours=1)
+            if a < h_end and b > h_start:
+                out[_hour_key(h)].append(desc)
+
+    return out
+
 
 @app.post("/api/stops")
 def create_stop(
