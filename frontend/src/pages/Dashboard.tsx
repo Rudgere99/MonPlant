@@ -240,7 +240,6 @@ function TooltipStopsHour({
 }
 
 
-};
 
 // Label do gráfico "Últimos 7 dias": risquinho no ponto + valor acima (com clamp nas bordas)
 const Last7PointLabel = (props: any) => {
