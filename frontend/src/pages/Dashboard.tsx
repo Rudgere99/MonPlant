@@ -363,6 +363,7 @@ export default function Dashboard() {
   const [prodDay, setProdDay] = useState<PlantDayPayload | null>(null);
   const [last7, setLast7] = useState<Last7Item[]>([]);
   const [stops, setStops] = useState<StopRow[]>([]);
+  const [stopsHourMap, setStopsHourMap] = useState<Record<string, string[]>>({});
   const [lastByEq, setLastByEq] = useState<Record<string, HorimetroRow | null>>({});
 
   const POLL_MS = 10_000;
@@ -463,6 +464,7 @@ export default function Dashboard() {
 
       const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
       const ps = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`).catch(() => []);
+      const hm = await apiGet<Record<string, string[]>>(`/api/stops/hour-map?day=${encodeURIComponent(day)}`).catch(() => ({}));
       const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`).catch(() => []);
 
       const map: Record<string, HorimetroRow | null> = {};
@@ -474,6 +476,7 @@ export default function Dashboard() {
       setProdDay(p);
       setLast7(Array.isArray(l7) ? l7 : []);
       setStops(Array.isArray(ps) ? ps : []);
+      setStopsHourMap(hm && typeof hm === 'object' ? hm : {});
       setLastByEq(map);
     } catch (e: any) {
       setErr(e?.message || "Falha ao carregar dashboard");
@@ -525,15 +528,11 @@ export default function Dashboard() {
     }));
     return buildHourlyGrid(data);
   }, [prodDay]);
-
-  // ✅ Mapa: período (HH-HH) -> descrições de paradas que caem naquela hora
-  const stopsByPeriod = useMemo(() => buildStopsByPeriod(day, stops), [day, stops]);
-
   // ✅ Tooltip do gráfico: mostra descrição da parada (se existir) para aquela hora
   const StopsTooltip = ({ active, label }: any) => {
     if (!active) return null;
     const key = String(label || "");
-    const list = (stopsByPeriod as any)?.[key] as string[] | undefined;
+    const list = (stopsHourMap as any)?.[key] as string[] | undefined;
 
     return (
       <div
