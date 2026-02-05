@@ -179,6 +179,65 @@ const FreqPointLabel = (props: any) => {
       {label}
     </text>
   );
+
+/* ===================== Tooltip (Produção -> Paradas) ===================== */
+type StopTipItem = { equipamento: string; descricao: string };
+
+function TooltipStopsHour({
+  active,
+  label,
+  stopsMap,
+}: {
+  active?: boolean;
+  label?: string;
+  stopsMap: Record<string, StopTipItem[]>;
+}) {
+  if (!active || !label) return null;
+
+  const items = stopsMap?.[String(label)] || [];
+  const show = items.slice(0, 5);
+  const more = Math.max(0, items.length - show.length);
+
+  return (
+    <div
+      style={{
+        background: "rgba(0,0,0,0.86)",
+        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: 14,
+        boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
+        padding: "10px 12px",
+        maxWidth: 320,
+      }}
+    >
+      <div style={{ color: "rgba(255,255,255,0.90)", fontWeight: 950, marginBottom: 6 }}>
+        {label}
+      </div>
+
+      {show.length ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {show.map((it, i) => (
+            <div key={i} style={{ fontSize: 12.5, lineHeight: 1.35, color: "rgba(255,255,255,0.82)" }}>
+              <b style={{ color: "rgba(255,255,255,0.92)" }}>{it.equipamento}</b>
+              {" — "}
+              {it.descricao || "Parada (sem descrição)"}
+            </div>
+          ))}
+          {more > 0 ? (
+            <div style={{ fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
+              +{more} outras
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.55)", fontWeight: 850 }}>
+          Sem parada registrada neste horário
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 };
 
 // Label do gráfico "Últimos 7 dias": risquinho no ponto + valor acima (com clamp nas bordas)
@@ -456,6 +515,32 @@ export default function Dashboard() {
     return buildHourlyGrid(data);
   }, [prodDay]);
 
+  // ✅ Mapa: período ("HH-HH") -> lista de observações de parada (para tooltip do gráfico)
+  const stopsByPeriod = useMemo<Record<string, StopTipItem[]>>(() => {
+    const map: Record<string, StopTipItem[]> = {};
+
+    for (const s of stops || []) {
+      const hStr = String((s as any)?.hora_inicio || "").slice(0, 2);
+      const h = Number(hStr);
+      if (!Number.isFinite(h) || h < 0 || h > 23) continue;
+
+      const key = `${pad2(h)}-${pad2((h + 1) % 24)}`;
+      const desc =
+        String((s as any)?.descricao || "").trim() ||
+        String((s as any)?.atividade || "").trim() ||
+        String((s as any)?.tipo_parada || "").trim() ||
+        "Parada (sem descrição)";
+
+      const eq = String((s as any)?.equipamento || "").trim() || "—";
+
+      if (!map[key]) map[key] = [];
+      map[key].push({ equipamento: eq, descricao: desc });
+    }
+
+    return map;
+  }, [stops]);
+
+
   // ✅ garante respiro no eixo Y (Ton/H): maior valor + 120
   const tonDomain = useMemo(() => {
     const maxTon = Math.max(...(hourlySeries || []).map((r) => Number(r.ton) || 0), 0);
@@ -549,77 +634,7 @@ export default function Dashboard() {
     return s / levelBars.length;
   }, [levelBars]);
 
-  
-// ===== Tooltip: mostrar observação da parada por horário (no lugar do valor de produção) =====
-const stopObsByPeriod = useMemo(() => {
-  const map: Record<string, string[]> = {};
-  for (const st of stops || []) {
-    const hStr = String(st?.hora_inicio || "").trim();
-    const m = hStr.match(/^(\d{1,2})/);
-    if (!m) continue;
-    const h = Math.max(0, Math.min(23, Number(m[1])));
-    const key = `${pad2(h)}-${pad2((h + 1) % 24)}`; // 23-00
-    const descRaw = (st?.descricao || st?.atividade || st?.tipo_parada || "").trim();
-    const desc = descRaw ? descRaw : "Parada";
-    const line = `${st?.equipamento ? String(st.equipamento).trim() + " — " : ""}${desc}`;
-    if (!map[key]) map[key] = [];
-    if (!map[key].includes(line)) map[key].push(line);
-  }
-  return map;
-}, [stops]);
-
-const ProdStopsTooltip = (props: any) => {
-  const { active, label } = props || {};
-  if (!active) return null;
-
-  const key = String(label || "");
-  const lines: string[] = stopObsByPeriod[key] || [];
-
-  return (
-    <div
-      style={{
-        background: "rgba(0,0,0,0.88)",
-        border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: 14,
-        padding: "10px 12px",
-        boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
-        maxWidth: 360,
-      }}
-    >
-      <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950, marginBottom: 6 }}>
-        {key}
-      </div>
-
-      {lines.length ? (
-        <div style={{ display: "grid", gap: 6 }}>
-          {lines.slice(0, 5).map((t, idx) => (
-            <div
-              key={idx}
-              style={{
-                color: "rgba(255,255,255,0.78)",
-                fontWeight: 800,
-                fontSize: 12,
-                lineHeight: 1.15,
-              }}
-            >
-              {t}
-            </div>
-          ))}
-          {lines.length > 5 ? (
-            <div style={{ color: "rgba(255,255,255,0.45)", fontWeight: 800, fontSize: 11 }}>
-              +{lines.length - 5} outras
-            </div>
-          ) : null}
-        </div>
-      ) : (
-        <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, fontSize: 12 }}>
-          Sem parada registrada neste horário
-        </div>
-      )}
-    </div>
-  );
-};
-const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff9f1a" }], [pctMetaGauge]);
+  const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff9f1a" }], [pctMetaGauge]);
 
   /* ===================== styles ===================== */
   const cardBase: React.CSSProperties = {
@@ -939,8 +954,8 @@ const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff
                                 tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
                                 tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                               />
-                              <Tooltip content={(p: any) => <ProdStopsTooltip {...p} />} />
-                              <Legend
+                              <Tooltip content={(p: any) => <TooltipStopsHour {...p} stopsMap={stopsByPeriod} />} />
+<Legend
                                 verticalAlign="bottom"
                                 height={30}
                                 iconType="circle"
@@ -1000,7 +1015,15 @@ const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                               <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
-                              <Tooltip content={(p: any) => <ProdStopsTooltip {...p} />} />
+                              <Tooltip
+                                formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
+                                contentStyle={{
+                                  background: "rgba(0,0,0,0.86)",
+                                  border: "1px solid rgba(255,255,255,0.12)",
+                                  borderRadius: 14,
+                                }}
+                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                              />
                               <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a">
                                 <LabelList
                                   dataKey="freq"
@@ -1390,19 +1413,8 @@ const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff
                   tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
                   tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
                 />
-                <Tooltip
-                  formatter={(v: any, name: any) =>
-                    name === "freq" ? `${fmtBR0(Number(v) || 0)}%` : fmtBR1(Number(v) || 0)
-                  }
-                  contentStyle={{
-                    background: "rgba(0,0,0,0.86)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    borderRadius: 14,
-                    boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
-                  }}
-                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
-                />
-                <Legend
+                <Tooltip content={(p: any) => <TooltipStopsHour {...p} stopsMap={stopsByPeriod} />} />
+<Legend
                   verticalAlign="bottom"
                   height={30}
                   iconType="circle"
