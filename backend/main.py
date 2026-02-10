@@ -42,18 +42,22 @@ else:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    # Usamos Bearer token (Authorization) e não cookies; então não precisamos de credentials.
+    # Isso evita qualquer edge-case de CORS em proxies.
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Dev-Key"],
 
-# =========================
-# Debug (produção)
-# =========================
-@app.get("/api/debug/ping")
-def debug_ping():
-    return {"ok": True, "app": "MonPlant", "ts": datetime.now(timezone.utc).isoformat()}
+
+from fastapi.responses import Response
+
+@app.options("/{path:path}")
+def cors_preflight(path: str):
+    # Preflight para garantir resposta 200 e headers de CORS em qualquer rota.
+    return Response(status_code=200)
+
+)
 
 # =========================
 # Helpers
