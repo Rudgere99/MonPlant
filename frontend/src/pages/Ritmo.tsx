@@ -1,0 +1,372 @@
+import React, { useEffect, useMemo, useState } from "react";
+
+/**
+ * Página: Ritmo (Necessário vs Real)
+ * - Manual: tonelada por conchada (t)
+ * - Automático: meta do dia, produção do dia, produção do período e cálculos
+ *
+ * Ajuste o FETCH_URL para o endpoint exato do seu Dashboard, se necessário.
+ */
+
+type HourRow = {
+  period: string; // ex: "16:00-17:00" OU "16-17" OU "16-17h"
+  ton?: number | string | null; // produção no período (t)
+  // opcional: pode existir "meta", "planned", etc.
+};
+
+type ApiPayload = {
+  day: string;
+
+  // ✅ ideal: o backend já mandar meta do dia aqui
+  meta_ton?: number | null;
+
+  // pode vir em outro nome (tentamos inferir)
+  meta?: number | null;
+  meta_day?: number | null;
+  planned_ton?: number | null;
+
+  rows: HourRow[];
+
+  // opcional
+  updated_at?: string | null;
+};
+
+const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
+
+function authHeaders(): HeadersInit {
+  const t = (localStorage.getItem("mp_token") || localStorage.getItem("token") || "").trim();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+function isoTodayLocal(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function fmtBR(n: number, dec = 1) {
+  return (Number(n) || 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec,
+  });
+}
+
+function fmtBR0(n: number) {
+  return (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+}
+
+function fmtPct(n: number, dec = 1) {
+  return `${(Number(n) || 0).toLocaleString("pt-BR", {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec,
+  })}%`;
+}
+
+function parseNum(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+
+  let s = String(v).trim();
+  if (!s) return null;
+
+  // "1.234,5" => "1234.5"
+  s = s.replace(/\s/g, "");
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** normaliza "16:00-17:00" | "16-17" -> "16-17" */
+function normalizePeriodToHH(period: string): string {
+  const s0 = String(period || "").trim();
+  if (!s0) return s0;
+
+  const s = s0.replace(/–|—/g, "-");
+  const parts = s.split("-").map((x) => x.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const h1m = parts[0].match(/^(\d{1,2})/);
+    const h2m = parts[1].match(/^(\d{1,2})/);
+    if (h1m && h2m) {
+      const h1 = Math.max(0, Math.min(23, Number(h1m[1])));
+      const h2 = Math.max(0, Math.min(23, Number(h2m[1])));
+      return `${pad2(h1)}-${pad2(h2)}`;
+    }
+  }
+  return s0;
+}
+
+function currentShiftWindow(now = new Date()) {
+  // Turno 1: 07–19 | Turno 2: 19–07 (padrão Trindade/Planta)
+  const h = now.getHours();
+  if (h >= 7 && h < 19) {
+    return { shiftName: "Turno 1", startH: 7, endH: 19, crossesMidnight: false };
+  }
+  // turno 2 cruza meia-noite
+  return { shiftName: "Turno 2", startH: 19, endH: 7, crossesMidnight: true };
+}
+
+function hoursRemainingInShift(now = new Date()) {
+  const { startH, endH, crossesMidnight } = currentShiftWindow(now);
+  const h = now.getHours();
+  if (!crossesMidnight) {
+    return Math.max(0, endH - h);
+  }
+  // 19 -> 24 + 0 -> 7
+  if (h >= startH) return 24 - h + endH;
+  return endH - h;
+}
+
+function hoursElapsedInShift(now = new Date()) {
+  const { startH, endH, crossesMidnight } = currentShiftWindow(now);
+  const h = now.getHours();
+  if (!crossesMidnight) {
+    return Math.max(0, h - startH);
+  }
+  // se está depois de 19h: elapsed = h - 19
+  if (h >= startH) return h - startH;
+  // se está antes de 7h: elapsed = (24-19) + h
+  return (24 - startH) + h;
+}
+
+const LS_BUCKET = "mp_bucket_ton_v1";
+
+export default function Ritmo() {
+  const [day, setDay] = useState<string>(isoTodayLocal());
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [data, setData] = useState<ApiPayload | null>(null);
+
+  const [bucketTon, setBucketTon] = useState<string>(() => localStorage.getItem(LS_BUCKET) || "4,2");
+
+  // 🔧 Troque aqui se seu Dashboard buscar de outro endpoint:
+  const FETCH_URL = useMemo(() => `${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, [day]);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setErr(null);
+      try {
+        const r = await fetch(FETCH_URL, { headers: authHeaders() });
+        if (r.status === 404) {
+          setData({ day, rows: [], meta_ton: null });
+          return;
+        }
+        if (!r.ok) {
+          const t = await r.text().catch(() => "");
+          throw new Error(t || `HTTP ${r.status}`);
+        }
+        const j = (await r.json()) as ApiPayload;
+        setData(j);
+      } catch (e: any) {
+        setErr(e?.message || "Erro ao carregar dados.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [FETCH_URL, day]);
+
+  const bucket = useMemo(() => {
+    const n = parseNum(bucketTon);
+    return n && n > 0 ? n : null;
+  }, [bucketTon]);
+
+  useEffect(() => {
+    if (bucket !== null) localStorage.setItem(LS_BUCKET, String(bucket).replace(".", ","));
+  }, [bucket]);
+
+  const rowsNorm = useMemo(() => {
+    const rows = (data?.rows || []).map((r) => ({
+      period: normalizePeriodToHH(r.period),
+      ton: parseNum(r.ton) ?? 0,
+    }));
+    const map = new Map<string, number>();
+    for (const r of rows) map.set(r.period, (map.get(r.period) || 0) + (r.ton || 0));
+    return map;
+  }, [data]);
+
+  const metaDay = useMemo(() => {
+    const v =
+      data?.meta_ton ??
+      data?.meta ??
+      data?.meta_day ??
+      data?.planned_ton ??
+      null;
+    return v !== null ? Number(v) : null;
+  }, [data]);
+
+  const now = new Date();
+  const currH = now.getHours();
+  const currPeriod = `${pad2(currH)}-${pad2((currH + 1) % 24)}`;
+  const periodTon = rowsNorm.get(currPeriod) ?? 0;
+
+  const produced = useMemo(() => {
+    let s = 0;
+    rowsNorm.forEach((v) => (s += Number(v || 0)));
+    return s;
+  }, [rowsNorm]);
+
+  const remainingH = hoursRemainingInShift(now);
+  const elapsedH = Math.max(1, hoursElapsedInShift(now)); // evita divisão por 0
+
+  const diff = metaDay !== null ? produced - metaDay : null;
+  const attainment = metaDay !== null && metaDay > 0 ? (produced / metaDay) * 100 : null;
+
+  const neededTPH = useMemo(() => {
+    if (metaDay === null) return null;
+    const remaining = Math.max(0, metaDay - produced);
+    if (remainingH <= 0) return remaining > 0 ? null : 0;
+    return remaining / remainingH;
+  }, [metaDay, produced, remainingH]);
+
+  const neededBucketsH = useMemo(() => {
+    if (neededTPH === null || bucket === null || bucket <= 0) return null;
+    return neededTPH / bucket;
+  }, [neededTPH, bucket]);
+
+  const avgRealTPH = produced / elapsedH;
+  const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
+
+  const shiftInfo = currentShiftWindow(now);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div
+        style={{
+          borderRadius: 22,
+          border: "1px solid rgba(255,255,255,0.10)",
+          background: "rgba(14,18,22,0.78)",
+          padding: 16,
+        }}
+      >
+        <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 20 }}>
+          Ritmo do turno (automático)
+        </div>
+        <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
+          {shiftInfo.shiftName} • {pad2(shiftInfo.startH)}:00 às {pad2(shiftInfo.endH)}:00 •{" "}
+          {loading ? "Carregando..." : err ? `Erro: ${err}` : "Atualizado automaticamente pelo Dashboard"}
+        </div>
+
+        <div style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div>
+            <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Data</div>
+            <input
+              type="date"
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+              style={{
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(255,255,255,0.04)",
+                color: "rgba(255,255,255,0.92)",
+                padding: "10px 12px",
+                outline: "none",
+                fontWeight: 900,
+              }}
+            />
+          </div>
+
+          <div>
+            <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>
+              Tonelada por conchada (t) — manual
+            </div>
+            <input
+              value={bucketTon}
+              onChange={(e) => setBucketTon(e.target.value)}
+              placeholder="ex: 4,2"
+              style={{
+                width: 220,
+                borderRadius: 14,
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(255,255,255,0.04)",
+                color: "rgba(255,255,255,0.92)",
+                padding: "10px 12px",
+                outline: "none",
+                fontWeight: 900,
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* bloco principal (igual print) */}
+      <div
+        style={{
+          borderRadius: 22,
+          border: "1px solid rgba(255,255,255,0.10)",
+          background: "rgba(14,18,22,0.78)",
+          padding: 16,
+          lineHeight: 1.7,
+        }}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
+            Meta: <span style={{ fontWeight: 950 }}>{metaDay === null ? "—" : `${fmtBR0(metaDay)} t`}</span>
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
+            Produzido: <span style={{ fontWeight: 950 }}>{fmtBR0(produced)} t</span>
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
+            Atingimento:{" "}
+            <span style={{ fontWeight: 950 }}>
+              {attainment === null ? "—" : fmtPct(attainment, 1)}
+            </span>
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
+            Diferença:{" "}
+            <span style={{ fontWeight: 950 }}>
+              {diff === null ? "—" : `${diff >= 0 ? "+" : ""}${fmtBR0(diff)} t`}
+            </span>
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
+            Tempo restante: <span style={{ fontWeight: 950 }}>{remainingH} h</span>
+          </div>
+
+          <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
+
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
+            Período: <span style={{ fontWeight: 950 }}>{pad2(currH)}h às {pad2((currH + 1) % 24)}h</span>
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
+            Produção do período: <span style={{ fontWeight: 950 }}>{fmtBR(periodTon, 1)} t</span>
+          </div>
+
+          <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
+
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
+            Necessário:{" "}
+            <span style={{ fontWeight: 950 }}>
+              {neededTPH === null ? "—" : `${fmtBR(neededTPH, 1)} t/h`}
+            </span>
+            {"  "}
+            <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
+              ≈ {neededBucketsH === null ? "—" : `${fmtBR0(neededBucketsH)} conchadas/h`}
+            </span>
+          </div>
+
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
+            Média real:{" "}
+            <span style={{ fontWeight: 950 }}>{fmtBR(avgRealTPH, 1)} t/h</span>
+            {"  "}
+            <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
+              ≈ {avgRealBucketsH === null ? "—" : `${fmtBR0(avgRealBucketsH)} conchadas/h`}
+            </span>
+          </div>
+
+          {metaDay === null ? (
+            <div style={{ marginTop: 10, color: "rgba(245,158,11,0.95)", fontWeight: 900 }}>
+              ⚠️ Meta do dia não veio do backend. Se você me disser qual endpoint do Dashboard retorna a meta, eu conecto 100%.
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
