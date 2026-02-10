@@ -303,6 +303,20 @@ class StopIn(BaseModel):
     tempo_parada_h: float
 
 
+class StopsLaunchRow(BaseModel):
+    period: str  # ex: '07-08' ou '23-00'
+    equipment: Optional[str] = None
+    stop_type: Optional[str] = None
+    description: Optional[str] = None
+    minutes: int = 0
+
+
+class StopsLaunchUpsert(BaseModel):
+    day: date
+    obs: Optional[str] = ""
+    rows: List[StopsLaunchRow] = Field(default_factory=list)
+
+
 class HorimetroIn(BaseModel):
     day: date
     turno: int  # 1|2
@@ -940,6 +954,104 @@ def delete_stop(
     )
 
     return {"ok": True}
+
+
+
+# =========================
+# Stops Launch (separado das paradas normais)
+# =========================
+@app.get("/api/stops-launch")
+def get_stops_launch(day: date = Query(...), owner_id: str = Depends(require_owner_id)):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select id, coalesce(obs,'') as obs
+            from bv_launch.stops_day
+            where owner_id=%s and day=%s
+            """,
+            (owner_id, day),
+        )
+        row = cur.fetchone()
+        if not row:
+            return {"day": str(day), "obs": "", "rows": []}
+
+        day_id, obs = row[0], row[1] or ""
+        cur.execute(
+            """
+            select period, equipment, stop_type, description, minutes
+            from bv_launch.stops_rows
+            where day_id=%s
+            order by period asc, id asc
+            """,
+            (day_id,),
+        )
+        rows = cur.fetchall() or []
+
+    payload_rows = [
+        {
+            "period": r[0],
+            "equipment": r[1],
+            "stop_type": r[2],
+            "description": r[3],
+            "minutes": int(r[4] or 0),
+        }
+        for r in rows
+    ]
+    return {"day": str(day), "obs": obs, "rows": payload_rows}
+
+
+@app.put("/api/stops-launch")
+def put_stops_launch(body: StopsLaunchUpsert, owner_id: str = Depends(require_owner_id)):
+    # sanitização + clamp 0..60 + remove linhas vazias
+    cleaned = []
+    for it in (body.rows or []):
+        minutes = int(it.minutes or 0)
+        if minutes < 0:
+            minutes = 0
+        if minutes > 60:
+            minutes = 60
+
+        period = (it.period or "").strip()
+        equipment = (it.equipment or "").strip() or None
+        stop_type = (it.stop_type or "").strip() or None
+        description = (it.description or "").strip() or None
+
+        # linha "vazia" (sem nada e 0 min) não salva
+        if not period and minutes == 0 and not equipment and not stop_type and not description:
+            continue
+
+        # period é obrigatório para salvar
+        if not period:
+            continue
+
+        cleaned.append((period, equipment, stop_type, description, minutes))
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into bv_launch.stops_day (owner_id, day, obs)
+            values (%s, %s, %s)
+            on conflict (owner_id, day)
+            do update set obs=excluded.obs, updated_at=now()
+            returning id
+            """,
+            (owner_id, body.day, body.obs or ""),
+        )
+        day_id = cur.fetchone()[0]
+
+        cur.execute("delete from bv_launch.stops_rows where day_id=%s", (day_id,))
+        if cleaned:
+            cur.executemany(
+                """
+                insert into bv_launch.stops_rows (day_id, period, equipment, stop_type, description, minutes)
+                values (%s, %s, %s, %s, %s, %s)
+                """,
+                [(day_id, *r) for r in cleaned],
+            )
+
+        conn.commit()
+
+    return {"ok": True, "day": str(body.day), "rows_saved": len(cleaned)}
 
 
 # =========================
