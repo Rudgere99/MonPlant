@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, Query, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel, Field, EmailStr
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, List, Any, Dict
@@ -43,21 +44,15 @@ else:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    # Usamos Bearer token (Authorization) e não cookies; então não precisamos de credentials.
-    # Isso evita qualquer edge-case de CORS em proxies.
-    allow_credentials=False,
+    allow_credentials=False,  # usamos Bearer token, sem cookies
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Dev-Key"],
-
-
-from fastapi.responses import Response
+)
 
 @app.options("/{path:path}")
 def cors_preflight(path: str):
-    # Preflight para garantir resposta 200 e headers de CORS em qualquer rota.
+    # garante resposta 200 no preflight do navegador
     return Response(status_code=200)
-
-)
 
 # =========================
 # Helpers
