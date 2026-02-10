@@ -134,6 +134,19 @@ function hoursElapsedInShift(now = new Date()) {
   return (24 - startH) + h;
 }
 
+
+function dayRemainingHours(now = new Date()) {
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const rem = Math.max(0, 1440 - mins); // minutes remaining until 00:00
+  return rem / 60;
+}
+
+function dayElapsedHours(now = new Date()) {
+  const mins = now.getHours() * 60 + now.getMinutes();
+  return Math.max(0, mins / 60);
+}
+
+
 const LS_BUCKET = "mp_bucket_ton_v1";
 
 const card: React.CSSProperties = {
@@ -239,8 +252,8 @@ export default function Ritmo() {
   const currPeriod = `${pad2(currH)}-${pad2((currH + 1) % 24)}`;
   const periodTon = rowsNorm.get(currPeriod) ?? 0;
 
-  const remainingH = hoursRemainingInShift(now);
-  const elapsedH = Math.max(1, hoursElapsedInShift(now)); // evita div/0
+  const remainingH = dayRemainingHours(now);
+  const elapsedH = Math.max(0.25, dayElapsedHours(now)); // evita div/0 e mantém estabilidade // evita div/0
 
   const diff = metaDay !== null ? produced - metaDay : null;
   const attainment = metaDay !== null && metaDay > 0 ? (produced / metaDay) * 100 : null;
@@ -269,7 +282,7 @@ export default function Ritmo() {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={card}>
         <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 20 }}>
-          Ritmo do turno (automático)
+          Ritmo do dia (00:00–00:00)
         </div>
         <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
           {shiftInfo.shiftName} • {pad2(shiftInfo.startH)}:00 às {pad2(shiftInfo.endH)}:00 •{" "}
@@ -318,7 +331,7 @@ export default function Ritmo() {
             </span>
           </div>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Tempo restante: <span style={{ fontWeight: 950 }}>{remainingH} h</span>
+            Tempo restante: <span style={{ fontWeight: 950 }}>{fmtBR(remainingH, 1)} h</span>
           </div>
 
           <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
