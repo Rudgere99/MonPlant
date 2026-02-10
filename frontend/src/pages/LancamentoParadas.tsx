@@ -1,5 +1,4 @@
-import React, {useEffect, useMemo, useState, useRef } from "react";
-import html2canvas from "html2canvas";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   PieChart,
@@ -17,17 +16,6 @@ function authHeaders(): HeadersInit {
   const t = (localStorage.getItem("mp_token") || localStorage.getItem("token") || "").trim();
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
-
-
-async function apiGet(path: string): Promise<any> {
-  const r = await fetch(`${API_BASE}${path}`, { headers: { ...authHeaders() } });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(t || `HTTP ${r.status}`);
-  }
-  return await r.json();
-}
-
 
 function isoTodayLocal(): string {
   const d = new Date();
@@ -102,13 +90,6 @@ type StopDayPayload = {
   rows: StopRow[];
 };
 
-
-type PlantHourRow = { period: string; ton?: any; freq?: any };
-type PlantDayPayload = { day: string; obs?: string | null; rows: PlantHourRow[] };
-
-type GoalDay = { day: string; meta_ton?: any; discount_hours?: any };
-
-
 /* ===================== UI small ===================== */
 
 function Dot({ color }: { color: string }) {
@@ -166,9 +147,9 @@ const btnStyle: React.CSSProperties = {
 
 export default function LancamentoParadas() {
   const periods = useMemo(() => makePeriods24(), []);
-  const [day, setDay] = useState(isoTodayLocal());
+  const [day, setDay] = useState<string>(isoTodayLocal());
 
-  const [rows, setRows] = useState(() =>
+  const [rows, setRows] = useState<StopRow[]>(() =>
     periods.map((p) => ({
       period: p,
       equipamento: "",
@@ -180,121 +161,7 @@ export default function LancamentoParadas() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
-
-
-// ===== resumo de produção (para exportar imagem) =====
-const exportCardRef = useRef<HTMLDivElement | null>(null);
-const [prodLoading, setProdLoading] = useState(false);
-const [metaTon, setMetaTon] = useState(4404);
-const [discountHours, setDiscountHours] = useState(2);
-const [prodRows, setProdRows] = useState([] as PlantHourRow[]);
-const [periodSel, setPeriodSel] = useState(() => {
-  const h = new Date().getHours();
-  const h2 = (h + 1) % 24;
-  return `${pad2(h)}-${pad2(h2)}`;
-});
-const [tonPorConchada, setTonPorConchada] = useState(2.78);
-
-async function loadProductionResume() {
-  if (!API_BASE) return;
-  setProdLoading(true);
-  try {
-    const p = await apiGet(`/api/plant-production/${encodeURIComponent(day)}`).catch(() => ({ day, rows: [] } as any));
-    setProdRows(Array.isArray(p?.rows) ? p.rows : []);
-
-    const g = await apiGet(`/api/goals/day/${encodeURIComponent(day)}`).catch(() => null as any);
-    if (g && typeof g === "object") {
-      const md = Number((g as any).meta_ton);
-      const dh = Number((g as any).discount_hours);
-      if (!Number.isNaN(md) && md > 0) setMetaTon(md);
-      if (!Number.isNaN(dh) && dh >= 0) setDiscountHours(dh);
-    }
-  } catch {
-    // silencioso: esse resumo é opcional
-  } finally {
-    setProdLoading(false);
-  }
-}
-
-async function exportResumoJPEG() {
-  const el = exportCardRef.current;
-  if (!el) return;
-
-  try {
-    const active = document.activeElement as HTMLElement | null;
-    active?.blur?.();
-  } catch {
-    // ignore
-  }
-
-  const canvas = await html2canvas(el, {
-    backgroundColor: "#0b0f14",
-    scale: Math.min(2, window.devicePixelRatio || 1.5),
-    useCORS: true,
-  });
-
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = `resumo_producao_${day}.jpg`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-const producedTon = useMemo(() => {
-  return (prodRows || []).reduce((s, r) => s + (Number(r?.ton) || 0), 0);
-}, [prodRows]);
-
-const ating = useMemo(() => {
-  if (!metaTon || metaTon <= 0) return 0;
-  return producedTon / metaTon;
-}, [producedTon, metaTon]);
-
-const diffTon = useMemo(() => producedTon - (Number(metaTon) || 0), [producedTon, metaTon]);
-
-const WORK_HOURS_BASE = 22;
-const metaHorasTrabalhadas = useMemo(() => Math.max(0, WORK_HOURS_BASE - (discountHours || 0)), [discountHours]);
-
-const horasComDado = useMemo(() => {
-  // conta horas onde existe registro (mesmo que ton=0), baseado em periods válidos
-  const set = new Set();
-  for (const r of prodRows || []) {
-    if (r?.period) set.add(String(r.period));
-  }
-  return set.size;
-}, [prodRows]);
-
-const tempoRestanteH = useMemo(() => {
-  // aproximação: horas de trabalho planejadas - horas com qualquer dado registrado
-  return Math.max(0, metaHorasTrabalhadas - horasComDado);
-}, [metaHorasTrabalhadas, horasComDado]);
-
-const prodPeriodoTon = useMemo(() => {
-  const it = (prodRows || []).find((x) => String(x?.period || "") === String(periodSel));
-  return Number(it?.ton) || 0;
-}, [prodRows, periodSel]);
-
-const mediaRealTH = useMemo(() => prodPeriodoTon, [prodPeriodoTon]);
-
-const necessarioTH = useMemo(() => {
-  if (!tempoRestanteH || tempoRestanteH <= 0) return 0;
-  const falta = (Number(metaTon) || 0) - producedTon;
-  return falta > 0 ? falta / tempoRestanteH : 0;
-}, [tempoRestanteH, metaTon, producedTon]);
-
-const necessarioConch = useMemo(() => {
-  const t = Number(tonPorConchada) || 0;
-  if (!t) return 0;
-  return necessarioTH / t;
-}, [necessarioTH, tonPorConchada]);
-
-const mediaRealConch = useMemo(() => {
-  const t = Number(tonPorConchada) || 0;
-  if (!t) return 0;
-  return mediaRealTH / t;
-}, [mediaRealTH, tonPorConchada]);
+  const [msg, setMsg] = useState<string>("");
 
   // ✅ ajuste conforme seu cadastro real
   const equipmentOptions = useMemo(() => ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08", "EH-05"], []);
@@ -394,7 +261,6 @@ const mediaRealConch = useMemo(() => {
 
   useEffect(() => {
     load();
-    loadProductionResume();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day]);
 
@@ -440,89 +306,6 @@ const mediaRealConch = useMemo(() => {
             {saving ? "Salvando..." : "Salvar"}
           </button>
         </div>
-
-{/* resumo de produção (exportável) */}
-<div
-  ref={exportCardRef}
-  style={{
-    ...cardStyle,
-    padding: 18,
-    background: "rgba(6,10,14,0.86)",
-    borderColor: "rgba(255,255,255,0.10)",
-  }}
->
-  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-    <div>
-      <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 16 }}>
-        Resumo de Produção
-      </div>
-      <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2, fontSize: 12 }}>
-        {prodLoading ? "Atualizando..." : "Pronto para exportar"}
-      </div>
-    </div>
-
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-      <div style={{ minWidth: 190 }}>
-        <div style={labelStyle}>Período</div>
-        <select value={periodSel} onChange={(e) => setPeriodSel(e.target.value)} style={inputStyle}>
-          {periods.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-
-        <button
-          onClick={exportResumoJPEG}
-          style={{
-            ...btnStyle,
-            background: "rgba(168,85,247,0.14)",
-            borderColor: "rgba(168,85,247,0.35)",
-          }}
-          disabled={prodLoading}
-        >
-          Exportar resumo
-        </button>
-      </div>
-
-      <div style={{ width: 160 }}>
-        <div style={labelStyle}>t / conchada</div>
-        <input
-          style={inputStyle}
-          type="number"
-          step="0.01"
-          value={String(tonPorConchada)}
-          onChange={(e) => setTonPorConchada(Number(e.target.value))}
-        />
-      </div>
-    </div>
-  </div>
-
-  <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "14px 0" }} />
-
-  <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900, lineHeight: 1.7 }}>
-    <div>Meta: {fmt1(metaTon)} t</div>
-    <div>Produzido: {fmt1(producedTon)} t</div>
-    <div>Atingimento: {(ating * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</div>
-    <div>Diferença: {fmt1(diffTon)} t</div>
-    <div>Tempo restante: {tempoRestanteH.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h</div>
-
-    <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "14px 0" }} />
-
-    <div style={{ fontWeight: 980 }}>Período: {periodSel.replace("-", "h às ")}h</div>
-    <div>Produção do período: {fmt1(prodPeriodoTon)} t</div>
-
-    <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "14px 0" }} />
-
-    <div>
-      Necessário: {fmt1(necessarioTH)} t/h ≈ {Math.round(necessarioConch)} conchadas/h
-    </div>
-    <div>
-      Média real: {fmt1(mediaRealTH)} t/h ≈ {Math.round(mediaRealConch)} conchadas/h
-    </div>
-  </div>
-</div>
-
       </div>
 
       {/* chart */}
