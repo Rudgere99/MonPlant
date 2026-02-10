@@ -19,13 +19,13 @@ function authHeaders(): HeadersInit {
 }
 
 
-async function apiGet(path: string): Promise<T> {
+async function apiGet(path: string): Promise<any> {
   const r = await fetch(`${API_BASE}${path}`, { headers: { ...authHeaders() } });
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     throw new Error(t || `HTTP ${r.status}`);
   }
-  return (await r.json()) as T;
+  return await r.json();
 }
 
 
@@ -188,7 +188,7 @@ const exportCardRef = useRef<HTMLDivElement | null>(null);
 const [prodLoading, setProdLoading] = useState(false);
 const [metaTon, setMetaTon] = useState(4404);
 const [discountHours, setDiscountHours] = useState(2);
-const [prodRows, setProdRows] = useState([]);
+const [prodRows, setProdRows] = useState([] as PlantHourRow[]);
 const [periodSel, setPeriodSel] = useState(() => {
   const h = new Date().getHours();
   const h2 = (h + 1) % 24;
