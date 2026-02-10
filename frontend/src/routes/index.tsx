@@ -13,6 +13,7 @@ import Paradas from "../pages/Paradas";
 import Exportar from "../pages/Exportar";
 import MetasMes from "../pages/MetasMes";
 import Statistics from "../pages/Statistics";
+import Ritmo from "./pages/Ritmo";
 
 // ✅ NOVO
 import LancamentoParadas from "../pages/LancamentoParadas";
@@ -143,6 +144,16 @@ export function AppRoutes() {
             </RequireRole>
           }
         />
+
+            <Route
+          path="ritmo"
+          element={
+            <RequireRole>
+              <Ritmo />
+            </RequireRole>
+          }
+        />
+        
         <Route
           path="horimetros"
           element={
