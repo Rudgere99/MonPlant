@@ -175,6 +175,24 @@ def _b64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + pad)
 
 
+# =========================
+# Stops Launch period normalizer (mantém padrão do front: "HH-HH")
+# =========================
+def normalize_period_launch(p: str) -> Optional[str]:
+    """Aceita apenas "HH-HH" (ex: 23-00). Retorna "HH-HH" padronizado."""
+    if not p:
+        return None
+    s = re.sub(r"\s+", "", str(p))
+    m = re.fullmatch(r"(\d{2})-(\d{2})", s)
+    if not m:
+        return None
+    h1 = int(m.group(1))
+    h2 = int(m.group(2))
+    if 0 <= h1 <= 23 and 0 <= h2 <= 23:
+        return f"{h1:02d}-{h2:02d}"
+    return None
+
+
 def _sign(payload_b64: str) -> str:
     sig = hmac.new(AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256).digest()
     return _b64url(sig)
@@ -281,6 +299,22 @@ def log_action(
             conn.commit()
     except Exception:
         return
+
+# =========================
+# Stops Launch (MonPlant) - bv_launch.stops_day + bv_launch.stops_rows
+# =========================
+class StopLaunchRowIn(BaseModel):
+    period: str  # "03-04"
+    equipamento: Optional[str] = ""
+    tipo_parada: Optional[str] = ""
+    descricao: Optional[str] = ""
+    minutos: int = 0
+
+
+class StopLaunchDayUpsert(BaseModel):
+    day: date
+    rows: List[StopLaunchRowIn] = Field(default_factory=list)
+
 
 
 # =========================
