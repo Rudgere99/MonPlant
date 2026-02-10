@@ -1,37 +1,43 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 /**
- * Página: Ritmo (Necessário vs Real)
- * - Manual: tonelada por conchada (t)
- * - Automático: meta do dia, produção do dia, produção do período e cálculos
+ * Ritmo do Turno
+ * - Manual: tonelada por conchada (t) (salva no localStorage)
+ * - Automático: meta do dia, produzido, período atual, necessário t/h e conchadas/h,
+ *              média real t/h e conchadas/h (puxa do mesmo endpoint do PlantProduction)
  *
- * Ajuste o FETCH_URL para o endpoint exato do seu Dashboard, se necessário.
+ * Endpoint esperado (igual PlantProduction):
+ *   GET /api/plant-production/{day}  -> { day, rows:[{period, ton, freq}], meta_ton? }
  */
 
 type HourRow = {
-  period: string; // ex: "16:00-17:00" OU "16-17" OU "16-17h"
-  ton?: number | string | null; // produção no período (t)
-  // opcional: pode existir "meta", "planned", etc.
+  period: string; // ex: "16:00-17:00" ou "16-17"
+  ton?: number | string | null;
+  freq?: number | string | null;
 };
+
+type GoalDay = { day: string; meta_ton: number | null; discount_hours?: number | null; updated_at?: string | null };
 
 type ApiPayload = {
   day: string;
-
-  // ✅ ideal: o backend já mandar meta do dia aqui
   meta_ton?: number | null;
-
-  // pode vir em outro nome (tentamos inferir)
   meta?: number | null;
   meta_day?: number | null;
   planned_ton?: number | null;
-
   rows: HourRow[];
-
-  // opcional
   updated_at?: string | null;
 };
 
-const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
+const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "http://127.0.0.1:8000").replace(/\/+$/, "");
+
+async function apiGet<T>(path: string): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(t || `HTTP ${r.status}`);
+  }
+  return (await r.json()) as T;
+}
 
 function authHeaders(): HeadersInit {
   const t = (localStorage.getItem("mp_token") || localStorage.getItem("token") || "").trim();
@@ -74,9 +80,10 @@ function parseNum(v: any): number | null {
 
   let s = String(v).trim();
   if (!s) return null;
+  s = s.replace("%", "").trim();
+  s = s.replace(/\s/g, "");
 
   // "1.234,5" => "1234.5"
-  s = s.replace(/\s/g, "");
   if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
   else if (s.includes(",")) s = s.replace(",", ".");
 
@@ -88,7 +95,6 @@ function parseNum(v: any): number | null {
 function normalizePeriodToHH(period: string): string {
   const s0 = String(period || "").trim();
   if (!s0) return s0;
-
   const s = s0.replace(/–|—/g, "-");
   const parts = s.split("-").map((x) => x.trim()).filter(Boolean);
   if (parts.length >= 2) {
@@ -104,49 +110,66 @@ function normalizePeriodToHH(period: string): string {
 }
 
 function currentShiftWindow(now = new Date()) {
-  // Turno 1: 07–19 | Turno 2: 19–07 (padrão Trindade/Planta)
+  // Turno 1: 07–19 | Turno 2: 19–07
   const h = now.getHours();
   if (h >= 7 && h < 19) {
     return { shiftName: "Turno 1", startH: 7, endH: 19, crossesMidnight: false };
   }
-  // turno 2 cruza meia-noite
   return { shiftName: "Turno 2", startH: 19, endH: 7, crossesMidnight: true };
 }
 
 function hoursRemainingInShift(now = new Date()) {
   const { startH, endH, crossesMidnight } = currentShiftWindow(now);
   const h = now.getHours();
-  if (!crossesMidnight) {
-    return Math.max(0, endH - h);
-  }
-  // 19 -> 24 + 0 -> 7
+  if (!crossesMidnight) return Math.max(0, endH - h);
   if (h >= startH) return 24 - h + endH;
   return endH - h;
 }
 
 function hoursElapsedInShift(now = new Date()) {
-  const { startH, endH, crossesMidnight } = currentShiftWindow(now);
+  const { startH, crossesMidnight } = currentShiftWindow(now);
   const h = now.getHours();
-  if (!crossesMidnight) {
-    return Math.max(0, h - startH);
-  }
-  // se está depois de 19h: elapsed = h - 19
+  if (!crossesMidnight) return Math.max(0, h - startH);
   if (h >= startH) return h - startH;
-  // se está antes de 7h: elapsed = (24-19) + h
   return (24 - startH) + h;
 }
 
 const LS_BUCKET = "mp_bucket_ton_v1";
+
+const card: React.CSSProperties = {
+  borderRadius: 22,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(14,18,22,0.78)",
+  padding: 16,
+};
+
+const label: React.CSSProperties = {
+  color: "rgba(255,255,255,0.55)",
+  fontWeight: 900,
+  fontSize: 12,
+  letterSpacing: 0.2,
+  textTransform: "uppercase",
+};
+
+const input: React.CSSProperties = {
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.04)",
+  color: "rgba(255,255,255,0.92)",
+  padding: "10px 12px",
+  outline: "none",
+  fontWeight: 900,
+};
 
 export default function Ritmo() {
   const [day, setDay] = useState<string>(isoTodayLocal());
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<ApiPayload | null>(null);
+  const [goal, setGoal] = useState<GoalDay | null>(null);
 
   const [bucketTon, setBucketTon] = useState<string>(() => localStorage.getItem(LS_BUCKET) || "4,2");
 
-  // 🔧 Troque aqui se seu Dashboard buscar de outro endpoint:
   const FETCH_URL = useMemo(() => `${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, [day]);
 
   useEffect(() => {
@@ -165,6 +188,13 @@ export default function Ritmo() {
         }
         const j = (await r.json()) as ApiPayload;
         setData(j);
+        // meta do dia (mesmo endpoint do Dashboard)
+        try {
+          const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`);
+          setGoal(g);
+        } catch {
+          setGoal(null);
+        }
       } catch (e: any) {
         setErr(e?.message || "Erro ao carregar dados.");
       } finally {
@@ -183,29 +213,20 @@ export default function Ritmo() {
   }, [bucket]);
 
   const rowsNorm = useMemo(() => {
-    const rows = (data?.rows || []).map((r) => ({
-      period: normalizePeriodToHH(r.period),
-      ton: parseNum(r.ton) ?? 0,
-    }));
     const map = new Map<string, number>();
-    for (const r of rows) map.set(r.period, (map.get(r.period) || 0) + (r.ton || 0));
+    for (const r of data?.rows || []) {
+      const p = normalizePeriodToHH(r.period);
+      const ton = parseNum(r.ton) ?? 0;
+      map.set(p, (map.get(p) || 0) + ton);
+    }
     return map;
   }, [data]);
 
   const metaDay = useMemo(() => {
-    const v =
-      data?.meta_ton ??
-      data?.meta ??
-      data?.meta_day ??
-      data?.planned_ton ??
-      null;
-    return v !== null ? Number(v) : null;
-  }, [data]);
-
-  const now = new Date();
-  const currH = now.getHours();
-  const currPeriod = `${pad2(currH)}-${pad2((currH + 1) % 24)}`;
-  const periodTon = rowsNorm.get(currPeriod) ?? 0;
+    // prioridade: metas do endpoint /api/goals/day/{day} (igual Dashboard)
+    const v = goal?.meta_ton ?? data?.meta_ton ?? data?.meta ?? data?.meta_day ?? data?.planned_ton ?? null;
+    return v !== null && v !== undefined ? Number(v) : null;
+  }, [goal, data]);
 
   const produced = useMemo(() => {
     let s = 0;
@@ -213,8 +234,13 @@ export default function Ritmo() {
     return s;
   }, [rowsNorm]);
 
+  const now = new Date();
+  const currH = now.getHours();
+  const currPeriod = `${pad2(currH)}-${pad2((currH + 1) % 24)}`;
+  const periodTon = rowsNorm.get(currPeriod) ?? 0;
+
   const remainingH = hoursRemainingInShift(now);
-  const elapsedH = Math.max(1, hoursElapsedInShift(now)); // evita divisão por 0
+  const elapsedH = Math.max(1, hoursElapsedInShift(now)); // evita div/0
 
   const diff = metaDay !== null ? produced - metaDay : null;
   const attainment = metaDay !== null && metaDay > 0 ? (produced / metaDay) * 100 : null;
@@ -236,77 +262,46 @@ export default function Ritmo() {
 
   const shiftInfo = currentShiftWindow(now);
 
+  const [yy, mm, dd] = day.split("-");
+  const dayBR = `${dd}/${mm}/${yy}`;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div
-        style={{
-          borderRadius: 22,
-          border: "1px solid rgba(255,255,255,0.10)",
-          background: "rgba(14,18,22,0.78)",
-          padding: 16,
-        }}
-      >
+      <div style={card}>
         <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 20 }}>
           Ritmo do turno (automático)
         </div>
         <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
           {shiftInfo.shiftName} • {pad2(shiftInfo.startH)}:00 às {pad2(shiftInfo.endH)}:00 •{" "}
-          {loading ? "Carregando..." : err ? `Erro: ${err}` : "Atualizado automaticamente pelo Dashboard"}
+          {loading ? "Carregando..." : err ? `Erro: ${err}` : data?.updated_at ? `Atualizado: ${data.updated_at}` : "—"}
         </div>
 
         <div style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
           <div>
-            <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Data</div>
-            <input
-              type="date"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-              style={{
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.10)",
-                background: "rgba(255,255,255,0.04)",
-                color: "rgba(255,255,255,0.92)",
-                padding: "10px 12px",
-                outline: "none",
-                fontWeight: 900,
-              }}
-            />
+            <div style={label}>Data</div>
+            <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={input} />
+            <div style={{ marginTop: 6, color: "rgba(255,255,255,0.55)", fontWeight: 800, fontSize: 12 }}>
+              {dayBR}
+            </div>
           </div>
 
           <div>
-            <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>
-              Tonelada por conchada (t) — manual
-            </div>
+            <div style={label}>Tonelada por conchada (t) — manual</div>
             <input
               value={bucketTon}
               onChange={(e) => setBucketTon(e.target.value)}
               placeholder="ex: 4,2"
-              style={{
-                width: 220,
-                borderRadius: 14,
-                border: "1px solid rgba(255,255,255,0.10)",
-                background: "rgba(255,255,255,0.04)",
-                color: "rgba(255,255,255,0.92)",
-                padding: "10px 12px",
-                outline: "none",
-                fontWeight: 900,
-              }}
+              style={{ ...input, width: 220 }}
             />
+            <div style={{ marginTop: 6, color: "rgba(255,255,255,0.55)", fontWeight: 800, fontSize: 12 }}>
+              Salva por PC (localStorage)
+            </div>
           </div>
         </div>
       </div>
 
-      {/* bloco principal (igual print) */}
-      <div
-        style={{
-          borderRadius: 22,
-          border: "1px solid rgba(255,255,255,0.10)",
-          background: "rgba(14,18,22,0.78)",
-          padding: 16,
-          lineHeight: 1.7,
-        }}
-      >
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
+      <div style={{ ...card, lineHeight: 1.7 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Meta: <span style={{ fontWeight: 950 }}>{metaDay === null ? "—" : `${fmtBR0(metaDay)} t`}</span>
           </div>
@@ -314,10 +309,7 @@ export default function Ritmo() {
             Produzido: <span style={{ fontWeight: 950 }}>{fmtBR0(produced)} t</span>
           </div>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Atingimento:{" "}
-            <span style={{ fontWeight: 950 }}>
-              {attainment === null ? "—" : fmtPct(attainment, 1)}
-            </span>
+            Atingimento: <span style={{ fontWeight: 950 }}>{attainment === null ? "—" : fmtPct(attainment, 1)}</span>
           </div>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Diferença:{" "}
@@ -332,7 +324,10 @@ export default function Ritmo() {
           <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
 
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Período: <span style={{ fontWeight: 950 }}>{pad2(currH)}h às {pad2((currH + 1) % 24)}h</span>
+            Período:{" "}
+            <span style={{ fontWeight: 950 }}>
+              {pad2(currH)}h às {pad2((currH + 1) % 24)}h
+            </span>
           </div>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Produção do período: <span style={{ fontWeight: 950 }}>{fmtBR(periodTon, 1)} t</span>
@@ -344,17 +339,14 @@ export default function Ritmo() {
             Necessário:{" "}
             <span style={{ fontWeight: 950 }}>
               {neededTPH === null ? "—" : `${fmtBR(neededTPH, 1)} t/h`}
-            </span>
-            {"  "}
+            </span>{" "}
             <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
               ≈ {neededBucketsH === null ? "—" : `${fmtBR0(neededBucketsH)} conchadas/h`}
             </span>
           </div>
 
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Média real:{" "}
-            <span style={{ fontWeight: 950 }}>{fmtBR(avgRealTPH, 1)} t/h</span>
-            {"  "}
+            Média real: <span style={{ fontWeight: 950 }}>{fmtBR(avgRealTPH, 1)} t/h</span>{" "}
             <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
               ≈ {avgRealBucketsH === null ? "—" : `${fmtBR0(avgRealBucketsH)} conchadas/h`}
             </span>
@@ -362,7 +354,7 @@ export default function Ritmo() {
 
           {metaDay === null ? (
             <div style={{ marginTop: 10, color: "rgba(245,158,11,0.95)", fontWeight: 900 }}>
-              ⚠️ Meta do dia não veio do backend. Se você me disser qual endpoint do Dashboard retorna a meta, eu conecto 100%.
+              ⚠️ Meta do dia não veio do backend (campo meta_ton/meta/meta_day/planned_ton).
             </div>
           ) : null}
         </div>
