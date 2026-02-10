@@ -42,11 +42,18 @@ else:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# =========================
+# Debug (produção)
+# =========================
+@app.get("/api/debug/ping")
+def debug_ping():
+    return {"ok": True, "app": "MonPlant", "ts": datetime.now(timezone.utc).isoformat()}
 
 # =========================
 # Helpers
