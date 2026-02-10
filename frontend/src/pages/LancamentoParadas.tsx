@@ -181,7 +181,7 @@ export default function LancamentoParadas() {
 
     try {
       // ⚠️ Ajuste se seu endpoint for diferente
-      const r = await fetch(`${API_BASE}/api/stops?day=${encodeURIComponent(day)}`, {
+      const r = await fetch(`${API_BASE}/api/stops-launch`, {
         headers: { ...authHeaders() },
       });
 
@@ -239,7 +239,7 @@ export default function LancamentoParadas() {
       const body: StopDayPayload = { day, rows: filtered };
 
       // ⚠️ Ajuste se seu endpoint for diferente
-      const r = await fetch(`${API_BASE}/api/stops?day=${encodeURIComponent(day)}`, {
+      const r = await fetch(`${API_BASE}/api/stops-launch`, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(body),
