@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
 
 /**
  * Ritmo do Turno
@@ -174,8 +175,39 @@ const input: React.CSSProperties = {
   fontWeight: 900,
 };
 
+const btn: React.CSSProperties = {
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.06)",
+  color: "rgba(255,255,255,0.92)",
+  padding: "10px 12px",
+  fontWeight: 950,
+  cursor: "pointer",
+  outline: "none",
+  whiteSpace: "nowrap",
+};
+
+
 export default function Ritmo() {
   const [day, setDay] = useState<string>(isoTodayLocal());
+
+  const exportCardRef = useRef<HTMLDivElement | null>(null);
+
+  async function exportResumoJPEG() {
+    const el = exportCardRef.current;
+    if (!el) return;
+    const canvas = await html2canvas(el, {
+      backgroundColor: null,
+      scale: 2,
+      useCORS: true,
+    });
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `ritmo_resumo_${day}.jpg`;
+    a.click();
+  }
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<ApiPayload | null>(null);
@@ -284,8 +316,14 @@ export default function Ritmo() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={card}>
-        <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 20 }}>
-          Ritmo do dia (00:00–00:00)
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 20 }}>
+            Ritmo do dia (00:00–00:00)
+          </div>
+
+          <button onClick={exportResumoJPEG} style={{ ...btn, background: "rgba(168,85,247,0.14)", borderColor: "rgba(168,85,247,0.35)" }}>
+            Exportar resumo
+          </button>
         </div>
         <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
           {shiftInfo.shiftName} • {pad2(shiftInfo.startH)}:00 às {pad2(shiftInfo.endH)}:00 •{" "}
@@ -316,7 +354,7 @@ export default function Ritmo() {
         </div>
       </div>
 
-      <div style={{ ...card, lineHeight: 1.7 }}>
+      <div ref={exportCardRef} style={{ ...card, lineHeight: 1.7 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Meta: <span style={{ fontWeight: 950 }}>{metaDay === null ? "—" : `${fmtBR0(metaDay)} t`}</span>
