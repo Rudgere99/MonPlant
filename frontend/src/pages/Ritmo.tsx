@@ -249,7 +249,10 @@ export default function Ritmo() {
 
   const now = new Date();
   const currH = now.getHours();
-  const currPeriod = `${pad2(currH)}-${pad2((currH + 1) % 24)}`;
+  // Mostra o período FECHADO anterior: h-1 → h (ex.: 04:00 mostra 03-04)
+  const endH = currH;
+  const startH = (currH + 23) % 24;
+  const currPeriod = `${pad2(startH)}-${pad2(endH)}`; // ex.: 23-00
   const periodTon = rowsNorm.get(currPeriod) ?? 0;
 
   const remainingH = dayRemainingHours(now);
@@ -339,7 +342,7 @@ export default function Ritmo() {
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Período:{" "}
             <span style={{ fontWeight: 950 }}>
-              {pad2(currH)}h às {pad2((currH + 1) % 24)}h
+              {pad2(startH)}h às {pad2(endH)}h
             </span>
           </div>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
