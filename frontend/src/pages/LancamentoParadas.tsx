@@ -471,6 +471,18 @@ const mediaRealConch = useMemo(() => {
             </option>
           ))}
         </select>
+
+        <button
+          onClick={exportResumoJPEG}
+          style={{
+            ...btnStyle,
+            background: "rgba(168,85,247,0.14)",
+            borderColor: "rgba(168,85,247,0.35)",
+          }}
+          disabled={prodLoading}
+        >
+          Exportar resumo
+        </button>
       </div>
 
       <div style={{ width: 160 }}>
