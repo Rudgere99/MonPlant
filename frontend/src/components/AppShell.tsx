@@ -8,6 +8,7 @@ import {
   Factory,
   Timer,
   PauseCircle,
+  Calculator,
   FileSpreadsheet,
   Logs,
   Users,
@@ -43,6 +44,9 @@ const nav: NavItem[] = [
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
 
+  // ✅ Ritmo (Necessário vs Real) — usa tonelada por conchada manual, resto automático
+  { to: "/ritmo", label: "Ritmo do turno", icon: Calculator, group: "Produção" },
+
   // ✅ NOVO
   { to: "/lancamento-paradas", label: "Lançamento de Paradas", icon: FileSpreadsheet, group: "Operação" },
 
@@ -70,6 +74,7 @@ function canAccess(role: UserRole, path: string) {
     return (
       path.startsWith("/producao-planta") ||
       path.startsWith("/paradas") ||
+      path.startsWith("/ritmo") ||
       path.startsWith("/lancamento-paradas")
     );
   }
