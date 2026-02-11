@@ -541,12 +541,7 @@ export default function Dashboard() {
     };
 
     const expandHoursInclusive = (a: number, b: number): number[] => {
-      // Regra:
-      // - Se for uma faixa "normal" de 1h (ex: 22-23), a parada pertence SOMENTE ao bucket 22-23 (não joga em 23-00)
-      // - Se for uma faixa maior (ex: 19-21), aplica em TODOS os horários decorrentes incluindo o "b"
-      //   (19-20, 20-21, 21-22)
-      if (((a + 1) % 24) === b) return [a];
-
+      // inclui o "b" também (regra pedida no tooltip)
       const out: number[] = [];
       let h = a;
       for (let guard = 0; guard < 48; guard++) {
@@ -558,19 +553,16 @@ export default function Dashboard() {
     };
 
     for (const s of (stops || []) as any[]) {
-      const tipo = String(s?.tipo_parada ?? s?.stop_type ?? "").trim();
-      const descRaw = String(s?.descricao ?? s?.atividade ?? s?.description ?? "").trim();
-      const eq = String(s?.equipamento ?? s?.equipment ?? "").trim() || "—";
-      const minutes = Number(s?.minutos ?? s?.minutes ?? 0) || 0;
+      const desc =
+        String(s?.descricao || "").trim() ||
+        String(s?.atividade || "").trim() ||
+        String(s?.tipo_parada || "").trim() ||
+        String(s?.stop_type || "").trim() ||
+        "Parada (sem descrição)";
 
-      // ignora linhas totalmente vazias/zeradas (pra não poluir tooltip)
-      const hasText = Boolean(tipo || descRaw || (eq && eq !== "—"));
-      if (minutes <= 0 && !hasText) continue;
-
-      const desc = (tipo && descRaw) ? `${tipo} — ${descRaw}` : (tipo || descRaw || "Parada");
+      const eq = String(s?.equipamento || s?.equipment || "").trim() || "—";
 
       // Novo formato (bv_launch.stops_rows): period "HH-HH"
- "HH-HH"
       const p = parsePeriod(String(s?.period || ""));
       if (p) {
         const hours = expandHoursInclusive(p.a, p.b);
