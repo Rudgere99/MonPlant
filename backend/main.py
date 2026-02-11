@@ -1724,6 +1724,8 @@ def get_stops_launch(
 ):
     """
     Lê lançamentos de paradas (manual) no schema bv_launch.
+    Retorna chaves em PT-BR para o front:
+      - equipamento, tipo_parada, descricao, minutos
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -1752,48 +1754,58 @@ def get_stops_launch(
                 (day_id,),
             )
             fetched = cur.fetchall() or []
-            rows = []
-            for r in fetched:
-                period = r.get("period") if isinstance(r, dict) else r[0]
-                equipment = r.get("equipment") if isinstance(r, dict) else r[1]
-                stop_type = r.get("stop_type") if isinstance(r, dict) else r[2]
-                description = r.get("description") if isinstance(r, dict) else r[3]
-                minutes = r.get("minutes") if isinstance(r, dict) else r[4]
-                rows.append({
-                    "period": period,
-                    "equipment": equipment or "",
-                    "stop_type": stop_type or "",
-                    "description": description or "",
-                    "minutes": int(minutes or 0),
-                })
+
+    rows = []
+    for r in fetched:
+        period = r.get("period") if isinstance(r, dict) else r[0]
+        equipment = r.get("equipment") if isinstance(r, dict) else r[1]
+        stop_type = r.get("stop_type") if isinstance(r, dict) else r[2]
+        description = r.get("description") if isinstance(r, dict) else r[3]
+        minutes = r.get("minutes") if isinstance(r, dict) else r[4]
+        rows.append(
+            {
+                "period": period,
+                "equipamento": equipment or "",
+                "tipo_parada": stop_type or "",
+                "descricao": description or "",
+                "minutos": int(minutes or 0),
+            }
+        )
+
     return {"day": day.isoformat(), "obs": obs, "rows": rows}
+
 
 @app.put("/api/stops-launch")
 def put_stops_launch(
-    payload: StopLaunchPayload,
+    payload: StopLaunchDayUpsert,
     day: date = Query(...),
     owner_id: str = Depends(require_owner_id),
 ):
     """
     Salva lançamentos de paradas (manual) no schema bv_launch.
-    Observação: mantém 'day' também na query para compatibilidade com o front.
-    """
-    if payload.day != day:
-        # mantém tolerante: usa o day da query (fonte de verdade)
-        payload = StopLaunchPayload(day=day, obs=payload.obs, rows=payload.rows)
 
-    # Filtra linhas vazias + clamp
-    cleaned: List[StopLaunchRow] = []
+    - Aceita payload em PT-BR (equipamento/tipo_parada/descricao/minutos)
+    - Salva TODAS as linhas recebidas (inclusive zeradas), para ficar "fixo" no front
+    - Mantém 'day' também na query para compatibilidade com o front
+    """
+    # tolerância: day da query é a fonte de verdade
+    if payload.day != day:
+        payload = StopLaunchDayUpsert(day=day, rows=payload.rows)
+
+    normalized_rows = []
     for r in payload.rows or []:
-        rr = StopLaunchRow(
-            period=str(r.period).strip(),
-            equipment=(r.equipment or "").strip() or None,
-            stop_type=(r.stop_type or "").strip() or None,
-            description=(r.description or "").strip() or None,
-            minutes=_clamp_0_60(r.minutes),
+        p = normalize_period_launch(str(r.period).strip())
+        if not p:
+            continue
+        normalized_rows.append(
+            (
+                p,
+                (r.equipamento or "").strip() or None,
+                (r.tipo_parada or "").strip() or None,
+                (r.descricao or "").strip() or None,
+                _clamp_0_60(int(r.minutos or 0)),
+            )
         )
-        if rr.period and not _row_is_empty(rr):
-            cleaned.append(rr)
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -1806,15 +1818,15 @@ def put_stops_launch(
                 DO UPDATE SET obs = EXCLUDED.obs, updated_at = now()
                 RETURNING id
                 """,
-                (owner_id, day, (payload.obs or "").strip() or None),
+                (owner_id, day, None),
             )
             row = cur.fetchone()
             day_id = row["id"] if isinstance(row, dict) else row[0]
 
-            # Substitui as rows do dia (simplifica e evita divergência)
+            # Substitui todas as rows do dia
             cur.execute("DELETE FROM bv_launch.stops_rows WHERE day_id = %s", (day_id,))
 
-            if cleaned:
+            if normalized_rows:
                 cur.executemany(
                     """
                     INSERT INTO bv_launch.stops_rows
@@ -1822,18 +1834,13 @@ def put_stops_launch(
                     VALUES (%s, %s, %s, %s, %s, %s)
                     """,
                     [
-                        (
-                            day_id,
-                            r.period,
-                            r.equipment,
-                            r.stop_type,
-                            r.description,
-                            _clamp_0_60(r.minutes),
-                        )
-                        for r in cleaned
+                        (day_id, period, equipment, stop_type, description, minutes)
+                        for (period, equipment, stop_type, description, minutes) in normalized_rows
                     ],
                 )
 
         conn.commit()
 
-    return {"ok": True, "day": day.isoformat(), "rows_saved": len(cleaned)}
+    return {"ok": True, "day": day.isoformat(), "rows_saved": len(normalized_rows)}
+
+
