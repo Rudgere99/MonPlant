@@ -200,7 +200,18 @@ export default function LancamentoParadas() {
 
       // cria mapa por period p/ manter 24 linhas
       const map: Record<string, StopRow> = {};
-      for (const x of data.rows || []) map[x.period] = x;
+      for (const x of data.rows || []) {
+        const p = (x as any).period;
+        map[p] = {
+          period: p,
+          // backend pode retornar pt-BR (equipamento/tipo_parada/descricao/minutos)
+          // ou inglês (equipment/stop_type/description/minutes)
+          equipamento: (x as any).equipamento ?? (x as any).equipment ?? "",
+          tipo_parada: (x as any).tipo_parada ?? (x as any).stop_type ?? "",
+          descricao: (x as any).descricao ?? (x as any).description ?? "",
+          minutos: Number((x as any).minutos ?? (x as any).minutes ?? 0),
+        };
+      }
 
       setRows(
         periods.map((p) => ({
