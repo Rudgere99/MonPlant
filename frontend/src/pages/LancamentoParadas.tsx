@@ -164,7 +164,7 @@ export default function LancamentoParadas() {
   const [msg, setMsg] = useState<string>("");
 
   // ✅ ajuste conforme seu cadastro real
-  const equipmentOptions = useMemo(() => ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08", "EH-05"], []);
+  const equipmentOptions = useMemo(() => ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08", "EH-04", "Peneiras", "Todos"], []);
   const stopTypes = useMemo(
     () => ["Operacional", "Preventiva", "Corretiva", "Elétrica", "Segurança"],
     []
