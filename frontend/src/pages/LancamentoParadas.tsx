@@ -239,15 +239,13 @@ export default function LancamentoParadas() {
     setMsg("");
 
     try {
-      // só manda linhas com algum conteúdo
-      const filtered = rows
-        .map((r) => ({
-          ...r,
-          minutos: clamp60(Number(r.minutos || 0)),
-        }))
-        .filter((r) => r.minutos > 0 || r.descricao.trim() || r.tipo_parada || r.equipamento);
+      // manda sempre as 24 linhas (mesmo zeradas) para manter histórico completo no banco
+      const normalized = rows.map((r) => ({
+        ...r,
+        minutos: clamp60(Number(r.minutos || 0)),
+      }));
 
-      const body: StopDayPayload = { day, rows: filtered };
+      const body: StopDayPayload = { day, rows: normalized };
 
       // ⚠️ Ajuste se seu endpoint for diferente
       const r = await fetch(`${API_BASE}/api/stops-launch?day=${encodeURIComponent(day)}`, {
