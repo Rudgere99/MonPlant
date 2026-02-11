@@ -44,9 +44,10 @@ else:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=False,  # usamos Bearer token, sem cookies
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Dev-Key"],
+    allow_headers=["*"],
 )
 
 @app.options("/{path:path}")
@@ -1655,10 +1656,17 @@ def stats_month(month: str, owner_id: str = Depends(require_owner_id)):
 
 class StopLaunchRow(BaseModel):
     period: str = Field(..., description="Faixa horária ex: 07-08 ou 23-00")
-    equipment: Optional[str] = None
-    stop_type: Optional[str] = None
-    description: Optional[str] = None
-    minutes: int = Field(0, ge=0, le=60)
+
+    # Aceita tanto o payload antigo (equipment/stop_type/description/minutes)
+    # quanto o payload do front (equipamento/tipo_parada/descricao/minutos)
+    equipment: Optional[str] = Field(None, alias="equipamento")
+    stop_type: Optional[str] = Field(None, alias="tipo_parada")
+    description: Optional[str] = Field(None, alias="descricao")
+    minutes: int = Field(0, ge=0, le=60, alias="minutos")
+
+    class Config:
+        allow_population_by_field_name = True
+
 
 class StopLaunchPayload(BaseModel):
     day: date
