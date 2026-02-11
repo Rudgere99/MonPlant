@@ -1782,7 +1782,8 @@ def put_stops_launch(
                 """,
                 (owner_id, day, (payload.obs or "").strip() or None),
             )
-            day_id = cur.fetchone()[0]
+            row = cur.fetchone()
+        day_id = row["id"] if isinstance(row, dict) else row[0]
 
             # Substitui as rows do dia (simplifica e evita divergência)
             cur.execute("DELETE FROM bv_launch.stops_rows WHERE day_id = %s", (day_id,))
