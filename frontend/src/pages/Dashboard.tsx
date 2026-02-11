@@ -144,7 +144,7 @@ const BarValueLabel = (props: any) => {
   const n = Number(value);
   if (!Number.isFinite(n) || n === 0) return null;
   const cx = (Number(x) || 0) + (Number(width) || 0) / 2;
-  const cy = (Number(y) || 0) - 10;
+  const cy = (Number(y) || 0) - 6;
   const label = n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
   return (
     <text
@@ -165,7 +165,7 @@ const FreqPointLabel = (props: any) => {
   const n = Number(value);
   if (!Number.isFinite(n) || n === 0) return null;
   const cx = Number(x) || 0;
-  const cy = (Number(y) || 0) - 14;
+  const cy = (Number(y) || 0) - 28;
   const label = `${Math.round(n)}%`;
   return (
     <text
@@ -452,7 +452,7 @@ export default function Dashboard() {
       }
 
       const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
-      const ps = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`).catch(() => []);
+      const ps = await apiGet<any>(`/api/stops-launch?day=${encodeURIComponent(day)}`).catch(() => null);
       const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`).catch(() => []);
 
       const map: Record<string, HorimetroRow | null> = {};
@@ -463,7 +463,7 @@ export default function Dashboard() {
 
       setProdDay(p);
       setLast7(Array.isArray(l7) ? l7 : []);
-      setStops(Array.isArray(ps) ? ps : []);
+      setStops(Array.isArray((ps as any)?.rows) ? (ps as any).rows : []);
       setLastByEq(map);
     } catch (e: any) {
       setErr(e?.message || "Falha ao carregar dashboard");
@@ -516,26 +516,64 @@ export default function Dashboard() {
     return buildHourlyGrid(data);
   }, [prodDay]);
 
-  // ✅ Mapa: período ("HH-HH") -> lista de observações de parada (para tooltip do gráfico)
+    // ✅ Mapa: período ("HH-HH") -> lista de observações de parada (para tooltip do gráfico)
+  // Regras:
+  // - aceita tanto formato antigo (hora_inicio) quanto novo (period "HH-HH")
+  // - se a parada vier como faixa (ex: 19-21), a descrição aparece em TODOS os horários decorrentes (19-20, 20-21, 21-22)
   const stopsByPeriod = useMemo<Record<string, StopTipItem[]>>(() => {
     const map: Record<string, StopTipItem[]> = {};
 
-    for (const s of stops || []) {
-      const hStr = String((s as any)?.hora_inicio || "").slice(0, 2);
-      const h = Number(hStr);
-      if (!Number.isFinite(h) || h < 0 || h > 23) continue;
-
+    const push = (h: number, eq: string, desc: string) => {
       const key = `${pad2(h)}-${pad2((h + 1) % 24)}`;
-      const desc =
-        String((s as any)?.descricao || "").trim() ||
-        String((s as any)?.atividade || "").trim() ||
-        String((s as any)?.tipo_parada || "").trim() ||
-        "Parada (sem descrição)";
-
-      const eq = String((s as any)?.equipamento || "").trim() || "—";
-
       if (!map[key]) map[key] = [];
       map[key].push({ equipamento: eq, descricao: desc });
+    };
+
+    const parsePeriod = (p: string): { a: number; b: number } | null => {
+      const s = String(p || "").trim();
+      const m = s.match(/^(\d{2})-(\d{2})$/);
+      if (!m) return null;
+      const a = Number(m[1]);
+      const b = Number(m[2]);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      if (a < 0 || a > 23 || b < 0 || b > 23) return null;
+      return { a, b };
+    };
+
+    const expandHoursInclusive = (a: number, b: number): number[] => {
+      // inclui o "b" também (regra pedida no tooltip)
+      const out: number[] = [];
+      let h = a;
+      for (let guard = 0; guard < 48; guard++) {
+        out.push(h);
+        if (h === b) break;
+        h = (h + 1) % 24;
+      }
+      return out;
+    };
+
+    for (const s of (stops || []) as any[]) {
+      const desc =
+        String(s?.descricao || "").trim() ||
+        String(s?.atividade || "").trim() ||
+        String(s?.tipo_parada || "").trim() ||
+        String(s?.stop_type || "").trim() ||
+        "Parada (sem descrição)";
+
+      const eq = String(s?.equipamento || s?.equipment || "").trim() || "—";
+
+      // Novo formato (bv_launch.stops_rows): period "HH-HH"
+      const p = parsePeriod(String(s?.period || ""));
+      if (p) {
+        const hours = expandHoursInclusive(p.a, p.b);
+        for (const h of hours) push(h, eq, desc);
+        continue;
+      }
+
+      // Formato antigo: hora_inicio (HH:mm:ss)
+      const hStr = String(s?.hora_inicio || "").slice(0, 2);
+      const h = Number(hStr);
+      if (Number.isFinite(h) && h >= 0 && h <= 23) push(h, eq, desc);
     }
 
     return map;
