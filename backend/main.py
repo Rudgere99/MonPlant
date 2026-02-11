@@ -179,18 +179,39 @@ def _b64url_decode(s: str) -> bytes:
 # =========================
 # Stops Launch period normalizer (mantém padrão do front: "HH-HH")
 # =========================
-def normalize_period_launch(p: str) -> Optional[str]:
-    """Aceita apenas "HH-HH" (ex: 23-00). Retorna "HH-HH" padronizado."""
+def normalize_period_launch(p: str | None) -> str | None:
+    """
+    Aceita:
+      - "19-21"
+      - "19:00-21:00"
+      - "19:00 às 21:00" / "19:00 as 21:00"
+      - "19 às 21" / "19 as 21"
+    Retorna sempre: "HH-HH" (ex: "19-21")
+    """
     if not p:
         return None
-    s = re.sub(r"\s+", "", str(p))
-    m = re.fullmatch(r"(\d{2})-(\d{2})", s)
+
+    s = str(p).strip().lower()
+
+    # normalizações comuns
+    s = s.replace("às", "-").replace("as", "-")
+    s = s.replace("–", "-").replace("—", "-")
+    s = s.replace(":", "")
+    s = re.sub(r"\s+", "", s)
+
+    # formatos aceitos após normalizar:
+    # - 19-21
+    # - 1900-2100
+    m = re.fullmatch(r"(\d{2})(?:00)?-(\d{2})(?:00)?", s)
     if not m:
         return None
+
     h1 = int(m.group(1))
     h2 = int(m.group(2))
+
     if 0 <= h1 <= 23 and 0 <= h2 <= 23:
         return f"{h1:02d}-{h2:02d}"
+
     return None
 
 
