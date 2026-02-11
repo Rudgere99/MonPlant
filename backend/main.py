@@ -1739,7 +1739,8 @@ def get_stops_launch(
             if not row:
                 return {"day": day.isoformat(), "obs": "", "rows": []}
 
-            day_id, obs = row[0], row[1] or ""
+            day_id = row["id"] if isinstance(row, dict) else row[0]
+        obs = (row.get("obs") if isinstance(row, dict) else row[1]) or ""
 
             cur.execute(
                 """
