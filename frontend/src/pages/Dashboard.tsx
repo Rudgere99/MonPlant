@@ -541,7 +541,12 @@ export default function Dashboard() {
     };
 
     const expandHoursInclusive = (a: number, b: number): number[] => {
-      // inclui o "b" também (regra pedida no tooltip)
+      // Regra:
+      // - Se for uma faixa "normal" de 1h (ex: 22-23), a parada pertence SOMENTE ao bucket 22-23 (não joga em 23-00)
+      // - Se for uma faixa maior (ex: 19-21), aplica em TODOS os horários decorrentes incluindo o "b"
+      //   (19-20, 20-21, 21-22)
+      if (((a + 1) % 24) === b) return [a];
+
       const out: number[] = [];
       let h = a;
       for (let guard = 0; guard < 48; guard++) {
