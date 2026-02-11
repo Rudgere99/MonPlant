@@ -37,7 +37,7 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: #94a3b8;
+  border-color: #22C55E;
 }
 
 ::-webkit-scrollbar {
@@ -61,14 +61,14 @@ textarea:focus {
   --text: rgba(255,255,255,.92);
   --muted: rgba(255,255,255,.62);
   --muted2: rgba(255,255,255,.45);
-  --brand: #94a3b8; /* silver/steel */
-  --brand2: rgba(148,163,184,.18);
+  --brand: #34d399; /* emerald */
+  --brand2: rgba(52,211,153,.16);
   --danger: #fb7185;
 }
 
 html, body {
-  background: radial-gradient(1200px 600px at 20% 0%, rgba(148,163,184,.14), transparent 60%),
-              radial-gradient(900px 500px at 100% 0%, rgba(203,213,225,.09), transparent 55%),
+  background: radial-gradient(1200px 600px at 20% 0%, rgba(52,211,153,.10), transparent 60%),
+              radial-gradient(900px 500px at 100% 0%, rgba(56,189,248,.08), transparent 55%),
               var(--bg);
   color: var(--text);
 }
@@ -105,8 +105,8 @@ a { color: inherit; text-decoration: none; }
   padding: 5px 10px;
   border-radius: 999px;
   background: var(--brand2);
-  border: 1px solid rgba(148,163,184,.28);
-  color: rgba(226,232,240,.95);
+  border: 1px solid rgba(52,211,153,.20);
+  color: rgba(167,243,208,.95);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .4px;
@@ -130,10 +130,10 @@ a { color: inherit; text-decoration: none; }
 .mp-btn:active{ transform: translateY(1px); }
 
 .mp-btn-primary{
-  border-color: rgba(148,163,184,.35);
-  background: rgba(148,163,184,.16);
+  border-color: rgba(52,211,153,.30);
+  background: rgba(52,211,153,.14);
 }
-.mp-btn-primary:hover{ background: rgba(148,163,184,.28); }
+.mp-btn-primary:hover{ background: rgba(52,211,153,.20); }
 
 .mp-btn-danger{
   border-color: rgba(251,113,133,.30);
@@ -157,8 +157,8 @@ a { color: inherit; text-decoration: none; }
 .mp-textarea{ min-height: 88px; resize: vertical; }
 .mp-input::placeholder, .mp-textarea::placeholder{ color: rgba(255,255,255,.30); }
 .mp-input:focus, .mp-textarea:focus, .mp-select:focus{
-  border-color: rgba(148,163,184,.40);
-  box-shadow: 0 0 0 4px rgba(148,163,184,.14);
+  border-color: rgba(52,211,153,.35);
+  box-shadow: 0 0 0 4px rgba(52,211,153,.10);
 }
 
 /* Tables/grid form */
