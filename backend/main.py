@@ -1740,7 +1740,7 @@ def get_stops_launch(
                 return {"day": day.isoformat(), "obs": "", "rows": []}
 
             day_id = row["id"] if isinstance(row, dict) else row[0]
-        obs = (row.get("obs") if isinstance(row, dict) else row[1]) or ""
+            obs = (row.get("obs") if isinstance(row, dict) else row[1]) or ""
 
             cur.execute(
                 """
@@ -1751,17 +1751,21 @@ def get_stops_launch(
                 """,
                 (day_id,),
             )
-            rows = [
-                {
-                    "period": r[0],
-                    "equipment": r[1] or "",
-                    "stop_type": r[2] or "",
-                    "description": r[3] or "",
-                    "minutes": int(r[4] or 0),
-                }
-                for r in cur.fetchall()
-            ]
-
+            fetched = cur.fetchall() or []
+            rows = []
+            for r in fetched:
+                period = r.get("period") if isinstance(r, dict) else r[0]
+                equipment = r.get("equipment") if isinstance(r, dict) else r[1]
+                stop_type = r.get("stop_type") if isinstance(r, dict) else r[2]
+                description = r.get("description") if isinstance(r, dict) else r[3]
+                minutes = r.get("minutes") if isinstance(r, dict) else r[4]
+                rows.append({
+                    "period": period,
+                    "equipment": equipment or "",
+                    "stop_type": stop_type or "",
+                    "description": description or "",
+                    "minutes": int(minutes or 0),
+                })
     return {"day": day.isoformat(), "obs": obs, "rows": rows}
 
 @app.put("/api/stops-launch")
