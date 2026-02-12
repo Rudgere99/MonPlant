@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 
 /**
- * Ritmo do Turno
+ * Ritmo do dia (00:00–00:00)
  * - Manual: tonelada por conchada (t) (salva no localStorage)
  * - Automático: meta do dia, produzido, período atual, necessário t/h e conchadas/h,
  *              média real t/h e conchadas/h (puxa do mesmo endpoint do PlantProduction)
  *
- * Endpoint esperado (igual PlantProduction):
+ * Endpoint esperado:
  *   GET /api/plant-production/{day}  -> { day, rows:[{period, ton, freq}], meta_ton? }
  */
 
@@ -36,6 +36,11 @@ type ApiPayload = {
 
 const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
+function authHeaders(): HeadersInit {
+  const t = (localStorage.getItem("mp_token") || localStorage.getItem("token") || "").trim();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
 async function apiGet<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
   if (!r.ok) {
@@ -43,11 +48,6 @@ async function apiGet<T>(path: string): Promise<T> {
     throw new Error(t || `HTTP ${r.status}`);
   }
   return (await r.json()) as T;
-}
-
-function authHeaders(): HeadersInit {
-  const t = (localStorage.getItem("mp_token") || localStorage.getItem("token") || "").trim();
-  return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
 function isoTodayLocal(): string {
@@ -102,7 +102,11 @@ function normalizePeriodToHH(period: string): string {
   const s0 = String(period || "").trim();
   if (!s0) return s0;
   const s = s0.replace(/–|—/g, "-");
-  const parts = s.split("-").map((x) => x.trim()).filter(Boolean);
+  const parts = s
+    .split("-")
+    .map((x) => x.trim())
+    .filter(Boolean);
+
   if (parts.length >= 2) {
     const h1m = parts[0].match(/^(\d{1,2})/);
     const h2m = parts[1].match(/^(\d{1,2})/);
@@ -118,10 +122,8 @@ function normalizePeriodToHH(period: string): string {
 function currentShiftWindow(now = new Date()) {
   // Turno 1: 07–19 | Turno 2: 19–07
   const h = now.getHours();
-  if (h >= 7 && h < 19) {
-    return { shiftName: "Turno 1", startH: 7, endH: 19, crossesMidnight: false };
-  }
-  return { shiftName: "Turno 2", startH: 19, endH: 7, crossesMidnight: true };
+  if (h >= 7 && h < 19) return { shiftName: "Turno 1", startH: 7, endH: 19 };
+  return { shiftName: "Turno 2", startH: 19, endH: 7 };
 }
 
 function dayRemainingHours(now = new Date()) {
@@ -174,49 +176,44 @@ const btn: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+/** mini-card (igual sua 1ª imagem) */
+const exportMiniCard: React.CSSProperties = {
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(14,18,22,0.92)",
+  padding: 12,
+  lineHeight: 1.45,
+  display: "inline-block",
+  width: "fit-content",
+  maxWidth: 560,
+  boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+};
+
+const exportLine: React.CSSProperties = {
+  color: "rgba(255,255,255,0.92)",
+  fontWeight: 900,
+  fontSize: 13,
+};
+
+const exportSep: React.CSSProperties = {
+  height: 1,
+  background: "rgba(255,255,255,0.10)",
+  margin: "8px 0",
+};
+
+const noWrapRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "baseline",
+  gap: 6,
+  flexWrap: "nowrap",
+  whiteSpace: "nowrap",
+};
+
 export default function Ritmo() {
   const [day, setDay] = useState<string>(isoTodayLocal());
 
-const exportCompactRef = useRef<HTMLDivElement | null>(null);
-
-async function exportResumoJPEG() {
-  const el = exportCompactRef.current;
-  if (!el) return;
-
-  await new Promise<void>((r) => requestAnimationFrame(() => r()));
-  // @ts-ignore
-  if (document.fonts?.ready) {
-    try {
-      // @ts-ignore
-      await document.fonts.ready;
-    } catch {}
-  }
-
-  const rect = el.getBoundingClientRect();
-  const EXTRA = 8;
-
-  const w = Math.ceil(rect.width + EXTRA);
-  const h = Math.ceil(rect.height + EXTRA);
-
-  const canvas = await html2canvas(el, {
-    backgroundColor: null,
-    scale: 2,
-    useCORS: true,
-    width: w,
-    height: h,
-    windowWidth: w,
-    windowHeight: h,
-    scrollX: 0,
-    scrollY: 0,
-  });
-
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = `ritmo_resumo_${day}.jpg`;
-  a.click();
-}
-
+  // ✅ somente esse é exportado
+  const exportCompactRef = useRef<HTMLDivElement | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -235,6 +232,7 @@ async function exportResumoJPEG() {
         const r = await fetch(FETCH_URL, { headers: authHeaders() });
         if (r.status === 404) {
           setData({ day, rows: [], meta_ton: null });
+          setGoal(null);
           return;
         }
         if (!r.ok) {
@@ -243,6 +241,7 @@ async function exportResumoJPEG() {
         }
         const j = (await r.json()) as ApiPayload;
         setData(j);
+
         try {
           const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`);
           setGoal(g);
@@ -291,7 +290,7 @@ async function exportResumoJPEG() {
   const currH = now.getHours();
   const endH = currH;
   const startH = (currH + 23) % 24;
-  const currPeriod = `${pad2(startH)}-${pad2(endH)}`;
+  const currPeriod = `${pad2(startH)}-${pad2(endH)}`; // ex.: 02-03
   const periodTon = rowsNorm.get(currPeriod) ?? 0;
 
   const remainingH = dayRemainingHours(now);
@@ -315,6 +314,7 @@ async function exportResumoJPEG() {
   const avgRealTPH = produced / elapsedH;
   const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
 
+  // regra prática: meta ~4404 => esperado 200 t/h
   const expectedTPH = useMemo(() => {
     if (metaDay === null || !isFinite(metaDay) || metaDay <= 0) return 200;
     if (Math.abs(metaDay - 4404) <= 150) return 200;
@@ -325,6 +325,9 @@ async function exportResumoJPEG() {
   const cGreen = "rgba(34,197,94,0.95)";
   const cRed = "rgba(239,68,68,0.95)";
 
+  // ✅ regras de cor:
+  // Necessário: verde quando <= esperado
+  // Média real: verde quando >= esperado
   const neededColor = neededTPH !== null && neededTPH <= expectedTPH ? cGreen : cRed;
   const avgRealColor = avgRealTPH >= expectedTPH ? cGreen : cRed;
 
@@ -333,8 +336,48 @@ async function exportResumoJPEG() {
   const [yy, mm, dd] = day.split("-");
   const dayBR = `${dd}/${mm}/${yy}`;
 
+  async function exportResumoJPEG() {
+    const el = exportCompactRef.current;
+    if (!el) return;
+
+    // garante layout/fonte pronto
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    // @ts-ignore
+    if (document.fonts?.ready) {
+      try {
+        // @ts-ignore
+        await document.fonts.ready;
+      } catch {}
+    }
+
+    const rect = el.getBoundingClientRect();
+    const EXTRA = 8;
+
+    const w = Math.ceil(rect.width + EXTRA);
+    const h = Math.ceil(rect.height + EXTRA);
+
+    const canvas = await html2canvas(el, {
+      backgroundColor: null,
+      scale: 2,
+      useCORS: true,
+      width: w,
+      height: h,
+      windowWidth: w,
+      windowHeight: h,
+      scrollX: 0,
+      scrollY: 0,
+    });
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `ritmo_resumo_${day}.jpg`;
+    a.click();
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* topo */}
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 20 }}>
@@ -358,9 +401,7 @@ async function exportResumoJPEG() {
           <div>
             <div style={label}>Data</div>
             <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={input} />
-            <div style={{ marginTop: 6, color: "rgba(255,255,255,0.55)", fontWeight: 800, fontSize: 12 }}>
-              {dayBR}
-            </div>
+            <div style={{ marginTop: 6, color: "rgba(255,255,255,0.55)", fontWeight: 800, fontSize: 12 }}>{dayBR}</div>
           </div>
 
           <div>
@@ -378,7 +419,8 @@ async function exportResumoJPEG() {
         </div>
       </div>
 
-      <div ref={exportCardRef} style={{ ...card, lineHeight: 1.7, display: "inline-block", width: "fit-content", maxWidth: 520 }}>
+      {/* preview normal (na tela) — pode manter grande se quiser */}
+      <div style={{ ...card, lineHeight: 1.7, display: "inline-block", width: "fit-content", maxWidth: 520 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Meta: <span style={{ fontWeight: 950 }}>{metaDay === null ? "—" : `${fmtBR0(metaDay)} t`}</span>
@@ -406,10 +448,7 @@ async function exportResumoJPEG() {
           <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
 
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Período:{" "}
-            <span style={{ fontWeight: 950 }}>
-              {pad2(startH)}h às {pad2(endH)}h
-            </span>
+            Período: <span style={{ fontWeight: 950 }}>{pad2(startH)}h às {pad2(endH)}h</span>
           </div>
 
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
@@ -435,12 +474,64 @@ async function exportResumoJPEG() {
               ≈ {avgRealBucketsH === null ? "—" : `${fmtBR0(avgRealBucketsH)} conchadas/h`}
             </span>
           </div>
+        </div>
+      </div>
 
-          {metaDay === null ? (
-            <div style={{ marginTop: 10, color: "rgba(245,158,11,0.95)", fontWeight: 900 }}>
-              ⚠️ Meta do dia não veio do backend (campo meta_ton/meta/meta_day/planned_ton).
-            </div>
-          ) : null}
+      {/* ✅ ESTE É O QUE VAI PARA IMAGEM (compacto, sem área vazia e sem "cardão") */}
+      <div style={{ position: "fixed", left: -10000, top: -10000, zIndex: -1 }}>
+        <div ref={exportCompactRef} style={exportMiniCard}>
+          <div style={exportLine}>
+            Meta: <span style={{ fontWeight: 950 }}>{metaDay === null ? "—" : `${fmtBR0(metaDay)} t`}</span>
+          </div>
+
+          <div style={exportLine}>
+            Produzido: <span style={{ fontWeight: 950, color: cYellow }}>{fmtBR0(produced)} t</span>
+          </div>
+
+          <div style={exportLine}>
+            Atingimento: <span style={{ fontWeight: 950 }}>{attainment === null ? "—" : fmtPct(attainment, 1)}</span>
+          </div>
+
+          <div style={exportLine}>
+            Diferença:{" "}
+            <span style={{ fontWeight: 950 }}>
+              {diff === null ? "—" : `${diff >= 0 ? "+" : ""}${fmtBR0(diff)} t`}
+            </span>
+          </div>
+
+          <div style={exportLine}>
+            Tempo restante: <span style={{ fontWeight: 950 }}>{fmtBR(remainingH, 1)} h</span>
+          </div>
+
+          <div style={exportSep} />
+
+          <div style={exportLine}>
+            Período: <span style={{ fontWeight: 950 }}>{pad2(startH)}h às {pad2(endH)}h</span>
+          </div>
+
+          <div style={exportLine}>
+            Produção do período: <span style={{ fontWeight: 950 }}>{fmtBR(periodTon, 1)} t</span>
+          </div>
+
+          <div style={exportSep} />
+
+          <div style={{ ...exportLine, ...noWrapRow }}>
+            <span>Necessário:</span>
+            <span style={{ fontWeight: 950, color: neededColor }}>
+              {neededTPH === null ? "—" : `${fmtBR(neededTPH, 1)} t/h`}
+            </span>
+            <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
+              ≈ {neededBucketsH === null ? "—" : `${fmtBR0(neededBucketsH)} conchadas/h`}
+            </span>
+          </div>
+
+          <div style={{ ...exportLine, ...noWrapRow }}>
+            <span>Média real:</span>
+            <span style={{ fontWeight: 950, color: avgRealColor }}>{fmtBR(avgRealTPH, 1)} t/h</span>
+            <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
+              ≈ {avgRealBucketsH === null ? "—" : `${fmtBR0(avgRealBucketsH)} conchadas/h`}
+            </span>
+          </div>
         </div>
       </div>
     </div>
