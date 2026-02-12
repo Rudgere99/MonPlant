@@ -177,47 +177,46 @@ const btn: React.CSSProperties = {
 export default function Ritmo() {
   const [day, setDay] = useState<string>(isoTodayLocal());
 
-  const exportCardRef = useRef<HTMLDivElement | null>(null);
+const exportCompactRef = useRef<HTMLDivElement | null>(null);
 
-  async function exportResumoJPEG() {
-    const el = exportCardRef.current;
-    if (!el) return;
+async function exportResumoJPEG() {
+  const el = exportCompactRef.current;
+  if (!el) return;
 
-    // garante layout/medidas corretas antes de capturar
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
-    // garante fontes carregadas (evita cortar linha no final)
-    // @ts-ignore
-    if (document.fonts?.ready) {
-      try {
-        // @ts-ignore
-        await document.fonts.ready;
-      } catch {}
-    }
-
-    const rect = el.getBoundingClientRect();
-    const EXTRA = 8; // folga pra não “comer” a última linha
-
-    const w = Math.ceil(rect.width + EXTRA);
-    const h = Math.ceil(rect.height + EXTRA);
-
-    const canvas = await html2canvas(el, {
-      backgroundColor: "rgba(14,18,22,0)", // mantém o mesmo look do card
-      scale: 2,
-      useCORS: true,
-      width: w,
-      height: h,
-      windowWidth: w,
-      windowHeight: h,
-      scrollX: 0,
-      scrollY: 0,
-    });
-
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-    const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = `ritmo_resumo_${day}.jpg`;
-    a.click();
+  await new Promise<void>((r) => requestAnimationFrame(() => r()));
+  // @ts-ignore
+  if (document.fonts?.ready) {
+    try {
+      // @ts-ignore
+      await document.fonts.ready;
+    } catch {}
   }
+
+  const rect = el.getBoundingClientRect();
+  const EXTRA = 8;
+
+  const w = Math.ceil(rect.width + EXTRA);
+  const h = Math.ceil(rect.height + EXTRA);
+
+  const canvas = await html2canvas(el, {
+    backgroundColor: null,
+    scale: 2,
+    useCORS: true,
+    width: w,
+    height: h,
+    windowWidth: w,
+    windowHeight: h,
+    scrollX: 0,
+    scrollY: 0,
+  });
+
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = `ritmo_resumo_${day}.jpg`;
+  a.click();
+}
+
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
