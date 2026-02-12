@@ -17,7 +17,12 @@ type HourRow = {
   freq?: number | string | null;
 };
 
-type GoalDay = { day: string; meta_ton: number | null; discount_hours?: number | null; updated_at?: string | null };
+type GoalDay = {
+  day: string;
+  meta_ton: number | null;
+  discount_hours?: number | null;
+  updated_at?: string | null;
+};
 
 type ApiPayload = {
   day: string;
@@ -97,7 +102,10 @@ function normalizePeriodToHH(period: string): string {
   const s0 = String(period || "").trim();
   if (!s0) return s0;
   const s = s0.replace(/–|—/g, "-");
-  const parts = s.split("-").map((x) => x.trim()).filter(Boolean);
+  const parts = s
+    .split("-")
+    .map((x) => x.trim())
+    .filter(Boolean);
   if (parts.length >= 2) {
     const h1m = parts[0].match(/^(\d{1,2})/);
     const h2m = parts[1].match(/^(\d{1,2})/);
@@ -119,23 +127,6 @@ function currentShiftWindow(now = new Date()) {
   return { shiftName: "Turno 2", startH: 19, endH: 7, crossesMidnight: true };
 }
 
-function hoursRemainingInShift(now = new Date()) {
-  const { startH, endH, crossesMidnight } = currentShiftWindow(now);
-  const h = now.getHours();
-  if (!crossesMidnight) return Math.max(0, endH - h);
-  if (h >= startH) return 24 - h + endH;
-  return endH - h;
-}
-
-function hoursElapsedInShift(now = new Date()) {
-  const { startH, crossesMidnight } = currentShiftWindow(now);
-  const h = now.getHours();
-  if (!crossesMidnight) return Math.max(0, h - startH);
-  if (h >= startH) return h - startH;
-  return (24 - startH) + h;
-}
-
-
 function dayRemainingHours(now = new Date()) {
   const mins = now.getHours() * 60 + now.getMinutes();
   const rem = Math.max(0, 1440 - mins); // minutes remaining until 00:00
@@ -146,7 +137,6 @@ function dayElapsedHours(now = new Date()) {
   const mins = now.getHours() * 60 + now.getMinutes();
   return Math.max(0, mins / 60);
 }
-
 
 const LS_BUCKET = "mp_bucket_ton_v1";
 
@@ -187,7 +177,6 @@ const btn: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-
 export default function Ritmo() {
   const [day, setDay] = useState<string>(isoTodayLocal());
 
@@ -196,6 +185,7 @@ export default function Ritmo() {
   async function exportResumoJPEG() {
     const el = exportCardRef.current;
     if (!el) return;
+
     const canvas = await html2canvas(el, {
       backgroundColor: null,
       scale: 2,
@@ -205,6 +195,7 @@ export default function Ritmo() {
       windowWidth: el.scrollWidth,
       windowHeight: el.scrollHeight,
     });
+
     const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
     const a = document.createElement("a");
     a.href = dataUrl;
@@ -237,6 +228,7 @@ export default function Ritmo() {
         }
         const j = (await r.json()) as ApiPayload;
         setData(j);
+
         // meta do dia (mesmo endpoint do Dashboard)
         try {
           const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`);
@@ -285,6 +277,7 @@ export default function Ritmo() {
 
   const now = new Date();
   const currH = now.getHours();
+
   // Mostra o período FECHADO anterior: h-1 → h (ex.: 04:00 mostra 03-04)
   const endH = currH;
   const startH = (currH + 23) % 24;
@@ -292,7 +285,7 @@ export default function Ritmo() {
   const periodTon = rowsNorm.get(currPeriod) ?? 0;
 
   const remainingH = dayRemainingHours(now);
-  const elapsedH = Math.max(0.25, dayElapsedHours(now)); // evita div/0 e mantém estabilidade // evita div/0
+  const elapsedH = Math.max(0.25, dayElapsedHours(now)); // evita div/0 e mantém estabilidade
 
   const diff = metaDay !== null ? produced - metaDay : null;
   const attainment = metaDay !== null && metaDay > 0 ? (produced / metaDay) * 100 : null;
@@ -324,10 +317,9 @@ export default function Ritmo() {
   const cGreen = "rgba(34,197,94,0.95)";
   const cRed = "rgba(239,68,68,0.95)";
 
-  const neededColor =
-    neededTPH !== null && neededTPH <= expectedTPH ? cGreen : cRed;
-  const avgRealColor =
-    avgRealTPH >= expectedTPH ? cGreen : cRed;
+  // ✅ regras de cor
+  const neededColor = neededTPH !== null && neededTPH <= expectedTPH ? cGreen : cRed;
+  const avgRealColor = avgRealTPH >= expectedTPH ? cGreen : cRed;
 
   const shiftInfo = currentShiftWindow(now);
 
@@ -342,10 +334,14 @@ export default function Ritmo() {
             Ritmo do dia (00:00–00:00)
           </div>
 
-          <button onClick={exportResumoJPEG} style={{ ...btn, background: "rgba(168,85,247,0.14)", borderColor: "rgba(168,85,247,0.35)" }}>
+          <button
+            onClick={exportResumoJPEG}
+            style={{ ...btn, background: "rgba(168,85,247,0.14)", borderColor: "rgba(168,85,247,0.35)" }}
+          >
             Exportar resumo
           </button>
         </div>
+
         <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
           {shiftInfo.shiftName} • {pad2(shiftInfo.startH)}:00 às {pad2(shiftInfo.endH)}:00 •{" "}
           {loading ? "Carregando..." : err ? `Erro: ${err}` : data?.updated_at ? `Atualizado: ${data.updated_at}` : "—"}
@@ -375,23 +371,29 @@ export default function Ritmo() {
         </div>
       </div>
 
-      <div ref={exportCardRef} style={{ ...card, lineHeight: 1.7, display: "inline-block", width: "fit-content", maxWidth: 520 }}>
+      {/* ✅ card usado na exportação: recorte só do necessário */}
+      <div
+        ref={exportCardRef}
+        style={{ ...card, lineHeight: 1.7, display: "inline-block", width: "fit-content", maxWidth: 520 }}
+      >
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Meta: <span style={{ fontWeight: 950 }}>{metaDay === null ? "—" : `${fmtBR0(metaDay)} t`}</span>
           </div>
+
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Produzido: <span style={{ fontWeight: 950, color: cYellow }}>{fmtBR0(produced)} t</span>
           </div>
+
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Atingimento: <span style={{ fontWeight: 950 }}>{attainment === null ? "—" : fmtPct(attainment, 1)}</span>
           </div>
+
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Diferença:{" "}
-            <span style={{ fontWeight: 950 }}>
-              {diff === null ? "—" : `${diff >= 0 ? "+" : ""}${fmtBR0(diff)} t`}
-            </span>
+            <span style={{ fontWeight: 950 }}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${fmtBR0(diff)} t`}</span>
           </div>
+
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Tempo restante: <span style={{ fontWeight: 950 }}>{fmtBR(remainingH, 1)} h</span>
           </div>
@@ -404,15 +406,17 @@ export default function Ritmo() {
               {pad2(startH)}h às {pad2(endH)}h
             </span>
           </div>
+
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Produção do período: <span style={{ fontWeight: 950 }}>{fmtBR(periodTon, 1)} t</span>
           </div>
 
           <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
 
+          {/* ✅ aplica cor no Necessário */}
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Necessário:{" "}
-            <span style={{ fontWeight: 950 }}>
+            <span style={{ fontWeight: 950, color: neededColor }}>
               {neededTPH === null ? "—" : `${fmtBR(neededTPH, 1)} t/h`}
             </span>{" "}
             <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
@@ -420,8 +424,10 @@ export default function Ritmo() {
             </span>
           </div>
 
+          {/* ✅ aplica cor na Média real */}
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Média real: <span style={{ fontWeight: 950 }}>{fmtBR(avgRealTPH, 1)} t/h</span>{" "}
+            Média real:{" "}
+            <span style={{ fontWeight: 950, color: avgRealColor }}>{fmtBR(avgRealTPH, 1)} t/h</span>{" "}
             <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
               ≈ {avgRealBucketsH === null ? "—" : `${fmtBR0(avgRealBucketsH)} conchadas/h`}
             </span>
