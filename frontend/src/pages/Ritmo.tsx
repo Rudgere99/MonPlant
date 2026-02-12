@@ -102,10 +102,7 @@ function normalizePeriodToHH(period: string): string {
   const s0 = String(period || "").trim();
   if (!s0) return s0;
   const s = s0.replace(/–|—/g, "-");
-  const parts = s
-    .split("-")
-    .map((x) => x.trim())
-    .filter(Boolean);
+  const parts = s.split("-").map((x) => x.trim()).filter(Boolean);
   if (parts.length >= 2) {
     const h1m = parts[0].match(/^(\d{1,2})/);
     const h2m = parts[1].match(/^(\d{1,2})/);
@@ -129,7 +126,7 @@ function currentShiftWindow(now = new Date()) {
 
 function dayRemainingHours(now = new Date()) {
   const mins = now.getHours() * 60 + now.getMinutes();
-  const rem = Math.max(0, 1440 - mins); // minutes remaining until 00:00
+  const rem = Math.max(0, 1440 - mins);
   return rem / 60;
 }
 
@@ -186,14 +183,33 @@ export default function Ritmo() {
     const el = exportCardRef.current;
     if (!el) return;
 
+    // garante layout/medidas corretas antes de capturar
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    // garante fontes carregadas (evita cortar linha no final)
+    // @ts-ignore
+    if (document.fonts?.ready) {
+      try {
+        // @ts-ignore
+        await document.fonts.ready;
+      } catch {}
+    }
+
+    const rect = el.getBoundingClientRect();
+    const EXTRA = 8; // folga pra não “comer” a última linha
+
+    const w = Math.ceil(rect.width + EXTRA);
+    const h = Math.ceil(rect.height + EXTRA);
+
     const canvas = await html2canvas(el, {
-      backgroundColor: null,
+      backgroundColor: "rgba(14,18,22,0)", // mantém o mesmo look do card
       scale: 2,
       useCORS: true,
-      width: el.scrollWidth,
-      height: el.scrollHeight,
-      windowWidth: el.scrollWidth,
-      windowHeight: el.scrollHeight,
+      width: w,
+      height: h,
+      windowWidth: w,
+      windowHeight: h,
+      scrollX: 0,
+      scrollY: 0,
     });
 
     const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
@@ -228,8 +244,6 @@ export default function Ritmo() {
         }
         const j = (await r.json()) as ApiPayload;
         setData(j);
-
-        // meta do dia (mesmo endpoint do Dashboard)
         try {
           const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`);
           setGoal(g);
@@ -264,7 +278,6 @@ export default function Ritmo() {
   }, [data]);
 
   const metaDay = useMemo(() => {
-    // prioridade: metas do endpoint /api/goals/day/{day} (igual Dashboard)
     const v = goal?.meta_ton ?? data?.meta_ton ?? data?.meta ?? data?.meta_day ?? data?.planned_ton ?? null;
     return v !== null && v !== undefined ? Number(v) : null;
   }, [goal, data]);
@@ -277,15 +290,13 @@ export default function Ritmo() {
 
   const now = new Date();
   const currH = now.getHours();
-
-  // Mostra o período FECHADO anterior: h-1 → h (ex.: 04:00 mostra 03-04)
   const endH = currH;
   const startH = (currH + 23) % 24;
-  const currPeriod = `${pad2(startH)}-${pad2(endH)}`; // ex.: 23-00
+  const currPeriod = `${pad2(startH)}-${pad2(endH)}`;
   const periodTon = rowsNorm.get(currPeriod) ?? 0;
 
   const remainingH = dayRemainingHours(now);
-  const elapsedH = Math.max(0.25, dayElapsedHours(now)); // evita div/0 e mantém estabilidade
+  const elapsedH = Math.max(0.25, dayElapsedHours(now));
 
   const diff = metaDay !== null ? produced - metaDay : null;
   const attainment = metaDay !== null && metaDay > 0 ? (produced / metaDay) * 100 : null;
@@ -305,11 +316,9 @@ export default function Ritmo() {
   const avgRealTPH = produced / elapsedH;
   const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
 
-  // Regra prática: quando a meta é ~4404t, o esperado por hora costuma ser 200 t/h
   const expectedTPH = useMemo(() => {
     if (metaDay === null || !isFinite(metaDay) || metaDay <= 0) return 200;
     if (Math.abs(metaDay - 4404) <= 150) return 200;
-    // fallback: distribui pela janela de 22h (ajuste simples)
     return metaDay / 22;
   }, [metaDay]);
 
@@ -317,7 +326,6 @@ export default function Ritmo() {
   const cGreen = "rgba(34,197,94,0.95)";
   const cRed = "rgba(239,68,68,0.95)";
 
-  // ✅ regras de cor
   const neededColor = neededTPH !== null && neededTPH <= expectedTPH ? cGreen : cRed;
   const avgRealColor = avgRealTPH >= expectedTPH ? cGreen : cRed;
 
@@ -371,11 +379,7 @@ export default function Ritmo() {
         </div>
       </div>
 
-      {/* ✅ card usado na exportação: recorte só do necessário */}
-      <div
-        ref={exportCardRef}
-        style={{ ...card, lineHeight: 1.7, display: "inline-block", width: "fit-content", maxWidth: 520 }}
-      >
+      <div ref={exportCardRef} style={{ ...card, lineHeight: 1.7, display: "inline-block", width: "fit-content", maxWidth: 520 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Meta: <span style={{ fontWeight: 950 }}>{metaDay === null ? "—" : `${fmtBR0(metaDay)} t`}</span>
@@ -391,7 +395,9 @@ export default function Ritmo() {
 
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Diferença:{" "}
-            <span style={{ fontWeight: 950 }}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${fmtBR0(diff)} t`}</span>
+            <span style={{ fontWeight: 950 }}>
+              {diff === null ? "—" : `${diff >= 0 ? "+" : ""}${fmtBR0(diff)} t`}
+            </span>
           </div>
 
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
@@ -413,7 +419,6 @@ export default function Ritmo() {
 
           <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
 
-          {/* ✅ aplica cor no Necessário */}
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Necessário:{" "}
             <span style={{ fontWeight: 950, color: neededColor }}>
@@ -424,7 +429,6 @@ export default function Ritmo() {
             </span>
           </div>
 
-          {/* ✅ aplica cor na Média real */}
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Média real:{" "}
             <span style={{ fontWeight: 950, color: avgRealColor }}>{fmtBR(avgRealTPH, 1)} t/h</span>{" "}
