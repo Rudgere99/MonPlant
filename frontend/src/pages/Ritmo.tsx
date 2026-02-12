@@ -200,6 +200,10 @@ export default function Ritmo() {
       backgroundColor: null,
       scale: 2,
       useCORS: true,
+      width: el.scrollWidth,
+      height: el.scrollHeight,
+      windowWidth: el.scrollWidth,
+      windowHeight: el.scrollHeight,
     });
     const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
     const a = document.createElement("a");
@@ -308,6 +312,23 @@ export default function Ritmo() {
   const avgRealTPH = produced / elapsedH;
   const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
 
+  // Regra prática: quando a meta é ~4404t, o esperado por hora costuma ser 200 t/h
+  const expectedTPH = useMemo(() => {
+    if (metaDay === null || !isFinite(metaDay) || metaDay <= 0) return 200;
+    if (Math.abs(metaDay - 4404) <= 150) return 200;
+    // fallback: distribui pela janela de 22h (ajuste simples)
+    return metaDay / 22;
+  }, [metaDay]);
+
+  const cYellow = "rgba(250,204,21,0.95)";
+  const cGreen = "rgba(34,197,94,0.95)";
+  const cRed = "rgba(239,68,68,0.95)";
+
+  const neededColor =
+    neededTPH !== null && neededTPH <= expectedTPH ? cGreen : cRed;
+  const avgRealColor =
+    avgRealTPH >= expectedTPH ? cGreen : cRed;
+
   const shiftInfo = currentShiftWindow(now);
 
   const [yy, mm, dd] = day.split("-");
@@ -354,13 +375,13 @@ export default function Ritmo() {
         </div>
       </div>
 
-      <div ref={exportCardRef} style={{ ...card, lineHeight: 1.7 }}>
+      <div ref={exportCardRef} style={{ ...card, lineHeight: 1.7, display: "inline-block", width: "fit-content", maxWidth: 520 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Meta: <span style={{ fontWeight: 950 }}>{metaDay === null ? "—" : `${fmtBR0(metaDay)} t`}</span>
           </div>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Produzido: <span style={{ fontWeight: 950 }}>{fmtBR0(produced)} t</span>
+            Produzido: <span style={{ fontWeight: 950, color: cYellow }}>{fmtBR0(produced)} t</span>
           </div>
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
             Atingimento: <span style={{ fontWeight: 950 }}>{attainment === null ? "—" : fmtPct(attainment, 1)}</span>
