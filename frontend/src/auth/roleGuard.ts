@@ -4,6 +4,7 @@ function normalizeRole(v: any): UserRole {
   const t = String(v || "").trim().toLowerCase();
   if (t === "dev") return "dev";
   if (t === "controlador") return "controlador";
+  if (t === "gerencia") return "gerencia";
   return "apontador";
 }
 
@@ -40,6 +41,11 @@ export function canAccess(role: UserRole, path: string): boolean {
 
   if (role === "apontador") {
     return path.startsWith("/producao-planta") || path.startsWith("/paradas");
+  }
+
+  if (role === "gerencia") {
+    // Gerência: apenas Dashboard
+    return path === "/" || path.startsWith("/dashboard");
   }
 
   // controlador: tudo menos dev-only (já bloqueado acima)
