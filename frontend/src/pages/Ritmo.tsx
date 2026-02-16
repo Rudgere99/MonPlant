@@ -286,33 +286,56 @@ export default function Ritmo() {
     return s;
   }, [rowsNorm]);
 
-  const now = new Date();
-  const currH = now.getHours();
-  const endH = currH;
-  const startH = (currH + 23) % 24;
-  const currPeriod = `${pad2(startH)}-${pad2(endH)}`; // ex.: 02-03
-  const periodTon = rowsNorm.get(currPeriod) ?? 0;
+  const todayISO = isoTodayLocal();
+const isClosedDay = day < todayISO; // dia passado => período encerrado
+const nowRef = isClosedDay ? new Date(`${day}T23:59:00`) : new Date();
 
-  const remainingH = dayRemainingHours(now);
-  const elapsedH = Math.max(0.25, dayElapsedHours(now));
+// período atual (dia aberto) ou último período com dado (dia fechado)
+const lastFilledPeriod = useMemo(() => {
+  const filled = Array.from(rowsNorm.entries())
+    .filter(([, v]) => (Number(v) || 0) > 0)
+    .map(([p]) => p)
+    .sort(); // "07-08" ordena ok
+  return filled.length ? filled[filled.length - 1] : "";
+}, [rowsNorm]);
+
+const currH = nowRef.getHours();
+const endH = currH;
+const startH = (currH + 23) % 24;
+
+const currPeriod = isClosedDay ? lastFilledPeriod : `${pad2(startH)}-${pad2(endH)}`; // ex.: 02-03
+const periodTon = currPeriod ? (rowsNorm.get(currPeriod) ?? 0) : 0;
+
+const remainingH = isClosedDay ? 0 : dayRemainingHours(nowRef);
+const elapsedH = isClosedDay ? 24 : Math.max(0.25, dayElapsedHours(nowRef));
 
   const diff = metaDay !== null ? produced - metaDay : null;
   const attainment = metaDay !== null && metaDay > 0 ? (produced / metaDay) * 100 : null;
 
-  const neededTPH = useMemo(() => {
+  const neededTPHRaw = useMemo(() => {
     if (metaDay === null) return null;
     const remaining = Math.max(0, metaDay - produced);
     if (remainingH <= 0) return remaining > 0 ? null : 0;
     return remaining / remainingH;
   }, [metaDay, produced, remainingH]);
 
+  const neededTPH = isClosedDay ? 0 : neededTPHRaw;
+
   const neededBucketsH = useMemo(() => {
     if (neededTPH === null || bucket === null || bucket <= 0) return null;
     return neededTPH / bucket;
   }, [neededTPH, bucket]);
 
-  const avgRealTPH = produced / elapsedH;
-  const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
+  // ✅ Média real igual ao Dashboard:
+// média das horas preenchidas (ton/h > 0), e não "produzido / horas decorridas"
+const avgRealTPH = useMemo(() => {
+  const filled = Array.from(rowsNorm.values()).filter((v) => (Number(v) || 0) > 0);
+  if (!filled.length) return 0;
+  const sum = filled.reduce((acc, v) => acc + (Number(v) || 0), 0);
+  return sum / filled.length;
+}, [rowsNorm]);
+
+const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
 
   // regra prática: meta ~4404 => esperado 200 t/h
   const expectedTPH = useMemo(() => {
@@ -331,7 +354,7 @@ export default function Ritmo() {
   const neededColor = neededTPH !== null && neededTPH <= expectedTPH ? cGreen : cRed;
   const avgRealColor = avgRealTPH >= expectedTPH ? cGreen : cRed;
 
-  const shiftInfo = currentShiftWindow(now);
+  const shiftInfo = currentShiftWindow(nowRef);
 
   const [yy, mm, dd] = day.split("-");
   const dayBR = `${dd}/${mm}/${yy}`;
@@ -448,7 +471,7 @@ export default function Ritmo() {
           <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
 
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Período: <span style={{ fontWeight: 950 }}>{pad2(startH)}h às {pad2(endH)}h</span>
+            Período: <span style={{ fontWeight: 950 }}>{isClosedDay ? "Período encerrado" : (<>{pad2(startH)}h às {pad2(endH)}h</>)}</span>
           </div>
 
           <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
@@ -506,7 +529,7 @@ export default function Ritmo() {
           <div style={exportSep} />
 
           <div style={exportLine}>
-            Período: <span style={{ fontWeight: 950 }}>{pad2(startH)}h às {pad2(endH)}h</span>
+            Período: <span style={{ fontWeight: 950 }}>{isClosedDay ? "Período encerrado" : (<>{pad2(startH)}h às {pad2(endH)}h</>)}</span>
           </div>
 
           <div style={exportLine}>
