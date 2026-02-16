@@ -14,7 +14,7 @@ export const APONTADOR_ALLOWED = new Set<string>([
   "/paradas",
 ]);
 
-export const APONTADOR_ALLOWED = new Set<string>([
+export const GERENCIA_ALLOWED = new Set<string>([
   "/producao-planta",
 ]);
 
