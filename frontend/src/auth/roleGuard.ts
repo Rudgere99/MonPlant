@@ -1,12 +1,18 @@
 export type UserRole = "apontador" | "controlador" | "gerencia" | "dev";
 
 function normalizeRole(v: any): UserRole {
-  const t = String(v || "").trim().toLowerCase();
+  const t = String(v || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // remove acentos
+
   if (t === "dev") return "dev";
   if (t === "controlador") return "controlador";
   if (t === "gerencia") return "gerencia";
   return "apontador";
 }
+
 
 export function getUserRole(user: any): UserRole {
   // 1) vindo do AuthProvider
