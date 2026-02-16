@@ -132,6 +132,7 @@ export default function DevUsers() {
               <select className="mp-input" value={userType} onChange={(e) => setUserType(e.target.value as UserType)}>
                 <option value="apontador">Apontador</option>
                 <option value="controlador">Controlador</option>
+                <option value="gerencia">Gerência</option>
                 <option value="dev">Dev</option>
               </select>
             </div>
