@@ -14,7 +14,7 @@ type AuthCtx = {
   token: string | null;
   user: MpUser | null;
   isDev: boolean;
-  loading: boolean; // ✅ NOVO
+  loading: boolean;
   setToken: (t: string | null) => void;
   setUser: (u: MpUser | null) => void;
   logout: () => void;
@@ -22,10 +22,35 @@ type AuthCtx = {
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
+function normalizeUserType(v: any): UserType {
+  const t = String(v || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // remove acentos
+
+  if (t === "dev") return "dev";
+  if (t === "controlador") return "controlador";
+  if (t === "gerencia") return "gerencia";
+  return "apontador";
+}
+
+function normalizeUser(u: any): MpUser | null {
+  if (!u) return null;
+
+  return {
+    id: String(u.id ?? ""),
+    full_name: String(u.full_name ?? ""),
+    sector: String(u.sector ?? ""),
+    user_type: normalizeUserType(u.user_type),
+    email: String(u.email ?? ""),
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [user, setUserState] = useState<MpUser | null>(null);
-  const [loading, setLoading] = useState(true); // ✅ NOVO
+  const [loading, setLoading] = useState(true);
 
   // 🔥 Hidratação inicial
   useEffect(() => {
@@ -36,13 +61,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (u) {
       try {
-        setUserState(JSON.parse(u));
+        const parsed = JSON.parse(u);
+        setUserState(normalizeUser(parsed));
       } catch {
         setUserState(null);
       }
     }
 
-    setLoading(false); // ✅ FINALIZA hidratação
+    setLoading(false);
   }, []);
 
   const setToken = (t: string | null) => {
@@ -52,8 +78,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setUser = (u: MpUser | null) => {
-    setUserState(u);
-    if (u) localStorage.setItem("mp_user", JSON.stringify(u));
+    if (!u) {
+      setUserState(null);
+      localStorage.removeItem("mp_user");
+      return;
+    }
+
+    const fixed = normalizeUser(u);
+    setUserState(fixed);
+
+    if (fixed) localStorage.setItem("mp_user", JSON.stringify(fixed));
     else localStorage.removeItem("mp_user");
   };
 
@@ -67,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       user,
       isDev: user?.user_type === "dev",
-      loading, // ✅ exposto
+      loading,
       setToken,
       setUser,
       logout,
