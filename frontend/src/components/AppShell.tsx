@@ -58,6 +58,14 @@ const nav: NavItem[] = [
 ];
 
 
+function isGerencia(userType?: string | null) {
+  const t = String(userType || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return t === "gerencia";
+}
 
 function defaultPathFor(role: UserRole) {
   // Gerência vê somente Dashboard
@@ -203,12 +211,27 @@ function AppShell() {
 
 
 
-  const filteredNav = useMemo(() => {
+  useEffect(() => {
+    const ger = isGerencia(user?.user_type);
+    if (!ger) return;
+
+    const p = location.pathname.toLowerCase();
+    const ok = p === "/" || p.startsWith("/dashboard");
+    if (!ok) navigate("/dashboard", { replace: true });
+  }, [user?.user_type, location.pathname, navigate]);
+
+  const navItems = useMemo(() => {
     return nav.filter((i) => {
       if (i.devOnly && !isDev) return false;
       return canAccessRole(role, i.to);
     });
   }, [isDev, role]);
+
+  const ger = isGerencia(user?.user_type);
+
+  const navItemsFiltered = useMemo(() => {
+    return ger ? navItems.filter((i) => i.to === "/dashboard" || i.to === "/") : navItems;
+  }, [ger, navItems]);
 
   const handleLogout = () => {
     logout?.();
@@ -444,7 +467,7 @@ function AppShell() {
             {/* Área rolável do menu */}
             <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
               <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {filteredNav.map((i) => {
+                {navItemsFiltered.map((i) => {
                   const Icon = i.icon;
 
                   if (sideCollapsed) {
@@ -685,7 +708,7 @@ function AppShell() {
                 </div>
 
                 <nav style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                  {filteredNav.map((i) => {
+                  {navItemsFiltered.map((i) => {
                     const Icon = i.icon;
                     return (
                       <NavLink
