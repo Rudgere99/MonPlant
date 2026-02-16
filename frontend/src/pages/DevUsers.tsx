@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 
-type UserType = "apontador" | "controlador" | "dev";
+type UserType = "apontador" | "controlador" | "gerencia" | "dev";
 
 type DevUser = {
   id: string;
