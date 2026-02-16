@@ -1,4 +1,4 @@
-export type UserRole = "apontador" | "controlador" | "dev";
+export type UserRole = "apontador" | "controlador" | "gerencia" | "dev";
 
 function normalizeRole(v: any): UserRole {
   const t = String(v || "").trim().toLowerCase();
