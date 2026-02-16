@@ -115,6 +115,49 @@ function hoursDiff(start: any, end: any) {
   return Math.round((ms / 3600000) * 100) / 100;
 }
 
+
+function classifyMaintenanceType(stop: any): "Corretiva" | "Preventiva" | "" {
+  const raw =
+    String(pick(stop, ["tipo", "tipo_parada", "stop_type", "type"]) || "") +
+    " " +
+    String(pick(stop, ["atividade", "activity"]) || "") +
+    " " +
+    String(pick(stop, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "");
+  const s = raw.toUpperCase();
+
+  if (s.includes("PREV")) return "Preventiva";
+  if (s.includes("CORR") || s.includes("CORRET")) return "Corretiva";
+  // fallback: se vier algo como "PMP" ou "PM" pode ser preventiva
+  if (s.includes("PMP") || s.includes("PM ")) return "Preventiva";
+  return "";
+}
+
+function stopDurationHours(stop: any): number {
+  const dataIni = pick(stop, ["data_inicio", "dt_inicio", "data_ini", "day_ini"]);
+  const horaIni = pick(stop, ["hora_inicio", "hr_inicio", "time_ini", "hora_ini"]);
+  const dataFim = pick(stop, ["data_fim", "dt_fim", "data_end", "day_fim"]);
+  const horaFim = pick(stop, ["hora_fim", "hr_fim", "time_end", "hora_end"]);
+
+  const startV =
+    combineDateAndHour(dataIni, horaIni) ??
+    pick(stop, ["start_at", "inicio", "start", "dt_inicio", "data_inicio"]);
+
+  const endV =
+    combineDateAndHour(dataFim, horaFim) ??
+    pick(stop, ["end_at", "fim", "end", "dt_fim", "data_fim"]);
+
+  const tempo =
+    Number(
+      pick(stop, ["tempo_h", "tempo_parada_h", "duration_h", "duracao_h"]) ?? NaN
+    );
+
+  if (Number.isFinite(tempo)) return Math.round(tempo * 100) / 100;
+
+  const hd = startV && endV ? hoursDiff(startV, endV) : null;
+  return Number.isFinite(hd as any) ? (hd as number) : 0;
+}
+
+
 function periodStartHour(p: any): number | null {
   const s = String(p || "").trim();
   // aceita "HH:MM-HH:MM" ou "HH:MM - HH:MM" ou "HH-HH"
@@ -530,6 +573,151 @@ export default function Exportar() {
     }
   }
 
+  async function handleExportModeloParadas() {
+    setMsg("");
+    setBusy(true);
+
+    try {
+      // 1) carrega TEMPLATE do modelo (coloque em public/)
+      // Sugestão de nome: public/MODELO_PARADAS.xlsx
+      const tplRes = await fetch("/MODELO_PARADAS.xlsx");
+      if (!tplRes.ok) throw new Error("Não achei /MODELO_PARADAS.xlsx em public/");
+      const tplBuf = await tplRes.arrayBuffer();
+
+      // 2) lê workbook
+      const wb = XLSX.read(tplBuf, { type: "array", cellDates: true });
+
+      const sheetName = wb.SheetNames[0] || "Modelo para exportação";
+      const ws = getOrCreateSheet(wb, sheetName);
+
+      const days = dateRange(fromDay, toDay);
+
+      // 3) puxa paradas (mesmo endpoint da página Paradas)
+      const stops: any[] = [];
+      for (const d of days) {
+        try {
+          const st = await apiGet<any[]>(`/api/stops?day=${d}`);
+          for (const s of st || []) stops.push(s);
+        } catch {
+          // ok
+        }
+      }
+
+      // 4) calcula horas por dia (Corretiva/Preventiva)
+      const byDay = new Map<
+        string,
+        { corr: number; prev: number; total: number }
+      >();
+
+      for (const d of days) byDay.set(d, { corr: 0, prev: 0, total: 0 });
+
+      // também prepara lista detalhada (1 linha por parada)
+      const detailRows: {
+        day: string;
+        desc: string;
+        tipo: string;
+        horas: number;
+      }[] = [];
+
+      for (const s of stops) {
+        const day =
+          String(
+            pick(s, ["day", "data_turno", "data", "shift_day"]) || ""
+          ).slice(0, 10) || "";
+
+        if (!day) continue;
+
+        const tipo = classifyMaintenanceType(s);
+        const horas = stopDurationHours(s);
+
+        const desc =
+          String(
+            pick(s, [
+              "descricao",
+              "descricao_detalhada",
+              "detail",
+              "detalhe",
+              "obs",
+            ]) || ""
+          ).trim();
+
+        const cur = byDay.get(day) || { corr: 0, prev: 0, total: 0 };
+        if (tipo === "Corretiva") cur.corr += horas;
+        else if (tipo === "Preventiva") cur.prev += horas;
+        cur.total += horas;
+        byDay.set(day, cur);
+
+        detailRows.push({
+          day,
+          desc,
+          tipo: tipo || "",
+          horas,
+        });
+      }
+
+      // arredonda
+      for (const [k, v] of byDay.entries()) {
+        v.corr = Math.round(v.corr * 100) / 100;
+        v.prev = Math.round(v.prev * 100) / 100;
+        v.total = Math.round(v.total * 100) / 100;
+        byDay.set(k, v);
+      }
+
+      // 5) limpa área do modelo
+      // Modelo tem 2 tabelas:
+      // A:D (Data, Horas Corretiva, Horas Preventiva, Total Horas)
+      // F:I (Data, Descrição, Tipo, Total Horas)
+      // Cabeçalhos ficam na linha 3. Dados começam na linha 4.
+      clearSheetValues(ws, 4);
+
+      // 6) escreve resumo por dia (A:D)
+      let r = 4;
+      for (const d of days) {
+        const dt = parseISODate(d);
+        const v = byDay.get(d) || { corr: 0, prev: 0, total: 0 };
+
+        setCell(ws, r, 1, dt);          // A Data
+        setCell(ws, r, 2, v.corr || ""); // B Horas Corretiva
+        setCell(ws, r, 3, v.prev || ""); // C Horas Preventiva
+        setCell(ws, r, 4, v.total || ""); // D Total Horas
+        r++;
+      }
+
+      // 7) escreve detalhes (F:I) 1 linha por parada
+      // ordena por dia e horas desc
+      detailRows.sort((a, b) => {
+        if (a.day !== b.day) return a.day.localeCompare(b.day);
+        return (b.horas || 0) - (a.horas || 0);
+      });
+
+      let r2 = 4;
+      for (const row of detailRows) {
+        const dt = parseISODate(row.day);
+        setCell(ws, r2, 6, dt);                // F Data
+        setCell(ws, r2, 7, row.desc || "");     // G Descrição
+        setCell(ws, r2, 8, row.tipo || "");     // H Tipo de manutenção
+        setCell(ws, r2, 9, row.horas || "");    // I Total de Horas Paradas (da parada)
+        r2++;
+      }
+
+      // 8) salva
+      const outBuf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+      const fileName =
+        fromDay === toDay
+          ? `PARADAS_MODELO_${fromDay}.xlsx`
+          : `PARADAS_MODELO_${fromDay}_a_${toDay}.xlsx`;
+
+      downloadArrayBuffer(outBuf, fileName);
+      setMsg(`✅ Exportado (modelo paradas): ${fileName}`);
+    } catch (e: any) {
+      setMsg(`❌ ${e?.message || String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+
+
   return (
     <div className="mp-container">
       <div>
@@ -564,6 +752,18 @@ export default function Exportar() {
           <button className="mp-btn mp-btn-primary" onClick={handleExport} disabled={busy}>
             {busy ? "Gerando..." : "Gerar Excel"}
           </button>
+
+          <div style={{ height: 10 }} />
+
+          <button className="mp-btn" onClick={handleExportModeloParadas} disabled={busy}>
+            {busy ? "Gerando..." : "Gerar Excel (Modelo Paradas)"}
+          </button>
+
+          <div style={{ height: 8 }} />
+          <div className="mp-help">
+            Modelo de paradas em <b>public/MODELO_PARADAS.xlsx</b> (igual ao template enviado)
+          </div>
+
 
           <div style={{ height: 10 }} />
           {msg ? <div className="mp-help">{msg}</div> : null}
