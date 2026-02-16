@@ -13,17 +13,49 @@ type DevUser = {
   created_at?: string | null;
 };
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
+// VITE_API_BASE pode ser:
+// - https://monplant-production.up.railway.app
+// - https://monplant-production.up.railway.app/api
+// - (vazio) -> usa /api no mesmo host
+const RAW_API_BASE = ((import.meta as any).env?.VITE_API_BASE || "").toString().trim();
+const API_BASE = RAW_API_BASE.replace(/\/+$/, "");
+
+function apiUrl(path: string) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+
+  // sem base -> mesma origem (Vercel) com /api
+  if (!API_BASE) return p;
+
+  // se base já termina com /api, não duplica
+  if (API_BASE.endsWith("/api") && p.startsWith("/api/")) {
+    return `${API_BASE}${p.replace(/^\/api/, "")}`;
+  }
+
+  return `${API_BASE}${p}`;
+}
 
 async function readErr(res: Response) {
   try {
     const j = await res.json();
-    if (j?.detail) return typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+    if ((j as any)?.detail) return typeof (j as any).detail === "string" ? (j as any).detail : JSON.stringify((j as any).detail);
     return JSON.stringify(j);
   } catch {
     const t = await res.text().catch(() => "");
     return t || `HTTP ${res.status}`;
   }
+}
+
+function normalizeUserType(v: string): UserType {
+  const s = (v || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (s === "gerencia") return "gerencia";
+  if (s === "controlador") return "controlador";
+  if (s === "dev") return "dev";
+  return "apontador";
 }
 
 export default function DevUsers() {
@@ -49,9 +81,11 @@ export default function DevUsers() {
     setErr(null);
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/dev/users`, { headers });
+      // ✅ usa o alias /api/dev/users (evita CORS em /dev/users)
+      const res = await fetch(apiUrl("/api/dev/users"), { headers });
       if (!res.ok) throw new Error(await readErr(res));
-      setRows(await res.json());
+      const data = await res.json();
+      setRows(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setErr(e?.message || "Erro ao carregar usuários");
     } finally {
@@ -61,6 +95,12 @@ export default function DevUsers() {
 
   async function createUser() {
     setErr(null);
+
+    if (!token) {
+      setErr("Sem token. Faça login com um usuário DEV.");
+      return;
+    }
+
     if (!fullName.trim() || !sector.trim() || !email.trim() || !password) {
       setErr("Preencha nome, setor, email e senha.");
       return;
@@ -68,13 +108,13 @@ export default function DevUsers() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/dev/users`, {
+      const res = await fetch(apiUrl("/api/dev/users"), {
         method: "POST",
         headers,
         body: JSON.stringify({
           full_name: fullName.trim(),
           sector: sector.trim(),
-          user_type: userType,
+          user_type: normalizeUserType(userType), // ✅ garante sem acento
           email: email.trim().toLowerCase(),
           password,
         }),
@@ -129,7 +169,7 @@ export default function DevUsers() {
 
             <div>
               <div className="mp-label">Tipo</div>
-              <select className="mp-input" value={userType} onChange={(e) => setUserType(e.target.value as UserType)}>
+              <select className="mp-input" value={userType} onChange={(e) => setUserType(normalizeUserType(e.target.value) as UserType)}>
                 <option value="apontador">Apontador</option>
                 <option value="controlador">Controlador</option>
                 <option value="gerencia">Gerência</option>
@@ -148,10 +188,13 @@ export default function DevUsers() {
             </div>
           </div>
 
-          <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+          <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
             <button className="mp-btn mp-btn-primary" onClick={createUser} disabled={loading}>
               Criar usuário
             </button>
+            <span className="mp-help" style={{ marginLeft: "auto" }}>
+              Endpoint: <b>/api/dev/users</b>
+            </span>
           </div>
         </div>
       </div>
