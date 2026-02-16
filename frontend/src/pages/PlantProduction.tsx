@@ -52,6 +52,11 @@ function isRetroDay(dayISO: string): boolean {
 function fmtBR(n: number): string {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
 }
+
+// ✅ usado na Calculadora (até 2 casas)
+function fmtBR2(n: number): string {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(n);
+}
 function fmtPct0(n: number): string {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(n);
 }
@@ -280,7 +285,7 @@ export default function PlantProduction() {
     const next = { ...eqAvgMap, [calcEq]: a };
     setEqAvgMap(next);
     saveEqAvg(next);
-    setInfo(`Média do equipamento ${calcEq} salva: ${fmtBR(a)} t/conchada`);
+    setInfo(`Média do equipamento ${calcEq} salva: ${fmtBR2(a)} t/conchada`);
   }
 
   function onRegisterCalc() {
@@ -293,7 +298,7 @@ export default function PlantProduction() {
       return;
     }
 
-    const line = `• [${nowBRTime()}] ${calcEq}: ${fmtBR(c)} conchadas × ${fmtBR(a)} t = ${fmtBR(t)} t${
+    const line = `• [${nowBRTime()}] ${calcEq}: ${fmtBR2(c)} conchadas × ${fmtBR2(a)} t = ${fmtBR2(t)} t${
       calcObs.trim() ? ` | Obs: ${calcObs.trim()}` : ""
     }`;
 
@@ -832,7 +837,7 @@ export default function PlantProduction() {
                   TOTAL ESTIMADO
                 </div>
                 <div style={{ marginTop: 6, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 28, lineHeight: 1 }}>
-                  {calcTotal === null ? "—" : `${fmtBR(calcTotal)} t`}
+                  {calcTotal === null ? "—" : `${fmtBR2(calcTotal)} t`}
                 </div>
                 <div style={{ marginTop: 4, color: "rgba(255,255,255,0.55)", fontWeight: 850, fontSize: 12 }}>
                   Conchadas × Média
@@ -844,7 +849,7 @@ export default function PlantProduction() {
                   MÉDIA ATUAL
                 </div>
                 <div style={{ marginTop: 6, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 22 }}>
-                  {parseBRNumber(calcAvg) ? `${fmtBR(parseBRNumber(calcAvg) as number)} t` : "—"}
+                  {parseBRNumber(calcAvg) ? `${fmtBR2(parseBRNumber(calcAvg) as number)} t` : "—"}
                   <span style={{ color: "rgba(255,255,255,0.55)", fontWeight: 850, fontSize: 12, marginLeft: 8 }}>
                     {calcEq}
                   </span>
