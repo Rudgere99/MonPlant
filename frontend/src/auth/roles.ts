@@ -15,7 +15,8 @@ export const APONTADOR_ALLOWED = new Set<string>([
 ]);
 
 export const GERENCIA_ALLOWED = new Set<string>([
-  "/producao-planta",
+  "/dashboard",
+  "/",
 ]);
 
 export function canAccessPath(role: Role, path: string) {
@@ -25,7 +26,7 @@ export function canAccessPath(role: Role, path: string) {
     return APONTADOR_ALLOWED.has(path);
   }
 
-    if (role === "gerencia") {
+  if (role === "gerencia") {
     return GERENCIA_ALLOWED.has(path);
   }
 
