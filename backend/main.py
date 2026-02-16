@@ -535,9 +535,10 @@ def api_dev_list_users(dev_payload=Depends(require_dev_user)):
 
 
 def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[str, Any]):
-    allowed = {"apontador", "controlador", "dev"}
-    if body.user_type not in allowed:
-        raise HTTPException(status_code=400, detail="user_type inválido")
+    allowed = {"apontador", "controlador", "dev", "gerencia"}
+if body.user_type not in allowed:
+    raise HTTPException(status_code=400, detail="user_type inválido")
+
 
     email = str(body.email).lower().strip()
 
@@ -596,7 +597,8 @@ def dev_update_user(
     request: Request,
     dev_payload=Depends(require_dev_user),
 ):
-    allowed = {"apontador", "controlador", "dev"}
+    allowed = {"apontador", "controlador", "dev", "gerencia"}
+
 
     fields = []
     values = []
