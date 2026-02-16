@@ -353,6 +353,7 @@ export default function Dashboard() {
   const [prodDay, setProdDay] = useState<PlantDayPayload | null>(null);
   const [last7, setLast7] = useState<Last7Item[]>([]);
   const [stops, setStops] = useState<StopRow[]>([]);
+  const [stopsDayCount, setStopsDayCount] = useState<number>(0);
   const [lastByEq, setLastByEq] = useState<Record<string, HorimetroRow | null>>({});
 
   const POLL_MS = 10_000;
@@ -453,6 +454,8 @@ export default function Dashboard() {
 
       const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
       const ps = await apiGet<any>(`/api/stops-launch?day=${encodeURIComponent(day)}`).catch(() => null);
+      // ✅ Somente o card "Total de Paradas" usa o mesmo endpoint da página Paradas
+      const psDay = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`).catch(() => []);
       const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`).catch(() => []);
 
       const map: Record<string, HorimetroRow | null> = {};
@@ -464,6 +467,7 @@ export default function Dashboard() {
       setProdDay(p);
       setLast7(Array.isArray(l7) ? l7 : []);
       setStops(Array.isArray((ps as any)?.rows) ? (ps as any).rows : []);
+      setStopsDayCount(Array.isArray(psDay) ? psDay.length : 0);
       setLastByEq(map);
     } catch (e: any) {
       setErr(e?.message || "Falha ao carregar dashboard");
@@ -646,7 +650,7 @@ export default function Dashboard() {
     }));
   }, [last7]);
 
-  const totalStops = useMemo(() => (stops || []).length, [stops]);
+  const totalStops = useMemo(() => Number(stopsDayCount) || 0, [stopsDayCount]);
 
   const lastStop = useMemo(() => {
     const list = [...(stops || [])];
