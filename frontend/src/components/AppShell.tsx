@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
+import { canAccess as canAccessRole, getUserRole, type UserRole } from "../auth/roleGuard";
 import {
   LayoutDashboard,
   BarChart3,
@@ -56,34 +57,14 @@ const nav: NavItem[] = [
   { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
 ];
 
-type UserRole = "apontador" | "controlador" | "dev";
 
-function getRole(user: any, devKey: string | null): UserRole {
-  if (devKey === "RAG2026") return "dev";
-  const t = String(user?.user_type || "").toLowerCase();
-  if (t === "dev") return "dev";
-  if (t === "controlador") return "controlador";
-  return "apontador";
-}
-
-function canAccess(role: UserRole, path: string) {
-  if (role === "dev") return true;
-  if (path.startsWith("/dev") || path.startsWith("/dashboard/producao-dia")) return false;
-
-  if (role === "apontador") {
-    return (
-      path.startsWith("/producao-planta") ||
-      path.startsWith("/paradas") ||
-      path.startsWith("/ritmo") ||
-      path.startsWith("/lancamento-paradas")
-    );
-  }
-  return true;
-}
 
 function defaultPathFor(role: UserRole) {
-  return role === "apontador" ? "/producao-planta" : "/dashboard";
+  // Gerência vê somente Dashboard
+  if (role === "apontador") return "/producao-planta";
+  return "/dashboard";
 }
+
 
 function getTitleFromPath(pathname: string) {
   const hit = nav.find((n) => pathname.startsWith(n.to));
@@ -209,14 +190,23 @@ function AppShell() {
     }
   })();
 
-  const role = useMemo(() => getRole(user, devKey), [user, devKey]);
+  const role = useMemo(() => (devKey === "RAG2026" ? ("dev" as UserRole) : getUserRole(user)), [user, devKey]);
   const isDev = role === "dev";
   const userLabel = useMemo(() => getUserDisplay(user), [user]);
+
+  useEffect(() => {
+    // Se tentar acessar rota sem permissão, redireciona automaticamente
+    if (!canAccessRole(role, location.pathname)) {
+      navigate(defaultPathFor(role), { replace: true });
+    }
+  }, [role, location.pathname, navigate]);
+
+
 
   const filteredNav = useMemo(() => {
     return nav.filter((i) => {
       if (i.devOnly && !isDev) return false;
-      return canAccess(role, i.to);
+      return canAccessRole(role, i.to);
     });
   }, [isDev, role]);
 
