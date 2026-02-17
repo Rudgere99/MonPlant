@@ -180,7 +180,7 @@ function ShellUser({
 }
 
 function AppShell() {
-  const { logout, user } = useAuth() as any;
+  const { logout, user, loading } = useAuth() as any;
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -202,23 +202,46 @@ function AppShell() {
   const isDev = role === "dev";
   const userLabel = useMemo(() => getUserDisplay(user), [user]);
 
+
+  // ⏳ enquanto hidrata, evita renderizar shell parcial (que causa "piscar")
+  if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          color: "rgba(255,255,255,0.85)",
+          fontWeight: 800,
+          letterSpacing: -0.2,
+          background: "#07090d",
+        }}
+      >
+        Carregando…
+      </div>
+    );
+  }
+
   useEffect(() => {
+    // ✅ espera hidratar para evitar loop/pisca no F5
+    if (loading) return;
     // Se tentar acessar rota sem permissão, redireciona automaticamente
     if (!canAccessRole(role, location.pathname)) {
       navigate(defaultPathFor(role), { replace: true });
     }
-  }, [role, location.pathname, navigate]);
+  }, [loading, role, location.pathname, navigate]);
 
 
 
   useEffect(() => {
+    if (loading) return;
     const ger = isGerencia(user?.user_type);
     if (!ger) return;
 
     const p = location.pathname.toLowerCase();
     const ok = p === "/" || p.startsWith("/dashboard");
     if (!ok) navigate("/dashboard", { replace: true });
-  }, [user?.user_type, location.pathname, navigate]);
+  }, [loading, user?.user_type, location.pathname, navigate]);
 
   const navItems = useMemo(() => {
     return nav.filter((i) => {
