@@ -8,7 +8,20 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 
   // ⏳ ESPERA hidratar
   if (loading) {
-    return null; // ou loader
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          color: "rgba(255,255,255,0.85)",
+          fontWeight: 800,
+          letterSpacing: -0.2,
+        }}
+      >
+        Carregando…
+      </div>
+    );
   }
 
   if (!token) {
