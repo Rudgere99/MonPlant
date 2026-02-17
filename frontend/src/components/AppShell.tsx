@@ -222,26 +222,28 @@ function AppShell() {
     );
   }
 
-  useEffect(() => {
-    // ✅ espera hidratar para evitar loop/pisca no F5
-    if (loading) return;
-    // Se tentar acessar rota sem permissão, redireciona automaticamente
-    if (!canAccessRole(role, location.pathname)) {
-      navigate(defaultPathFor(role), { replace: true });
-    }
-  }, [loading, role, location.pathname, navigate]);
+useEffect(() => {
+  if (loading) return;
+  if (!user) return;
 
+  const ger = isGerencia(user?.user_type);
 
-
-  useEffect(() => {
-    if (loading) return;
-    const ger = isGerencia(user?.user_type);
-    if (!ger) return;
-
+  // ✅ regra da gerência: só / e /dashboard
+  if (ger) {
     const p = location.pathname.toLowerCase();
     const ok = p === "/" || p.startsWith("/dashboard");
     if (!ok) navigate("/dashboard", { replace: true });
-  }, [loading, user?.user_type, location.pathname, navigate]);
+    return; // ✅ impede cair na regra geral e “brigar”
+  }
+
+  // ✅ regra geral: roleGuard decide
+  if (!canAccessRole(role, location.pathname)) {
+    navigate(defaultPathFor(role), { replace: true });
+  }
+}, [loading, user, role, location.pathname, navigate]);
+
+
+
 
   const navItems = useMemo(() => {
     return nav.filter((i) => {
