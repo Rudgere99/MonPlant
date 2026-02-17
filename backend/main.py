@@ -73,6 +73,19 @@ def today_local() -> date:
     return now_local().date()
 
 
+def normalize_user_type(t: Optional[str]) -> str:
+    s = str(t or "").strip().lower()
+    # remove accents
+    s = s.encode("utf-8").decode("utf-8")
+    try:
+        import unicodedata
+        s = unicodedata.normalize("NFD", s)
+        s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+    except Exception:
+        pass
+    return s
+
+
 def is_dev(dev_key: Optional[str]) -> bool:
     """
     Habilita bypass do bloqueio retroativo, usando header X-Dev-Key.
@@ -439,7 +452,8 @@ def auth_login(body: LoginIn, request: Request):
         if not pwd.verify(body.password, pw_hash):
             raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-        token = create_token(str(u["id"]), u["user_type"], u["email"])
+        ut = normalize_user_type(u["user_type"])
+        token = create_token(str(u["id"]), ut, u["email"])
 
     log_action(
         action="LOGIN",
@@ -447,7 +461,7 @@ def auth_login(body: LoginIn, request: Request):
         user_id=str(u["id"]),
         entity="bv_users",
         entity_id=str(u["id"]),
-        payload={"email": email, "user_type": u["user_type"]},
+        payload={"email": email, "user_type": ut},
     )
 
     return {
@@ -456,7 +470,7 @@ def auth_login(body: LoginIn, request: Request):
             "id": str(u["id"]),
             "full_name": u["full_name"],
             "sector": u["sector"],
-            "user_type": u["user_type"],
+            "user_type": ut,
             "email": u["email"],
         },
     }
@@ -491,7 +505,7 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
         "id": str(u["id"]),
         "full_name": u["full_name"],
         "sector": u["sector"],
-        "user_type": u["user_type"],
+        "user_type": ut,
         "email": u["email"],
     }
 
@@ -535,9 +549,9 @@ def api_dev_list_users(dev_payload=Depends(require_dev_user)):
 
 
 def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[str, Any]):
-    allowed = {"apontador", "controlador", "dev", "gerencia"}
-
-    if body.user_type not in allowed:
+    allowed = {"apontador", "controlador", "dev"}
+    body_user_type = normalize_user_type(body.user_type)
+    if body_user_type not in allowed:
         raise HTTPException(status_code=400, detail="user_type inválido")
 
     email = str(body.email).lower().strip()
@@ -555,7 +569,7 @@ def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[
             values (%s,%s,%s,%s,%s,true)
             returning id
             """,
-            (body.full_name.strip(), body.sector.strip(), body.user_type, email, pw_hash),
+            (body.full_name.strip(), body.sector.strip(), body_user_type, email, pw_hash),
         )
         new_id = cur.fetchone()["id"]
         conn.commit()
@@ -571,14 +585,13 @@ def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[
                 "id": str(new_id),
                 "full_name": body.full_name.strip(),
                 "sector": body.sector.strip(),
-                "user_type": body.user_type,
+                "user_type": body_user_type,
                 "email": email,
             }
         },
     )
 
     return {"ok": True, "id": str(new_id)}
-
 
 
 @app.post("/dev/users")
@@ -598,7 +611,7 @@ def dev_update_user(
     request: Request,
     dev_payload=Depends(require_dev_user),
 ):
-    allowed = {"apontador", "controlador", "dev", "gerencia"}
+    allowed = {"apontador", "controlador", "dev"}
 
     fields = []
     values = []
@@ -612,10 +625,11 @@ def dev_update_user(
         values.append(body.sector.strip())
 
     if body.user_type is not None:
-        if body.user_type not in allowed:
+        if normalize_user_type(body.user_type) not in allowed:
             raise HTTPException(status_code=400, detail="user_type inválido")
+        ut2 = normalize_user_type(body.user_type)
         fields.append("user_type=%s")
-        values.append(body.user_type)
+        values.append(ut2)
 
     if body.is_active is not None:
         fields.append("is_active=%s")
