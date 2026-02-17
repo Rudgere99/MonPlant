@@ -138,6 +138,43 @@ function buildHourlyGrid(rows: { period: string; ton: number; freq: number }[]) 
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
+
+/* ===================== auth hydration (anti-flicker) ===================== */
+/**
+ * Pequeno hook local para evitar o "pisca" no F5:
+ * - primeiro render: loading=true (ainda não leu localStorage)
+ * - depois: carrega token e libera chamadas de API
+ *
+ * Se você já tiver um AuthProvider global com useAuth(), pode remover este hook
+ * e importar o seu. Mantive aqui para o Dashboard ficar auto-suficiente.
+ */
+function useAuth() {
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const keys = ["mp_token", "token", "access_token", "auth_token"];
+    let t: string | null = null;
+    for (const k of keys) {
+      const v = (localStorage.getItem(k) || "").trim();
+      if (v) { t = v; break; }
+    }
+    setToken(t);
+    setLoading(false);
+
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (!keys.includes(e.key)) return;
+      const v = (localStorage.getItem(e.key) || "").trim();
+      setToken(v || null);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  return { token, loading };
+}
+
 // ==== Labels do gráfico ====
 const BarValueLabel = (props: any) => {
   const { x, y, width, value } = props || {};
@@ -280,7 +317,10 @@ const Last7PointLabel = (props: any) => {
   );
 };
 
-function authHeaders(): Record<string, string> {
+function authHeaders(token?: string | null): Record<string, string> {
+  const t = (token || "").trim();
+  if (t) return { Authorization: `Bearer ${t}` };
+
   const keys = ["mp_token", "token", "access_token", "auth_token"];
   for (const k of keys) {
     const v = (localStorage.getItem(k) || "").trim();
@@ -289,8 +329,8 @@ function authHeaders(): Record<string, string> {
   return {};
 }
 
-async function apiGet<T>(path: string): Promise<T> {
-  const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+async function apiGet<T>(path: string, token?: string | null): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders(token) });
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     throw new Error(t || `HTTP ${r.status}`);
@@ -345,6 +385,7 @@ type ExportItem = { key: ExportKey; label: string; hint: string; icon: any };
 
 export default function Dashboard() {
   const nav = useNavigate();
+  const { token, loading: authLoading } = useAuth();
   const [day, setDay] = useState<string>(isoTodayLocal());
 
   const [loading, setLoading] = useState(false);
@@ -433,12 +474,12 @@ export default function Dashboard() {
     setErr(null);
 
     try {
-      const p = await apiGet<PlantDayPayload>(`/api/plant-production/${encodeURIComponent(day)}`).catch(() => {
+      const p = await apiGet<PlantDayPayload>(`/api/plant-production/${encodeURIComponent(day)}`, token).catch(() => {
         return { day, rows: [], obs: "" } as PlantDayPayload;
       });
 
       // metas do dia (se não existir, mantém defaults)
-      const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`).catch(() => null as any);
+      const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`, token).catch(() => null as any);
       if (g && typeof g === "object") {
         const mdRaw = (g as any).meta_ton;
         const dhRaw = (g as any).discount_hours;
@@ -452,11 +493,11 @@ export default function Dashboard() {
         }
       }
 
-      const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`).catch(() => []);
-      const ps = await apiGet<any>(`/api/stops-launch?day=${encodeURIComponent(day)}`).catch(() => null);
+      const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`, token).catch(() => []);
+      const ps = await apiGet<any>(`/api/stops-launch?day=${encodeURIComponent(day)}`, token).catch(() => null);
       // ✅ Somente o card "Total de Paradas" usa o mesmo endpoint da página Paradas
-      const psDay = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`).catch(() => []);
-      const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`).catch(() => []);
+      const psDay = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`, token).catch(() => []);
+      const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`, token).catch(() => []);
 
       const map: Record<string, HorimetroRow | null> = {};
       for (const r of hb || []) {
@@ -477,15 +518,20 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
+    if (authLoading) return; // espera hidratar auth
+    if (!token) return; // só chama API se tiver token
+
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day]);
+  }, [authLoading, token, day]);
+useEffect(() => {
+    if (authLoading) return;
+    if (!token) return;
 
-  useEffect(() => {
     const id = window.setInterval(() => loadAll(), POLL_MS);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day]);
+  }, [authLoading, token, day]);
 
   /* ===================== computed ===================== */
   const totalTonDay = useMemo(() => {
