@@ -1,18 +1,22 @@
 export type UserRole = "apontador" | "controlador" | "gerencia" | "dev";
 
-function normalizeRole(v: any): UserRole {
-  const t = String(v || "")
+function norm(v: any): string {
+  return String(v || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, ""); // remove acentos
+}
 
+function normalizeRole(v: any): UserRole {
+  const t = norm(v);
   if (t === "dev") return "dev";
   if (t === "controlador") return "controlador";
   if (t === "gerencia") return "gerencia";
+  // aceita variações comuns
+  if (t === "gestao" || t === "gerente" || t === "manager") return "gerencia";
   return "apontador";
 }
-
 
 export function getUserRole(user: any): UserRole {
   // 1) vindo do AuthProvider
@@ -36,7 +40,7 @@ export function getUserRole(user: any): UserRole {
 const DEV_ONLY_PATHS = [
   "/dev/logs",
   "/dev/users",
-  "/dashboard/producao-dia", // Dev Dash (você pediu bloquear)
+  "/dashboard/producao-dia", // Dev Dash
 ];
 
 export function canAccess(role: UserRole, path: string): boolean {
