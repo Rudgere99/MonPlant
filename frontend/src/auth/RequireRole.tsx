@@ -6,7 +6,9 @@ function RequireRole({ children }: { children: React.ReactNode }) {
   const { user, token } = useAuth() as any; // ajuste se seu provider usa outro nome
   const loc = useLocation();
 
-  // ✅ evita “loop” no primeiro render: token existe mas user ainda não chegou
+  if (loading) return <>{children}</>;
+  if (!user && token) return <>{children}</>;
+// ✅ evita “loop” no primeiro render: token existe mas user ainda não chegou
   if (!user && token) return <>{children}</>;
 
   const role = getUserRole(user);
