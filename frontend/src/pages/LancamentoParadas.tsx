@@ -113,8 +113,7 @@ function renderPieCalloutLabel(props: any) {
     value, // hours (dataKey)
   } = props;
 
-  // não poluir com fatias muito pequenas
-  if ((percent ?? 0) < 0.04) return null;
+  // ✅ Mostrar callout para todos os tipos (mesmo fatias pequenas)
 
   const rLine = outerRadius + 14;   // ponta da linha
   const rText = outerRadius + 30;   // posição do texto
