@@ -228,10 +228,10 @@ useEffect(() => {
 
   const ger = isGerencia(user?.user_type);
 
-  // ✅ regra da gerência: só / e /dashboard
+  // ✅ regra da gerência: só /, /dashboard e /ritmo
   if (ger) {
     const p = location.pathname.toLowerCase();
-    const ok = p === "/" || p.startsWith("/dashboard");
+    const ok = p === "/" || p.startsWith("/dashboard") || p.startsWith("/ritmo");
     if (!ok) navigate("/dashboard", { replace: true });
     return; // ✅ impede cair na regra geral e “brigar”
   }
@@ -255,7 +255,7 @@ useEffect(() => {
   const ger = isGerencia(user?.user_type);
 
   const navItemsFiltered = useMemo(() => {
-    return ger ? navItems.filter((i) => i.to === "/dashboard" || i.to === "/") : navItems;
+    return ger ? navItems.filter((i) => i.to === "/dashboard" || i.to === "/" || i.to === "/ritmo") : navItems;
   }, [ger, navItems]);
 
   const handleLogout = () => {
