@@ -54,8 +54,8 @@ export function canAccess(role: UserRole, path: string): boolean {
   }
 
   if (role === "gerencia") {
-    // Gerência: apenas Dashboard
-    return path === "/" || path.startsWith("/dashboard");
+    // Gerência: Dashboard + Ritmo
+    return path === "/" || path.startsWith("/dashboard") || path.startsWith("/ritmo");
   }
 
   // controlador: tudo menos dev-only (já bloqueado acima)
