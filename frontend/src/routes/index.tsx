@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { RequireAuth } from "../auth/RequireAuth";
 import AppShell from "../components/AppShell";
 import { useAuth } from "../auth/AuthProvider";
+import { canAccess as canAccessRole, getUserRole } from "../auth/roleGuard";
 import Historico from "../pages/Historico";
 
 import Login from "../pages/Login";
@@ -24,46 +25,23 @@ import DevUsers from "../pages/DevUsers";
 import PlantProductionDayView from "../pages/PlantProductionDayView";
 import Last7DaysView from "../pages/Last7DaysView";
 
-type UserRole = "apontador" | "controlador" | "dev";
-
-function getRole(user: any): UserRole {
-  // role vem do backend em user.user_type (dev/controlador/apontador)
-  const t = String(user?.user_type || "").toLowerCase();
-  if (t === "dev") return "dev";
-  if (t === "controlador") return "controlador";
-  return "apontador";
-}
-
-function canAccess(role: UserRole, path: string) {
-  if (role === "dev") return true;
-
-  // DEV pages
-  if (path.startsWith("/dev") || path.startsWith("/dashboard/producao-dia")) return false;
-
-  if (role === "apontador") {
-    // ✅ liberado também lançamento de paradas
-    return (
-      path.startsWith("/producao-planta") ||
-      path.startsWith("/paradas") ||
-      path.startsWith("/lancamento-paradas")
-    );
-  }
-
-  // controlador: tudo exceto dev
-  return true;
-}
-
-function defaultPathFor(role: UserRole) {
+function defaultPathFor(role: ReturnType<typeof getUserRole>) {
+  // Gerência também cai no dashboard
   return role === "apontador" ? "/producao-planta" : "/dashboard";
 }
 
 function RequireRole({ children }: { children: ReactNode }) {
-  const { user } = useAuth() as any;
-  const role = getRole(user);
+  const { user, token, loading } = useAuth() as any;
   const location = useLocation();
   const path = location.pathname;
 
-  if (!canAccess(role, path)) {
+  // ✅ não redireciona durante hidratação (evita piscar/loop no F5)
+  if (loading) return <>{children}</>;
+  if (!user && token) return <>{children}</>;
+
+  const role = getUserRole(user);
+
+  if (!canAccessRole(role, path)) {
     return <Navigate to={defaultPathFor(role)} replace />;
   }
 
@@ -71,8 +49,11 @@ function RequireRole({ children }: { children: ReactNode }) {
 }
 
 function RoleIndexRedirect() {
-  const { user } = useAuth() as any;
-  const role = getRole(user);
+  const { user, token, loading } = useAuth() as any;
+  if (loading) return null;
+  if (!user && token) return null;
+
+  const role = getUserRole(user);
   return <Navigate to={defaultPathFor(role)} replace />;
 }
 
