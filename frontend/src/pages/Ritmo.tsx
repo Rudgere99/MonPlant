@@ -1,18 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import html2canvas from "html2canvas";
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 /**
- * Ritmo do dia (00:00–00:00)
- * - Manual: tonelada por conchada (t) (salva no localStorage)
- * - Automático: meta do dia, produzido, período atual, necessário t/h e conchadas/h,
- *              média real t/h e conchadas/h (puxa do mesmo endpoint do PlantProduction)
+ * Ritmo — Executivo Premium
+ * - Tudo do operacional + Gráfico acumulado (Real x Ideal)
+ * - Hero KPIs + Status grande + Projeção com desvio projetado
+ * - Proteções: tempo restante nunca negativo, dia encerrado automático, padronização decimais
  *
- * Endpoint esperado:
+ * Endpoint:
  *   GET /api/plant-production/{day}  -> { day, rows:[{period, ton, freq}], meta_ton? }
+ *   GET /api/goals/day/{day}         -> { day, meta_ton, discount_hours? }
  */
 
 type HourRow = {
-  period: string; // ex: "16:00-17:00" ou "16-17"
+  period: string;
   ton?: number | string | null;
   freq?: number | string | null;
 };
@@ -89,7 +91,6 @@ function parseNum(v: any): number | null {
   s = s.replace("%", "").trim();
   s = s.replace(/\s/g, "");
 
-  // "1.234,5" => "1234.5"
   if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
   else if (s.includes(",")) s = s.replace(",", ".");
 
@@ -97,7 +98,6 @@ function parseNum(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** normaliza "16:00-17:00" | "16-17" -> "16-17" */
 function normalizePeriodToHH(period: string): string {
   const s0 = String(period || "").trim();
   if (!s0) return s0;
@@ -117,13 +117,6 @@ function normalizePeriodToHH(period: string): string {
     }
   }
   return s0;
-}
-
-function currentShiftWindow(now = new Date()) {
-  // Turno 1: 07–19 | Turno 2: 19–07
-  const h = now.getHours();
-  if (h >= 7 && h < 19) return { shiftName: "Turno 1", startH: 7, endH: 19 };
-  return { shiftName: "Turno 2", startH: 19, endH: 7 };
 }
 
 function dayRemainingHours(now = new Date()) {
@@ -176,7 +169,100 @@ const btn: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-/** mini-card (igual sua 1ª imagem) */
+const heroGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
+  gap: 12,
+};
+
+function HeroKPI(props: {
+  title: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  colSpan?: number;
+  accent?: "green" | "yellow" | "red" | "neutral";
+}) {
+  const { title, value, sub, colSpan = 4, accent = "neutral" } = props;
+  const accentMap: Record<string, string> = {
+    green: "rgba(34,197,94,0.95)",
+    yellow: "rgba(250,204,21,0.95)",
+    red: "rgba(239,68,68,0.95)",
+    neutral: "rgba(255,255,255,0.12)",
+  };
+
+  return (
+    <div
+      style={{
+        ...card,
+        gridColumn: `span ${colSpan}`,
+        borderColor: accent === "neutral" ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.14)",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            accent === "neutral"
+              ? "transparent"
+              : `radial-gradient(900px 260px at 10% 10%, ${accentMap[accent]}33, transparent 60%)`,
+          pointerEvents: "none",
+        }}
+      />
+      <div style={{ position: "relative" }}>
+        <div style={label}>{title}</div>
+        <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 30, marginTop: 6 }}>{value}</div>
+        {sub ? <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>{sub}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function BigStatus(props: { kind: "green" | "yellow" | "red"; title: string; subtitle?: string }) {
+  const map = {
+    green: { bg: "rgba(34,197,94,0.16)", bd: "rgba(34,197,94,0.35)", fg: "rgba(34,197,94,0.95)" },
+    yellow: { bg: "rgba(250,204,21,0.14)", bd: "rgba(250,204,21,0.32)", fg: "rgba(250,204,21,0.95)" },
+    red: { bg: "rgba(239,68,68,0.14)", bd: "rgba(239,68,68,0.32)", fg: "rgba(239,68,68,0.95)" },
+  }[props.kind];
+
+  return (
+    <div
+      style={{
+        ...card,
+        borderRadius: 26,
+        border: `1px solid ${map.bd}`,
+        background: map.bg,
+        padding: 16,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        minHeight: 92,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ width: 16, height: 16, borderRadius: 99, background: map.fg, boxShadow: `0 0 0 8px ${map.bg}` }} />
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 990, fontSize: 18 }}>{props.title}</div>
+          {props.subtitle ? (
+            <div style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900, fontSize: 13 }}>{props.subtitle}</div>
+          ) : null}
+        </div>
+      </div>
+
+      <div style={{ textAlign: "right" }}>
+        <div style={{ ...label, marginBottom: 4 }}>Semáforo</div>
+        <div style={{ color: map.fg, fontWeight: 990, fontSize: 16 }}>
+          {props.kind === "green" ? "🟢" : props.kind === "yellow" ? "🟡" : "🔴"}{" "}
+          {props.kind === "green" ? "OK" : props.kind === "yellow" ? "ALERTA" : "CRÍTICO"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const exportMiniCard: React.CSSProperties = {
   borderRadius: 14,
   border: "1px solid rgba(255,255,255,0.10)",
@@ -185,7 +271,7 @@ const exportMiniCard: React.CSSProperties = {
   lineHeight: 1.45,
   display: "inline-block",
   width: "fit-content",
-  maxWidth: 560,
+  maxWidth: 720,
   boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
 };
 
@@ -201,18 +287,8 @@ const exportSep: React.CSSProperties = {
   margin: "8px 0",
 };
 
-const noWrapRow: React.CSSProperties = {
-  display: "flex",
-  alignItems: "baseline",
-  gap: 6,
-  flexWrap: "nowrap",
-  whiteSpace: "nowrap",
-};
-
 export default function Ritmo() {
   const [day, setDay] = useState<string>(isoTodayLocal());
-
-  // ✅ somente esse é exportado
   const exportCompactRef = useRef<HTMLDivElement | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -275,10 +351,12 @@ export default function Ritmo() {
     return map;
   }, [data]);
 
-  const metaDay = useMemo(() => {
+  const metaDayRaw = useMemo(() => {
     const v = goal?.meta_ton ?? data?.meta_ton ?? data?.meta ?? data?.meta_day ?? data?.planned_ton ?? null;
     return v !== null && v !== undefined ? Number(v) : null;
   }, [goal, data]);
+
+  const metaDay = metaDayRaw;
 
   const produced = useMemo(() => {
     let s = 0;
@@ -287,74 +365,92 @@ export default function Ritmo() {
   }, [rowsNorm]);
 
   const todayISO = isoTodayLocal();
-const isClosedDay = day < todayISO; // dia passado => período encerrado
-const nowRef = isClosedDay ? new Date(`${day}T23:59:00`) : new Date();
+  const isPastDay = day < todayISO;
 
-// período atual (dia aberto) ou último período com dado (dia fechado)
-const lastFilledPeriod = useMemo(() => {
-  const filled = Array.from(rowsNorm.entries())
-    .filter(([, v]) => (Number(v) || 0) > 0)
-    .map(([p]) => p)
-    .sort(); // "07-08" ordena ok
-  return filled.length ? filled[filled.length - 1] : "";
-}, [rowsNorm]);
+  const filledPeriods = useMemo(() => {
+    return Array.from(rowsNorm.entries())
+      .filter(([, v]) => (Number(v) || 0) > 0)
+      .map(([p]) => p)
+      .sort();
+  }, [rowsNorm]);
 
-const currH = nowRef.getHours();
-const endH = currH;
-const startH = (currH + 23) % 24;
+  const filledCount = filledPeriods.length;
+  const isClosedDay = isPastDay || filledCount >= 24;
 
-const currPeriod = isClosedDay ? lastFilledPeriod : `${pad2(startH)}-${pad2(endH)}`; // ex.: 02-03
-const periodTon = currPeriod ? (rowsNorm.get(currPeriod) ?? 0) : 0;
+  const nowRef = isClosedDay ? new Date(`${day}T23:59:00`) : new Date();
 
-const remainingH = isClosedDay ? 0 : dayRemainingHours(nowRef);
-const elapsedH = isClosedDay ? 24 : Math.max(0.25, dayElapsedHours(nowRef));
+  const lastFilledPeriod = useMemo(() => (filledPeriods.length ? filledPeriods[filledPeriods.length - 1] : ""), [filledPeriods]);
+
+  const currH = nowRef.getHours();
+  const endH = currH;
+  const startH = (currH + 23) % 24;
+
+  const currPeriod = isClosedDay ? lastFilledPeriod : `${pad2(startH)}-${pad2(endH)}`;
+  const periodTon = currPeriod ? (rowsNorm.get(currPeriod) ?? 0) : 0;
+
+  const remainingH = isClosedDay ? 0 : Math.max(0, dayRemainingHours(nowRef));
+  const elapsedH = isClosedDay ? 24 : Math.max(0.25, dayElapsedHours(nowRef));
 
   const diff = metaDay !== null ? produced - metaDay : null;
   const attainment = metaDay !== null && metaDay > 0 ? (produced / metaDay) * 100 : null;
 
-  const neededTPHRaw = useMemo(() => {
+  const neededTPH = useMemo(() => {
     if (metaDay === null) return null;
     const remaining = Math.max(0, metaDay - produced);
-    if (remainingH <= 0) return remaining > 0 ? null : 0;
+    if (remaining <= 0) return 0;
+    if (remainingH <= 0) return null;
     return remaining / remainingH;
   }, [metaDay, produced, remainingH]);
-
-  const neededTPH = isClosedDay ? 0 : neededTPHRaw;
 
   const neededBucketsH = useMemo(() => {
     if (neededTPH === null || bucket === null || bucket <= 0) return null;
     return neededTPH / bucket;
   }, [neededTPH, bucket]);
 
-  // ✅ Média real igual ao Dashboard:
-// média das horas preenchidas (ton/h > 0), e não "produzido / horas decorridas"
-const avgRealTPH = useMemo(() => {
-  const filled = Array.from(rowsNorm.values()).filter((v) => (Number(v) || 0) > 0);
-  if (!filled.length) return 0;
-  const sum = filled.reduce((acc, v) => acc + (Number(v) || 0), 0);
-  return sum / filled.length;
-}, [rowsNorm]);
+  const avgRealTPH = useMemo(() => {
+    const filled = Array.from(rowsNorm.values()).filter((v) => (Number(v) || 0) > 0);
+    if (!filled.length) return 0;
+    const sum = filled.reduce((acc, v) => acc + (Number(v) || 0), 0);
+    return sum / filled.length;
+  }, [rowsNorm]);
 
-const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
+  const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
 
-  // regra prática: meta ~4404 => esperado 200 t/h
-  const expectedTPH = useMemo(() => {
-    if (metaDay === null || !isFinite(metaDay) || metaDay <= 0) return 200;
-    if (Math.abs(metaDay - 4404) <= 150) return 200;
-    return metaDay / 22;
-  }, [metaDay]);
+  const projectionTon = useMemo(() => {
+    if (isClosedDay) return produced;
+    if (avgRealTPH <= 0) return 0;
+    return avgRealTPH * 24;
+  }, [avgRealTPH, isClosedDay, produced]);
 
-  const cYellow = "rgba(250,204,21,0.95)";
-  const cGreen = "rgba(34,197,94,0.95)";
-  const cRed = "rgba(239,68,68,0.95)";
+  const projectedDiff = useMemo(() => {
+    if (metaDay === null) return null;
+    return projectionTon - metaDay;
+  }, [projectionTon, metaDay]);
 
-  // ✅ regras de cor:
-  // Necessário: verde quando <= esperado
-  // Média real: verde quando >= esperado
-  const neededColor = neededTPH !== null && neededTPH <= expectedTPH ? cGreen : cRed;
-  const avgRealColor = avgRealTPH >= expectedTPH ? cGreen : cRed;
+  const status = useMemo(() => {
+    if (metaDay !== null && metaDay > 0 && produced >= metaDay) {
+      return { kind: "green" as const, title: "Meta atingida", subtitle: "Necessário = 0 t/h" };
+    }
 
-  const shiftInfo = currentShiftWindow(nowRef);
+    if (isClosedDay) {
+      if (metaDay === null) return { kind: "yellow" as const, title: "Dia encerrado", subtitle: "Sem meta definida" };
+      return produced >= metaDay
+        ? { kind: "green" as const, title: "Dia encerrado", subtitle: "Meta atingida" }
+        : { kind: "red" as const, title: "Dia encerrado", subtitle: "Meta não atingida" };
+    }
+
+    if (neededTPH === null) return { kind: "yellow" as const, title: "Sem cálculo", subtitle: "Meta ou tempo inválido" };
+    if (neededTPH === 0) return { kind: "green" as const, title: "Dentro do ritmo", subtitle: "Meta já foi batida" };
+
+    if (avgRealTPH >= neededTPH) return { kind: "green" as const, title: "Dentro do ritmo", subtitle: "Média ≥ Necessário" };
+    if (avgRealTPH >= neededTPH * 0.9) return { kind: "yellow" as const, title: "Atenção", subtitle: "Abaixo do necessário" };
+    return { kind: "red" as const, title: "Crítico", subtitle: "Fora da meta" };
+  }, [avgRealTPH, isClosedDay, metaDay, neededTPH, produced]);
+
+  // padronização de casas decimais
+  const dTon = 1;
+  const dTPH = 1;
+  const dPct = 1;
 
   const [yy, mm, dd] = day.split("-");
   const dayBR = `${dd}/${mm}/${yy}`;
@@ -363,7 +459,6 @@ const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
     const el = exportCompactRef.current;
     if (!el) return;
 
-    // garante layout/fonte pronto
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
     // @ts-ignore
     if (document.fonts?.ready) {
@@ -398,162 +493,293 @@ const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
     a.click();
   }
 
+  const progressPct = metaDay && metaDay > 0 ? Math.max(0, Math.min(100, (produced / metaDay) * 100)) : 0;
+
+  // ======= Gráfico acumulado (Real x Ideal) =======
+  const series = useMemo(() => {
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+    const idealPerH = metaDay && metaDay > 0 ? metaDay / 24 : null;
+
+    let acc = 0;
+    return hours.map((h) => {
+      // período "HH-(HH+1)"
+      const h2 = (h + 1) % 24;
+      const key = `${pad2(h)}-${pad2(h2)}`;
+      const v = rowsNorm.get(key) ?? 0;
+      acc += Number(v || 0);
+
+      const ideal = idealPerH !== null ? idealPerH * (h + 1) : null;
+
+      return {
+        hour: pad2(h),
+        real: acc,
+        ideal: ideal,
+      };
+    });
+  }, [rowsNorm, metaDay]);
+
+  function tooltipFmt(v: any) {
+    const n = Number(v) || 0;
+    return `${fmtBR(n, dTon)} t`;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* topo */}
+      {/* Topo */}
       <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 20 }}>
-            Ritmo do dia (00:00–00:00)
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 990, fontSize: 20 }}>Ritmo do Dia</div>
+            <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>
+              Dia: <span style={{ color: "rgba(255,255,255,0.92)" }}>{dayBR}</span>{" "}
+              <span style={{ opacity: 0.55 }}>•</span>{" "}
+              <span style={{ opacity: 0.85 }}>{isClosedDay ? "Período encerrado" : "Dia em andamento"}</span>
+            </div>
           </div>
 
-          <button
-            onClick={exportResumoJPEG}
-            style={{ ...btn, background: "rgba(168,85,247,0.14)", borderColor: "rgba(168,85,247,0.35)" }}
-          >
-            Exportar resumo
-          </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={label}>Data</span>
+              <input style={{ ...input, minWidth: 170 }} type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={label}>t / Conchada</span>
+              <input
+                style={{ ...input, minWidth: 140 }}
+                value={bucketTon}
+                onChange={(e) => setBucketTon(e.target.value)}
+                inputMode="decimal"
+                placeholder="4,2"
+              />
+            </label>
+
+            <button style={btn} onClick={exportResumoJPEG}>
+              Exportar resumo (JPG)
+            </button>
+          </div>
         </div>
 
-        <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
-          {shiftInfo.shiftName} • {pad2(shiftInfo.startH)}:00 às {pad2(shiftInfo.endH)}:00 •{" "}
-          {loading ? "Carregando..." : err ? `Erro: ${err}` : data?.updated_at ? `Atualizado: ${data.updated_at}` : "—"}
-        </div>
+        {err ? (
+          <div style={{ marginTop: 10, color: "rgba(239,68,68,0.95)", fontWeight: 900 }}>{err}</div>
+        ) : loading ? (
+          <div style={{ marginTop: 10, color: "rgba(255,255,255,0.70)", fontWeight: 900 }}>Carregando…</div>
+        ) : null}
+      </div>
 
-        <div style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+      {/* STATUS GERAL GRANDE */}
+      <BigStatus kind={status.kind} title={status.title} subtitle={status.subtitle} />
+
+      {/* HERO KPIs */}
+      <div style={heroGrid}>
+        <HeroKPI title="Meta" value={metaDay !== null ? `${fmtBR(metaDay, dTon)} t` : "—"} colSpan={4} accent="neutral" />
+        <HeroKPI title="Produzido" value={`${fmtBR(produced, dTon)} t`} colSpan={4} accent="neutral" />
+        <HeroKPI title="Projeção" value={`${fmtBR(projectionTon, dTon)} t`} colSpan={4} accent={metaDay && projectionTon >= metaDay ? "green" : metaDay ? "red" : "neutral"} />
+
+        <HeroKPI
+          title="Atingimento"
+          value={attainment !== null ? fmtPct(attainment, dPct) : "—"}
+          colSpan={4}
+          accent={status.kind === "green" ? "green" : status.kind === "yellow" ? "yellow" : "red"}
+        />
+        <HeroKPI
+          title="Desvio"
+          value={diff !== null ? `${diff >= 0 ? "+" : ""}${fmtBR(diff, dTon)} t` : "—"}
+          colSpan={4}
+          accent={diff !== null && diff >= 0 ? "green" : diff !== null ? "red" : "neutral"}
+          sub={projectedDiff !== null ? (
+            <span>
+              Desvio proj.:{" "}
+              <b style={{ color: projectedDiff >= 0 ? "rgba(34,197,94,0.95)" : "rgba(239,68,68,0.95)" }}>
+                {projectedDiff >= 0 ? "+" : ""}
+                {fmtBR(projectedDiff, dTon)} t
+              </b>
+            </span>
+          ) : undefined}
+        />
+        <HeroKPI title="Tempo restante" value={isClosedDay ? "0h" : `${fmtBR(remainingH, 1)}h`} colSpan={4} accent="neutral" />
+      </div>
+
+      {/* Barra de progresso */}
+      <div style={{ ...card, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+          <div style={label}>Progresso da meta</div>
+          <div style={{ color: "rgba(255,255,255,0.85)", fontWeight: 950 }}>{metaDay ? fmtPct(progressPct, 1) : "—"}</div>
+        </div>
+        <div style={{ height: 14, borderRadius: 99, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+          <div
+            style={{
+              width: `${progressPct}%`,
+              height: "100%",
+              borderRadius: 99,
+              background:
+                progressPct >= 100
+                  ? "rgba(34,197,94,0.95)"
+                  : status.kind === "green"
+                  ? "rgba(34,197,94,0.85)"
+                  : status.kind === "yellow"
+                  ? "rgba(250,204,21,0.85)"
+                  : "rgba(239,68,68,0.85)",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Gráfico acumulado */}
+      <div style={{ ...card }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
           <div>
-            <div style={label}>Data</div>
-            <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={input} />
-            <div style={{ marginTop: 6, color: "rgba(255,255,255,0.55)", fontWeight: 800, fontSize: 12 }}>{dayBR}</div>
+            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 16 }}>Ritmo acumulado</div>
+            <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>
+              Real x Linha ideal (meta distribuída por hora)
+            </div>
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>
+            Último período: <b style={{ color: "rgba(255,255,255,0.92)" }}>{currPeriod || "—"}</b>
+          </div>
+        </div>
+
+        <div style={{ height: 220, width: "100%", minWidth: 0, marginTop: 10 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={series} margin={{ top: 10, right: 14, left: 0, bottom: 0 }}>
+              <XAxis dataKey="hour" tick={{ fill: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }} />
+              <YAxis tick={{ fill: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }} width={48} />
+              <Tooltip
+                formatter={(v: any) => tooltipFmt(v)}
+                labelFormatter={(l: any) => `Hora ${l}:00`}
+                contentStyle={{
+                  background: "rgba(14,18,22,0.98)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 12,
+                  color: "rgba(255,255,255,0.92)",
+                  fontWeight: 900,
+                }}
+              />
+              <Line type="monotone" dataKey="ideal" dot={false} strokeWidth={2} strokeDasharray="6 4" />
+              <Line type="monotone" dataKey="real" dot={false} strokeWidth={3} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Período atual + Ritmo (necessário vs média real) + Resumo exportável */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 12 }}>
+        <div style={{ gridColumn: "span 7", ...card }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 16 }}>Período atual</div>
+              <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>
+                {currPeriod ? (
+                  <>
+                    <span style={{ opacity: 0.8 }}>{currPeriod.replace("-", "h às ")}</span>h • Produção:{" "}
+                    <b style={{ color: "rgba(255,255,255,0.94)" }}>{fmtBR(periodTon, dTon)} t</b>
+                  </>
+                ) : (
+                  "—"
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                <div style={label}>⚙ Conchadas / h</div>
+                <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 24 }}>
+                  {avgRealBucketsH !== null ? fmtBR0(avgRealBucketsH) : "—"}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                <div style={label}>📦 t / h</div>
+                <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 24 }}>{fmtBR(avgRealTPH, dTPH)}</div>
+              </div>
+            </div>
           </div>
 
-          <div>
-            <div style={label}>Tonelada por conchada (t) — manual</div>
-            <input
-              value={bucketTon}
-              onChange={(e) => setBucketTon(e.target.value)}
-              placeholder="ex: 4,2"
-              style={{ ...input, width: 220 }}
-            />
-            <div style={{ marginTop: 6, color: "rgba(255,255,255,0.55)", fontWeight: 800, fontSize: 12 }}>
-              Salva por PC (localStorage)
+          <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "12px 0" }} />
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 12 }}>
+            <div style={{ gridColumn: "span 6", ...card, background: "rgba(255,255,255,0.03)" }}>
+              <div style={label}>Necessário</div>
+              <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 30, marginTop: 6 }}>
+                {neededTPH === null ? "—" : `${fmtBR(neededTPH, dTPH)} t/h`}
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>
+                {neededBucketsH === null ? "—" : `≈ ${fmtBR0(neededBucketsH)} conchadas/h`}
+              </div>
+            </div>
+
+            <div style={{ gridColumn: "span 6", ...card, background: "rgba(255,255,255,0.03)" }}>
+              <div style={label}>Média real</div>
+              <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 30, marginTop: 6 }}>
+                {`${fmtBR(avgRealTPH, dTPH)} t/h`}
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>
+                {avgRealBucketsH === null ? "—" : `≈ ${fmtBR0(avgRealBucketsH)} conchadas/h`}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* preview normal (na tela) — pode manter grande se quiser */}
-      <div style={{ ...card, lineHeight: 1.7, display: "inline-block", width: "fit-content", maxWidth: 520 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Meta: <span style={{ fontWeight: 950 }}>{metaDay === null ? "—" : `${fmtBR0(metaDay)} t`}</span>
+        <div style={{ gridColumn: "span 5", ...card }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 16 }}>Resumo</div>
+            <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>{dayBR}</div>
           </div>
 
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Produzido: <span style={{ fontWeight: 950, color: cYellow }}>{fmtBR0(produced)} t</span>
+          <div style={{ marginTop: 12 }}>
+            <div ref={exportCompactRef} style={exportMiniCard}>
+              <div style={exportLine}>
+                Status: <b>{status.title}</b>
+              </div>
+
+              <div style={exportSep} />
+
+              <div style={exportLine}>
+                Meta: <b>{metaDay !== null ? `${fmtBR(metaDay, dTon)} t` : "—"}</b>
+              </div>
+              <div style={exportLine}>
+                Produzido: <b>{`${fmtBR(produced, dTon)} t`}</b>
+              </div>
+              <div style={exportLine}>
+                Projeção: <b>{`${fmtBR(projectionTon, dTon)} t`}</b>
+              </div>
+
+              <div style={exportLine}>
+                Atingimento: <b>{attainment !== null ? fmtPct(attainment, dPct) : "—"}</b>
+              </div>
+              <div style={exportLine}>
+                Desvio: <b>{diff !== null ? `${diff >= 0 ? "+" : ""}${fmtBR(diff, dTon)} t` : "—"}</b>
+              </div>
+
+              <div style={exportSep} />
+
+              <div style={exportLine}>
+                Tempo restante: <b>{isClosedDay ? "0h" : `${fmtBR(remainingH, 1)} h`}</b>
+              </div>
+
+              <div style={exportLine}>
+                Período: <b>{currPeriod ? currPeriod.replace("-", "h às ") + "h" : "—"}</b>
+              </div>
+              <div style={exportLine}>
+                Produção do período: <b>{`${fmtBR(periodTon, dTon)} t`}</b>
+              </div>
+
+              <div style={exportSep} />
+
+              <div style={exportLine}>
+                Necessário: <b>{neededTPH === null ? "—" : `${fmtBR(neededTPH, dTPH)} t/h`}</b>{" "}
+                {neededBucketsH === null ? null : <span style={{ opacity: 0.9 }}>{`≈ ${fmtBR0(neededBucketsH)} conchadas/h`}</span>}
+              </div>
+
+              <div style={exportLine}>
+                Média real: <b>{`${fmtBR(avgRealTPH, dTPH)} t/h`}</b>{" "}
+                {avgRealBucketsH === null ? null : <span style={{ opacity: 0.9 }}>{`≈ ${fmtBR0(avgRealBucketsH)} conchadas/h`}</span>}
+              </div>
+            </div>
           </div>
 
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Atingimento: <span style={{ fontWeight: 950 }}>{attainment === null ? "—" : fmtPct(attainment, 1)}</span>
-          </div>
-
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Diferença:{" "}
-            <span style={{ fontWeight: 950 }}>
-              {diff === null ? "—" : `${diff >= 0 ? "+" : ""}${fmtBR0(diff)} t`}
-            </span>
-          </div>
-
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Tempo restante: <span style={{ fontWeight: 950 }}>{fmtBR(remainingH, 1)} h</span>
-          </div>
-
-          <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
-
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Período: <span style={{ fontWeight: 950 }}>{isClosedDay ? "Período encerrado" : (<>{pad2(startH)}h às {pad2(endH)}h</>)}</span>
-          </div>
-
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Produção do período: <span style={{ fontWeight: 950 }}>{fmtBR(periodTon, 1)} t</span>
-          </div>
-
-          <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "10px 0" }} />
-
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Necessário:{" "}
-            <span style={{ fontWeight: 950, color: neededColor }}>
-              {neededTPH === null ? "—" : `${fmtBR(neededTPH, 1)} t/h`}
-            </span>{" "}
-            <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
-              ≈ {neededBucketsH === null ? "—" : `${fmtBR0(neededBucketsH)} conchadas/h`}
-            </span>
-          </div>
-
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 900 }}>
-            Média real:{" "}
-            <span style={{ fontWeight: 950, color: avgRealColor }}>{fmtBR(avgRealTPH, 1)} t/h</span>{" "}
-            <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
-              ≈ {avgRealBucketsH === null ? "—" : `${fmtBR0(avgRealBucketsH)} conchadas/h`}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ✅ ESTE É O QUE VAI PARA IMAGEM (compacto, sem área vazia e sem "cardão") */}
-      <div style={{ position: "fixed", left: -10000, top: -10000, zIndex: -1 }}>
-        <div ref={exportCompactRef} style={exportMiniCard}>
-          <div style={exportLine}>
-            Meta: <span style={{ fontWeight: 950 }}>{metaDay === null ? "—" : `${fmtBR0(metaDay)} t`}</span>
-          </div>
-
-          <div style={exportLine}>
-            Produzido: <span style={{ fontWeight: 950, color: cYellow }}>{fmtBR0(produced)} t</span>
-          </div>
-
-          <div style={exportLine}>
-            Atingimento: <span style={{ fontWeight: 950 }}>{attainment === null ? "—" : fmtPct(attainment, 1)}</span>
-          </div>
-
-          <div style={exportLine}>
-            Diferença:{" "}
-            <span style={{ fontWeight: 950 }}>
-              {diff === null ? "—" : `${diff >= 0 ? "+" : ""}${fmtBR0(diff)} t`}
-            </span>
-          </div>
-
-          <div style={exportLine}>
-            Tempo restante: <span style={{ fontWeight: 950 }}>{fmtBR(remainingH, 1)} h</span>
-          </div>
-
-          <div style={exportSep} />
-
-          <div style={exportLine}>
-            Período: <span style={{ fontWeight: 950 }}>{isClosedDay ? "Período encerrado" : (<>{pad2(startH)}h às {pad2(endH)}h</>)}</span>
-          </div>
-
-          <div style={exportLine}>
-            Produção do período: <span style={{ fontWeight: 950 }}>{fmtBR(periodTon, 1)} t</span>
-          </div>
-
-          <div style={exportSep} />
-
-          <div style={{ ...exportLine, ...noWrapRow }}>
-            <span>Necessário:</span>
-            <span style={{ fontWeight: 950, color: neededColor }}>
-              {neededTPH === null ? "—" : `${fmtBR(neededTPH, 1)} t/h`}
-            </span>
-            <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
-              ≈ {neededBucketsH === null ? "—" : `${fmtBR0(neededBucketsH)} conchadas/h`}
-            </span>
-          </div>
-
-          <div style={{ ...exportLine, ...noWrapRow }}>
-            <span>Média real:</span>
-            <span style={{ fontWeight: 950, color: avgRealColor }}>{fmtBR(avgRealTPH, 1)} t/h</span>
-            <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900 }}>
-              ≈ {avgRealBucketsH === null ? "—" : `${fmtBR0(avgRealBucketsH)} conchadas/h`}
-            </span>
+          <div style={{ marginTop: 10, color: "rgba(255,255,255,0.60)", fontWeight: 900, fontSize: 12 }}>
+            * t/h (1 casa), toneladas (1), % (1), conchadas (inteiro).
           </div>
         </div>
       </div>
