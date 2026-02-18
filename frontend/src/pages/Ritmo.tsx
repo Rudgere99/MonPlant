@@ -473,6 +473,7 @@ export default function Ritmo() {
     const el = exportCompactRef.current;
     if (!el) return;
 
+    // garante layout/medidas estabilizadas antes do capture
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
     // @ts-ignore
     if (document.fonts?.ready) {
@@ -483,19 +484,23 @@ export default function Ritmo() {
     }
 
     const rect = el.getBoundingClientRect();
-    const EXTRA = 8;
 
-    const w = Math.ceil(rect.width + EXTRA);
-    const h = Math.ceil(rect.height + EXTRA);
+    // ✅ IMPORTANTE:
+    // Não force windowWidth/windowHeight para o tamanho do card,
+    // senão o html2canvas "simula" um viewport pequeno e ativa CSS responsivo,
+    // mudando quebras de linha (fica diferente do resumo na tela).
+    const ww = document.documentElement.clientWidth || window.innerWidth;
+    const wh = document.documentElement.clientHeight || window.innerHeight;
 
     const canvas = await html2canvas(el, {
       backgroundColor: null,
       scale: 2,
       useCORS: true,
-      width: w,
-      height: h,
-      windowWidth: w,
-      windowHeight: h,
+      // captura exatamente o card (sem alterar o viewport)
+      width: Math.ceil(rect.width),
+      height: Math.ceil(rect.height),
+      windowWidth: ww,
+      windowHeight: wh,
       scrollX: 0,
       scrollY: 0,
     });
