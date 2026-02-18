@@ -6,13 +6,30 @@ import {
   Cell,
   Tooltip,
   Legend,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ReferenceLine,
 } from "recharts";
+
+/**
+ * Operação • Lançamento de Paradas
+ * - Lança paradas por hora (máx. 60 min por faixa).
+ * - Donut "Horas por tipo de parada" com callouts: linha saindo da fatia + valor de horas na ponta.
+ *
+ * ⚠️ Endpoints (ajuste se o seu backend usar outros paths):
+ *   GET  /api/stops-launch?day=YYYY-MM-DD  -> { day, rows:[{period,equipamento,tipo_parada,descricao,minutos}] }
+ *   PUT  /api/stops-launch?day=YYYY-MM-DD  -> mesmo payload
+ */
+
+type StopRow = {
+  period: string;        // "03-04"
+  equipamento: string;   // "PN-01" | "Todos" | ""
+  tipo_parada: string;   // "Corretiva" | "Preventiva" | ...
+  descricao: string;
+  minutos: number;       // 0..60
+};
+
+type StopDayPayload = {
+  day: string;
+  rows: StopRow[];
+};
 
 /* ===================== helpers ===================== */
 
@@ -31,14 +48,6 @@ function isoTodayLocal(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function clamp60(n: number) {
-  return Math.max(0, Math.min(60, n));
-}
-
-function fmt1(n: number) {
-  return (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
-
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -50,6 +59,14 @@ function makePeriods24(): string[] {
     res.push(`${pad2(h)}-${pad2(h2)}`); // ex: 23-00
   }
   return res;
+}
+
+function clamp60(n: number) {
+  return Math.max(0, Math.min(60, n));
+}
+
+function fmt1(n: number) {
+  return (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 /* ===================== colors ===================== */
@@ -81,22 +98,69 @@ function colorForType(type: any) {
   return TYPE_COLORS.Outros;
 }
 
-/* ===================== types ===================== */
+/* ===================== callouts (linha saindo da fatia) ===================== */
 
-type StopRow = {
-  period: string;         // "03-04"
-  equipamento: string;    // "PN-01"
-  tipo_parada: string;    // "Corretiva"
-  descricao: string;      // texto
-  minutos: number;        // 0..60
-};
+const RAD = Math.PI / 180;
 
-type StopDayPayload = {
-  day: string;
-  rows: StopRow[];
-};
+function renderPieCalloutLabel(props: any) {
+  const {
+    cx,
+    cy,
+    midAngle,
+    outerRadius,
+    percent,
+    payload,
+    value, // hours (dataKey)
+  } = props;
 
-/* ===================== UI small ===================== */
+  // não poluir com fatias muito pequenas
+  if ((percent ?? 0) < 0.04) return null;
+
+  const rLine = outerRadius + 14;   // ponta da linha
+  const rText = outerRadius + 30;   // posição do texto
+  const x1 = cx + rLine * Math.cos(-midAngle * RAD);
+  const y1 = cy + rLine * Math.sin(-midAngle * RAD);
+  const x2 = cx + rText * Math.cos(-midAngle * RAD);
+  const y2 = cy + rText * Math.sin(-midAngle * RAD);
+
+  // "joelho" para ficar mais legível (linha em 2 segmentos)
+  const xMid = x2 + (x2 > cx ? 14 : -14);
+  const yMid = y2;
+
+  const hours = Number(value || 0);
+  const label = `${fmt1(hours)} h`;
+  const type = String(payload?.type ?? payload?.name ?? "").trim() || "Outros";
+  const stroke = colorForType(type);
+
+  return (
+    <g>
+      {/* linha 2 segmentos */}
+      <path
+        d={`M${x1},${y1} L${x2},${y2} L${xMid},${yMid}`}
+        stroke={stroke}
+        strokeWidth={2}
+        fill="none"
+        opacity={0.9}
+      />
+      {/* bolinha na ponta */}
+      <circle cx={xMid} cy={yMid} r={3.5} fill={stroke} />
+      {/* texto */}
+      <text
+        x={xMid + (xMid > cx ? 8 : -8)}
+        y={yMid}
+        textAnchor={xMid > cx ? "start" : "end"}
+        dominantBaseline="central"
+        fill="rgba(255,255,255,0.92)"
+        fontWeight={900}
+        fontSize={12}
+      >
+        {type}: {label}
+      </text>
+    </g>
+  );
+}
+
+/* ===================== UI styles ===================== */
 
 function Dot({ color }: { color: string }) {
   return (
@@ -170,7 +234,10 @@ export default function LancamentoParadas() {
   const [msg, setMsg] = useState<string>("");
 
   // ✅ ajuste conforme seu cadastro real
-  const equipmentOptions = useMemo(() => ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08", "EH-04", "Peneiras", "Todos"], []);
+  const equipmentOptions = useMemo(
+    () => ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08", "EH-04", "Peneiras", "Todos"],
+    []
+  );
   const stopTypes = useMemo(
     () => ["Operacional", "Preventiva", "Corretiva", "Elétrica", "Segurança"],
     []
@@ -186,13 +253,11 @@ export default function LancamentoParadas() {
     setMsg("");
 
     try {
-      // ⚠️ Ajuste se seu endpoint for diferente
       const r = await fetch(`${API_BASE}/api/stops-launch?day=${encodeURIComponent(day)}`, {
         headers: { ...authHeaders() },
       });
 
       if (r.status === 404) {
-        // mantém padrão vazio
         setLoading(false);
         return;
       }
@@ -204,14 +269,11 @@ export default function LancamentoParadas() {
 
       const data = (await r.json()) as StopDayPayload;
 
-      // cria mapa por period p/ manter 24 linhas
       const map: Record<string, StopRow> = {};
       for (const x of data.rows || []) {
         const p = (x as any).period;
         map[p] = {
           period: p,
-          // backend pode retornar pt-BR (equipamento/tipo_parada/descricao/minutos)
-          // ou inglês (equipment/stop_type/description/minutes)
           equipamento: (x as any).equipamento ?? (x as any).equipment ?? "",
           tipo_parada: (x as any).tipo_parada ?? (x as any).stop_type ?? "",
           descricao: (x as any).descricao ?? (x as any).description ?? "",
@@ -245,7 +307,6 @@ export default function LancamentoParadas() {
     setMsg("");
 
     try {
-      // manda sempre as 24 linhas (mesmo zeradas) para manter histórico completo no banco
       const normalized = rows.map((r) => ({
         ...r,
         minutos: clamp60(Number(r.minutos || 0)),
@@ -253,7 +314,6 @@ export default function LancamentoParadas() {
 
       const body: StopDayPayload = { day, rows: normalized };
 
-      // ⚠️ Ajuste se seu endpoint for diferente
       const r = await fetch(`${API_BASE}/api/stops-launch?day=${encodeURIComponent(day)}`, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -279,7 +339,10 @@ export default function LancamentoParadas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day]);
 
-  const totalMinutes = useMemo(() => rows.reduce((s, r) => s + clamp60(Number(r.minutos || 0)), 0), [rows]);
+  const totalMinutes = useMemo(
+    () => rows.reduce((s, r) => s + clamp60(Number(r.minutos || 0)), 0),
+    [rows]
+  );
   const totalHours = totalMinutes / 60;
 
   const pieData = useMemo(() => {
@@ -297,26 +360,23 @@ export default function LancamentoParadas() {
       .sort((a, b) => b.hours - a.hours);
   }, [rows]);
 
-  // Série por hora (0..60 min) para linhas indicativas (marcadores verticais nas horas com parada)
-  const hourSeries = useMemo(
-    () =>
-      rows.map((r) => ({
-        period: r.period,
-        minutos: clamp60(Number(r.minutos || 0)),
-        tipo_parada: r.tipo_parada || "",
-        equipamento: r.equipamento || "",
-        descricao: r.descricao || "",
-      })),
-    [rows]
-  );
-
-  const hourMarkers = useMemo(() => hourSeries.filter((x) => Number(x.minutos || 0) > 0), [hourSeries]);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ ...cardStyle, display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+      {/* header */}
+      <div
+        style={{
+          ...cardStyle,
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
         <div>
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 20 }}>Lançamento de Paradas</div>
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 20 }}>
+            Lançamento de Paradas
+          </div>
           <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
             {loading ? "Carregando..." : msg ? msg : "Lance paradas por hora (máx. 60 min por faixa)."}
           </div>
@@ -332,15 +392,27 @@ export default function LancamentoParadas() {
             Atualizar
           </button>
 
-          <button onClick={save} style={{ ...btnStyle, background: "rgba(16,185,129,0.16)", borderColor: "rgba(16,185,129,0.35)" }} disabled={saving || loading}>
+          <button
+            onClick={save}
+            style={{ ...btnStyle, background: "rgba(16,185,129,0.16)", borderColor: "rgba(16,185,129,0.35)" }}
+            disabled={saving || loading}
+          >
             {saving ? "Salvando..." : "Salvar"}
           </button>
         </div>
       </div>
 
-      {/* chart */}
+      {/* donut */}
       <div style={{ ...cardStyle, display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
           <div>
             <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950 }}>Horas por tipo de parada</div>
             <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
@@ -348,7 +420,6 @@ export default function LancamentoParadas() {
             </div>
           </div>
 
-          {/* legenda global discreta */}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", color: "rgba(255,255,255,0.65)", fontWeight: 850, fontSize: 12 }}>
             {["Operacional", "Preventiva", "Corretiva", "Elétrica", "Segurança"].map((t) => (
               <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -358,7 +429,7 @@ export default function LancamentoParadas() {
           </div>
         </div>
 
-        <div style={{ height: 320 }}>
+        <div style={{ height: 340 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -370,6 +441,8 @@ export default function LancamentoParadas() {
                 paddingAngle={2}
                 stroke="rgba(255,255,255,0.18)"
                 strokeWidth={1}
+                labelLine={false}
+                label={renderPieCalloutLabel}
               >
                 {pieData.map((entry, idx) => (
                   <Cell key={`c-${idx}`} fill={colorForType(entry.type)} />
@@ -388,89 +461,10 @@ export default function LancamentoParadas() {
 
               <Legend
                 formatter={(value: any) => (
-                  <span style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900 }}>
-                    {String(value)}
-                  </span>
+                  <span style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900 }}>{String(value)}</span>
                 )}
               />
             </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Linhas indicativas por hora (onde houve parada) */}
-        <div style={{ height: 160 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={hourSeries} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={true} horizontal={false} />
-              <XAxis
-                dataKey="period"
-                interval={1}
-                tick={{ fill: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 11 }}
-                axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[0, 60]}
-                tick={{ fill: "rgba(255,255,255,0.45)", fontWeight: 900, fontSize: 11 }}
-                axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
-                tickLine={false}
-                width={30}
-              />
-
-              {/* Linhas verticais coloridas indicando as horas com parada */}
-              {hourMarkers.map((m) => (
-                <ReferenceLine
-                  key={`mk-${m.period}`}
-                  x={m.period}
-                  stroke={colorForType(m.tipo_parada)}
-                  strokeOpacity={0.85}
-                  strokeWidth={2}
-                />
-              ))}
-
-              {/* Curva discreta (minutos por hora) para indicar intensidade */}
-              <Line
-                type="monotone"
-                dataKey="minutos"
-                stroke="rgba(255,255,255,0.35)"
-                strokeWidth={2}
-                dot={(p: any) => {
-                  const v = Number(p?.payload?.minutos || 0);
-                  if (v <= 0) return null;
-                  const t = p?.payload?.tipo_parada;
-                  return (
-                    <circle
-                      cx={p.cx}
-                      cy={p.cy}
-                      r={4}
-                      fill={colorForType(t)}
-                      stroke="rgba(0,0,0,0.65)"
-                      strokeWidth={2}
-                    />
-                  );
-                }}
-                activeDot={{ r: 5 }}
-              />
-
-              <Tooltip
-                contentStyle={{
-                  background: "rgba(0,0,0,0.85)",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  borderRadius: 12,
-                }}
-                labelFormatter={(l: any) => `Hora: ${String(l || "")}`}
-                formatter={(v: any, _name: any, props: any) => {
-                  const p = props?.payload || {};
-                  const tipo = String(p.tipo_parada || "—");
-                  const eq = String(p.equipamento || "—");
-                  const desc = String(p.descricao || "").trim();
-                  const min = clamp60(Number(v || 0));
-                  const tail = [`Tipo: ${tipo}`, `Eq: ${eq}`];
-                  if (desc) tail.push(`Desc: ${desc}`);
-                  return [`${min} min`, tail.join(" • ")];
-                }}
-              />
-            </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -498,10 +492,8 @@ export default function LancamentoParadas() {
                 const c = colorForType(r.tipo_parada);
 
                 return (
-                  <tr key={r.period} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                    <td style={{ padding: "10px 10px", color: "rgba(255,255,255,0.85)", fontWeight: 950 }}>
-                      {r.period}
-                    </td>
+                  <tr key={r.period} style={{ background: "rgba(255,255,255,0.04)" }}>
+                    <td style={{ padding: "10px 10px", color: "rgba(255,255,255,0.85)", fontWeight: 950 }}>{r.period}</td>
 
                     <td style={{ padding: "10px 10px" }}>
                       <select
