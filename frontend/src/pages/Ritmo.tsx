@@ -756,6 +756,11 @@ export default function Ritmo() {
                 <span style={exportLabel}>Produzido:</span>
                 <span style={{ ...exportValue, color: "rgba(250,204,21,0.95)" }}>{`${fmtBR(produced, dTon)} t`}</span>
               </div>
+              <div style={exportLineRow}>
+                <span style={exportLabel}>Projeção:</span>
+                <span style={exportValue}>{`${fmtBR(projectionTon, dTon)} t`}</span>
+              </div>
+
 
               <div style={exportLineRow}>
                 <span style={exportLabel}>Atingimento:</span>
