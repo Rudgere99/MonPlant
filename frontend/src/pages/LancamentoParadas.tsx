@@ -6,6 +6,12 @@ import {
   Cell,
   Tooltip,
   Legend,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ReferenceLine,
 } from "recharts";
 
 /* ===================== helpers ===================== */
@@ -291,6 +297,21 @@ export default function LancamentoParadas() {
       .sort((a, b) => b.hours - a.hours);
   }, [rows]);
 
+  // Série por hora (0..60 min) para linhas indicativas (marcadores verticais nas horas com parada)
+  const hourSeries = useMemo(
+    () =>
+      rows.map((r) => ({
+        period: r.period,
+        minutos: clamp60(Number(r.minutos || 0)),
+        tipo_parada: r.tipo_parada || "",
+        equipamento: r.equipamento || "",
+        descricao: r.descricao || "",
+      })),
+    [rows]
+  );
+
+  const hourMarkers = useMemo(() => hourSeries.filter((x) => Number(x.minutos || 0) > 0), [hourSeries]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ ...cardStyle, display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -373,6 +394,83 @@ export default function LancamentoParadas() {
                 )}
               />
             </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Linhas indicativas por hora (onde houve parada) */}
+        <div style={{ height: 160 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={hourSeries} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+              <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={true} horizontal={false} />
+              <XAxis
+                dataKey="period"
+                interval={1}
+                tick={{ fill: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 11 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                tickLine={false}
+              />
+              <YAxis
+                domain={[0, 60]}
+                tick={{ fill: "rgba(255,255,255,0.45)", fontWeight: 900, fontSize: 11 }}
+                axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                tickLine={false}
+                width={30}
+              />
+
+              {/* Linhas verticais coloridas indicando as horas com parada */}
+              {hourMarkers.map((m) => (
+                <ReferenceLine
+                  key={`mk-${m.period}`}
+                  x={m.period}
+                  stroke={colorForType(m.tipo_parada)}
+                  strokeOpacity={0.85}
+                  strokeWidth={2}
+                />
+              ))}
+
+              {/* Curva discreta (minutos por hora) para indicar intensidade */}
+              <Line
+                type="monotone"
+                dataKey="minutos"
+                stroke="rgba(255,255,255,0.35)"
+                strokeWidth={2}
+                dot={(p: any) => {
+                  const v = Number(p?.payload?.minutos || 0);
+                  if (v <= 0) return null;
+                  const t = p?.payload?.tipo_parada;
+                  return (
+                    <circle
+                      cx={p.cx}
+                      cy={p.cy}
+                      r={4}
+                      fill={colorForType(t)}
+                      stroke="rgba(0,0,0,0.65)"
+                      strokeWidth={2}
+                    />
+                  );
+                }}
+                activeDot={{ r: 5 }}
+              />
+
+              <Tooltip
+                contentStyle={{
+                  background: "rgba(0,0,0,0.85)",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  borderRadius: 12,
+                }}
+                labelFormatter={(l: any) => `Hora: ${String(l || "")}`}
+                formatter={(v: any, _name: any, props: any) => {
+                  const p = props?.payload || {};
+                  const tipo = String(p.tipo_parada || "—");
+                  const eq = String(p.equipamento || "—");
+                  const desc = String(p.descricao || "").trim();
+                  const min = clamp60(Number(v || 0));
+                  const tail = [`Tipo: ${tipo}`, `Eq: ${eq}`];
+                  if (desc) tail.push(`Desc: ${desc}`);
+                  return [`${min} min`, tail.join(" • ")];
+                }}
+              />
+            </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
