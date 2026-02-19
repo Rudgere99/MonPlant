@@ -2070,6 +2070,7 @@ def api_read_notice(
 
 
 @app.post("/api/notices/{notice_id}/close", dependencies=[Depends(require_supervisor_user)])
+@app.post("/api/notices/{notice_id}/end", dependencies=[Depends(require_supervisor_user)])
 def api_close_notice(
     notice_id: str,
     request: Request,
