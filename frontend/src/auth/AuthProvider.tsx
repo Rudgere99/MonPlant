@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type UserType = "apontador" | "controlador" | "gerencia" | "dev";
+type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
 
 export type MpUser = {
   id: string;
