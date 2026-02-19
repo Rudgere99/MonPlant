@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { defaultRouteFor } from "../auth/roleGuard";
 
 type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
 
@@ -12,6 +11,24 @@ type MpUser = {
   user_type: UserType;
   email: string;
 };
+
+function normRole(v?: string | null) {
+  return String(v || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+// ✅ Mantém o Login independente do roleGuard (sem mexer nele)
+function defaultRouteForRole(userType?: string | null) {
+  const r = normRole(userType);
+  if (r === "dev") return "/dev-dash";
+  if (r === "gerencia") return "/dashboard";
+  if (r === "supervisor") return "/dashboard";
+  // apontador / controlador
+  return "/producao-planta";
+}
 
 export default function Login() {
   const nav = useNavigate();
@@ -34,7 +51,7 @@ export default function Login() {
     try {
       const uRaw = localStorage.getItem("mp_user");
       const u = uRaw ? (JSON.parse(uRaw) as any) : null;
-      nav(defaultRouteFor(u?.user_type), { replace: true });
+      nav(defaultRouteForRole(u?.user_type), { replace: true });
     } catch {
       nav("/dashboard", { replace: true });
     }
@@ -58,7 +75,7 @@ export default function Login() {
       setToken(data.token);
       setUser(data.user as MpUser);
 
-      nav(defaultRouteFor((data.user as MpUser)?.user_type), { replace: true });
+      nav(defaultRouteForRole((data.user as MpUser)?.user_type), { replace: true });
     } catch (err: any) {
       setError(err?.message || "Erro inesperado");
     } finally {
