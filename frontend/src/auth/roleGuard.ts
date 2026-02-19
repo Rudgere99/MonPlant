@@ -1,63 +1,61 @@
-export type UserRole = "apontador" | "controlador" | "gerencia" | "dev";
+// src/auth/roleGuard.ts
+// Regras de acesso por tipo de usuário (MonPlant)
 
-function norm(v: any): string {
-  return String(v || "")
+export type UserRole = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
+
+// normaliza string (remove acentos, lower)
+function norm(s?: string | null) {
+  return String(s || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, ""); // remove acentos
-}
-
-function normalizeRole(v: any): UserRole {
-  const t = norm(v);
-  if (t === "dev") return "dev";
-  if (t === "controlador") return "controlador";
-  if (t === "gerencia") return "gerencia";
-  // aceita variações comuns
-  if (t === "gestao" || t === "gerente" || t === "manager") return "gerencia";
-  return "apontador";
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 export function getUserRole(user: any): UserRole {
-  // 1) vindo do AuthProvider
-  const direct = user?.user_type ?? user?.role ?? user?.perfil ?? user?.type;
-  if (direct) return normalizeRole(direct);
+  const t = norm(user?.user_type);
 
-  // 2) fallback: localStorage mp_user
-  try {
-    const raw = localStorage.getItem("mp_user");
-    if (raw) {
-      const u = JSON.parse(raw);
-      const fromLs = u?.user_type ?? u?.role ?? u?.perfil ?? u?.type;
-      if (fromLs) return normalizeRole(fromLs);
-    }
-  } catch {}
-
-  // default
+  if (t === "dev") return "dev";
+  if (t === "gerencia") return "gerencia";
+  if (t === "supervisor") return "supervisor";
+  if (t === "controlador") return "controlador";
   return "apontador";
 }
 
-const DEV_ONLY_PATHS = [
-  "/dev/logs",
-  "/dev/users",
-  "/dashboard/producao-dia", // Dev Dash
-];
+function pathOk(pathname: string, allowed: string[]) {
+  const p = (pathname || "/").toLowerCase();
+  if (p === "/") return true;
+  return allowed.some((a) => {
+    const aa = a.toLowerCase();
+    return p === aa || p.startsWith(aa + "/");
+  });
+}
 
-export function canAccess(role: UserRole, path: string): boolean {
+/**
+ * canAccess:
+ * - supervisor: dashboard + ritmo + avisos (tela de avisos) apenas
+ * - gerencia: dashboard + ritmo (ajuste conforme sua política)
+ * - apontador/controlador: tudo (exceto /dev)
+ * - dev: tudo
+ */
+export function canAccess(role: UserRole, pathname: string): boolean {
+  const p = (pathname || "/").toLowerCase();
+
+  // sempre permitir login (segurança extra caso use canAccess fora do guard)
+  if (p.startsWith("/login")) return true;
+
   if (role === "dev") return true;
 
-  // bloqueios dev-only
-  if (DEV_ONLY_PATHS.some((p) => path.startsWith(p))) return false;
-
-  if (role === "apontador") {
-    return path.startsWith("/producao-planta") || path.startsWith("/paradas");
+  if (role === "supervisor") {
+    return pathOk(p, ["/dashboard", "/ritmo", "/avisos"]);
   }
 
   if (role === "gerencia") {
-    // Gerência: Dashboard + Ritmo
-    return path === "/" || path.startsWith("/dashboard") || path.startsWith("/ritmo");
+    return pathOk(p, ["/dashboard", "/ritmo"]);
   }
 
-  // controlador: tudo menos dev-only (já bloqueado acima)
+  // apontador/controlador: bloqueia área DEV
+  if (p.startsWith("/dev")) return false;
+
   return true;
 }
