@@ -135,8 +135,8 @@ export function AppRoutes() {
             </RequireRole>
           }
         />
-        
-        
+
+        {/* Avisos (Supervisor) */}
         <Route
           path="avisos"
           element={
@@ -145,8 +145,8 @@ export function AppRoutes() {
             </RequireRole>
           }
         />
-
-<Route
+        
+        <Route
           path="horimetros"
           element={
             <RequireRole>
