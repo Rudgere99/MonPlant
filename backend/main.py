@@ -308,7 +308,8 @@ def require_supervisor_user(
     if not tok:
         raise HTTPException(status_code=401, detail="Sem token")
     payload = decode_token(tok)
-    if payload.get("typ") != "supervisor":
+    # Supervisor (e Dev) podem criar/encerrar avisos
+    if payload.get("typ") not in ("supervisor", "dev"):
         raise HTTPException(status_code=403, detail="Acesso negado")
     return payload
 
