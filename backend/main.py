@@ -73,19 +73,6 @@ def today_local() -> date:
     return now_local().date()
 
 
-def normalize_user_type(t: Optional[str]) -> str:
-    s = str(t or "").strip().lower()
-    # remove accents
-    s = s.encode("utf-8").decode("utf-8")
-    try:
-        import unicodedata
-        s = unicodedata.normalize("NFD", s)
-        s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
-    except Exception:
-        pass
-    return s
-
-
 def is_dev(dev_key: Optional[str]) -> bool:
     """
     Habilita bypass do bloqueio retroativo, usando header X-Dev-Key.
@@ -265,6 +252,19 @@ def decode_token(token: str) -> Dict[str, Any]:
     return payload
 
 
+
+def require_supervisor_user(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    tok = bearer_token(authorization)
+    if not tok:
+        raise HTTPException(status_code=401, detail="Sem token")
+    payload = decode_token(tok)
+    if payload.get("typ") != "supervisor":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    return payload
+
+
 def bearer_token(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
         return None
@@ -410,6 +410,22 @@ class DevUpdateUserIn(BaseModel):
     reset_password: Optional[str] = None  # se vier, troca senha
 
 
+class NoticeCreateIn(BaseModel):
+    title: str
+    message: str
+
+
+class NoticeOut(BaseModel):
+    id: str
+    title: str
+    message: str
+    is_active: bool
+    created_at: str
+    created_by: str
+    read: bool
+    read_at: Optional[str] = None
+
+
 # =========================
 # Health
 # =========================
@@ -452,8 +468,7 @@ def auth_login(body: LoginIn, request: Request):
         if not pwd.verify(body.password, pw_hash):
             raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-        ut = normalize_user_type(u["user_type"])
-        token = create_token(str(u["id"]), ut, u["email"])
+        token = create_token(str(u["id"]), u["user_type"], u["email"])
 
     log_action(
         action="LOGIN",
@@ -461,7 +476,7 @@ def auth_login(body: LoginIn, request: Request):
         user_id=str(u["id"]),
         entity="bv_users",
         entity_id=str(u["id"]),
-        payload={"email": email, "user_type": ut},
+        payload={"email": email, "user_type": u["user_type"]},
     )
 
     return {
@@ -470,7 +485,7 @@ def auth_login(body: LoginIn, request: Request):
             "id": str(u["id"]),
             "full_name": u["full_name"],
             "sector": u["sector"],
-            "user_type": ut,
+            "user_type": u["user_type"],
             "email": u["email"],
         },
     }
@@ -505,7 +520,7 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
         "id": str(u["id"]),
         "full_name": u["full_name"],
         "sector": u["sector"],
-        "user_type": ut,
+        "user_type": u["user_type"],
         "email": u["email"],
     }
 
@@ -549,9 +564,9 @@ def api_dev_list_users(dev_payload=Depends(require_dev_user)):
 
 
 def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[str, Any]):
-    allowed = {"apontador", "controlador", "dev"}
-    body_user_type = normalize_user_type(body.user_type)
-    if body_user_type not in allowed:
+    allowed = {"apontador", "controlador", "dev", "gerencia", "supervisor"}
+
+    if body.user_type not in allowed:
         raise HTTPException(status_code=400, detail="user_type inválido")
 
     email = str(body.email).lower().strip()
@@ -569,7 +584,7 @@ def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[
             values (%s,%s,%s,%s,%s,true)
             returning id
             """,
-            (body.full_name.strip(), body.sector.strip(), body_user_type, email, pw_hash),
+            (body.full_name.strip(), body.sector.strip(), body.user_type, email, pw_hash),
         )
         new_id = cur.fetchone()["id"]
         conn.commit()
@@ -585,13 +600,14 @@ def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[
                 "id": str(new_id),
                 "full_name": body.full_name.strip(),
                 "sector": body.sector.strip(),
-                "user_type": body_user_type,
+                "user_type": body.user_type,
                 "email": email,
             }
         },
     )
 
     return {"ok": True, "id": str(new_id)}
+
 
 
 @app.post("/dev/users")
@@ -611,7 +627,7 @@ def dev_update_user(
     request: Request,
     dev_payload=Depends(require_dev_user),
 ):
-    allowed = {"apontador", "controlador", "dev"}
+    allowed = {"apontador", "controlador", "dev", "gerencia", "supervisor"}
 
     fields = []
     values = []
@@ -625,11 +641,10 @@ def dev_update_user(
         values.append(body.sector.strip())
 
     if body.user_type is not None:
-        if normalize_user_type(body.user_type) not in allowed:
+        if body.user_type not in allowed:
             raise HTTPException(status_code=400, detail="user_type inválido")
-        ut2 = normalize_user_type(body.user_type)
         fields.append("user_type=%s")
-        values.append(ut2)
+        values.append(body.user_type)
 
     if body.is_active is not None:
         fields.append("is_active=%s")
@@ -1859,4 +1874,157 @@ def put_stops_launch(
 
     return {"ok": True, "day": day.isoformat(), "rows_saved": len(normalized_rows)}
 
+
+
+# =========================
+# Notices (Supervisor broadcast + confirmação de leitura)
+# =========================
+@app.get("/api/notices/active", response_model=List[NoticeOut])
+def api_list_active_notices(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    tok = bearer_token(authorization)
+    if not tok:
+        raise HTTPException(status_code=401, detail="Sem token")
+
+    payload = decode_token(tok)
+    uid = payload.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select n.id, n.title, n.message, n.is_active, n.created_at, n.created_by,
+                   r.read_at
+            from public.bv_notices n
+            left join public.bv_notice_reads r
+              on r.notice_id = n.id and r.user_id = %s
+            where n.is_active = true
+            order by n.created_at desc
+            """,
+            (uid,),
+        )
+        rows = cur.fetchall() or []
+
+    out: List[NoticeOut] = []
+    for r in rows:
+        out.append(
+            NoticeOut(
+                id=str(r["id"]),
+                title=r["title"],
+                message=r["message"],
+                is_active=bool(r["is_active"]),
+                created_at=r["created_at"].isoformat() if r.get("created_at") else "",
+                created_by=str(r["created_by"]),
+                read=r["read_at"] is not None,
+                read_at=r["read_at"].isoformat() if r.get("read_at") else None,
+            )
+        )
+    return out
+
+
+@app.post("/api/notices", dependencies=[Depends(require_supervisor_user)])
+def api_create_notice(
+    body: NoticeCreateIn,
+    request: Request,
+    sup_payload=Depends(require_supervisor_user),
+):
+    uid = sup_payload.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    title = (body.title or "").strip()
+    msg = (body.message or "").strip()
+    if not title or not msg:
+        raise HTTPException(status_code=400, detail="Título e mensagem são obrigatórios")
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into public.bv_notices(title, message, is_active, created_by)
+            values (%s,%s,true,%s)
+            returning id
+            """,
+            (title, msg, uid),
+        )
+        nid = cur.fetchone()["id"]
+        conn.commit()
+
+    log_action(
+        action="CREATE_NOTICE",
+        request=request,
+        user_id=str(uid),
+        entity="bv_notices",
+        entity_id=str(nid),
+        payload={"title": title},
+    )
+
+    return {"ok": True, "id": str(nid)}
+
+
+@app.post("/api/notices/{notice_id}/read")
+def api_read_notice(
+    notice_id: str,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    tok = bearer_token(authorization)
+    if not tok:
+        raise HTTPException(status_code=401, detail="Sem token")
+    payload = decode_token(tok)
+    uid = payload.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("select 1 from public.bv_notices where id=%s and is_active=true", (notice_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Aviso não encontrado/ativo")
+
+        cur.execute(
+            """
+            insert into public.bv_notice_reads(notice_id, user_id, read_at)
+            values (%s,%s, now())
+            on conflict (notice_id, user_id) do update set read_at = excluded.read_at
+            """,
+            (notice_id, uid),
+        )
+        conn.commit()
+
+    return {"ok": True}
+
+
+@app.post("/api/notices/{notice_id}/close", dependencies=[Depends(require_supervisor_user)])
+def api_close_notice(
+    notice_id: str,
+    request: Request,
+    sup_payload=Depends(require_supervisor_user),
+):
+    uid = sup_payload.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            update public.bv_notices
+            set is_active=false, closed_at=now()
+            where id=%s and is_active=true
+            """,
+            (notice_id,),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Aviso não encontrado/ativo")
+        conn.commit()
+
+    log_action(
+        action="CLOSE_NOTICE",
+        request=request,
+        user_id=str(uid),
+        entity="bv_notices",
+        entity_id=str(notice_id),
+        payload=None,
+    )
+
+    return {"ok": True}
 
