@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { canAccess as canAccessRole, getUserRole, type UserRole } from "../auth/roleGuard";
+import NoticeGate from "../components/NoticeGate";
 import {
   LayoutDashboard,
   BarChart3,
@@ -858,7 +859,7 @@ useEffect(() => {
               overflow: "hidden",
             }}
           >
-            <Outlet />
+            <NoticeGate><Outlet /></NoticeGate>
           </main>
         </div>
       </div>
