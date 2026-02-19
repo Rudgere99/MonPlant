@@ -32,7 +32,23 @@ export const ROLE_ALLOWED_PATHS: Record<UserRole, string[]> = {
 };
 
 export function normalizeRole(v: unknown): UserRole | null {
-  const s = String(v ?? "").trim().toLowerCase();
+  const s0 = String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  // "supervisor planta" -> "supervisor_planta"
+  const s = s0
+    .replace(/\s+/g, "_")
+    .replace(/-+/g, "_")
+    .replace(/__+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  // sinônimos
+  if (s === "supervisao") return "supervisor";
+  if (s === "supervisor_planta" || s === "supervisao_planta") return "supervisor";
+  if (s === "gerencia_planta") return "gerencia";
+
   const ok: UserRole[] = ["apontador", "controlador", "gerencia", "supervisor", "dev"];
   return (ok as string[]).includes(s) ? (s as UserRole) : null;
 }
