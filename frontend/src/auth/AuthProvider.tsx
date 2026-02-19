@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
+// ✅ incluir supervisor
+export type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
 
 export type MpUser = {
   id: string;
@@ -22,31 +23,6 @@ type AuthCtx = {
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
-function normalizeUserType(v: any): UserType {
-  const t = String(v || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, ""); // remove acentos
-
-  if (t === "dev") return "dev";
-  if (t === "controlador") return "controlador";
-  if (t === "gerencia") return "gerencia";
-  return "apontador";
-}
-
-function normalizeUser(u: any): MpUser | null {
-  if (!u) return null;
-
-  return {
-    id: String(u.id ?? ""),
-    full_name: String(u.full_name ?? ""),
-    sector: String(u.sector ?? ""),
-    user_type: normalizeUserType(u.user_type),
-    email: String(u.email ?? ""),
-  };
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [user, setUserState] = useState<MpUser | null>(null);
@@ -61,8 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (u) {
       try {
-        const parsed = JSON.parse(u);
-        setUserState(normalizeUser(parsed));
+        setUserState(JSON.parse(u));
       } catch {
         setUserState(null);
       }
@@ -78,16 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setUser = (u: MpUser | null) => {
-    if (!u) {
-      setUserState(null);
-      localStorage.removeItem("mp_user");
-      return;
-    }
-
-    const fixed = normalizeUser(u);
-    setUserState(fixed);
-
-    if (fixed) localStorage.setItem("mp_user", JSON.stringify(fixed));
+    setUserState(u);
+    if (u) localStorage.setItem("mp_user", JSON.stringify(u));
     else localStorage.removeItem("mp_user");
   };
 
