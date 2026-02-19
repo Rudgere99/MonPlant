@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 
-type UserType = "apontador" | "controlador" | "gerencia" | "dev";
+type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
 
 type DevUser = {
   id: string;
@@ -173,6 +173,7 @@ export default function DevUsers() {
                 <option value="apontador">Apontador</option>
                 <option value="controlador">Controlador</option>
                 <option value="gerencia">Gerência</option>
+                <option value="supervisor">Supervisor</option>
                 <option value="dev">Dev</option>
               </select>
             </div>
