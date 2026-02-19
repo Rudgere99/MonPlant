@@ -184,7 +184,7 @@ function ShellUser({
 }
 
 function AppShell() {
-  const { logout, user, loading } = useAuth() as any;
+  const { logout, user, token, loading } = useAuth() as any;
   const navigate = useNavigate();
   const location = useLocation();
   const API_BASE = (import.meta as any).env?.VITE_API_BASE || "";
