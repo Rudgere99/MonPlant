@@ -19,6 +19,54 @@ from auth_dep import require_owner_id
 
 app = FastAPI(title="MonPlant API", version="1.0.0")
 
+
+# =========================
+# Notices tables bootstrap
+# =========================
+def ensure_notice_tables():
+    """Cria as tabelas de avisos (se ainda não existirem)."""
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            # gen_random_uuid() vem do pgcrypto
+            cur.execute("create extension if not exists pgcrypto;")
+
+            cur.execute(
+                """
+                create table if not exists public.bv_notices (
+                  id uuid primary key default gen_random_uuid(),
+                  title text not null,
+                  message text not null,
+                  created_by uuid null,
+                  created_by_name text null,
+                  is_active boolean not null default true,
+                  created_at timestamptz not null default now(),
+                  expires_at timestamptz null
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                create table if not exists public.bv_notice_reads (
+                  id bigserial primary key,
+                  notice_id uuid not null references public.bv_notices(id) on delete cascade,
+                  user_id uuid not null,
+                  read_at timestamptz not null default now(),
+                  unique(notice_id, user_id)
+                );
+                """
+            )
+
+            conn.commit()
+    except Exception:
+        # não pode derrubar a API
+        return
+
+
+@app.on_event("startup")
+def _startup_bootstrap():
+    ensure_notice_tables()
+
 # =========================
 # CORS
 # =========================
