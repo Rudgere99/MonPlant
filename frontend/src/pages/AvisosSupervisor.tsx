@@ -1,6 +1,20 @@
+
 import React, { useEffect, useMemo, useState } from "react";
-import { Bell, RefreshCcw, Send, XCircle } from "lucide-react";
+import { Bell, Send, RefreshCcw, XCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
+
+/**
+ * Avisos do Supervisor
+ * - Supervisor cria e encerra avisos
+ * - Todos podem visualizar avisos ativos
+ * - TODOS precisam confirmar leitura (POST /api/notices/{id}/read)
+ *
+ * Endpoints (backend):
+ *   GET  /api/notices/active
+ *   POST /api/notices                 (somente supervisor)
+ *   POST /api/notices/{id}/close      (somente supervisor)
+ *   POST /api/notices/{id}/read       (qualquer logado)
+ */
 
 type Notice = {
   id: string;
@@ -8,271 +22,282 @@ type Notice = {
   message: string;
   is_active: boolean;
   created_at?: string | null;
-  created_by?: string | null;
-  read?: boolean;
-  read_at?: string | null;
+  created_by_name?: string | null;
 };
 
-function fmtIso(iso?: string | null) {
-  if (!iso) return "—";
+function apiBase() {
+  // segue o padrão do MonPlant
+  const env = (import.meta as any).env?.VITE_API_BASE as string | undefined;
+  return (env || "http://localhost:8000").replace(/\/$/, "");
+}
+
+function fmtDt(iso?: string | null) {
+  if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
 export default function AvisosSupervisor() {
-  const { token, loading, user } = useAuth() as any;
-  const API = ((import.meta as any).env?.VITE_API_BASE || "").toString().trim();
+  const { token, user } = useAuth();
+  const isSupervisor = (user?.user_type || "").toLowerCase() === "supervisor";
 
-  const [items, setItems] = useState<Notice[]>([]);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
 
-  function apiUrl(path: string) {
-    const p = path.startsWith("/") ? path : `/${path}`;
-    if (!API) return p;
-    return `${API.replace(/\/+$/, "")}${p}`;
-  }
+  const [items, setItems] = useState<Notice[]>([]);
 
-  async function getActive() {
+  const canPost = useMemo(() => {
+    return isSupervisor && title.trim().length >= 3 && message.trim().length >= 3;
+  }, [isSupervisor, title, message]);
+
+  async function fetchActive() {
+    setLoading(true);
     setErr(null);
     try {
-      const res = await fetch(apiUrl("/api/notices/active"), {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`${apiBase()}/api/notices/active`, {
+        method: "GET",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`${res.status} — ${t || res.statusText}`);
+      }
       const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
+      setItems(Array.isArray(data) ? data : (data.items || []));
     } catch (e: any) {
-      setErr(e?.message || "Falha ao carregar avisos");
+      setErr(e?.message || "Falha ao carregar avisos.");
+      setItems([]);
+    } finally {
+      setLoading(false);
     }
   }
 
   async function publish() {
-    setOkMsg(null);
+    if (!canPost) return;
+    setPosting(true);
     setErr(null);
-
-    const t = title.trim();
-    const m = message.trim();
-    if (!t || !m) {
-      setErr("Preencha título e mensagem.");
-      return;
-    }
-
-    setBusy(true);
     try {
-      const res = await fetch(apiUrl("/api/notices"), {
+      const res = await fetch(`${apiBase()}/api/notices`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ title: t, message: m }),
+        body: JSON.stringify({ title: title.trim(), message: message.trim() }),
       });
+
       if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`${res.status} ${res.statusText}${txt ? ` — ${txt}` : ""}`);
+        const t = await res.text();
+        throw new Error(`${res.status} — ${t || res.statusText}`);
       }
+
       setTitle("");
       setMessage("");
-      setOkMsg("Aviso publicado com sucesso.");
-      await getActive();
+      await fetchActive();
     } catch (e: any) {
-      setErr(e?.message || "Falha ao publicar");
+      setErr(e?.message || "Falha ao publicar aviso.");
     } finally {
-      setBusy(false);
+      setPosting(false);
     }
   }
 
   async function closeNotice(id: string) {
-    if (!id) return;
-    setOkMsg(null);
+    if (!isSupervisor) return;
+    if (!confirm("Encerrar este aviso?")) return;
+
     setErr(null);
-    setBusy(true);
     try {
-      const res = await fetch(apiUrl(`/api/notices/${id}/close`), {
+      const res = await fetch(`${apiBase()}/api/notices/${encodeURIComponent(id)}/close`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`${res.status} ${res.statusText}${txt ? ` — ${txt}` : ""}`);
+        const t = await res.text();
+        throw new Error(`${res.status} — ${t || res.statusText}`);
       }
-      setOkMsg("Aviso encerrado.");
-      await getActive();
+      await fetchActive();
     } catch (e: any) {
-      setErr(e?.message || "Falha ao encerrar");
-    } finally {
-      setBusy(false);
+      setErr(e?.message || "Falha ao encerrar aviso.");
+    }
+  }
+
+  async function markRead(id: string) {
+    setErr(null);
+    try {
+      const res = await fetch(`${apiBase()}/api/notices/${encodeURIComponent(id)}/read`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`${res.status} — ${t || res.statusText}`);
+      }
+      // não precisa recarregar, mas mantém consistente
+      await fetchActive();
+    } catch (e: any) {
+      setErr(e?.message || "Falha ao confirmar leitura.");
     }
   }
 
   useEffect(() => {
-    if (loading) return;
-    if (!token) return;
-    getActive();
+    fetchActive();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, token]);
-
-  const active = useMemo(() => items.filter((x) => x.is_active), [items]);
+  }, []);
 
   return (
-    <div className="p-4 sm:p-6">
-      {/* Header */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="p-6">
+      <div className="mb-4 text-xs text-white/60">Visão geral • Avisos</div>
+
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-zinc-300">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/5 ring-1 ring-white/10">
-              <Bell className="h-5 w-5" />
+          <div className="flex items-center gap-2 text-white/70 text-sm">
+            <span className="inline-flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              {isSupervisor ? "Supervisor" : "Leitura"} • Comunicação oficial
             </span>
-            <div>
-              <div className="text-sm text-zinc-400">Supervisor • Comunicação oficial</div>
-              <h1 className="text-2xl font-semibold text-zinc-100">Avisos</h1>
-            </div>
           </div>
-          <div className="mt-2 text-sm text-zinc-400">
-            Tudo que for publicado aqui aparece para todos e exige confirmação.
-          </div>
+          <h1 className="mt-2 text-3xl font-semibold text-white">Avisos do Supervisor</h1>
+          <p className="mt-2 text-sm text-white/60 max-w-2xl">
+            Tudo que for publicado aqui aparece para todos e exige confirmação de leitura. Use isso como fonte oficial
+            para evitar erro de lançamento por rádio.
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="rounded-2xl bg-white/5 px-3 py-2 text-xs text-zinc-200 ring-1 ring-white/10">
-            Ativos: <span className="font-semibold">{active.length}</span>
-          </div>
-          <button
-            onClick={getActive}
-            disabled={busy || !token}
-            className="inline-flex items-center gap-2 rounded-2xl bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 hover:bg-white/10 disabled:opacity-50"
-          >
-            <RefreshCcw className="h-4 w-4" />
-            Atualizar
-          </button>
-        </div>
+        <button
+          onClick={fetchActive}
+          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
+        >
+          <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          Atualizar
+        </button>
       </div>
 
-      {/* Alerts */}
-      {err ? (
-        <div className="mb-4 rounded-2xl border border-rose-500/25 bg-rose-500/10 p-4 text-rose-200">
+      {err && (
+        <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-200">
           {err}
         </div>
-      ) : null}
+      )}
 
-      {okMsg ? (
-        <div className="mb-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-emerald-200">
-          {okMsg}
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        {/* Composer */}
-        <div className="lg:col-span-5">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
+        {/* NOVO AVISO */}
+        <div className="xl:col-span-5">
           <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-            <div className="text-xs font-semibold text-zinc-400">NOVO AVISO</div>
+            <div className="mb-3 text-sm font-semibold text-white/80">Novo aviso</div>
 
-            <div className="mt-3">
-              <div className="text-xs text-zinc-400">Título</div>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-zinc-100 outline-none focus:ring-2 focus:ring-emerald-500/30"
-                placeholder="Ex.: Ajuste de produção / parada / alteração de valor"
-              />
+            {!isSupervisor && (
+              <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-100">
+                Você está em modo leitura. Somente <b>supervisor</b> pode publicar/encerrar avisos.
+              </div>
+            )}
+
+            <label className="block text-xs text-white/60 mb-1">Título</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ex.: Ajuste de produção por manutenção"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/20"
+              disabled={!isSupervisor || posting}
+            />
+
+            <label className="mt-3 block text-xs text-white/60 mb-1">Mensagem</label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Descreva a orientação oficial (períodos, estimativa, horário de confirmação, etc.)"
+              rows={5}
+              className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/20"
+              disabled={!isSupervisor || posting}
+            />
+
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-xs text-white/40">
+                Logado como: <span className="text-white/70">{user?.full_name || "—"}</span>
+              </div>
+
+              <button
+                onClick={publish}
+                disabled={!canPost || posting}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-100 ring-1 ring-emerald-400/25 hover:bg-emerald-500/20 disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+                {posting ? "Publicando..." : "Publicar aviso"}
+              </button>
             </div>
-
-            <div className="mt-3">
-              <div className="text-xs text-zinc-400">Mensagem</div>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                className="mt-2 h-44 w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-zinc-100 outline-none focus:ring-2 focus:ring-emerald-500/30"
-                placeholder="Escreva a informação oficial que deve ser usada no lançamento."
-              />
-            </div>
-
-            <button
-              onClick={publish}
-              disabled={busy || !token}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/30 hover:bg-emerald-500/20 disabled:opacity-50"
-            >
-              <Send className="h-4 w-4" />
-              {busy ? "Enviando..." : "Publicar aviso"}
-            </button>
-
-            <div className="mt-3 text-xs text-zinc-500">
-              Logado como: <span className="text-zinc-300">{user?.full_name || "—"}</span>
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-white/10 bg-black/10 p-4 text-xs text-zinc-400">
-            <div className="font-semibold text-zinc-300">Boas práticas</div>
-            <ul className="mt-2 list-disc space-y-1 pl-4">
-              <li>Use valores fechados (t/h, ton do período) e o motivo do ajuste.</li>
-              <li>Se estiver em apuração, escreva “Pendente de confirmação”.</li>
-              <li>Encerrre o aviso quando o período estiver estabilizado.</li>
-            </ul>
           </div>
         </div>
 
-        {/* Active list */}
-        <div className="lg:col-span-7">
+        {/* AVISOS ATIVOS */}
+        <div className="xl:col-span-7">
           <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-zinc-400">AVISOS ATIVOS</div>
-              <div className="text-xs text-zinc-500">Bloqueia até confirmar leitura</div>
+              <div className="text-sm font-semibold text-white/80">Avisos ativos</div>
+              <div className="text-xs text-white/50">{items.length} ativo(s)</div>
             </div>
 
-            <div className="mt-3 space-y-3">
-              {active.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-zinc-300">
+            <div className="mt-4 space-y-3">
+              {items.length === 0 ? (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/50">
                   Nenhum aviso ativo.
                 </div>
               ) : (
-                active.map((n) => (
-                  <div key={n.id} className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                items.map((n) => (
+                  <div key={n.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-sm font-semibold text-zinc-100 truncate">{n.title}</div>
-                          <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-200 ring-1 ring-emerald-500/20">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-white font-semibold">{n.title}</div>
+                          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100 ring-1 ring-emerald-400/25">
                             ATIVO
                           </span>
                         </div>
-
-                        <div className="mt-2 whitespace-pre-wrap text-sm text-zinc-300">{n.message}</div>
-
-                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-                          <div>
-                            Criado em: <span className="text-zinc-300">{fmtIso(n.created_at)}</span>
-                          </div>
-                          <div>
-                            ID: <span className="font-mono text-zinc-400">{n.id.slice(0, 8)}…</span>
-                          </div>
+                        <div className="mt-1 text-xs text-white/50">
+                          {n.created_by_name ? <>por <span className="text-white/70">{n.created_by_name}</span> • </> : null}
+                          {fmtDt(n.created_at)}
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => closeNotice(n.id)}
-                        disabled={busy}
-                        className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-rose-500/15 px-3 py-2 text-xs font-semibold text-rose-200 ring-1 ring-rose-500/30 hover:bg-rose-500/20 disabled:opacity-50"
-                        title="Encerrar aviso"
-                      >
-                        <XCircle className="h-4 w-4" />
-                        Encerrar
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => markRead(n.id)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white hover:bg-white/10"
+                          title="Confirmar leitura"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          Confirmar
+                        </button>
+
+                        {isSupervisor && (
+                          <button
+                            onClick={() => closeNotice(n.id)}
+                            className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100 hover:bg-red-500/15"
+                            title="Encerrar aviso"
+                          >
+                            <XCircle className="h-4 w-4" />
+                            Encerrar
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    <div className="mt-3 whitespace-pre-wrap text-sm text-white/75">{n.message}</div>
                   </div>
                 ))
               )}
+            </div>
+
+            <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4 text-xs text-white/55">
+              <div className="font-semibold text-white/70 mb-1">Boas práticas</div>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Inclua período (ex.: 07–08) e o horário de confirmação.</li>
+                <li>Se ainda estiver “em ajuste”, deixe explícito para o CCO aguardar confirmação.</li>
+                <li>Encerre o aviso quando a informação estiver consolidada.</li>
+              </ul>
             </div>
           </div>
         </div>
