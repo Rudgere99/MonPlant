@@ -1,16 +1,25 @@
 export type UserRole = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
 
 function normalizeRole(v: any): UserRole {
+  // Normaliza variações vindas do banco/front (acentos, espaços, hífens, etc.)
+  // Ex.: "Supervisor Planta" -> "supervisor_planta"
   const s = String(v || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-  if (s === "dev") return "dev";
-  if (s === "controlador") return "controlador";
-  if (s === "gerencia" || s === "gerencia" || s === "gerência") return "gerencia";
-  if (s === "supervisor" || s === "supervisao" || s === "supervisor_planta" || s === "supervisao_planta")
+  // unifica separadores ("supervisor planta" -> "supervisor_planta")
+  const k = s
+    .replace(/\s+/g, "_")
+    .replace(/-+/g, "_")
+    .replace(/__+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (k === "dev") return "dev";
+  if (k === "controlador") return "controlador";
+  if (k === "gerencia" || k === "gerencia_planta") return "gerencia";
+  if (k === "supervisor" || k === "supervisao" || k === "supervisor_planta" || k === "supervisao_planta")
     return "supervisor";
 
   return "apontador";
