@@ -59,6 +59,15 @@ const nav: NavItem[] = [
 ];
 
 
+function isSupervisor(userType?: string | null) {
+  const t = String(userType || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return t === "supervisor";
+}
+
 function isGerencia(userType?: string | null) {
   const t = String(userType || "")
     .trim()
@@ -229,7 +238,9 @@ useEffect(() => {
 
   const ger = isGerencia(user?.user_type);
 
-  // ✅ regra da gerência: só /, /dashboard e /ritmo
+  
+  const sup = isSupervisor(user?.user_type);
+// ✅ regra da gerência: só /, /dashboard e /ritmo
   if (ger) {
     const p = location.pathname.toLowerCase();
     const ok = p === "/" || p.startsWith("/dashboard") || p.startsWith("/ritmo");
