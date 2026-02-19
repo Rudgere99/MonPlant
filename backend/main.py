@@ -268,11 +268,36 @@ def _sign(payload_b64: str) -> str:
     return _b64url(sig)
 
 
+
+def normalize_user_type(raw: str | None) -> str:
+    """Normaliza user_type vindo do banco/inputs para um conjunto estável (sem acento, minúsculo)."""
+    s = (raw or "").strip().lower()
+    # remove acentos
+    s = s.encode("utf-8", "ignore").decode("utf-8")
+    try:
+        import unicodedata
+        s = "".join(ch for ch in unicodedata.normalize("NFD", s) if unicodedata.category(ch) != "Mn")
+    except Exception:
+        pass
+    s = s.replace(" ", "_")
+    # aliases
+    if s in ("gerencia", "gerência"):
+        return "gerencia"
+    if s in ("supervisor", "supervisao", "supervisao_planta", "supervisor_planta"):
+        return "supervisor"
+    if s in ("apontador",):
+        return "apontador"
+    if s in ("controlador",):
+        return "controlador"
+    if s in ("dev",):
+        return "dev"
+    return s
+
 def create_token(user_id: str, user_type: str, email: str) -> str:
     exp = datetime.now(timezone.utc) + timedelta(hours=AUTH_TTL_HOURS)
     payload = {
         "uid": user_id,
-        "typ": user_type,
+        "typ": normalize_user_type(user_type),
         "em": email,
         "exp": int(exp.timestamp()),
         "v": 1,
@@ -309,7 +334,7 @@ def require_supervisor_user(
         raise HTTPException(status_code=401, detail="Sem token")
     payload = decode_token(tok)
     # Supervisor (e Dev) podem criar/encerrar avisos
-    if payload.get("typ") not in ("supervisor", "dev"):
+    if normalize_user_type(payload.get("typ")) not in ("supervisor", "dev"):
         raise HTTPException(status_code=403, detail="Acesso negado")
     return payload
 
