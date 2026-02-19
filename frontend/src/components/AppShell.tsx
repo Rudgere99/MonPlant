@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { canAccess as canAccessRole, getUserRole, type UserRole } from "../auth/roleGuard";
-import NoticeGate from "../components/NoticeGate";
 import {
   LayoutDashboard,
   BarChart3,
@@ -18,6 +17,7 @@ import {
   Menu,
   X,
   Search,
+  Bell,
   ChevronRight,
   History,
   ChevronsLeft,
@@ -35,6 +35,9 @@ type NavItem = {
 
 const nav: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Visão geral" },
+
+  // ✅ Avisos (somente supervisor / dev)
+  { to: "/avisos", label: "Avisos", icon: Bell, group: "Visão geral" },
 
   // ===== DEV =====
   { to: "/dashboard/producao-dia", label: "Dev Dash", icon: Code2, group: "Desenvolvimento", devOnly: true },
@@ -58,15 +61,6 @@ const nav: NavItem[] = [
   { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
 ];
 
-
-function isSupervisor(userType?: string | null) {
-  const t = String(userType || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-  return t === "supervisor";
-}
 
 function isGerencia(userType?: string | null) {
   const t = String(userType || "")
@@ -238,9 +232,7 @@ useEffect(() => {
 
   const ger = isGerencia(user?.user_type);
 
-  
-  const sup = isSupervisor(user?.user_type);
-// ✅ regra da gerência: só /, /dashboard e /ritmo
+  // ✅ regra da gerência: só /, /dashboard e /ritmo
   if (ger) {
     const p = location.pathname.toLowerCase();
     const ok = p === "/" || p.startsWith("/dashboard") || p.startsWith("/ritmo");
@@ -870,7 +862,7 @@ useEffect(() => {
               overflow: "hidden",
             }}
           >
-            <NoticeGate><Outlet /></NoticeGate>
+            <Outlet />
           </main>
         </div>
       </div>
