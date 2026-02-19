@@ -71,6 +71,14 @@ function isGerencia(userType?: string | null) {
   return t === "gerencia";
 }
 
+function normRole(v?: string | null) {
+  return String(v || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 function defaultPathFor(role: UserRole) {
   // Gerência vê somente Dashboard
   if (role === "apontador") return "/producao-planta";
@@ -230,7 +238,9 @@ useEffect(() => {
   if (loading) return;
   if (!user) return;
 
-  const ger = isGerencia(user?.user_type);
+  const roleNorm = normRole(user?.user_type);
+  const ger = roleNorm === "gerencia";
+  const sup = roleNorm === "supervisor";
 
   // ✅ regra da gerência: só /, /dashboard e /ritmo
   if (ger) {
@@ -238,6 +248,14 @@ useEffect(() => {
     const ok = p === "/" || p.startsWith("/dashboard") || p.startsWith("/ritmo");
     if (!ok) navigate("/dashboard", { replace: true });
     return; // ✅ impede cair na regra geral e “brigar”
+  }
+
+  // ✅ regra do supervisor: só /, /dashboard, /ritmo e /avisos
+  if (sup) {
+    const p = location.pathname.toLowerCase();
+    const ok = p === "/" || p.startsWith("/dashboard") || p.startsWith("/ritmo") || p.startsWith("/avisos");
+    if (!ok) navigate("/dashboard", { replace: true });
+    return;
   }
 
   // ✅ regra geral: roleGuard decide
@@ -256,11 +274,15 @@ useEffect(() => {
     });
   }, [isDev, role]);
 
-  const ger = isGerencia(user?.user_type);
+  const roleNorm = normRole(user?.user_type);
+  const ger = roleNorm === "gerencia";
+  const sup = roleNorm === "supervisor";
 
   const navItemsFiltered = useMemo(() => {
-    return ger ? navItems.filter((i) => i.to === "/dashboard" || i.to === "/" || i.to === "/ritmo") : navItems;
-  }, [ger, navItems]);
+    if (ger) return navItems.filter((i) => i.to === "/dashboard" || i.to === "/" || i.to === "/ritmo");
+    if (sup) return navItems.filter((i) => i.to === "/dashboard" || i.to === "/" || i.to === "/ritmo" || i.to === "/avisos");
+    return navItems;
+  }, [ger, sup, navItems]);
 
   const handleLogout = () => {
     logout?.();
