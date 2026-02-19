@@ -15,6 +15,7 @@ import Exportar from "../pages/Exportar";
 import MetasMes from "../pages/MetasMes";
 import Statistics from "../pages/Statistics";
 import Ritmo from "../pages/Ritmo";
+import AvisosSupervisor from "../pages/AvisosSupervisor";
 
 // ✅ NOVO
 import LancamentoParadas from "../pages/LancamentoParadas";
@@ -135,7 +136,17 @@ export function AppRoutes() {
           }
         />
         
+        
         <Route
+          path="avisos"
+          element={
+            <RequireRole>
+              <AvisosSupervisor />
+            </RequireRole>
+          }
+        />
+
+<Route
           path="horimetros"
           element={
             <RequireRole>
