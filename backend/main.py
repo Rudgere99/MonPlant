@@ -32,8 +32,9 @@ def ensure_notice_tables():
 
             cur.execute(
                 """
-                create table if not exists public.bv_notices (
-                  id uuid primary key default gen_random_uuid(),
+                create extension if not exists pgcrypto;
+            create table if not exists public.bv_notices (
+                id uuid primary key default gen_random_uuid(),
                   title text not null,
                   message text not null,
                   created_by uuid null,
@@ -408,6 +409,40 @@ def log_action(
             conn.commit()
     except Exception:
         return
+
+# =========================
+# Notices (Supervisor) - bv_notices + bv_notice_reads
+# =========================
+def ensure_notice_tables():
+    """Cria tabelas de avisos caso ainda não existam (para evitar 500)."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            create extension if not exists pgcrypto;
+            create table if not exists public.bv_notices (
+                id uuid primary key default gen_random_uuid(),
+                title text not null,
+                message text not null,
+                is_active boolean not null default true,
+                created_by uuid,
+                created_at timestamptz not null default now(),
+                closed_at timestamptz null,
+                closed_by uuid null
+            );
+            """
+        )
+        cur.execute(
+            """
+            create table if not exists public.bv_notice_reads (
+                notice_id uuid not null references public.bv_notices(id) on delete cascade,
+                user_id uuid not null references public.bv_users(id) on delete cascade,
+                read_at timestamptz not null default now(),
+                primary key (notice_id, user_id)
+            );
+            """
+        )
+        conn.commit()
+
 
 # =========================
 # Stops Launch (MonPlant) - bv_launch.stops_day + bv_launch.stops_rows
@@ -1957,6 +1992,9 @@ def put_stops_launch(
 def api_list_active_notices(
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
+
+    ensure_notice_tables()
+
     tok = bearer_token(authorization)
     if not tok:
         raise HTTPException(status_code=401, detail="Sem token")
@@ -2004,6 +2042,9 @@ def api_create_notice(
     request: Request,
     sup_payload=Depends(require_supervisor_user),
 ):
+
+    ensure_notice_tables()
+
     uid = sup_payload.get("uid")
     if not uid:
         raise HTTPException(status_code=401, detail="Token inválido")
@@ -2042,6 +2083,9 @@ def api_read_notice(
     notice_id: str,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
+
+    ensure_notice_tables()
+
     tok = bearer_token(authorization)
     if not tok:
         raise HTTPException(status_code=401, detail="Sem token")
@@ -2074,6 +2118,9 @@ def api_close_notice(
     request: Request,
     sup_payload=Depends(require_supervisor_user),
 ):
+
+    ensure_notice_tables()
+
     uid = sup_payload.get("uid")
     if not uid:
         raise HTTPException(status_code=401, detail="Token inválido")
