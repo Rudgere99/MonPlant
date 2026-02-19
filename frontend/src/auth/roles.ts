@@ -1,47 +1,47 @@
-export type Role = "apontador" | "controlador" | "gerencia" | "dev";
+// src/auth/roles.ts
+// Centraliza tipos e regras de papéis do MonPlant
 
-export const ROLE_LABEL: Record<Role, string> = {
+export type UserRole =
+  | "apontador"
+  | "controlador"
+  | "gerencia"
+  | "supervisor"
+  | "dev";
+
+export const ROLE_LABEL: Record<UserRole, string> = {
   apontador: "Apontador",
   controlador: "Controlador",
-  dev: "Dev",
-  gerencia: "Gerencia",
+  gerencia: "Gerência",
+  supervisor: "Supervisor",
+  dev: "DEV",
 };
 
-export const DEV_ONLY_PAGES = new Set<string>(["/logs", "/usuarios", "/dev-dash"]);
+// Rotas permitidas por papel
+// (Ajuste aqui se quiser liberar mais páginas para algum papel.)
+export const ROLE_ALLOWED_PATHS: Record<UserRole, string[]> = {
+  // acesso total
+  dev: ["*"],
+  controlador: ["*"],
+  apontador: ["*"],
 
-export const APONTADOR_ALLOWED = new Set<string>([
-  "/producao-planta",
-  "/paradas",
-]);
+  // gerência: só dashboard + ritmo
+  gerencia: ["/", "/dashboard", "/ritmo", "/ritmo-do-turno"],
 
-export const GERENCIA_ALLOWED = new Set<string>([
-  "/producao-planta",
-]);
+  // supervisor: dashboard + ritmo + avisos
+  supervisor: ["/", "/dashboard", "/ritmo", "/ritmo-do-turno", "/avisos", "/avisos-supervisor"],
+};
 
-export function canAccessPath(role: Role, path: string) {
-  if (role === "dev") return true;
-
-  if (role === "apontador") {
-    return APONTADOR_ALLOWED.has(path);
-  }
-
-    if (role === "gerencia") {
-    return GERENCIA_ALLOWED.has(path);
-  }
-
-  // controlador
-  if (role === "controlador") {
-    return !DEV_ONLY_PAGES.has(path);
-  }
-
-  return false;
+export function normalizeRole(v: unknown): UserRole | null {
+  const s = String(v ?? "").trim().toLowerCase();
+  const ok: UserRole[] = ["apontador", "controlador", "gerencia", "supervisor", "dev"];
+  return (ok as string[]).includes(s) ? (s as UserRole) : null;
 }
 
+export function canAccessPath(role: UserRole | null | undefined, path: string): boolean {
+  if (!role) return false;
+  const allow = ROLE_ALLOWED_PATHS[role] ?? [];
+  if (allow.includes("*")) return true;
 
-export const ROUTE_ACCESS: Record<UserRole, string[]> = {
-  apontador: ["/producao-planta", "/paradas", "/ritmo"],
-  controlador: ["*"],
-  gerencia: ["/dashboard", "/ritmo"],
-  supervisor: ["/dashboard", "/ritmo", "/avisos"],
-  dev: ["*"],
-};
+  const p = (path || "/").toLowerCase();
+  return allow.some((x) => x.toLowerCase() === p || (x.endsWith("/") && p.startsWith(x.toLowerCase())));
+}
