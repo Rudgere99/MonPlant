@@ -45,16 +45,20 @@ async function readErr(res: Response) {
   }
 }
 
-function normalizeUserType(v: string): UserType {
-  const s = (v || "")
+function normalizeUserType(v: any): UserType {
+  const s = String(v || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-  if (s === "gerencia") return "gerencia";
-  if (s === "controlador") return "controlador";
   if (s === "dev") return "dev";
+  if (s === "controlador") return "controlador";
+  if (s === "gerencia" || s === "gerencia" || s === "gerência") return "gerencia";
+  // aceita "supervisor" e variações comuns
+  if (s === "supervisor" || s === "supervisao" || s === "supervisao_planta" || s === "supervisor_planta")
+    return "supervisor";
+
   return "apontador";
 }
 
@@ -169,21 +173,13 @@ export default function DevUsers() {
 
             <div>
               <div className="mp-label">Tipo</div>
-             <select
-  value={form.user_type}
-  onChange={(e) =>
-    setForm((f) => ({
-      ...f,
-      user_type: e.target.value as any,
-    }))
-  }
->
-  <option value="apontador">Apontador</option>
-  <option value="controlador">Controlador</option>
-  <option value="gerencia">Gerência</option>
-  <option value="supervisor">Supervisor</option>
-  <option value="dev">DEV</option>
-</select>
+              <select className="mp-input" value={userType} onChange={(e) => setUserType(normalizeUserType(e.target.value) as UserType)}>
+                <option value="apontador">Apontador</option>
+                <option value="controlador">Controlador</option>
+                <option value="gerencia">Gerência</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="dev">Dev</option>
+              </select>
             </div>
 
             <div>
