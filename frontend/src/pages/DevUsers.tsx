@@ -169,13 +169,21 @@ export default function DevUsers() {
 
             <div>
               <div className="mp-label">Tipo</div>
-              <select className="mp-input" value={userType} onChange={(e) => setUserType(normalizeUserType(e.target.value) as UserType)}>
-                <option value="apontador">Apontador</option>
-                <option value="controlador">Controlador</option>
-                <option value="gerencia">Gerência</option>
-                <option value="supervisor">Supervisor</option>
-                <option value="dev">Dev</option>
-              </select>
+             <select
+  value={form.user_type}
+  onChange={(e) =>
+    setForm((f) => ({
+      ...f,
+      user_type: e.target.value as any,
+    }))
+  }
+>
+  <option value="apontador">Apontador</option>
+  <option value="controlador">Controlador</option>
+  <option value="gerencia">Gerência</option>
+  <option value="supervisor">Supervisor</option>
+  <option value="dev">DEV</option>
+</select>
             </div>
 
             <div>
