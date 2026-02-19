@@ -71,14 +71,6 @@ function isGerencia(userType?: string | null) {
   return t === "gerencia";
 }
 
-function normRole(v?: string | null) {
-  return String(v || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
 function defaultPathFor(role: UserRole) {
   // Gerência vê somente Dashboard
   if (role === "apontador") return "/producao-planta";
@@ -195,6 +187,125 @@ function AppShell() {
   const { logout, user, loading } = useAuth() as any;
   const navigate = useNavigate();
   const location = useLocation();
+  const API_BASE = (import.meta as any).env?.VITE_API_BASE || "";
+
+  // =========================
+  // Aviso global (modal) — aparece em qualquer página até confirmar leitura
+  // =========================
+  type ActiveNotice = {
+    id: string;
+    title?: string | null;
+    message?: string | null;
+    created_at?: string | null;
+    created_by_name?: string | null;
+    author?: string | null;
+    is_read?: boolean | null;
+    read_at?: string | null;
+  };
+
+  const [activeNotices, setActiveNotices] = React.useState<ActiveNotice[]>([]);
+  const [noticeModal, setNoticeModal] = React.useState<ActiveNotice | null>(null);
+  const [noticeBusy, setNoticeBusy] = React.useState(false);
+  const [noticeErr, setNoticeErr] = React.useState<string | null>(null);
+
+  const overlayStyle: React.CSSProperties = {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.55)",
+    backdropFilter: "blur(6px)",
+    zIndex: 9999,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  };
+
+  const modalStyle: React.CSSProperties = {
+    width: "min(720px, 96vw)",
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "linear-gradient(180deg, rgba(17,24,39,0.92), rgba(2,6,23,0.92))",
+    boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
+    overflow: "hidden",
+  };
+
+  const modalHeader: React.CSSProperties = {
+    padding: "14px 16px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+  };
+
+  const modalBody: React.CSSProperties = {
+    padding: 16,
+    display: "grid",
+    gap: 12,
+  };
+
+  const modalBtn: React.CSSProperties = {
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.06)",
+    color: "white",
+    fontWeight: 700,
+    cursor: "pointer",
+  };
+
+  const modalBtnPrimary: React.CSSProperties = {
+    ...modalBtn,
+    background: "linear-gradient(180deg, rgba(16,185,129,0.28), rgba(16,185,129,0.12))",
+    border: "1px solid rgba(16,185,129,0.35)",
+  };
+
+  const pickFirstUnread = (rows: ActiveNotice[]) => {
+    const unread = rows.find((n) => !(n?.is_read) && !n?.read_at);
+    return unread || null;
+  };
+
+  const loadActiveNotices = React.useCallback(async () => {
+    if (!token) return;
+    try {
+      setNoticeErr(null);
+      const r = await fetch(`${API_BASE}/api/notices/active`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) return;
+      const data = await r.json();
+      const rows: ActiveNotice[] = Array.isArray(data) ? data : (data?.items || []);
+      setActiveNotices(rows);
+      const next = pickFirstUnread(rows);
+      if (next) setNoticeModal(next);
+    } catch (e: any) {
+      // não quebra o app
+      return;
+    }
+  }, [token]);
+
+  const confirmNotice = React.useCallback(async () => {
+    if (!token || !noticeModal?.id) return;
+    setNoticeBusy(true);
+    setNoticeErr(null);
+    try {
+      const r = await fetch(`${API_BASE}/api/notices/${noticeModal.id}/read`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        setNoticeErr(txt || `Erro ao confirmar (${r.status})`);
+        return;
+      }
+      // remove do modal e recarrega lista (para pegar próximo)
+      setNoticeModal(null);
+      await loadActiveNotices();
+    } finally {
+      setNoticeBusy(false);
+    }
+  }, [token, noticeModal, loadActiveNotices]);
+
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sideCollapsed, setSideCollapsed] = useState(false);
@@ -216,6 +327,17 @@ function AppShell() {
 
 
   // ⏳ enquanto hidrata, evita renderizar shell parcial (que causa "piscar")
+
+  React.useEffect(() => {
+    if (loading) return;
+    if (!token) return;
+    loadActiveNotices();
+    const id = window.setInterval(() => {
+      loadActiveNotices();
+    }, 20000); // 20s
+    return () => window.clearInterval(id);
+  }, [loading, token, loadActiveNotices]);
+
   if (loading) {
     return (
       <div
@@ -238,9 +360,7 @@ useEffect(() => {
   if (loading) return;
   if (!user) return;
 
-  const roleNorm = normRole(user?.user_type);
-  const ger = roleNorm === "gerencia";
-  const sup = roleNorm === "supervisor";
+  const ger = isGerencia(user?.user_type);
 
   // ✅ regra da gerência: só /, /dashboard e /ritmo
   if (ger) {
@@ -248,14 +368,6 @@ useEffect(() => {
     const ok = p === "/" || p.startsWith("/dashboard") || p.startsWith("/ritmo");
     if (!ok) navigate("/dashboard", { replace: true });
     return; // ✅ impede cair na regra geral e “brigar”
-  }
-
-  // ✅ regra do supervisor: só /, /dashboard, /ritmo e /avisos
-  if (sup) {
-    const p = location.pathname.toLowerCase();
-    const ok = p === "/" || p.startsWith("/dashboard") || p.startsWith("/ritmo") || p.startsWith("/avisos");
-    if (!ok) navigate("/dashboard", { replace: true });
-    return;
   }
 
   // ✅ regra geral: roleGuard decide
@@ -274,15 +386,11 @@ useEffect(() => {
     });
   }, [isDev, role]);
 
-  const roleNorm = normRole(user?.user_type);
-  const ger = roleNorm === "gerencia";
-  const sup = roleNorm === "supervisor";
+  const ger = isGerencia(user?.user_type);
 
   const navItemsFiltered = useMemo(() => {
-    if (ger) return navItems.filter((i) => i.to === "/dashboard" || i.to === "/" || i.to === "/ritmo");
-    if (sup) return navItems.filter((i) => i.to === "/dashboard" || i.to === "/" || i.to === "/ritmo" || i.to === "/avisos");
-    return navItems;
-  }, [ger, sup, navItems]);
+    return ger ? navItems.filter((i) => i.to === "/dashboard" || i.to === "/" || i.to === "/ritmo") : navItems;
+  }, [ger, navItems]);
 
   const handleLogout = () => {
     logout?.();
@@ -888,7 +996,70 @@ useEffect(() => {
           </main>
         </div>
       </div>
-    </div>
+    
+      {noticeModal && (
+        <div style={overlayStyle} aria-modal="true" role="dialog">
+          <div style={modalStyle}>
+            <div style={modalHeader}>
+              <div style={{ display: "grid", gap: 2 }}>
+                <div style={{ fontSize: 12, opacity: 0.7, fontWeight: 700 }}>
+                  Comunicação oficial • Supervisor
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 900, lineHeight: 1.2 }}>
+                  {noticeModal.title || "Aviso"}
+                </div>
+              </div>
+
+              {/* sem botão de fechar: fica até confirmar */}
+            </div>
+
+            <div style={modalBody}>
+              <div
+                style={{
+                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.45,
+                  fontSize: 14,
+                  opacity: 0.95,
+                }}
+              >
+                {noticeModal.message || ""}
+              </div>
+
+              {noticeErr && (
+                <div
+                  style={{
+                    padding: 10,
+                    borderRadius: 12,
+                    border: "1px solid rgba(239,68,68,0.35)",
+                    background: "rgba(239,68,68,0.10)",
+                    color: "rgba(255,255,255,0.92)",
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}
+                >
+                  {noticeErr}
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+                <button
+                  type="button"
+                  style={noticeBusy ? { ...modalBtnPrimary, opacity: 0.6, cursor: "not-allowed" } : modalBtnPrimary}
+                  disabled={noticeBusy}
+                  onClick={confirmNotice}
+                >
+                  {noticeBusy ? "Confirmando..." : "Confirmar leitura"}
+                </button>
+              </div>
+
+              <div style={{ fontSize: 12, opacity: 0.6 }}>
+                Este aviso ficará na tela até você confirmar.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+</div>
   );
 }
 
