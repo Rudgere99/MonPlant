@@ -1,304 +1,267 @@
-
 import React, { useEffect, useMemo, useState } from "react";
-import { Bell, Send, RefreshCcw, XCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 
-/**
- * Avisos do Supervisor
- * - Supervisor cria e encerra avisos
- * - Todos podem visualizar avisos ativos
- * - TODOS precisam confirmar leitura (POST /api/notices/{id}/read)
- *
- * Endpoints (backend):
- *   GET  /api/notices/active
- *   POST /api/notices                 (somente supervisor)
- *   POST /api/notices/{id}/close      (somente supervisor)
- *   POST /api/notices/{id}/read       (qualquer logado)
- */
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || "";
 
 type Notice = {
   id: string;
   title: string;
   message: string;
-  is_active: boolean;
-  created_at?: string | null;
-  created_by_name?: string | null;
+  created_at?: string;
+  created_by_name?: string;
+  is_active?: boolean;
+  read?: boolean; // se backend devolver
 };
 
-function apiBase() {
-  // segue o padrão do MonPlant
-  const env = (import.meta as any).env?.VITE_API_BASE as string | undefined;
-  return (env || "http://localhost:8000").replace(/\/$/, "");
-}
-
-function fmtDt(iso?: string | null) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+function normRole(v?: string | null) {
+  return String(v || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 export default function AvisosSupervisor() {
   const { token, user } = useAuth();
-  const isSupervisor = (user?.user_type || "").toLowerCase() === "supervisor";
+
+  const canPublish = useMemo(() => normRole(user?.user_type) === "supervisor", [user?.user_type]);
+
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [items, setItems] = useState<Notice[]>([]);
 
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
 
-  const [loading, setLoading] = useState(false);
-  const [posting, setPosting] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  async function apiFetch(path: string, init?: RequestInit) {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(init?.headers as any),
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const [items, setItems] = useState<Notice[]>([]);
-
-  const canPost = useMemo(() => {
-    return isSupervisor && title.trim().length >= 3 && message.trim().length >= 3;
-  }, [isSupervisor, title, message]);
-
-  async function fetchActive() {
-    setLoading(true);
-    setErr(null);
+    const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+    const txt = await res.text();
+    let data: any = null;
     try {
-      const res = await fetch(`${apiBase()}/api/notices/active`, {
-        method: "GET",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
+      data = txt ? JSON.parse(txt) : null;
+    } catch {
+      data = txt;
+    }
+    if (!res.ok) {
+      const detail = data?.detail || data?.message || txt || res.statusText;
+      throw new Error(`${res.status} — ${detail}`);
+    }
+    return data;
+  }
 
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`${res.status} — ${t || res.statusText}`);
-      }
-      const data = await res.json();
-      setItems(Array.isArray(data) ? data : (data.items || []));
+  async function load() {
+    setErr(null);
+    setLoading(true);
+    try {
+      const data = await apiFetch("/api/notices/active", { method: "GET" });
+      setItems(Array.isArray(data) ? data : data?.items || []);
     } catch (e: any) {
-      setErr(e?.message || "Falha ao carregar avisos.");
-      setItems([]);
+      setErr(e?.message || "Falha ao carregar");
     } finally {
       setLoading(false);
     }
   }
 
   async function publish() {
-    if (!canPost) return;
-    setPosting(true);
     setErr(null);
+    if (!canPublish) {
+      setErr("Apenas supervisor pode publicar.");
+      return;
+    }
+    if (!title.trim() || !message.trim()) {
+      setErr("Preencha título e mensagem.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      const res = await fetch(`${apiBase()}/api/notices`, {
+      await apiFetch("/api/notices", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
         body: JSON.stringify({ title: title.trim(), message: message.trim() }),
       });
-
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`${res.status} — ${t || res.statusText}`);
-      }
-
       setTitle("");
       setMessage("");
-      await fetchActive();
+      await load();
     } catch (e: any) {
-      setErr(e?.message || "Falha ao publicar aviso.");
+      setErr(e?.message || "Falha ao publicar");
     } finally {
-      setPosting(false);
+      setLoading(false);
     }
   }
 
   async function closeNotice(id: string) {
-    if (!isSupervisor) return;
-    if (!confirm("Encerrar este aviso?")) return;
-
     setErr(null);
+    if (!canPublish) {
+      setErr("Apenas supervisor pode encerrar.");
+      return;
+    }
+    setLoading(true);
     try {
-      const res = await fetch(`${apiBase()}/api/notices/${encodeURIComponent(id)}/close`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`${res.status} — ${t || res.statusText}`);
-      }
-      await fetchActive();
+      await apiFetch(`/api/notices/${id}/close`, { method: "POST" });
+      await load();
     } catch (e: any) {
-      setErr(e?.message || "Falha ao encerrar aviso.");
+      setErr(e?.message || "Falha ao encerrar");
+    } finally {
+      setLoading(false);
     }
   }
 
   async function markRead(id: string) {
     setErr(null);
+    setLoading(true);
     try {
-      const res = await fetch(`${apiBase()}/api/notices/${encodeURIComponent(id)}/read`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`${res.status} — ${t || res.statusText}`);
-      }
-      // não precisa recarregar, mas mantém consistente
-      await fetchActive();
+      await apiFetch(`/api/notices/${id}/read`, { method: "POST" });
+      await load();
     } catch (e: any) {
-      setErr(e?.message || "Falha ao confirmar leitura.");
+      setErr(e?.message || "Falha ao confirmar leitura");
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    fetchActive();
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="p-6">
-      <div className="mb-4 text-xs text-white/60">Visão geral • Avisos</div>
+      <div className="mb-5">
+        <div className="text-xs text-white/60">Visão geral • Avisos</div>
+        <div className="text-sm text-white/70">Supervisor • Comunicação oficial</div>
+        <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-white">Avisos do Supervisor</h1>
+        <p className="mt-2 max-w-3xl text-sm text-white/70">
+          Tudo que for publicado aqui aparece para todos e exige confirmação de leitura. Use isso como fonte oficial para evitar erro de
+          lançamento por rádio.
+        </p>
+      </div>
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-white/70 text-sm">
-            <span className="inline-flex items-center gap-2">
-              <Bell className="h-4 w-4" />
-              {isSupervisor ? "Supervisor" : "Leitura"} • Comunicação oficial
-            </span>
-          </div>
-          <h1 className="mt-2 text-3xl font-semibold text-white">Avisos do Supervisor</h1>
-          <p className="mt-2 text-sm text-white/60 max-w-2xl">
-            Tudo que for publicado aqui aparece para todos e exige confirmação de leitura. Use isso como fonte oficial
-            para evitar erro de lançamento por rádio.
-          </p>
-        </div>
-
+      <div className="mb-4 flex items-center gap-3">
         <button
-          onClick={fetchActive}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
+          onClick={load}
+          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
         >
-          <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          Atualizar
+          {loading ? "Atualizando..." : "Atualizar"}
         </button>
+        <div className="text-sm text-white/60">
+          Logado como: <span className="text-white/80 font-semibold">{user?.full_name || "—"}</span>
+          {canPublish ? (
+            <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">Supervisor</span>
+          ) : (
+            <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/70">Somente leitura</span>
+          )}
+        </div>
       </div>
 
       {err && (
-        <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-200">
-          {err}
-        </div>
+        <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{err}</div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
-        {/* NOVO AVISO */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        {/* Composer */}
         <div className="xl:col-span-5">
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-            <div className="mb-3 text-sm font-semibold text-white/80">Novo aviso</div>
-
-            {!isSupervisor && (
-              <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-100">
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-5 shadow">
+            <div className="mb-3 text-sm font-semibold text-white">Novo aviso</div>
+            {!canPublish && (
+              <div className="mb-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">
                 Você está em modo leitura. Somente <b>supervisor</b> pode publicar/encerrar avisos.
               </div>
             )}
 
-            <label className="block text-xs text-white/60 mb-1">Título</label>
+            <label className="block text-xs text-white/60">Título</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              disabled={!canPublish || loading}
               placeholder="Ex.: Ajuste de produção por manutenção"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/20"
-              disabled={!isSupervisor || posting}
+              className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 disabled:opacity-60"
             />
 
-            <label className="mt-3 block text-xs text-white/60 mb-1">Mensagem</label>
+            <label className="mt-4 block text-xs text-white/60">Mensagem</label>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              disabled={!canPublish || loading}
+              rows={6}
               placeholder="Descreva a orientação oficial (períodos, estimativa, horário de confirmação, etc.)"
-              rows={5}
-              className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/20"
-              disabled={!isSupervisor || posting}
+              className="mt-1 w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 disabled:opacity-60"
             />
 
-            <div className="mt-4 flex items-center justify-between">
-              <div className="text-xs text-white/40">
-                Logado como: <span className="text-white/70">{user?.full_name || "—"}</span>
-              </div>
+            <button
+              onClick={publish}
+              disabled={!canPublish || loading}
+              className="mt-4 w-full rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
+            >
+              Publicar aviso
+            </button>
 
-              <button
-                onClick={publish}
-                disabled={!canPost || posting}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-100 ring-1 ring-emerald-400/25 hover:bg-emerald-500/20 disabled:opacity-50"
-              >
-                <Send className="h-4 w-4" />
-                {posting ? "Publicando..." : "Publicar aviso"}
-              </button>
+            <div className="mt-4 text-xs text-white/50">
+              Boas práticas:
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>Inclua período (ex.: 07–08) e o horário de confirmação.</li>
+                <li>Se estiver “em ajuste”, deixe explícito para o CCO aguardar confirmação.</li>
+                <li>Encerre o aviso quando a informação estiver consolidada.</li>
+              </ul>
             </div>
           </div>
         </div>
 
-        {/* AVISOS ATIVOS */}
+        {/* Active notices */}
         <div className="xl:col-span-7">
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold text-white/80">Avisos ativos</div>
-              <div className="text-xs text-white/50">{items.length} ativo(s)</div>
+          <div className="rounded-2xl border border-white/10 bg-black/25 p-5 shadow">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-white">Avisos ativos</div>
+                <div className="text-xs text-white/60">{items.length} ativo(s)</div>
+              </div>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {items.length === 0 ? (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/50">
-                  Nenhum aviso ativo.
-                </div>
-              ) : (
-                items.map((n) => (
+            {items.length === 0 ? (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">Nenhum aviso ativo.</div>
+            ) : (
+              <div className="space-y-3">
+                {items.map((n) => (
                   <div key={n.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <div className="text-white font-semibold">{n.title}</div>
-                          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100 ring-1 ring-emerald-400/25">
-                            ATIVO
-                          </span>
-                        </div>
-                        <div className="mt-1 text-xs text-white/50">
-                          {n.created_by_name ? <>por <span className="text-white/70">{n.created_by_name}</span> • </> : null}
-                          {fmtDt(n.created_at)}
+                        <div className="text-base font-semibold text-white">{n.title}</div>
+                        <div className="mt-1 whitespace-pre-wrap text-sm text-white/80">{n.message}</div>
+                        <div className="mt-2 text-xs text-white/50">
+                          {n.created_by_name ? `Por ${n.created_by_name}` : ""}
+                          {n.created_at ? ` • ${n.created_at}` : ""}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 flex-col gap-2">
                         <button
                           onClick={() => markRead(n.id)}
-                          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white hover:bg-white/10"
-                          title="Confirmar leitura"
+                          disabled={loading}
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10 disabled:opacity-60"
                         >
-                          <CheckCircle2 className="h-4 w-4" />
-                          Confirmar
+                          Confirmar leitura
                         </button>
 
-                        {isSupervisor && (
+                        {canPublish && (
                           <button
                             onClick={() => closeNotice(n.id)}
-                            className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100 hover:bg-red-500/15"
-                            title="Encerrar aviso"
+                            disabled={loading}
+                            className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/15 disabled:opacity-60"
                           >
-                            <XCircle className="h-4 w-4" />
                             Encerrar
                           </button>
                         )}
                       </div>
                     </div>
-
-                    <div className="mt-3 whitespace-pre-wrap text-sm text-white/75">{n.message}</div>
                   </div>
-                ))
-              )}
-            </div>
-
-            <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4 text-xs text-white/55">
-              <div className="font-semibold text-white/70 mb-1">Boas práticas</div>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Inclua período (ex.: 07–08) e o horário de confirmação.</li>
-                <li>Se ainda estiver “em ajuste”, deixe explícito para o CCO aguardar confirmação.</li>
-                <li>Encerre o aviso quando a informação estiver consolidada.</li>
-              </ul>
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
