@@ -11,6 +11,7 @@ import json
 import hmac
 import hashlib
 import re
+import unicodedata
 
 from passlib.context import CryptContext
 
@@ -32,9 +33,8 @@ def ensure_notice_tables():
 
             cur.execute(
                 """
-                create extension if not exists pgcrypto;
-            create table if not exists public.bv_notices (
-                id uuid primary key default gen_random_uuid(),
+                create table if not exists public.bv_notices (
+                  id uuid primary key default gen_random_uuid(),
                   title text not null,
                   message text not null,
                   created_by uuid null,
@@ -120,6 +120,28 @@ def now_local() -> datetime:
 
 def today_local() -> date:
     return now_local().date()
+
+def normalize_user_type(v: str | None) -> str:
+    """Normaliza user_type vindo do front/DB.
+    Aceita variações com maiúsculas/acentos/espaços.
+    """
+    if v is None:
+        return ""
+    t = str(v).strip().lower()
+    # remove acentos (ex: "gerência" -> "gerencia")
+    t = unicodedata.normalize("NFD", t)
+    t = "".join(ch for ch in t if unicodedata.category(ch) != "Mn")
+    # normaliza separadores
+    t = t.replace(" ", "_").replace("-", "_")
+    t = re.sub(r"_+", "_", t)
+
+    # aliases
+    if t in {"gerencia", "gerencia_", "gerencia_planta", "management"}:
+        return "gerencia"
+    if t in {"supervisor", "supervisor_planta", "sup", "sup_planta"}:
+        return "supervisor"
+
+    return t
 
 
 def is_dev(dev_key: Optional[str]) -> bool:
@@ -269,36 +291,11 @@ def _sign(payload_b64: str) -> str:
     return _b64url(sig)
 
 
-
-def normalize_user_type(raw: str | None) -> str:
-    """Normaliza user_type vindo do banco/inputs para um conjunto estável (sem acento, minúsculo)."""
-    s = (raw or "").strip().lower()
-    # remove acentos
-    s = s.encode("utf-8", "ignore").decode("utf-8")
-    try:
-        import unicodedata
-        s = "".join(ch for ch in unicodedata.normalize("NFD", s) if unicodedata.category(ch) != "Mn")
-    except Exception:
-        pass
-    s = s.replace(" ", "_")
-    # aliases
-    if s in ("gerencia", "gerência"):
-        return "gerencia"
-    if s in ("supervisor", "supervisao", "supervisao_planta", "supervisor_planta"):
-        return "supervisor"
-    if s in ("apontador",):
-        return "apontador"
-    if s in ("controlador",):
-        return "controlador"
-    if s in ("dev",):
-        return "dev"
-    return s
-
 def create_token(user_id: str, user_type: str, email: str) -> str:
     exp = datetime.now(timezone.utc) + timedelta(hours=AUTH_TTL_HOURS)
     payload = {
         "uid": user_id,
-        "typ": normalize_user_type(user_type),
+        "typ": user_type,
         "em": email,
         "exp": int(exp.timestamp()),
         "v": 1,
@@ -334,8 +331,7 @@ def require_supervisor_user(
     if not tok:
         raise HTTPException(status_code=401, detail="Sem token")
     payload = decode_token(tok)
-    # Supervisor (e Dev) podem criar/encerrar avisos
-    if normalize_user_type(payload.get("typ")) not in ("supervisor", "dev"):
+    if payload.get("typ") != "supervisor":
         raise HTTPException(status_code=403, detail="Acesso negado")
     return payload
 
@@ -409,40 +405,6 @@ def log_action(
             conn.commit()
     except Exception:
         return
-
-# =========================
-# Notices (Supervisor) - bv_notices + bv_notice_reads
-# =========================
-def ensure_notice_tables():
-    """Cria tabelas de avisos caso ainda não existam (para evitar 500)."""
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            create extension if not exists pgcrypto;
-            create table if not exists public.bv_notices (
-                id uuid primary key default gen_random_uuid(),
-                title text not null,
-                message text not null,
-                is_active boolean not null default true,
-                created_by uuid,
-                created_at timestamptz not null default now(),
-                closed_at timestamptz null,
-                closed_by uuid null
-            );
-            """
-        )
-        cur.execute(
-            """
-            create table if not exists public.bv_notice_reads (
-                notice_id uuid not null references public.bv_notices(id) on delete cascade,
-                user_id uuid not null references public.bv_users(id) on delete cascade,
-                read_at timestamptz not null default now(),
-                primary key (notice_id, user_id)
-            );
-            """
-        )
-        conn.commit()
-
 
 # =========================
 # Stops Launch (MonPlant) - bv_launch.stops_day + bv_launch.stops_rows
@@ -577,7 +539,8 @@ def auth_login(body: LoginIn, request: Request):
         if not pwd.verify(body.password, pw_hash):
             raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-        token = create_token(str(u["id"]), u["user_type"], u["email"])
+        ut = normalize_user_type(u["user_type"])
+        token = create_token(str(u["id"]), ut, u["email"])
 
     log_action(
         action="LOGIN",
@@ -585,7 +548,7 @@ def auth_login(body: LoginIn, request: Request):
         user_id=str(u["id"]),
         entity="bv_users",
         entity_id=str(u["id"]),
-        payload={"email": email, "user_type": u["user_type"]},
+        payload={"email": email, "user_type": normalize_user_type(u["user_type"])},
     )
 
     return {
@@ -594,7 +557,7 @@ def auth_login(body: LoginIn, request: Request):
             "id": str(u["id"]),
             "full_name": u["full_name"],
             "sector": u["sector"],
-            "user_type": u["user_type"],
+            "user_type": normalize_user_type(u["user_type"]),
             "email": u["email"],
         },
     }
@@ -629,7 +592,7 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
         "id": str(u["id"]),
         "full_name": u["full_name"],
         "sector": u["sector"],
-        "user_type": u["user_type"],
+        "user_type": normalize_user_type(u["user_type"]),
         "email": u["email"],
     }
 
@@ -652,7 +615,7 @@ def _dev_list_users():
             "id": str(r["id"]),
             "full_name": r["full_name"],
             "sector": r["sector"],
-            "user_type": r["user_type"],
+            "user_type": normalize_user_type(r["user_type"]),
             "email": r["email"],
             "is_active": bool(r["is_active"]),
             "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
@@ -675,7 +638,10 @@ def api_dev_list_users(dev_payload=Depends(require_dev_user)):
 def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[str, Any]):
     allowed = {"apontador", "controlador", "dev", "gerencia", "supervisor"}
 
-    if body.user_type not in allowed:
+    user_type = normalize_user_type(body.user_type)
+    if user_type not in allowed:
+        raise HTTPException(status_code=400, detail="user_type inválido")
+
         raise HTTPException(status_code=400, detail="user_type inválido")
 
     email = str(body.email).lower().strip()
@@ -693,7 +659,7 @@ def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[
             values (%s,%s,%s,%s,%s,true)
             returning id
             """,
-            (body.full_name.strip(), body.sector.strip(), body.user_type, email, pw_hash),
+            (body.full_name.strip(), body.sector.strip(), user_type, email, pw_hash),
         )
         new_id = cur.fetchone()["id"]
         conn.commit()
@@ -709,7 +675,7 @@ def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[
                 "id": str(new_id),
                 "full_name": body.full_name.strip(),
                 "sector": body.sector.strip(),
-                "user_type": body.user_type,
+                "user_type": user_type,
                 "email": email,
             }
         },
@@ -750,7 +716,7 @@ def dev_update_user(
         values.append(body.sector.strip())
 
     if body.user_type is not None:
-        if body.user_type not in allowed:
+        if normalize_user_type(body.user_type) not in allowed:
             raise HTTPException(status_code=400, detail="user_type inválido")
         fields.append("user_type=%s")
         values.append(body.user_type)
@@ -1992,9 +1958,6 @@ def put_stops_launch(
 def api_list_active_notices(
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-
-    ensure_notice_tables()
-
     tok = bearer_token(authorization)
     if not tok:
         raise HTTPException(status_code=401, detail="Sem token")
@@ -2042,9 +2005,6 @@ def api_create_notice(
     request: Request,
     sup_payload=Depends(require_supervisor_user),
 ):
-
-    ensure_notice_tables()
-
     uid = sup_payload.get("uid")
     if not uid:
         raise HTTPException(status_code=401, detail="Token inválido")
@@ -2083,9 +2043,6 @@ def api_read_notice(
     notice_id: str,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-
-    ensure_notice_tables()
-
     tok = bearer_token(authorization)
     if not tok:
         raise HTTPException(status_code=401, detail="Sem token")
@@ -2118,9 +2075,6 @@ def api_close_notice(
     request: Request,
     sup_payload=Depends(require_supervisor_user),
 ):
-
-    ensure_notice_tables()
-
     uid = sup_payload.get("uid")
     if not uid:
         raise HTTPException(status_code=401, detail="Token inválido")
