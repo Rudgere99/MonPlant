@@ -105,9 +105,9 @@ export default function Login() {
           </div>
 
           <h1 className="mp-login-title">
-            Make every
+            Torne cada Turno
             <br />
-            turno EASIER!
+            MAIS FÁCIL!
           </h1>
           <p className="mp-login-sub">
             MonPlant centraliza a informação oficial do turno para reduzir retrabalho e erro de comunicação.
@@ -122,7 +122,7 @@ export default function Login() {
         {/* Card direita */}
         <div className="mp-login-panel mp-card">
           <div className="mp-login-panel-head">
-            <div className="mp-login-panel-title">Welcome Back!</div>
+            <div className="mp-login-panel-title">Bem vindo de volta!</div>
             <div className="mp-login-panel-sub">Entre com seu e-mail e senha.</div>
           </div>
 
