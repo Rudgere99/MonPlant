@@ -260,6 +260,8 @@ export default function Login() {
         </div>
       </div>
 
+      <footer className="text-center text-xs text-neutral-500 py-4">© {new Date().getFullYear()} MonPlant • Trindade Mineração • Rudgere Germano.</footer>
+
       <style>{`
         .mp-login { padding: 18px; }
         .mp-login-wrap {
