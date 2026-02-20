@@ -237,7 +237,7 @@ export default function Login() {
 
             <label className="mp-login-check">
               <input type="checkbox" defaultChecked />
-              <span>Subscribe to MonPlant updates and operational tips</span>
+              <span>Atualizações e dicas operacionais da MonPlant.</span>
             </label>
 
             <div className="mp-login-terms">By logging in you agree with internal policies (Terms & Privacy).</div>
