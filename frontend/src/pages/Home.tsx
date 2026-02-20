@@ -12,7 +12,7 @@ export default function Home() {
 
       {/* Quem somos — imagem ocupando as 2 colunas da direita */}
       <section id="quem-somos" className="container scroll-mt-24 pt-14 md:pt-20">
-        <h2 className="section-title text-3xl md:text-4xl mb-6">Quem somos</h2>
+        <h2 className="section-title text-3xl md:text-4xl mb-6">MonPlant</h2>
 
         <div className="relative">
           <SectionAccent side="right" variant="curve" className="-z-10" />
@@ -21,10 +21,10 @@ export default function Home() {
             {/* texto 1 coluna */}
             <div className="card p-5 md:col-span-1">
               <p className="text-lg text-gray-600 mb-6">
-                A Trindade Mineração é uma empresa que atua com
+                O MonPlant é um sistema que atua com
                 responsabilidade, segurança e respeito ao meio ambiente. Com
                 foco em eficiência e inovação, buscamos excelência em todas as
-                etapas — da lavra ao beneficiamento.
+                etapas — para acompanhamento em tempo real da operação.
               </p>
               <p className="text-lg text-gray-600 mb-6">
                 Valorizamos as pessoas,
@@ -79,7 +79,7 @@ export default function Home() {
       <WaveDivider />
 
       <section id="nossa-gente" className="container scroll-mt-24 pt-14 md:pt-20">
-        <h2 className="section-title text-3xl md:text-4xl mb-6">Nossa Gente</h2>
+        <h2 className="section-title text-3xl md:text-4xl mb-6">Para quem é</h2>
 
         <div className="relative">
           <SectionAccent side="right" variant="curve" className="-z-10" />
@@ -140,7 +140,7 @@ export default function Home() {
       <WaveDivider flip />
 
       <section className="container pt-14">
-        <h2 className="section-title text-3xl md:text-4xl mb-6">Trindade agora</h2>
+        <h2 className="section-title text-3xl md:text-4xl mb-6">Atualizações</h2>
         <div className="relative">
           <SectionAccent side="left" className="-z-10" intensity={-0.08} />
           <div className="grid md:grid-cols-3 gap-6 relative">
