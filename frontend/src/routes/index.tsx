@@ -7,6 +7,7 @@ import { canAccess as canAccessRole, getUserRole } from "../auth/roleGuard";
 import Historico from "../pages/Historico";
 
 import Login from "../pages/Login";
+import Home from "../pages/Home";
 import Dashboard from "../pages/Dashboard";
 import PlantProduction from "../pages/PlantProduction";
 import Horimetros from "../pages/Horimetros";
@@ -61,6 +62,7 @@ function RoleIndexRedirect() {
 export function AppRoutes() {
   return (
     <Routes>
+      <Route path="/home" element={<Home />} />
       <Route path="/login" element={<Login />} />
 
       <Route
