@@ -122,8 +122,21 @@ export default function Login() {
         {/* Card direita */}
         <div className="mp-login-panel mp-card">
           <div className="mp-login-panel-head">
-            <div className="mp-login-panel-title">Bem vindo de volta!</div>
-            <div className="mp-login-panel-sub">Entre com seu e-mail e senha.</div>
+            <div className="mp-login-panel-headrow">
+              <div>
+                <div className="mp-login-panel-title">Bem vindo de volta!</div>
+                <div className="mp-login-panel-sub">Entre com seu e-mail e senha.</div>
+              </div>
+
+              <button
+                type="button"
+                className="mp-btn mp-login-home"
+                onClick={() => nav("/home")}
+                title="Ir para a página inicial"
+              >
+                Home
+              </button>
+            </div>
           </div>
 
           {error && <div className="mp-login-error">{error}</div>}
