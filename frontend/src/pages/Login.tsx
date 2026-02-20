@@ -247,9 +247,8 @@ export default function Login() {
             <div className="mp-login-terms">By logging in you agree with internal policies (Terms & Privacy).</div>
           </form>
         </div>
-      </div>
 
-      <div>
+              <div>
         <button
           type="button"
           className="mp-btn mp-login-home"
@@ -258,6 +257,8 @@ export default function Login() {
         >
            Sobre o Monplant
         </button>
+      </div>
+        
       </div>
 
       <style>{`
