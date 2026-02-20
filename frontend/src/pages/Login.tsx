@@ -225,13 +225,13 @@ export default function Login() {
 
             <div className="mp-login-social">
               <button type="button" className="mp-login-socialbtn" onClick={(e) => e.preventDefault()}>
-                <span className="s">G</span> Google
+                <span className="s">I</span> Google
               </button>
               <button type="button" className="mp-login-socialbtn" onClick={(e) => e.preventDefault()}>
-                <span className="s">f</span> Facebook
+                <span className="s">M</span> MonPlant
               </button>
               <button type="button" className="mp-login-socialbtn" onClick={(e) => e.preventDefault()}>
-                <span className="s">D</span> Discord
+                <span className="s">O</span> Outlook
               </button>
             </div>
 
