@@ -249,9 +249,16 @@ export default function Login() {
         </div>
       </div>
 
-      <div> 
-        <button type="button"className="mp-btn mp-login-home" onClick={() => nav("/home")} title="Ir para a página inicial"> Sobre o Monplant </button>
-     </div>
+      <div>
+        <button
+          type="button"
+          className="mp-btn mp-login-home"
+          onClick={() => nav("/home")}
+          title="Ir para a página inicial"
+        >
+           Sobre o Monplant
+        </button>
+      </div>
 
       <style>{`
         .mp-login { padding: 18px; }
