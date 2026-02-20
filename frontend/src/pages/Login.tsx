@@ -128,6 +128,17 @@ export default function Login() {
                 <div className="mp-login-panel-sub">Entre com seu e-mail e senha.</div>
               </div>
 
+              <button
+                type="button"
+                className="mp-btn mp-login-home"
+                onClick={() => nav("/home")}
+                title="Ir para a página inicial"
+              >
+                Home
+              </button>
+            </div>
+          </div>
+
           {error && <div className="mp-login-error">{error}</div>}
 
           <form onSubmit={onSubmit} className="mp-login-form">
@@ -246,18 +257,6 @@ export default function Login() {
           </form>
         </div>
       </div>
-
-          <div>
-            <button
-                type="button"
-                className="mp-btn mp-login-home"
-                onClick={() => nav("/home")}
-                title="Ir para a página inicial"
-              >
-                Home
-              </button>
-            </div>
-          </div>
 
       <style>{`
         .mp-login { padding: 18px; }
