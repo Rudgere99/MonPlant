@@ -1163,26 +1163,6 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           <div>
                             <div style={titleStyle}>Produção do dia</div>
                             <div style={subStyle}>Meta: {fmtBR0(metaDia)} t</div>
-                            
-                    {/* Projeção (diferença vs meta) */}
-            {metaDia > 0 ? (
-              <div style={{ position: "absolute", left: 14, bottom: 12, textAlign: "left" }}>
-                <div style={{ ...subStyle, marginTop: 0 }}>Projeção</div>
-                <div
-                  style={{
-                    fontWeight: 950,
-                    marginTop: 2,
-                    color: projectionIsPositive
-                      ? "rgba(34,197,94,0.95)"
-                      : "rgba(239,68,68,0.95)",
-                  }}
-                >
-                  {projectionDiffTon >= 0 ? "+" : ""}
-                  {fmtBR0(projectionDiffTon)} t
-                </div>
-              </div>
-            ) : null}
-</div>
                           </div>
                         </div>
 
