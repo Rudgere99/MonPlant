@@ -87,7 +87,15 @@ export function canAccess(role: UserRole, path: string): boolean {
   if (isDevOnly(p)) return false;
 
   // GERÊNCIA: mantém o que já tem hoje (assumindo: acesso total às páginas do app, exceto dev-only)
-  if (role === "gerencia") return true;
+ if (role === "gerencia") {
+    return isAllowedExactOrPrefix(p, [
+      "/dashboard",
+      "/ritmo",
+      "/ritmo-do-turno",
+      "/ufdf",
+      "/statisticas",
+    ]);
+  }
 
   // CONTROLADOR: conforme sua lista
   if (role === "controlador") {
