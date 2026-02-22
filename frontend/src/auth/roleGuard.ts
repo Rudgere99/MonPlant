@@ -102,6 +102,7 @@ export function canAccess(role: UserRole, path: string): boolean {
     return isAllowedExactOrPrefix(p, [
       "/dashboard",
       "/ritmo",
+      "/producao-planta",
       "/ritmo-do-turno",
       "/avisos",
       "/avisos-supervisor",
