@@ -1,5 +1,5 @@
 // src/auth/roleGuard.ts
-// Regras de acesso por papel (inclui supervisor)
+// Regras de acesso por papel (inclui supervisor) — MENU e ROTAS usam esta mesma regra.
 
 export type UserRole = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
 
@@ -13,10 +13,17 @@ function norm(v: any): string {
 
 function normalizeRole(v: any): UserRole {
   const t = norm(v);
-  if (t === "dev") return "dev";
-  if (t === "controlador") return "controlador";
-  if (t === "gerencia") return "gerencia";
-  if (t === "supervisor") return "supervisor";
+
+  // aceita variações comuns (ex.: "Supervisor CCO", "GERÊNCIA", "Controlador_cco", etc.)
+  if (!t) return "apontador";
+
+  if (t === "dev" || t.includes("dev")) return "dev";
+  if (t === "controlador" || t.includes("control")) return "controlador";
+  if (t === "gerencia" || t.includes("gerenc")) return "gerencia";
+  if (t === "supervisor" || t.includes("supervis")) return "supervisor";
+  if (t === "apontador" || t.includes("apont")) return "apontador";
+
+  // fallback
   return "apontador";
 }
 
@@ -60,41 +67,31 @@ function isAllowedExactOrPrefix(path: string, allowed: string[]): boolean {
     const aa = a.toLowerCase();
     if (aa === "*") return true;
     if (aa === p) return true;
-    // prefix match para rotas com subpaths
     return p.startsWith(aa.endsWith("/") ? aa : aa + "/");
   });
 }
 
 export function canAccess(role: UserRole, path: string): boolean {
-  if (role === "dev") return true;
-  if (isDevOnly(path)) return false;
+  const p = (path || "/").toLowerCase();
 
-  // ✅ Gerência: mantém o que já tem hoje
-  // (libera tudo do app, exceto páginas dev-only)
+  // home interno (route index) sempre ok — ele já decide redirect por role
+  if (p === "/") {
+    // todos autenticados podem cair no shell
+    return true;
+  }
+
+  // DEV: tudo
+  if (role === "dev") return true;
+
+  // ninguém (exceto dev) entra em rotas dev-only
+  if (isDevOnly(p)) return false;
+
+  // GERÊNCIA: mantém o que já tem hoje (assumindo: acesso total às páginas do app, exceto dev-only)
   if (role === "gerencia") return true;
 
-  // ✅ Apontador: somente Paradas e Produção da Planta
-  if (role === "apontador") {
-    return isAllowedExactOrPrefix(path, ["/", "/producao-planta", "/paradas"]);
-  }
-
-  // ✅ Supervisor: Dashboard, Ritmo, Produção da Planta e Avisos
-  if (role === "supervisor") {
-    return isAllowedExactOrPrefix(path, [
-      "/",
-      "/dashboard",
-      "/ritmo",
-      "/ritmo-do-turno",
-      "/producao-planta",
-      "/avisos",
-      "/avisos-supervisor",
-    ]);
-  }
-
-  // ✅ Controlador: conjunto específico de páginas
+  // CONTROLADOR: conforme sua lista
   if (role === "controlador") {
-    return isAllowedExactOrPrefix(path, [
-      "/",
+    return isAllowedExactOrPrefix(p, [
       "/dashboard",
       "/ritmo",
       "/ritmo-do-turno",
@@ -108,6 +105,23 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/exportar",
       "/historico",
       "/ufdf",
+    ]);
+  }
+
+  // APONTADOR: apenas Paradas e Produção da Planta
+  if (role === "apontador") {
+    return isAllowedExactOrPrefix(p, ["/producao-planta", "/paradas"]);
+  }
+
+  // SUPERVISOR: Dashboard, Ritmo, Produção da Planta e Avisos
+  if (role === "supervisor") {
+    return isAllowedExactOrPrefix(p, [
+      "/dashboard",
+      "/ritmo",
+      "/ritmo-do-turno",
+      "/producao-planta",
+      "/avisos",
+      "/avisos-supervisor",
     ]);
   }
 
