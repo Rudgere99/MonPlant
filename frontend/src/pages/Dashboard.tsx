@@ -651,6 +651,17 @@ useEffect(() => {
     return sum / filled.length;
   }, [hourlySeries]);
 
+  const filledHoursCount = useMemo(() => {
+    return (hourlySeries || []).filter((r) => (Number(r.ton) || 0) > 0).length;
+  }, [hourlySeries]);
+
+  const projTonDay = useMemo(() => {
+    if (!filledHoursCount || filledHoursCount <= 0) return 0;
+    // projeção com base na média real por hora e horas planejadas do dia (22 - descontos)
+    return (Number(avgTonPerHour) || 0) * (Number(metaHorasTrabalhadas) || 0);
+  }, [avgTonPerHour, metaHorasTrabalhadas, filledHoursCount]);
+
+
   const EXPECTED_TON_H = metaHoraEsperada;
 
   // garante que as linhas (esperada e media real) sempre aparecam no mini-grafico
@@ -1149,6 +1160,15 @@ useEffect(() => {
                             <div style={titleStyle}>Produção do dia</div>
                             <div style={subStyle}>Meta: {fmtBR0(metaDia)} t</div>
                           </div>
+
+
+                          <div style={{ position: "absolute", left: 12, bottom: 10, pointerEvents: "none" }}>
+                            <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Projeção</div>
+                            <div style={{ marginTop: 2, fontWeight: 950, color: "rgba(255,255,255,0.90)" }}>
+                              {fmtBR0(projTonDay)} t
+                            </div>
+                          </div>
+
                         </div>
 
                         <div style={{ height: 190, position: "relative" }}>
@@ -1604,6 +1624,15 @@ useEffect(() => {
               <div style={titleStyle}>Produção do dia</div>
               <div style={subStyle}>Meta: {fmtBR0(metaDia)} t</div>
             </div>
+
+
+            <div style={{ position: "absolute", left: 12, bottom: 10, pointerEvents: "none" }}>
+              <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Projeção</div>
+              <div style={{ marginTop: 2, fontWeight: 950, color: "rgba(255,255,255,0.90)" }}>
+                {fmtBR0(projTonDay)} t
+              </div>
+            </div>
+
           </div>
 
           <div style={{ height: 190, position: "relative" }}>
