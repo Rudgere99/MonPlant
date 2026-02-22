@@ -415,7 +415,7 @@ export default function UfDF() {
           <KpiCard
             label="Produção do dia"
             value={`${fmt0(metrics.prodTon)} t`}
-            sub={metrics.meta > 0 ? `Meta: ${fmt0(metrics.meta)} t • ${fmt1(metrics.pctMeta)}%` : `Freq: ${fmt0(metrics.prodFreq)}`}
+            sub={metrics.meta > 0 ? `Meta: ${fmt0(metrics.meta)} t • ${fmt1(metrics.pctMeta)}%` }
           />
         </div>
 
