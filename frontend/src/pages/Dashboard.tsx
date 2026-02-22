@@ -1177,10 +1177,6 @@ const EXPECTED_TON_H = metaHoraEsperada;
                             <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMetaRaw)}%</div>
                             <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
                             {pctMetaOver > 0 ? (
-                              <div style={{ marginTop: 4, fontWeight: 900, color: "rgba(34,197,94,0.95)" }}>
-                                +{fmtBR0(pctMetaOver)}% acima
-                              </div>
-                            ) : null}
                             <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
                               {fmtBR0(totalTonDay)} t
                             </div>
