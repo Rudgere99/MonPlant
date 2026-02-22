@@ -49,6 +49,9 @@ const nav: NavItem[] = [
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
 
+  // ✅ UF / DF (DEV, Gerência, Controlador)
+  { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Operação" },
+
   // ✅ Ritmo (Necessário vs Real) — usa tonelada por conchada manual, resto automático
   { to: "/ritmo", label: "Ritmo do turno", icon: Calculator, group: "Produção" },
 
@@ -60,16 +63,6 @@ const nav: NavItem[] = [
   { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
   { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
 ];
-
-
-function isGerencia(userType?: string | null) {
-  const t = String(userType || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-  return t === "gerencia";
-}
 
 function defaultPathFor(role: UserRole) {
   // Gerência vê somente Dashboard
@@ -360,17 +353,7 @@ useEffect(() => {
   if (loading) return;
   if (!user) return;
 
-  const ger = isGerencia(user?.user_type);
-
-  // ✅ regra da gerência: só /, /dashboard e /ritmo
-  if (ger) {
-    const p = location.pathname.toLowerCase();
-    const ok = p === "/" || p.startsWith("/dashboard") || p.startsWith("/ritmo");
-    if (!ok) navigate("/dashboard", { replace: true });
-    return; // ✅ impede cair na regra geral e “brigar”
-  }
-
-  // ✅ regra geral: roleGuard decide
+  // ✅ regra geral: roleGuard decide (sem regras duplicadas)
   if (!canAccessRole(role, location.pathname)) {
     navigate(defaultPathFor(role), { replace: true });
   }
@@ -386,11 +369,7 @@ useEffect(() => {
     });
   }, [isDev, role]);
 
-  const ger = isGerencia(user?.user_type);
-
-  const navItemsFiltered = useMemo(() => {
-    return ger ? navItems.filter((i) => i.to === "/dashboard" || i.to === "/" || i.to === "/ritmo") : navItems;
-  }, [ger, navItems]);
+  const navItemsFiltered = navItems;
 
   const handleLogout = () => {
     logout?.();
