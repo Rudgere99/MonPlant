@@ -21,14 +21,40 @@ export const ROLE_LABEL: Record<UserRole, string> = {
 export const ROLE_ALLOWED_PATHS: Record<UserRole, string[]> = {
   // acesso total
   dev: ["*"],
-  controlador: ["*"],
-  apontador: ["*"],
+  // controlador: conjunto específico
+  controlador: [
+    "/",
+    "/dashboard",
+    "/ritmo",
+    "/ritmo-do-turno",
+    "/avisos",
+    "/avisos-supervisor",
+    "/horimetros",
+    "/paradas",
+    "/lancamento-paradas",
+    "/statisticas",
+    "/metas",
+    "/exportar",
+    "/historico",
+    "/ufdf",
+  ],
 
-  // gerência: só dashboard + ritmo
-  gerencia: ["/", "/dashboard", "/ritmo", "/ritmo-do-turno"],
+  // apontador: apenas produção + paradas
+  apontador: ["/", "/producao-planta", "/paradas"],
 
-  // supervisor: dashboard + ritmo + avisos
-  supervisor: ["/", "/dashboard", "/ritmo", "/ritmo-do-turno", "/avisos", "/avisos-supervisor"],
+  // gerência: mantém o que já tem hoje (+ UF/DF)
+  gerencia: ["/", "/dashboard", "/ritmo", "/ritmo-do-turno", "/ufdf"],
+
+  // supervisor: dashboard + ritmo + produção + avisos
+  supervisor: [
+    "/",
+    "/dashboard",
+    "/producao-planta",
+    "/ritmo",
+    "/ritmo-do-turno",
+    "/avisos",
+    "/avisos-supervisor",
+  ],
 };
 
 export function normalizeRole(v: unknown): UserRole | null {
