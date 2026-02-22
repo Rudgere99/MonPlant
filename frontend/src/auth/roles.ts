@@ -19,9 +19,13 @@ export const ROLE_LABEL: Record<UserRole, string> = {
 // Rotas permitidas por papel
 // (Ajuste aqui se quiser liberar mais páginas para algum papel.)
 export const ROLE_ALLOWED_PATHS: Record<UserRole, string[]> = {
-  // acesso total
+  // DEV: tudo
   dev: ["*"],
-  // controlador: conjunto específico
+
+  // Gerência: mantém o que já tem hoje (tudo do app; dev-only é barrado no roleGuard)
+  gerencia: ["*"],
+
+  // Controlador: conjunto específico
   controlador: [
     "/",
     "/dashboard",
@@ -39,19 +43,16 @@ export const ROLE_ALLOWED_PATHS: Record<UserRole, string[]> = {
     "/ufdf",
   ],
 
-  // apontador: apenas produção + paradas
+  // Apontador: só Paradas + Produção da Planta
   apontador: ["/", "/producao-planta", "/paradas"],
 
-  // gerência: mantém o que já tem hoje (+ UF/DF)
-  gerencia: ["/", "/dashboard", "/ritmo", "/ritmo-do-turno", "/ufdf"],
-
-  // supervisor: dashboard + ritmo + produção + avisos
+  // Supervisor: Dashboard + Ritmo + Produção da Planta + Avisos
   supervisor: [
     "/",
     "/dashboard",
-    "/producao-planta",
     "/ritmo",
     "/ritmo-do-turno",
+    "/producao-planta",
     "/avisos",
     "/avisos-supervisor",
   ],
@@ -85,5 +86,10 @@ export function canAccessPath(role: UserRole | null | undefined, path: string): 
   if (allow.includes("*")) return true;
 
   const p = (path || "/").toLowerCase();
-  return allow.some((x) => x.toLowerCase() === p || (x.endsWith("/") && p.startsWith(x.toLowerCase())));
+  return allow.some((x0) => {
+    const x = x0.toLowerCase();
+    if (x === p) return true;
+    // prefix match para rotas com subpaths
+    return p.startsWith(x.endsWith("/") ? x : x + "/");
+  });
 }
