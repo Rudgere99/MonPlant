@@ -44,6 +44,8 @@ const DEV_ONLY_PATHS = [
   "/dev/",
   "/dev/logs",
   "/dev/users",
+  "/dashboard/producao-dia",
+  "/dashboard/ultimos-7",
   "/usuarios",
   "/logs",
   "/dev-dash",
@@ -69,22 +71,47 @@ export function canAccess(role: UserRole, path: string): boolean {
   if (role === "dev") return true;
   if (isDevOnly(path)) return false;
 
-  // controlador: tudo exceto dev-only
-  if (role === "controlador") return true;
-
   // apontador: apenas produção + paradas
   if (role === "apontador") {
     return isAllowedExactOrPrefix(path, ["/", "/producao-planta", "/paradas"]);
   }
 
-  // gerência: apenas dashboard + ritmo
-  if (role === "gerencia") {
-    return isAllowedExactOrPrefix(path, ["/", "/dashboard", "/ritmo", "/ritmo-do-turno"]);
+  // supervisor: dashboard + ritmo + produção + avisos
+  if (role === "supervisor") {
+    return isAllowedExactOrPrefix(path, [
+      "/",
+      "/dashboard",
+      "/producao-planta",
+      "/ritmo",
+      "/ritmo-do-turno",
+      "/avisos",
+      "/avisos-supervisor",
+    ]);
   }
 
-  // supervisor: dashboard + ritmo + avisos
-  if (role === "supervisor") {
-    return isAllowedExactOrPrefix(path, ["/", "/dashboard", "/ritmo", "/ritmo-do-turno", "/avisos", "/avisos-supervisor"]);
+  // controlador: conjunto específico
+  if (role === "controlador") {
+    return isAllowedExactOrPrefix(path, [
+      "/",
+      "/dashboard",
+      "/ritmo",
+      "/ritmo-do-turno",
+      "/avisos",
+      "/avisos-supervisor",
+      "/horimetros",
+      "/paradas",
+      "/lancamento-paradas",
+      "/statisticas",
+      "/metas",
+      "/exportar",
+      "/historico",
+      "/ufdf",
+    ]);
+  }
+
+  // gerência: mantém o que já tem hoje (+ UF/DF)
+  if (role === "gerencia") {
+    return isAllowedExactOrPrefix(path, ["/", "/dashboard", "/ritmo", "/ritmo-do-turno", "/ufdf"]);
   }
 
   return false;
