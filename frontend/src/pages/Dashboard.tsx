@@ -1165,7 +1165,17 @@ useEffect(() => {
                           <div style={{ position: "absolute", left: 12, bottom: 10, pointerEvents: "none" }}>
                             <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Projeção</div>
                             <div style={{ marginTop: 2, fontWeight: 950, color: "rgba(255,255,255,0.90)" }}>
-                              {fmtBR0(projTonDay)} t
+                              {(() => {
+                              const delta = (Number(projTonDay) || 0) - (Number(metaDia) || 0);
+                              const good = delta >= 0;
+                              const sign = delta >= 0 ? "+" : "";
+                              const color = good ? "rgba(34,197,94,0.95)" : "rgba(239,68,68,0.95)";
+                              return (
+                                <span style={{ color }}>
+                                  {sign}{fmtBR0(delta)} t
+                                </span>
+                              );
+                            })()} 
                             </div>
                           </div>
 
@@ -1629,7 +1639,17 @@ useEffect(() => {
             <div style={{ position: "absolute", left: 12, bottom: 10, pointerEvents: "none" }}>
               <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Projeção</div>
               <div style={{ marginTop: 2, fontWeight: 950, color: "rgba(255,255,255,0.90)" }}>
-                {fmtBR0(projTonDay)} t
+                {(() => {
+                              const delta = (Number(projTonDay) || 0) - (Number(metaDia) || 0);
+                              const good = delta >= 0;
+                              const sign = delta >= 0 ? "+" : "";
+                              const color = good ? "rgba(34,197,94,0.95)" : "rgba(239,68,68,0.95)";
+                              return (
+                                <span style={{ color }}>
+                                  {sign}{fmtBR0(delta)} t
+                                </span>
+                              );
+                            })()} 
               </div>
             </div>
 
