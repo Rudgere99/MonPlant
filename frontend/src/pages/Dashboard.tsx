@@ -651,18 +651,22 @@ useEffect(() => {
     return sum / filled.length;
   }, [hourlySeries]);
 
-  const filledHoursCount = useMemo(() => {
-    return (hourlySeries || []).filter((r) => (Number(r.ton) || 0) > 0).length;
-  }, [hourlySeries]);
+  
+  // ===== projeção (mesma lógica do Ritmo) =====
+  // Projeção = média real (t/h) * 24h
+  const projectionTon24 = useMemo(() => {
+    if ((Number(avgTonPerHour) || 0) <= 0) return 0;
+    return (Number(avgTonPerHour) || 0) * 24;
+  }, [avgTonPerHour]);
 
-  const projTonDay = useMemo(() => {
-    if (!filledHoursCount || filledHoursCount <= 0) return 0;
-    // projeção com base na média real por hora e horas planejadas do dia (22 - descontos)
-    return (Number(avgTonPerHour) || 0) * (Number(metaHorasTrabalhadas) || 0);
-  }, [avgTonPerHour, metaHorasTrabalhadas, filledHoursCount]);
+  const projectionDiffTon = useMemo(() => {
+    if (!metaDia || metaDia <= 0) return 0;
+    return projectionTon24 - metaDia;
+  }, [projectionTon24, metaDia]);
 
+  const projectionIsPositive = metaDia > 0 ? projectionTon24 >= metaDia : false;
 
-  const EXPECTED_TON_H = metaHoraEsperada;
+const EXPECTED_TON_H = metaHoraEsperada;
 
   // garante que as linhas (esperada e media real) sempre aparecam no mini-grafico
   const miniTonDomain = useMemo(() => {
@@ -1160,25 +1164,6 @@ useEffect(() => {
                             <div style={titleStyle}>Produção do dia</div>
                             <div style={subStyle}>Meta: {fmtBR0(metaDia)} t</div>
                           </div>
-
-
-                          <div style={{ position: "absolute", left: 12, bottom: 10, pointerEvents: "none" }}>
-                            <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Projeção</div>
-                            <div style={{ marginTop: 2, fontWeight: 950, color: "rgba(255,255,255,0.90)" }}>
-                              {(() => {
-                              const delta = (Number(projTonDay) || 0) - (Number(metaDia) || 0);
-                              const good = delta >= 0;
-                              const sign = delta >= 0 ? "+" : "";
-                              const color = good ? "rgba(34,197,94,0.95)" : "rgba(239,68,68,0.95)";
-                              return (
-                                <span style={{ color }}>
-                                  {sign}{fmtBR0(delta)} t
-                                </span>
-                              );
-                            })()} 
-                            </div>
-                          </div>
-
                         </div>
 
                         <div style={{ height: 190, position: "relative" }}>
@@ -1633,26 +1618,26 @@ useEffect(() => {
             <div>
               <div style={titleStyle}>Produção do dia</div>
               <div style={subStyle}>Meta: {fmtBR0(metaDia)} t</div>
-            </div>
-
-
-            <div style={{ position: "absolute", left: 12, bottom: 10, pointerEvents: "none" }}>
-              <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Projeção</div>
-              <div style={{ marginTop: 2, fontWeight: 950, color: "rgba(255,255,255,0.90)" }}>
-                {(() => {
-                              const delta = (Number(projTonDay) || 0) - (Number(metaDia) || 0);
-                              const good = delta >= 0;
-                              const sign = delta >= 0 ? "+" : "";
-                              const color = good ? "rgba(34,197,94,0.95)" : "rgba(239,68,68,0.95)";
-                              return (
-                                <span style={{ color }}>
-                                  {sign}{fmtBR0(delta)} t
-                                </span>
-                              );
-                            })()} 
+            
+            {/* Projeção (diferença vs meta) */}
+            {metaDia > 0 ? (
+              <div style={{ position: "absolute", left: 14, bottom: 12, textAlign: "left" }}>
+                <div style={{ ...subStyle, marginTop: 0 }}>Projeção</div>
+                <div
+                  style={{
+                    fontWeight: 950,
+                    marginTop: 2,
+                    color: projectionIsPositive
+                      ? "rgba(34,197,94,0.95)"
+                      : "rgba(239,68,68,0.95)",
+                  }}
+                >
+                  {projectionDiffTon >= 0 ? "+" : ""}
+                  {fmtBR0(projectionDiffTon)} t
+                </div>
               </div>
-            </div>
-
+            ) : null}
+</div>
           </div>
 
           <div style={{ height: 190, position: "relative" }}>
@@ -1673,7 +1658,26 @@ useEffect(() => {
               <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
                 {fmtBR0(totalTonDay)} t
               </div>
-            </div>
+            
+            {/* Projeção (diferença vs meta) */}
+            {metaDia > 0 ? (
+              <div style={{ position: "absolute", left: 14, bottom: 12, textAlign: "left" }}>
+                <div style={{ ...subStyle, marginTop: 0 }}>Projeção</div>
+                <div
+                  style={{
+                    fontWeight: 950,
+                    marginTop: 2,
+                    color: projectionIsPositive
+                      ? "rgba(34,197,94,0.95)"
+                      : "rgba(239,68,68,0.95)",
+                  }}
+                >
+                  {projectionDiffTon >= 0 ? "+" : ""}
+                  {fmtBR0(projectionDiffTon)} t
+                </div>
+              </div>
+            ) : null}
+</div>
           </div>
         </div>
 
