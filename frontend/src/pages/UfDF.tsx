@@ -766,17 +766,33 @@ function computeAllMetrics(dayRows: StopRow[], prod: ProdPayload | null) {
     equipamento: String(r.equipamento || "").trim(),
   }));
 
-  const { chainRows, useTodos } = computeChainRows(safeRows);
+  // ✅ REGRA DA CADEIA: todos param juntos → soma tudo do dia
+  // (independente de "Todos" ou equipamento específico)
+  const chainRows = safeRows;
+  const useTodos = safeRows.some((r) => isTodos(r.equipamento));
+
   const chainUFDF = computeUFDFForRows(chainRows);
 
+  // Por equipamento (mantém útil para cards/tabela)
   const byEq: any = {};
   for (const eq of EQS) {
-    const eqRows = useTodos ? chainRows : safeRows.filter((r) => String(r.equipamento || "").trim() === eq);
+    const eqRows = safeRows.filter((r) => String(r.equipamento || "").trim() === eq);
     byEq[eq] = computeUFDFForRows(eqRows);
   }
 
+  // Produção
   const prodTon = (prod?.rows || []).reduce((acc, r) => acc + toNum(r.ton), 0);
-  const prodFreq = (prod?.rows || []).reduce((acc, r) => acc + toNum(r.freq), 0);
+
+  // ✅ Frequência como MÉDIA (não soma)
+  const freqVals = (prod?.rows || [])
+    .map((r) => toNum(r.freq))
+    .filter((v) => Number.isFinite(v)); // se quiser ignorar zeros: .filter(v => v > 0)
+
+  const prodFreq =
+    freqVals.length > 0
+      ? freqVals.reduce((acc, v) => acc + v, 0) / freqVals.length
+      : 0;
+
   const meta = Number(prod?.meta_ton ?? 0) || 0;
   const pctMeta = meta > 0 ? (prodTon / meta) * 100 : 0;
   const gapMeta = meta > 0 ? meta - prodTon : 0;
