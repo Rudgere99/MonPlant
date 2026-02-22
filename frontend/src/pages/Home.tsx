@@ -6,6 +6,7 @@ export default function Home() {
   return (
     <div className="mp-home">
       <div className="mp-home-bg" />
+      <div className="mp-banner" aria-hidden="true" />
 
       {/* NAV */}
       <header className="mp-home-nav">
@@ -37,6 +38,33 @@ export default function Home() {
           <button className="mp-btn-secondary">
             Ver Funcionalidades
           </button>
+        </div>
+      </section>
+
+
+      {/* GALERIA / IMAGENS (placeholders) */}
+      <section className="mp-section mp-gallery">
+        <h2>Visão do Sistema</h2>
+        <p className="mp-muted">
+          Espaços reservados para imagens (prints, logo da empresa, fluxos ou referências visuais).
+          Troque as imagens depois apontando o <code>src</code> ou usando CSS no banner.
+        </p>
+
+        <div className="mp-image-grid">
+          <div className="mp-image-slot">
+            <div className="mp-image-slot-title">Imagem 1</div>
+            <div className="mp-image-slot-sub">Ex.: Dashboard</div>
+          </div>
+
+          <div className="mp-image-slot">
+            <div className="mp-image-slot-title">Imagem 2</div>
+            <div className="mp-image-slot-sub">Ex.: Paradas</div>
+          </div>
+
+          <div className="mp-image-slot">
+            <div className="mp-image-slot-title">Imagem 3</div>
+            <div className="mp-image-slot-sub">Ex.: Horímetros / KPI</div>
+          </div>
         </div>
       </section>
 
@@ -95,6 +123,90 @@ export default function Home() {
           font-family: Inter, sans-serif;
           position: relative;
           overflow-x: hidden;
+        }
+
+
+        /* Banner no topo (troque a imagem em background-image) */
+        .mp-banner {
+          position: absolute;
+          inset: 0 0 auto 0;
+          height: 320px;
+          background-image:
+            radial-gradient(1200px 420px at 30% 30%, rgba(16,185,129,0.22), transparent 60%),
+            linear-gradient(to bottom, rgba(2,6,23,0.10), rgba(2,6,23,0.92)),
+            url("/assets/monplant-banner.jpg");
+          background-size: cover;
+          background-position: center;
+          opacity: 0.9;
+          pointer-events: none;
+          filter: saturate(1.05) contrast(1.05);
+        }
+
+        /* mantém nav/hero acima do banner */
+        .mp-home-nav,
+        .mp-hero,
+        .mp-section,
+        .mp-cta {
+          position: relative;
+          z-index: 2;
+        }
+
+        .mp-muted {
+          color: rgba(255,255,255,0.68);
+          font-weight: 600;
+          margin-top: 10px;
+        }
+
+        .mp-gallery {
+          padding-top: 26px;
+        }
+
+        .mp-image-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 14px;
+          margin-top: 16px;
+        }
+
+        .mp-image-slot {
+          border-radius: 18px;
+          border: 1px dashed rgba(255,255,255,0.22);
+          background: rgba(255,255,255,0.04);
+          min-height: 160px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+          padding: 16px;
+          box-shadow: 0 10px 26px rgba(0,0,0,0.20);
+        }
+
+        .mp-image-slot-title {
+          font-weight: 900;
+          letter-spacing: 0.2px;
+        }
+
+        .mp-image-slot-sub {
+          margin-top: 6px;
+          color: rgba(255,255,255,0.65);
+          font-weight: 700;
+          font-size: 13px;
+        }
+
+        @media (max-width: 920px) {
+          .mp-image-grid {
+            grid-template-columns: 1fr;
+          }
+          .mp-banner {
+            height: 260px;
+          }
+          .mp-home-nav {
+            padding: 22px 18px;
+          }
+          .mp-hero h1 {
+            font-size: 36px;
+          }
         }
 
         .mp-home-bg {
