@@ -121,12 +121,10 @@ function norm(s: any) {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  Corretiva: "#EF4444",
-  Elétrica: "#F59E0B",
-  Preventiva: "#22C55E",
-  Operacional: "#3B82F6",
-  Segurança: "#A855F7",
-  Outros: "#94A3B8",
+  Manutenção: "rgba(245,158,11,0.95)",
+  Operacional: "rgba(59,130,246,0.95)",
+  Segurança: "rgba(168,85,247,0.95)",
+  Outros: "rgba(148,163,184,0.95)",
 };
 
 const EQ_COLORS: Record<string, string> = {
@@ -138,11 +136,13 @@ const EQ_COLORS: Record<string, string> = {
 
 function classTipo(tipo: string) {
   const t = norm(tipo);
-  if (t.includes("corret")) return "Corretiva";
-  if (t.includes("eletr")) return "Elétrica";
-  if (t.includes("prevent")) return "Preventiva";
+
+  // ✅ Alinhado com a tela de Lançamento de Paradas (stops-launch)
+  // normalmente vem como: "Parada Operacional" | "Parada de Manutenção" | "Parada por Segurança"
+  if (t.includes("manut")) return "Manutenção";
   if (t.includes("operac")) return "Operacional";
   if (t.includes("segur")) return "Segurança";
+
   return "Outros";
 }
 
@@ -159,16 +159,20 @@ function parsePeriodStart(p: string): number {
 }
 
 function statusFromStops(dayRows: StopRow[], eq: string, useTodos: boolean) {
-  const rows = useTodos ? dayRows.filter((r) => isTodos(r.equipamento)) : dayRows.filter((r) => String(r.equipamento || "").trim() === eq);
+  const rows = useTodos
+    ? dayRows.filter((r) => isTodos(r.equipamento))
+    : dayRows.filter((r) => String(r.equipamento || "").trim() === eq);
+
   const periods = Array.from(new Set(rows.map((r) => r.period))).sort((a, b) => parsePeriodStart(a) - parsePeriodStart(b));
   const last = periods.slice().reverse().find((p) => rows.some((r) => r.period === p && clamp60(r.minutos) > 0));
   if (!last) return { label: "Operacional", tone: "ok" as const };
 
   const lastRows = rows.filter((r) => r.period === last && clamp60(r.minutos) > 0);
-  const hasCor = lastRows.some((r) => classTipo(r.tipo_parada) === "Corretiva");
-  const hasMan = lastRows.some((r) => ["Preventiva", "Elétrica"].includes(classTipo(r.tipo_parada)));
-  if (hasCor) return { label: "Com Falha", tone: "bad" as const };
+  const hasMan = lastRows.some((r) => classTipo(r.tipo_parada) === "Manutenção");
+  const hasStop = lastRows.some((r) => ["Operacional", "Segurança", "Outros"].includes(classTipo(r.tipo_parada)));
+
   if (hasMan) return { label: "Em Manutenção", tone: "warn" as const };
+  if (hasStop) return { label: "Com Parada", tone: "bad" as const };
   return { label: "Operacional", tone: "ok" as const };
 }
 
