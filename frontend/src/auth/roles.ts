@@ -1,12 +1,7 @@
 // src/auth/roles.ts
-// Centraliza tipos e regras de papéis do MonPlant
+// Centraliza tipos e labels de papéis do MonPlant
 
-export type UserRole =
-  | "apontador"
-  | "controlador"
-  | "gerencia"
-  | "supervisor"
-  | "dev";
+export type UserRole = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
 
 export const ROLE_LABEL: Record<UserRole, string> = {
   apontador: "Apontador",
@@ -15,81 +10,3 @@ export const ROLE_LABEL: Record<UserRole, string> = {
   supervisor: "Supervisor",
   dev: "DEV",
 };
-
-// Rotas permitidas por papel
-// (Ajuste aqui se quiser liberar mais páginas para algum papel.)
-export const ROLE_ALLOWED_PATHS: Record<UserRole, string[]> = {
-  // DEV: tudo
-  dev: ["*"],
-
-  // Gerência: mantém o que já tem hoje (tudo do app; dev-only é barrado no roleGuard)
-  gerencia: ["*"],
-
-  // Controlador: conjunto específico
-  controlador: [
-    "/",
-    "/dashboard",
-    "/ritmo",
-    "/ritmo-do-turno",
-    "/avisos",
-    "/avisos-supervisor",
-    "/horimetros",
-    "/paradas",
-    "/lancamento-paradas",
-    "/statisticas",
-    "/metas",
-    "/exportar",
-    "/historico",
-    "/ufdf",
-  ],
-
-  // Apontador: só Paradas + Produção da Planta
-  apontador: ["/", "/producao-planta", "/paradas"],
-
-  // Supervisor: Dashboard + Ritmo + Produção da Planta + Avisos
-  supervisor: [
-    "/",
-    "/dashboard",
-    "/ritmo",
-    "/ritmo-do-turno",
-    "/producao-planta",
-    "/avisos",
-    "/avisos-supervisor",
-  ],
-};
-
-export function normalizeRole(v: unknown): UserRole | null {
-  const s0 = String(v ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-  // "supervisor planta" -> "supervisor_planta"
-  const s = s0
-    .replace(/\s+/g, "_")
-    .replace(/-+/g, "_")
-    .replace(/__+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  // sinônimos
-  if (s === "supervisao") return "supervisor";
-  if (s === "supervisor_planta" || s === "supervisao_planta") return "supervisor";
-  if (s === "gerencia_planta") return "gerencia";
-
-  const ok: UserRole[] = ["apontador", "controlador", "gerencia", "supervisor", "dev"];
-  return (ok as string[]).includes(s) ? (s as UserRole) : null;
-}
-
-export function canAccessPath(role: UserRole | null | undefined, path: string): boolean {
-  if (!role) return false;
-  const allow = ROLE_ALLOWED_PATHS[role] ?? [];
-  if (allow.includes("*")) return true;
-
-  const p = (path || "/").toLowerCase();
-  return allow.some((x0) => {
-    const x = x0.toLowerCase();
-    if (x === p) return true;
-    // prefix match para rotas com subpaths
-    return p.startsWith(x.endsWith("/") ? x : x + "/");
-  });
-}
