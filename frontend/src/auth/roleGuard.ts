@@ -44,8 +44,6 @@ const DEV_ONLY_PATHS = [
   "/dev/",
   "/dev/logs",
   "/dev/users",
-  "/dashboard/producao-dia",
-  "/dashboard/ultimos-7",
   "/usuarios",
   "/logs",
   "/dev-dash",
@@ -71,25 +69,29 @@ export function canAccess(role: UserRole, path: string): boolean {
   if (role === "dev") return true;
   if (isDevOnly(path)) return false;
 
-  // apontador: apenas produção + paradas
+  // ✅ Gerência: mantém o que já tem hoje
+  // (libera tudo do app, exceto páginas dev-only)
+  if (role === "gerencia") return true;
+
+  // ✅ Apontador: somente Paradas e Produção da Planta
   if (role === "apontador") {
     return isAllowedExactOrPrefix(path, ["/", "/producao-planta", "/paradas"]);
   }
 
-  // supervisor: dashboard + ritmo + produção + avisos
+  // ✅ Supervisor: Dashboard, Ritmo, Produção da Planta e Avisos
   if (role === "supervisor") {
     return isAllowedExactOrPrefix(path, [
       "/",
       "/dashboard",
-      "/producao-planta",
       "/ritmo",
       "/ritmo-do-turno",
+      "/producao-planta",
       "/avisos",
       "/avisos-supervisor",
     ]);
   }
 
-  // controlador: conjunto específico
+  // ✅ Controlador: conjunto específico de páginas
   if (role === "controlador") {
     return isAllowedExactOrPrefix(path, [
       "/",
@@ -107,11 +109,6 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/historico",
       "/ufdf",
     ]);
-  }
-
-  // gerência: mantém o que já tem hoje (+ UF/DF)
-  if (role === "gerencia") {
-    return isAllowedExactOrPrefix(path, ["/", "/dashboard", "/ritmo", "/ritmo-do-turno", "/ufdf"]);
   }
 
   return false;
