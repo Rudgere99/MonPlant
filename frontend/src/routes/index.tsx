@@ -26,6 +26,7 @@ import DevUsers from "../pages/DevUsers";
 
 import PlantProductionDayView from "../pages/PlantProductionDayView";
 import Last7DaysView from "../pages/Last7DaysView";
+import UfDF from "../pages/UfDF";
 
 function defaultPathFor(role: ReturnType<typeof getUserRole>) {
   // Gerência também cai no dashboard
@@ -207,6 +208,15 @@ export function AppRoutes() {
           element={
             <RequireRole>
               <Exportar />
+            </RequireRole>
+          }
+        />
+
+        <Route
+          path="ufdf"
+          element={
+            <RequireRole>
+              <UfDF />
             </RequireRole>
           }
         />
