@@ -49,9 +49,6 @@ const nav: NavItem[] = [
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
 
-  // ✅ UF / DF (DEV, Gerência, Controlador)
-  { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Operação" },
-
   // ✅ Ritmo (Necessário vs Real) — usa tonelada por conchada manual, resto automático
   { to: "/ritmo", label: "Ritmo do turno", icon: Calculator, group: "Produção" },
 
@@ -62,7 +59,9 @@ const nav: NavItem[] = [
   { to: "/statisticas", label: "Estatísticas", icon: BarChart3, group: "Configurações" },
   { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
   { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
+  { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
 ];
+
 
 function defaultPathFor(role: UserRole) {
   // Gerência vê somente Dashboard
@@ -305,16 +304,7 @@ function AppShell() {
 
   const pageTitle = useMemo(() => getTitleFromPath(location.pathname), [location.pathname]);
   const pageGroup = useMemo(() => getGroupFromPath(location.pathname), [location.pathname]);
-
-  const devKey = (() => {
-    try {
-      return localStorage.getItem("mp_dev_key");
-    } catch {
-      return null;
-    }
-  })();
-
-  const role = useMemo(() => (devKey === "RAG2026" ? ("dev" as UserRole) : getUserRole(user)), [user, devKey]);
+  const role = useMemo(() => getUserRole(user), [user]);
   const isDev = role === "dev";
   const userLabel = useMemo(() => getUserDisplay(user), [user]);
 
@@ -322,43 +312,14 @@ function AppShell() {
   // ⏳ enquanto hidrata, evita renderizar shell parcial (que causa "piscar")
 
   React.useEffect(() => {
-    if (loading) return;
-    if (!token) return;
-    loadActiveNotices();
-    const id = window.setInterval(() => {
-      loadActiveNotices();
-    }, 20000); // 20s
-    return () => window.clearInterval(id);
-  }, [loading, token, loadActiveNotices]);
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          color: "rgba(255,255,255,0.85)",
-          fontWeight: 800,
-          letterSpacing: -0.2,
-          background: "#07090d",
-        }}
-      >
-        Carregando…
-      </div>
-    );
-  }
-
-useEffect(() => {
   if (loading) return;
   if (!user) return;
 
-  // ✅ regra geral: roleGuard decide (sem regras duplicadas)
+  // ✅ regra única: roleGuard decide (sem exceções por role aqui)
   if (!canAccessRole(role, location.pathname)) {
     navigate(defaultPathFor(role), { replace: true });
   }
 }, [loading, user, role, location.pathname, navigate]);
-
 
 
 
@@ -368,7 +329,6 @@ useEffect(() => {
       return canAccessRole(role, i.to);
     });
   }, [isDev, role]);
-
   const navItemsFiltered = navItems;
 
   const handleLogout = () => {
