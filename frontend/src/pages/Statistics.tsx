@@ -12,7 +12,8 @@ type StopDayPayload = { day: string; rows: StopRow[] };
 
 const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
 
-function authHeaders(): HeadersInit {
+// ✅ IMPORTANTE: precisa ser objeto simples para poder usar spread
+function authHeaders(): Record<string, string> {
   const t = (localStorage.getItem("mp_token") || localStorage.getItem("token") || "").trim();
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
@@ -69,8 +70,12 @@ function isoDate(yyyy: number, mm1: number, dd: number) {
 }
 
 async function fetchStopsDay(day: string): Promise<StopDayPayload> {
+  if (!API_BASE) throw new Error("VITE_API_BASE não configurado.");
+
   const qs = `day=${encodeURIComponent(day)}`;
-  const r = await fetch(`${API_BASE}/api/stops-launch?${qs}`, { headers: { ...authHeaders() } });
+  const r = await fetch(`${API_BASE}/api/stops-launch?${qs}`, {
+    headers: { ...authHeaders() },
+  });
   if (!r.ok) throw new Error(`Stops ${day}: ${r.status}`);
   const json = (await r.json()) as StopDayPayload;
   return { day: json?.day || day, rows: Array.isArray(json?.rows) ? json.rows : [] };
@@ -169,8 +174,9 @@ export default function Statistics() {
   async function loadMonth(m: string) {
     setBusy(true);
     setErr(null);
+
     try {
-      const [yyyyS, mmS] = m.split("-");
+      const [yyyyS, mmS] = String(m || "").split("-");
       const yyyy = Number(yyyyS);
       const mm1 = Number(mmS);
       if (!yyyy || !mm1) throw new Error("Mês inválido.");
@@ -184,7 +190,6 @@ export default function Statistics() {
 
       // ✅ total da planta (independente do equipamento)
       const allRows = payloads.flatMap((p) => p.rows || []);
-
       setAgg(computeMonthAgg(m, days, allRows));
     } catch (e: any) {
       setErr(e?.message || "Falha ao carregar estatísticas do mês.");
@@ -200,8 +205,8 @@ export default function Statistics() {
   }, [month]);
 
   const monthLabel = useMemo(() => {
-    const [y, m] = month.split("-");
-    return `${m}/${y}`;
+    const [y, m] = String(month || "").split("-");
+    return y && m ? `${m}/${y}` : month;
   }, [month]);
 
   return (
@@ -283,7 +288,11 @@ export default function Statistics() {
             <Kpi title="DF da Planta (mês)" value={fmtPct(agg.DF)} sub={`DF = (TP − PM) / TP • PM: ${fmt1(agg.PM)} h`} />
           </div>
           <div style={{ gridColumn: "span 6" }}>
-            <Kpi title="UF da Planta (mês)" value={fmtPct(agg.UF)} sub={`UF = (TP − PM − PO) / (TP − PM) • PO: ${fmt1(agg.PO)} h`} />
+            <Kpi
+              title="UF da Planta (mês)"
+              value={fmtPct(agg.UF)}
+              sub={`UF = (TP − PM − PO) / (TP − PM) • PO: ${fmt1(agg.PO)} h`}
+            />
           </div>
         </div>
       )}
