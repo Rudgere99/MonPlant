@@ -1,301 +1,1099 @@
 import React, { useEffect, useMemo, useState } from "react";
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  BarChart,
+  Bar,
+  LabelList,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  LineChart,
+  Line,
+  Legend,
+  ReferenceArea,
+} from "recharts";
+import { useAuth } from "../auth/AuthProvider";
 
-type StopRow = {
-  period: string;
-  equipamento: string;
-  tipo_parada: string;
-  descricao: string;
-  minutos: number;
+type StopKV = { type?: string; equipment?: string; hours?: number };
+type StopDesc = { description?: string; hours?: number };
+type StopCountPeriod = { period?: string; count?: number };
+
+type DailyRow = {
+  day: string; // YYYY-MM-DD
+  produced_ton?: number;
+  meta_ton?: number;
+  attainment_pct?: number;
+  freq_avg?: number;
+  avg_ton_per_hour?: number;
+  t1_ton?: number;
+  t2_ton?: number;
+  maintenance_hours?: number;
 };
 
-type StopDayPayload = { day: string; rows: StopRow[] };
+type StatsMonth = {
+  month: string; // YYYY-MM
+  meta_month_ton?: number;
+  produced_month_ton?: number;
+  attainment_pct?: number;
+  delta_ton?: number;
+  delta_pct?: number;
 
-const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
+  days?: {
+    produced_days?: number;
+    programmed_stop_days?: number;
+    maintenance_stop_days?: number;
+  };
 
-// ✅ IMPORTANTE: precisa ser objeto simples para poder usar spread
-function authHeaders(): Record<string, string> {
-  const t = (localStorage.getItem("mp_token") || localStorage.getItem("token") || "").trim();
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  best_day?: { day: string; produced_ton?: number; meta_ton?: number; attainment_pct?: number };
+  worst_day?: { day: string; produced_ton?: number; meta_ton?: number; attainment_pct?: number };
+
+  kpis?: {
+    freq_avg_pct?: number;
+    avg_ton_per_hour?: number;
+  };
+
+  shift?: { t1_ton?: number; t2_ton?: number };
+
+  stops?: {
+    by_type?: StopKV[];
+    by_equipment?: StopKV[];
+    by_description?: StopDesc[];
+    count_by_period?: StopCountPeriod[];
+  };
+
+  hours_worked?: {
+    total_hours?: number;
+    by_equipment?: { equipment?: string; hours?: number }[];
+  };
+
+  series?: { daily?: DailyRow[] };
+};
+
+const COLORS = {
+  bgCard: "rgba(14,18,22,0.78)",
+  stroke: "rgba(255,255,255,0.10)",
+  text: "rgba(255,255,255,0.92)",
+  sub: "rgba(255,255,255,0.55)",
+  orange: "#ff9f1a",
+  cyan: "#00d2ff",
+  slate: "rgba(148,163,184,0.70)",
+  green: "#22c55e",
+  red: "#fb7185",
+};
+
+function fmtBR0(n: number) {
+  return (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
-
-function clamp60(n: any) {
-  const x = Number(n || 0);
-  return Math.max(0, Math.min(60, x));
-}
-
-function norm(s: any) {
-  return String(s || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-// Buckets para cálculo (conforme regra do usuário)
-function classTipo(tipo: string) {
-  const t = norm(tipo);
-  if (t.includes("corret")) return "Corretiva";
-  if (t.includes("prevent")) return "Preventiva";
-  if (t.includes("eletr")) return "Elétrica";
-  if (t.includes("operac")) return "Operacional";
-  if (t.includes("segur")) return "Segurança";
-  return "Outros";
-}
-
-function fmt1(n: number) {
+function fmtBR1(n: number) {
   return (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
-function fmt2(n: number) {
-  return (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function fmtPct(n: number) {
-  return `${fmt2(n)}%`;
+function fmtPct(n: number, digits = 0) {
+  const v = Number.isFinite(n) ? n : 0;
+  return v.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits }) + "%";
 }
 
-function monthStr(d = new Date()) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${yyyy}-${mm}`; // input[type=month]
+function truncLabel(s: string, max = 28) {
+  const t = (s || "").trim();
+  if (!t) return "—";
+  if (t.length <= max) return t;
+  return t.slice(0, Math.max(0, max - 1)) + "…";
+}
+function ymdToDM(ymd: string) {
+  if (!ymd) return "";
+  const parts = ymd.split("-");
+  if (parts.length < 3) return ymd;
+  return `${parts[2]}/${parts[1]}`;
+}
+function daysInMonth(ym: string) {
+  const [y, m] = ym.split("-").map((x) => Number(x));
+  if (!y || !m) return 30;
+  return new Date(y, m, 0).getDate();
+}
+function monthToLabel(ym: string) {
+  if (!ym || ym.length < 7) return ym;
+  const [y, m] = ym.split("-");
+  const mi = Number(m);
+  const meses = [
+    "",
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
+  ];
+  return `${meses[mi] || m} de ${y}`;
+}
+function apiBase() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const v = (import.meta as any)?.env?.VITE_API_BASE;
+  return String(v || "").trim().replace(/\/+$/, "");
 }
 
-function daysInMonth(yyyy: number, mm1: number) {
-  // mm1: 1..12
-  return new Date(yyyy, mm1, 0).getDate();
-}
-
-function isoDate(yyyy: number, mm1: number, dd: number) {
-  const mm = String(mm1).padStart(2, "0");
-  const d = String(dd).padStart(2, "0");
-  return `${yyyy}-${mm}-${d}`;
-}
-
-async function fetchStopsDay(day: string): Promise<StopDayPayload> {
-  if (!API_BASE) throw new Error("VITE_API_BASE não configurado.");
-
-  const qs = `day=${encodeURIComponent(day)}`;
-  const r = await fetch(`${API_BASE}/api/stops-launch?${qs}`, {
-    headers: { ...authHeaders() },
-  });
-  if (!r.ok) throw new Error(`Stops ${day}: ${r.status}`);
-  const json = (await r.json()) as StopDayPayload;
-  return { day: json?.day || day, rows: Array.isArray(json?.rows) ? json.rows : [] };
-}
-
-type MonthAgg = {
-  month: string; // YYYY-MM
-  days: number;
-
-  totalH: number; // total de horas paradas no mês (planta)
-  corretivaH: number;
-  preventivaH: number;
-  operacionalH: number;
-
-  // para DF/UF
-  TP: number; // h
-  PM: number; // h (Corretiva+Preventiva+Elétrica)
-  PO: number; // h (Operacional+Segurança+Outros)
-  DF: number; // %
-  UF: number; // %
-};
-
-function computeMonthAgg(month: string, days: number, rows: StopRow[]): MonthAgg {
-  let totalMin = 0;
-
-  let minCor = 0;
-  let minPrev = 0;
-  let minOper = 0;
-
-  // extras usados no cálculo DF/UF
-  let minEle = 0;
-  let minSeg = 0;
-  let minOut = 0;
-
-  for (const r of rows) {
-    const m = clamp60(r.minutos);
-    totalMin += m;
-
-    const k = classTipo(r.tipo_parada);
-    if (k === "Corretiva") minCor += m;
-    else if (k === "Preventiva") minPrev += m;
-    else if (k === "Operacional") minOper += m;
-    else if (k === "Elétrica") minEle += m;
-    else if (k === "Segurança") minSeg += m;
-    else minOut += m;
-  }
-
-  const totalH = totalMin / 60;
-  const corretivaH = minCor / 60;
-  const preventivaH = minPrev / 60;
-  const operacionalH = minOper / 60;
-
-  const TP = days * 24;
-  const PM = (minCor + minPrev + minEle) / 60;
-  const PO = (minOper + minSeg + minOut) / 60;
-
-  const DF = TP > 0 ? ((TP - PM) / TP) * 100 : 0;
-  const UF = (TP - PM) > 0 ? ((TP - PM - PO) / (TP - PM)) * 100 : 0;
-
-  return { month, days, totalH, corretivaH, preventivaH, operacionalH, TP, PM, PO, DF, UF };
-}
-
-const card: React.CSSProperties = {
-  borderRadius: 22,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(14,18,22,0.78)",
-  padding: 16,
-};
-
-const label: React.CSSProperties = {
-  color: "rgba(255,255,255,0.55)",
-  fontWeight: 900,
-  fontSize: 12,
-  letterSpacing: 0.2,
-  textTransform: "uppercase",
-};
-
-function Kpi({ title, value, sub }: { title: string; value: React.ReactNode; sub?: React.ReactNode }) {
+function Card({
+  title,
+  sub,
+  right,
+  children,
+}: {
+  title: string;
+  sub?: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <div style={card}>
-      <div style={label}>{title}</div>
-      <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.4, marginTop: 6 }}>{value}</div>
-      {sub ? (
-        <div style={{ marginTop: 6, color: "rgba(255,255,255,0.70)", fontWeight: 800, fontSize: 13 }}>{sub}</div>
-      ) : null}
+    <div
+      style={{
+        borderRadius: 22,
+        border: `1px solid ${COLORS.stroke}`,
+        background: COLORS.bgCard,
+        boxShadow: "0 30px 60px rgba(0,0,0,0.55)",
+        backdropFilter: "blur(14px)",
+        padding: 14,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 980, color: COLORS.text, fontSize: 16, letterSpacing: -0.2 }}>{title}</div>
+          {sub ? <div style={{ marginTop: 2, color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>{sub}</div> : null}
+        </div>
+        {right ? <div style={{ flex: "0 0 auto" }}>{right}</div> : null}
+      </div>
+      <div style={{ marginTop: 10 }}>{children}</div>
     </div>
   );
 }
 
-export default function Statistics() {
-  const [month, setMonth] = useState<string>(monthStr());
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [agg, setAgg] = useState<MonthAgg | null>(null);
+function StatusChip({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <div
+      style={{
+        height: 34,
+        padding: "0 12px",
+        borderRadius: 999,
+        border: `1px solid ${ok ? "rgba(34,197,94,0.28)" : "rgba(251,113,133,0.30)"}`,
+        background: ok ? "rgba(34,197,94,0.14)" : "rgba(251,113,133,0.14)",
+        color: "white",
+        fontWeight: 980,
+        display: "grid",
+        placeItems: "center",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </div>
+  );
+}
 
-  async function loadMonth(m: string) {
-    setBusy(true);
-    setErr(null);
+function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: number }) {
+  const maxV = Math.max(producedTon, metaTon, 1);
+  const leftH = Math.max(10, Math.round((producedTon / maxV) * 100));
+  const rightH = Math.max(10, Math.round((metaTon / maxV) * 100));
 
-    try {
-      const [yyyyS, mmS] = String(m || "").split("-");
-      const yyyy = Number(yyyyS);
-      const mm1 = Number(mmS);
-      if (!yyyy || !mm1) throw new Error("Mês inválido.");
-
-      const days = daysInMonth(yyyy, mm1);
-      const daysList = Array.from({ length: days }, (_, i) => isoDate(yyyy, mm1, i + 1));
-
-      const payloads = await Promise.all(
-        daysList.map((d) => fetchStopsDay(d).catch(() => ({ day: d, rows: [] as StopRow[] })))
-      );
-
-      // ✅ total da planta (independente do equipamento)
-      const allRows = payloads.flatMap((p) => p.rows || []);
-      setAgg(computeMonthAgg(m, days, allRows));
-    } catch (e: any) {
-      setErr(e?.message || "Falha ao carregar estatísticas do mês.");
-      setAgg(null);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    loadMonth(month);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month]);
-
-  const monthLabel = useMemo(() => {
-    const [y, m] = String(month || "").split("-");
-    return y && m ? `${m}/${y}` : month;
-  }, [month]);
+  const barBase: React.CSSProperties = {
+    width: "100%",
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,0.10)",
+    display: "grid",
+    placeItems: "center",
+    fontWeight: 980,
+    color: "rgba(255,255,255,0.96)",
+    textShadow: "0 2px 10px rgba(0,0,0,0.55)",
+    padding: "0 10px",
+    lineHeight: 1.05,
+  };
 
   return (
-    <div style={{ padding: 18 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: -0.3 }}>Produção do mês • Estatísticas</div>
-          <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 800, marginTop: 4 }}>
-            UF/DF da planta baseado nas paradas lançadas hora a hora
+    <div
+      style={{
+        borderRadius: 18,
+        border: `1px solid ${COLORS.stroke}`,
+        background: COLORS.bgCard,
+        boxShadow: "0 24px 50px rgba(0,0,0,0.55)",
+        backdropFilter: "blur(14px)",
+        padding: 14,
+        position: "relative",
+        overflow: "hidden",
+        minHeight: 96,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: -30,
+          background: `radial-gradient(600px 180px at 20% 20%, rgba(255,159,26,0.18), transparent 55%)`,
+          pointerEvents: "none",
+        }}
+      />
+      <div style={{ position: "relative" }}>
+        <div style={{ fontSize: 12, fontWeight: 900, color: COLORS.sub }}>Meta do mês x Produção do mês</div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 8px 1fr",
+            gap: 12,
+            alignItems: "end",
+            height: 90,
+            marginTop: 10,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, fontSize: 12 }}>Produzido</div>
+            <div
+              style={{
+                ...barBase,
+                height: `${leftH}%`,
+                background: "linear-gradient(180deg, rgba(255,159,26,0.96), rgba(255,159,26,0.55))",
+              }}
+            >
+              <div style={{ fontSize: 22 }}>{fmtBR0(producedTon)} t</div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              width: 2,
+              height: "100%",
+              justifySelf: "center",
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.10)",
+            }}
+          />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, fontSize: 12, textAlign: "right" }}>Meta</div>
+            <div
+              style={{
+                ...barBase,
+                height: `${rightH}%`,
+                background: "linear-gradient(180deg, rgba(148,163,184,0.75), rgba(148,163,184,0.35))",
+              }}
+            >
+              <div style={{ fontSize: 22 }}>{fmtBR0(metaTon)} t</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  title,
+  value,
+  sub,
+  ok,
+  chip,
+  tone = "normal",
+}: {
+  title: string;
+  value: string;
+  sub: string;
+  ok: boolean;
+  chip?: React.ReactNode;
+  tone?: "normal" | "low";
+}) {
+  const isLow = tone === "low";
+  return (
+    <div
+      style={{
+        borderRadius: 18,
+        border: `1px solid ${COLORS.stroke}`,
+        background: COLORS.bgCard,
+        boxShadow: "0 24px 50px rgba(0,0,0,0.55)",
+        backdropFilter: "blur(14px)",
+        padding: 14,
+        position: "relative",
+        overflow: "hidden",
+        minHeight: 96,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: -30,
+          background: `radial-gradient(600px 180px at 20% 20%, ${
+            ok ? "rgba(34,197,94,0.14)" : "rgba(251,113,133,0.14)"
+          }, transparent 55%)`,
+          opacity: isLow ? 0.6 : 1,
+          pointerEvents: "none",
+        }}
+      />
+      <div style={{ position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 900, color: COLORS.sub, letterSpacing: 0.2 }}>{title}</div>
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: isLow ? 24 : 28,
+                fontWeight: 980,
+                color: COLORS.text,
+                letterSpacing: -0.4,
+                lineHeight: 1,
+              }}
+            >
+              {value}
+            </div>
+          </div>
+          {chip ? chip : <StatusChip ok={ok} label={ok ? "🟢 Acima" : "🔴 Abaixo"} />}
+        </div>
+        {/* sub = uma única linha (sem redundância) */}
+        <div style={{ marginTop: 8, fontSize: 12, fontWeight: 900, color: COLORS.sub }}>{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+function MiniLegend() {
+  const itemStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: `1px solid ${COLORS.stroke}`,
+    background: "rgba(255,255,255,0.04)",
+    color: "rgba(255,255,255,0.78)",
+    fontWeight: 900,
+    fontSize: 12,
+    whiteSpace: "nowrap",
+  };
+
+  const dot = (bg: string) => (
+    <span style={{ width: 10, height: 10, borderRadius: 999, background: bg, display: "inline-block" }} />
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div style={itemStyle} title="Indicador acima do alvo/esperado">
+        {dot("rgba(34,197,94,0.95)")} Acima
+      </div>
+      <div style={itemStyle} title="Indicador abaixo do alvo/esperado">
+        {dot("rgba(251,113,133,0.95)")} Abaixo
+      </div>
+      <div style={itemStyle} title="Indicador em atenção">
+        {dot("rgba(255,159,26,0.95)")} Atenção
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ icon, title, sub }: { icon: string; title: string; sub?: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginTop: 4 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 980, color: "rgba(255,255,255,0.80)" }}>{icon}</div>
+        <div style={{ fontSize: 14, fontWeight: 980, color: "rgba(255,255,255,0.90)", letterSpacing: -0.2 }}>{title}</div>
+        {sub ? <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12, whiteSpace: "nowrap" }}>• {sub}</div> : null}
+      </div>
+      <div
+        style={{
+          height: 1,
+          flex: 1,
+          background: "linear-gradient(90deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02))",
+          marginTop: 8,
+        }}
+      />
+    </div>
+  );
+}
+
+function unitStyle() {
+  return { fontSize: 12, fontWeight: 950, color: "rgba(255,255,255,0.55)" } as const;
+}
+
+export default function Statistics() {
+  const { token } = useAuth();
+  const [month, setMonth] = useState(() => {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    return `${d.getFullYear()}-${mm}`;
+  });
+  const [data, setData] = useState<StatsMonth | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const api = apiBase();
+
+  useEffect(() => {
+    let alive = true;
+    async function run() {
+      setLoading(true);
+      setErr(null);
+      try {
+        const r = await fetch(`${api}/api/stats/month/${month}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (!r.ok) {
+          const txt = await r.text();
+          throw new Error(txt || `HTTP ${r.status}`);
+        }
+        const js = (await r.json()) as StatsMonth;
+        if (!alive) return;
+        setData(js);
+      } catch (e: any) {
+        if (!alive) return;
+        setData(null);
+        setErr(e?.message || "Erro ao carregar");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+    if (api) run();
+    return () => {
+      alive = false;
+    };
+  }, [api, month, token]);
+
+  const daily = useMemo(() => data?.series?.daily || [], [data]);
+
+  const metaMonth = Number(data?.meta_month_ton || 0);
+  const prodMonth = Number(data?.produced_month_ton || 0);
+
+  const attainmentPct = useMemo(() => {
+    const raw = Number(data?.attainment_pct);
+    if (Number.isFinite(raw) && raw !== 0) return raw;
+    if (metaMonth <= 0) return 0;
+    return (prodMonth / metaMonth) * 100;
+  }, [data, metaMonth, prodMonth]);
+
+  const deltaTon = useMemo(() => {
+    const raw = Number(data?.delta_ton);
+    if (Number.isFinite(raw) && raw !== 0) return raw;
+    return prodMonth - metaMonth;
+  }, [data, prodMonth, metaMonth]);
+
+  const deltaPct = useMemo(() => {
+    const raw = Number(data?.delta_pct);
+    if (Number.isFinite(raw) && raw !== 0) return raw;
+    if (metaMonth <= 0) return 0;
+    return ((prodMonth - metaMonth) / metaMonth) * 100;
+  }, [data, metaMonth, prodMonth]);
+
+  const okAtt = attainmentPct >= 100;
+
+  const dim = useMemo(() => daysInMonth(month), [month]);
+  const monthLabel = useMemo(() => monthToLabel(month), [month]);
+
+  const dailySeries = useMemo(() => {
+    return daily.map((d) => {
+      const produced = Number(d.produced_ton || 0);
+      const meta = Number(d.meta_ton || 0);
+      const pct = meta > 0 ? (produced / meta) * 100 : 0;
+      const noProd = meta > 0 && produced <= 0;
+      return { day: ymdToDM(d.day), produced, meta, pct, noProd };
+    });
+  }, [daily]);
+
+  const xTick = { fill: "rgba(255,255,255,0.55)", fontSize: 11 } as const;
+  const yTick = { fill: "rgba(255,255,255,0.55)", fontSize: 11 } as const;
+
+  const tooltipStyle = {
+    background: "rgba(5,7,10,0.92)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 14,
+    color: "white",
+    boxShadow: "0 18px 40px rgba(0,0,0,0.6)",
+  } as const;
+
+  const DailyTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const row = payload?.[0]?.payload || {};
+    const produced = Number(row.produced || 0);
+    const meta = Number(row.meta || 0);
+    const pct = meta > 0 ? (produced / meta) * 100 : 0;
+    return (
+      <div style={{ ...tooltipStyle, padding: 12 }}>
+        <div style={{ fontWeight: 980, marginBottom: 6 }}>{`Dia ${label}`}</div>
+        <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Produção</div>
+        <div style={{ fontWeight: 980 }}>{fmtBR0(produced)} t</div>
+        <div style={{ marginTop: 6, color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Meta</div>
+        <div style={{ fontWeight: 980 }}>{fmtBR0(meta)} t</div>
+        <div style={{ marginTop: 6, color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>% do dia</div>
+        <div style={{ fontWeight: 980 }}>{fmtPct(pct, 0)}</div>
+      </div>
+    );
+  };
+
+  const projection = useMemo(() => {
+    const producedDays = daily.filter((d) => (d.produced_ton || 0) > 0);
+    if (!producedDays.length) return { projected_ton: 0, projected_pct: 0 };
+    const avgDaily =
+      producedDays.reduce((a, b) => a + (Number(b.produced_ton) || 0), 0) / producedDays.length;
+    const projected = avgDaily * dim;
+    const projectedPct = metaMonth > 0 ? (projected / metaMonth) * 100 : 0;
+    return { projected_ton: projected, projected_pct: projectedPct };
+  }, [daily, dim, metaMonth]);
+
+  const t1Month = Number(data?.shift?.t1_ton || 0);
+  const t2Month = Number(data?.shift?.t2_ton || 0);
+  const shiftPie = useMemo(() => {
+    const s = t1Month + t2Month;
+    if (s <= 0) return [];
+    return [
+      { name: "Turno 1 (07–19)", value: t1Month },
+      { name: "Turno 2 (19–07)", value: t2Month },
+    ];
+  }, [t1Month, t2Month]);
+
+
+  const shiftTotal = useMemo(() => t1Month + t2Month, [t1Month, t2Month]);
+
+  const shiftLegend = useMemo(() => {
+    if (shiftTotal <= 0) return [] as { key: string; name: string; value: number; pct: number; color: string }[];
+    return [
+      { key: "T1", name: "Turno 1 (07–19)", value: t1Month, pct: (t1Month / shiftTotal) * 100, color: COLORS.cyan },
+      { key: "T2", name: "Turno 2 (19–07)", value: t2Month, pct: (t2Month / shiftTotal) * 100, color: COLORS.orange },
+    ];
+  }, [shiftTotal, t1Month, t2Month]);
+
+  const stopsByType = useMemo(
+    () => (data?.stops?.by_type || []).map((x) => ({ name: x.type || "—", hours: Number(x.hours || 0) })),
+    [data]
+  );
+  const stopsByEq = useMemo(
+    () =>
+      (data?.stops?.by_equipment || [])
+        .map((x) => ({ name: x.equipment || "—", hours: Number(x.hours || 0) }))
+        .slice(0, 10),
+    [data]
+  );
+  const stopsByDesc = useMemo(
+    () => {
+      const raw = (data?.stops?.by_description || []).map((x) => ({
+        name: (x.description || "—").trim() || "—",
+        hours: Number(x.hours || 0),
+      }));
+      // Top 8 + "Outros" (reduz densidade visual)
+      const top = raw.slice(0, 8);
+      const rest = raw.slice(8);
+      const otherHours = rest.reduce((a, b) => a + (Number(b.hours) || 0), 0);
+      return otherHours > 0.01 ? [...top, { name: "Outros", hours: otherHours }] : top;
+    },
+    [data]
+  );
+  const stopsCountByPeriod = useMemo(
+    () => (data?.stops?.count_by_period || []).map((x) => ({ period: x.period || "—", count: Number(x.count || 0) })),
+    [data]
+  );
+
+  const totalStopHours = useMemo(
+    () => stopsByType.reduce((a, b) => a + (Number(b.hours) || 0), 0),
+    [stopsByType]
+  );
+
+  const producedDays = useMemo(
+    () => data?.days?.produced_days ?? daily.filter((d) => (d.produced_ton || 0) > 0).length,
+    [data, daily]
+  );
+  const programmedStopDays = useMemo(
+    () => data?.days?.programmed_stop_days ?? daily.filter((d) => (d.meta_ton || 0) === 0).length,
+    [data, daily]
+  );
+  const maintDays = useMemo(
+    () => data?.days?.maintenance_stop_days ?? daily.filter((d) => (d.maintenance_hours || 0) > 0).length,
+    [data, daily]
+  );
+
+  const freqAvg = Number(data?.kpis?.freq_avg_pct || 0);
+  const avgTonH = Number(data?.kpis?.avg_ton_per_hour || 0);
+
+  // ✅ horas operadas dos equipamentos (horímetro do backend)
+  const totalWorkedHours = Number(data?.hours_worked?.total_hours || 0);
+  const workedHoursByEq = useMemo(
+    () =>
+      (data?.hours_worked?.by_equipment || [])
+        .map((x) => ({ name: x.equipment || "—", hours: Number(x.hours || 0) }))
+        .slice(0, 10),
+    [data]
+  );
+
+  const availabilityPct = useMemo(() => {
+    if (totalWorkedHours <= 0) return 0;
+    const v = (1 - totalStopHours / totalWorkedHours) * 100;
+    if (!Number.isFinite(v)) return 0;
+    return Math.max(0, Math.min(100, v));
+  }, [totalWorkedHours, totalStopHours]);
+
+  const okAvail = availabilityPct >= 85;
+
+  const microInsight = useMemo(() => {
+    if (totalStopHours <= 0.01) return "";
+    const tA = stopsByType?.[0];
+    const tB = stopsByType?.[1];
+    const dA = stopsByDesc?.[0];
+
+    const pct = (h?: number) => {
+      const v = Number(h || 0);
+      return totalStopHours > 0 ? Math.round((v / totalStopHours) * 100) : 0;
+    };
+
+    const parts: string[] = [];
+    if (tA) parts.push(`${tA.name} (${pct(tA.hours)}%)`);
+    if (tB) parts.push(`${tB.name} (${pct(tB.hours)}%)`);
+
+    const head = parts.length ? `Principais perdas: ${parts.join(" e ")}.` : "";
+    const cause = dA ? ` Causa líder: ${dA.name} (${pct(dA.hours)}%).` : "";
+    return (head + cause).trim();
+  }, [totalStopHours, stopsByType, stopsByDesc]);
+
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Header */}
+      <div
+        style={{
+          borderRadius: 22,
+          border: `1px solid ${COLORS.stroke}`,
+          background: COLORS.bgCard,
+          boxShadow: "0 30px 60px rgba(0,0,0,0.55)",
+          backdropFilter: "blur(14px)",
+          padding: 16,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Relatórios • Estatísticas</div>
+          <div style={{ marginTop: 4, fontSize: 26, fontWeight: 980, color: COLORS.text, letterSpacing: -0.4 }}>
+            Estatísticas do mês
+          </div>
+
+          <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+            <div style={{ color: COLORS.sub, fontWeight: 900 }}>Mês</div>
+            <input
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              style={{
+                height: 36,
+                borderRadius: 12,
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(0,0,0,0.25)",
+                color: "white",
+                padding: "0 12px",
+                fontWeight: 900,
+                outline: "none",
+              }}
+            />
+            <div style={{ color: COLORS.sub, fontWeight: 850 }}>•</div>
+            <div style={{ color: "rgba(255,255,255,0.85)", fontWeight: 950 }}>{monthLabel}</div>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <input
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" }}>
+          <div
             style={{
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.10)",
-              background: "rgba(255,255,255,0.04)",
-              color: "rgba(255,255,255,0.92)",
-              padding: "10px 12px",
-              fontWeight: 900,
+              height: 34,
+              padding: "0 12px",
+              borderRadius: 999,
+              border: `1px solid ${okAtt ? "rgba(34,197,94,0.28)" : "rgba(251,113,133,0.30)"}`,
+              background: okAtt ? "rgba(34,197,94,0.14)" : "rgba(251,113,133,0.14)",
+              color: "white",
+              fontWeight: 950,
+              display: "grid",
+              placeItems: "center",
+              whiteSpace: "nowrap",
             }}
-          />
-          <button
-            onClick={() => loadMonth(month)}
-            disabled={busy}
+            title="Diferença vs meta do mês"
+          >
+            {deltaTon >= 0 ? `+${fmtBR0(deltaTon)} t` : `-${fmtBR0(Math.abs(deltaTon))} t`} •{" "}
+            {deltaPct >= 0 ? `+${fmtBR1(deltaPct)}%` : `-${fmtBR1(Math.abs(deltaPct))}%`}
+          </div>
+
+          <div
             style={{
-              borderRadius: 14,
+              height: 34,
+              padding: "0 12px",
+              borderRadius: 999,
               border: "1px solid rgba(255,255,255,0.10)",
               background: "rgba(255,255,255,0.06)",
-              color: "rgba(255,255,255,0.92)",
-              padding: "10px 12px",
+              color: "rgba(255,255,255,0.85)",
               fontWeight: 950,
-              cursor: busy ? "not-allowed" : "pointer",
+              display: "grid",
+              placeItems: "center",
             }}
           >
-            {busy ? "Carregando…" : "Atualizar"}
-          </button>
+            {loading ? "Carregando…" : err ? "Offline" : "Online"}
+          </div>
         </div>
       </div>
 
-      {err ? (
-        <div style={{ marginTop: 12, ...card, borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)" }}>
-          <div style={{ fontWeight: 950 }}>Falha ao carregar</div>
-          <div style={{ color: "rgba(255,255,255,0.75)", fontWeight: 800, marginTop: 6 }}>{err}</div>
-        </div>
-      ) : null}
+      {/* ===================== VISÃO EXECUTIVA ===================== */}
+      <SectionHeader icon="📌" title="Visão Executiva" sub="KPIs do mês" />
 
-      {!agg ? (
-        <div style={{ marginTop: 14, ...card }}>
-          <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900 }}>
-            {busy ? "Carregando dados do mês…" : "Sem dados."}
+      {/* KPI rei + barras meta x produzido */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 14 }}>
+        <div style={{ gridColumn: "span 7" }}>
+          <MonthBars producedTon={prodMonth} metaTon={metaMonth} />
+        </div>
+
+        {/* KPI Rei: Diferença vs Meta */}
+        <div
+          style={{
+            gridColumn: "span 5",
+            borderRadius: 22,
+            border: `1px solid ${COLORS.stroke}`,
+            background: COLORS.bgCard,
+            boxShadow: "0 30px 60px rgba(0,0,0,0.55)",
+            backdropFilter: "blur(14px)",
+            padding: 16,
+            position: "relative",
+            overflow: "hidden",
+            minHeight: 96,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: -30,
+              background: `radial-gradient(650px 220px at 25% 20%, ${
+                okAtt ? "rgba(34,197,94,0.18)" : "rgba(251,113,133,0.18)"
+              }, transparent 55%)`,
+              pointerEvents: "none",
+            }}
+          />
+          <div style={{ position: "relative" }}>
+            <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 10 }}>
+              <div>
+                <div style={{ color: COLORS.sub, fontWeight: 950, fontSize: 12 }}>⭐ KPI principal</div>
+                <div style={{ marginTop: 6, color: COLORS.text, fontWeight: 980, fontSize: 16 }}>Diferença vs Meta</div>
+              </div>
+              <StatusChip ok={okAtt} label={okAtt ? "🟢 Acima" : "🔴 Abaixo"} />
+            </div>
+
+            <div style={{ marginTop: 10, fontSize: 34, fontWeight: 990, color: COLORS.text, letterSpacing: -0.6, lineHeight: 1 }}>
+              {deltaTon >= 0 ? `+${fmtBR0(deltaTon)} t` : `-${fmtBR0(Math.abs(deltaTon))} t`}
+            </div>
+            <div style={{ marginTop: 8, color: COLORS.sub, fontWeight: 920 }}>
+              Atingimento: {fmtPct(attainmentPct, 0)} • {deltaPct >= 0 ? `+${fmtBR1(deltaPct)}%` : `-${fmtBR1(Math.abs(deltaPct))}%`}
+            </div>
           </div>
         </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 12, marginTop: 14 }}>
-          <div style={{ gridColumn: "span 12" }}>
-            <Kpi
-              title={`Horas paradas da planta no mês (${monthLabel})`}
-              value={`${fmt1(agg.totalH)} h`}
-              sub={`TP: ${fmt1(agg.TP)} h (${agg.days} dias × 24h)`}
-            />
-          </div>
+      </div>
 
-          <div style={{ gridColumn: "span 4" }}>
-            <Kpi title="Corretiva (mês)" value={`${fmt1(agg.corretivaH)} h`} />
-          </div>
-          <div style={{ gridColumn: "span 4" }}>
-            <Kpi title="Preventiva (mês)" value={`${fmt1(agg.preventivaH)} h`} />
-          </div>
-          <div style={{ gridColumn: "span 4" }}>
-            <Kpi title="Operacional (mês)" value={`${fmt1(agg.operacionalH)} h`} />
-          </div>
+      {/* KPIs de suporte */}
+      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+        <MetricCard
+          title="Atingimento"
+          tone="low"
+          value={fmtPct(attainmentPct, 0)}
+          sub={`${okAtt ? "🟢" : "🔴"} ${okAtt ? "Acima da meta" : "Abaixo da meta"} • (${deltaTon >= 0 ? "+" : "-"}${fmtBR0(Math.abs(deltaTon))} t)`}
+          ok={okAtt}
+        />
 
-          <div style={{ gridColumn: "span 6" }}>
-            <Kpi title="DF da Planta (mês)" value={fmtPct(agg.DF)} sub={`DF = (TP − PM) / TP • PM: ${fmt1(agg.PM)} h`} />
-          </div>
-          <div style={{ gridColumn: "span 6" }}>
-            <Kpi
-              title="UF da Planta (mês)"
-              value={fmtPct(agg.UF)}
-              sub={`UF = (TP − PM − PO) / (TP − PM) • PO: ${fmt1(agg.PO)} h`}
-            />
-          </div>
+        <MetricCard
+          title="Projeção (run-rate)"
+          value={`${fmtBR0(projection.projected_ton)} t`}
+          sub={`${projection.projected_pct >= 100 ? "🟢" : "🔴"} Projeção do mês: ${fmtPct(projection.projected_pct, 0)} • Mantido o ritmo atual (dias produtivos)`}
+          ok={projection.projected_pct >= 100}
+        />
+
+        <MetricCard
+          title="Disponibilidade"
+          value={fmtPct(availabilityPct, 0)}
+          sub={`⏱ Paradas: ${fmtBR1(totalStopHours)} h • Operado: ${fmtBR1(totalWorkedHours)} h`}
+          ok={okAvail}
+          chip={<StatusChip ok={okAvail} label={okAvail ? "Boa" : "Atenção"} />}
+        />
+
+        <MetricCard title="Frequência média" value={fmtPct(freqAvg, 0)} sub="📊 Média agregada do mês" ok={freqAvg >= 85} />
+        <MetricCard title="Produção média" value={`${fmtBR0(avgTonH)} t/h`} sub="⛏ Média agregada do mês" ok={avgTonH > 0} />
+      </div>
+
+      {/* Micro-insights + legenda global */}
+      <div
+        style={{
+          borderRadius: 18,
+          border: `1px solid ${COLORS.stroke}`,
+          background: "rgba(0,0,0,0.18)",
+          padding: 12,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900, fontSize: 12, minWidth: 0 }}>
+          {microInsight ? `💡 ${microInsight}` : "💡 Insights: sem paradas registradas no período."}
         </div>
-      )}
+        <MiniLegend />
+      </div>
+
+      <SectionHeader icon="🧭" title="Diagnóstico Operacional" sub="produção diária, turnos, horímetros e paradas" />
+
+      {/* Produção diária + Turnos + Horas operadas */}
+      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1.15fr 0.85fr" }}>
+        <Card title="Produção diária x Meta diária" sub="Produção vs meta (a % aparece no tooltip)">
+          <div style={{ height: 320, minHeight: 320 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={dailySeries} margin={{ top: 16, right: 22, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={18} angle={-30} textAnchor="end" height={54} tick={xTick} />
+                <YAxis tick={yTick} />
+                <Tooltip content={<DailyTooltip />} />
+                {dailySeries.filter((d: any) => d.noProd).map((d: any) => (
+                  <ReferenceArea key={d.day} x1={d.day} x2={d.day} fill="rgba(255,255,255,0.035)" />
+                ))}
+                <Line type="monotone" dataKey="meta" stroke="rgba(148,163,184,0.45)" strokeWidth={1.2} strokeDasharray="6 6" dot={false} />
+                <Line type="monotone" dataKey="produced" stroke={COLORS.cyan} strokeWidth={3} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
+            <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
+              <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Dias produzidos</div>
+              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{producedDays}</div>
+              <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>de {dim} dias</div>
+            </div>
+
+            <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
+              <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Parada programada</div>
+              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{programmedStopDays}</div>
+              <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Dias com meta 0</div>
+            </div>
+
+            <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
+              <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Manutenção</div>
+              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{maintDays}</div>
+              <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Dias com manutenção</div>
+            </div>
+
+            <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
+              <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Horas operadas</div>
+              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{fmtBR1(totalWorkedHours)} h</div>
+              <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Horímetro (mês)</div>
+            </div>
+          </div>
+        </Card>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <Card title="Turnos" sub="Produção do mês por turno">
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 12, alignItems: "center" }}>
+              <div style={{ height: 420, minHeight: 420 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={shiftPie}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={62}
+                      outerRadius={95}
+                      paddingAngle={2}
+                      labelLine={false}
+                      label={({ value }: any) => {
+                        const v = Number(value || 0);
+                        const pct = shiftTotal > 0 ? (v / shiftTotal) * 100 : 0;
+                        if (!v) return "";
+                        return `${fmtBR0(v)}t • ${fmtPct(pct, 0)}`;
+                      }}
+                    >
+                      {(shiftPie || []).map((_, idx) => (
+                        <Cell key={idx} fill={idx === 0 ? COLORS.cyan : COLORS.orange} />
+                      ))}
+                    </Pie>
+
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      formatter={(v: any) => {
+                        const n = Number(v || 0);
+                        const pct = shiftTotal > 0 ? (n / shiftTotal) * 100 : 0;
+                        return [`${fmtBR0(n)} t • ${fmtPct(pct, 1)}`, "Turno"];
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {shiftLegend.map((it) => (
+                  <div
+                    key={it.key}
+                    style={{
+                      borderRadius: 16,
+                      border: `1px solid ${COLORS.stroke}`,
+                      background: "rgba(0,0,0,0.18)",
+                      padding: 12,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: 999,
+                            background: it.color,
+                            display: "inline-block",
+                            flex: "0 0 auto",
+                          }}
+                        />
+                        <div
+                          style={{
+                            color: "rgba(255,255,255,0.80)",
+                            fontWeight: 950,
+                            fontSize: 12,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                          title={it.name}
+                        >
+                          {it.name}
+                        </div>
+                      </div>
+
+                      <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, whiteSpace: "nowrap" }}>
+                        {fmtBR0(it.value)}t
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 6, color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>
+                      {fmtPct(it.pct, 0)} do mês
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          <Card title="Horas operadas por equipamento" sub="Horímetro (Top 10)">
+            <div style={{ height: 220, minHeight: 220 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={workedHoursByEq} layout="vertical" margin={{ top: 6, right: 16, left: 14, bottom: 6 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                  <XAxis type="number" tick={yTick} />
+                  <YAxis type="category" dataKey="name" width={80} tick={xTick} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
+                  <Bar dataKey="hours" fill={COLORS.slate as any} radius={[10, 10, 10, 10]}>
+                    <LabelList
+                      dataKey="hours"
+                      position="insideRight"
+                      formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
+                      style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      <SectionHeader icon="🛠" title="Paradas" sub="horas por tipo e por equipamento" />
+
+      {/* Paradas: horas por tipo e por equipamento */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 14 }}>
+        <Card title="Paradas por tipo" sub="Horas paradas agregadas no mês (apontamentos)">
+          <div style={{ height: 280, minHeight: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stopsByType} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                <XAxis dataKey="name" interval={0} tick={xTick} />
+                <YAxis tick={yTick} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
+                <Bar dataKey="hours" fill={COLORS.orange} radius={[10, 10, 0, 0]}>
+                  <LabelList
+                    dataKey="hours"
+                    position="insideTop"
+                    formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
+                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card title="Top equipamentos por paradas" sub="Horas paradas (Top 10)">
+          <div style={{ height: 280, minHeight: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stopsByEq} layout="vertical" margin={{ top: 6, right: 16, left: 14, bottom: 6 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                <XAxis type="number" tick={yTick} />
+                <YAxis type="category" dataKey="name" width={80} tick={xTick} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
+                <Bar dataKey="hours" fill={COLORS.cyan} radius={[10, 10, 10, 10]}>
+                  <LabelList
+                    dataKey="hours"
+                    position="insideRight"
+                    formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
+                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+
+      <SectionHeader icon="📊" title="Frequência e Descrições" sub="paradas por período e principais causas" />
+
+      {/* Número de paradas por período + horas por descrição */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <Card title="Número de paradas por período" sub="Contagem por hora (ex.: 07-08, 08-09)">
+          <div style={{ height: 360, minHeight: 360 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stopsCountByPeriod} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={0} angle={-35} textAnchor="end" height={70} tick={xTick} />
+                <YAxis tick={yTick} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR0(Number(v || 0))}`, "Paradas"]} />
+                <Bar dataKey="count" fill={COLORS.slate as any} radius={[10, 10, 0, 0]}>
+                  <LabelList
+                    dataKey="count"
+                    position="insideTop"
+                    formatter={(v: any) => `${fmtBR0(Number(v || 0))}`}
+                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card title="Horas paradas por descrição" sub="Top 8 + Outros (campo Descrição do apontamento)">
+          <div style={{ height: 460, minHeight: 460 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stopsByDesc} layout="vertical" margin={{ top: 6, right: 34, left: 22, bottom: 6 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                <XAxis type="number" tick={yTick} />
+                <YAxis type="category" dataKey="name" width={300} tick={xTick} tickFormatter={(v) => truncLabel(String(v), 34)} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
+                <Bar dataKey="hours" fill={COLORS.orange} radius={[10, 10, 10, 10]}>
+                  <LabelList
+                    dataKey="hours"
+                    position="insideRight"
+                    formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
+                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+
+      <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
+        {err ? `Erro: ${err}` : api ? `Mês ${month} • API ${api}` : "Configure VITE_API_BASE"}
+      </div>
     </div>
   );
 }
