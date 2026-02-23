@@ -5,11 +5,15 @@ import {
   Pie,
   Cell,
   Tooltip,
+  BarChart,
+  Bar,
+  LabelList,
   XAxis,
   YAxis,
   CartesianGrid,
   LineChart,
   Line,
+  Legend,
   ReferenceArea,
 } from "recharts";
 import { useAuth } from "../auth/AuthProvider";
@@ -354,6 +358,39 @@ function MetricCard({
   );
 }
 
+function MiniLegend() {
+  const itemStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: `1px solid ${COLORS.stroke}`,
+    background: "rgba(255,255,255,0.04)",
+    color: "rgba(255,255,255,0.78)",
+    fontWeight: 900,
+    fontSize: 12,
+    whiteSpace: "nowrap",
+  };
+
+  const dot = (bg: string) => (
+    <span style={{ width: 10, height: 10, borderRadius: 999, background: bg, display: "inline-block" }} />
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div style={itemStyle} title="Indicador acima do alvo/esperado">
+        {dot("rgba(34,197,94,0.95)")} Acima
+      </div>
+      <div style={itemStyle} title="Indicador abaixo do alvo/esperado">
+        {dot("rgba(251,113,133,0.95)")} Abaixo
+      </div>
+      <div style={itemStyle} title="Indicador em atenção">
+        {dot("rgba(255,159,26,0.95)")} Atenção
+      </div>
+    </div>
+  );
+}
 
 function SectionHeader({ icon, title, sub }: { icon: string; title: string; sub?: string }) {
   return (
@@ -524,6 +561,41 @@ export default function Statistics() {
     ];
   }, [shiftTotal, t1Month, t2Month]);
 
+  const stopsByType = useMemo(
+    () => (data?.stops?.by_type || []).map((x) => ({ name: x.type || "—", hours: Number(x.hours || 0) })),
+    [data]
+  );
+  const stopsByEq = useMemo(
+    () =>
+      (data?.stops?.by_equipment || [])
+        .map((x) => ({ name: x.equipment || "—", hours: Number(x.hours || 0) }))
+        .slice(0, 10),
+    [data]
+  );
+  const stopsByDesc = useMemo(
+    () => {
+      const raw = (data?.stops?.by_description || []).map((x) => ({
+        name: (x.description || "—").trim() || "—",
+        hours: Number(x.hours || 0),
+      }));
+      // Top 8 + "Outros" (reduz densidade visual)
+      const top = raw.slice(0, 8);
+      const rest = raw.slice(8);
+      const otherHours = rest.reduce((a, b) => a + (Number(b.hours) || 0), 0);
+      return otherHours > 0.01 ? [...top, { name: "Outros", hours: otherHours }] : top;
+    },
+    [data]
+  );
+  const stopsCountByPeriod = useMemo(
+    () => (data?.stops?.count_by_period || []).map((x) => ({ period: x.period || "—", count: Number(x.count || 0) })),
+    [data]
+  );
+
+  const totalStopHours = useMemo(
+    () => stopsByType.reduce((a, b) => a + (Number(b.hours) || 0), 0),
+    [stopsByType]
+  );
+
   const producedDays = useMemo(
     () => data?.days?.produced_days ?? daily.filter((d) => (d.produced_ton || 0) > 0).length,
     [data, daily]
@@ -539,12 +611,45 @@ export default function Statistics() {
 
   const freqAvg = Number(data?.kpis?.freq_avg_pct || 0);
   const avgTonH = Number(data?.kpis?.avg_ton_per_hour || 0);
+
+  // ✅ horas operadas dos equipamentos (horímetro do backend)
+  const totalWorkedHours = Number(data?.hours_worked?.total_hours || 0);
+  const workedHoursByEq = useMemo(
     () =>
       (data?.hours_worked?.by_equipment || [])
         .map((x) => ({ name: x.equipment || "—", hours: Number(x.hours || 0) }))
         .slice(0, 10),
     [data]
   );
+
+  const availabilityPct = useMemo(() => {
+    if (totalWorkedHours <= 0) return 0;
+    const v = (1 - totalStopHours / totalWorkedHours) * 100;
+    if (!Number.isFinite(v)) return 0;
+    return Math.max(0, Math.min(100, v));
+  }, [totalWorkedHours, totalStopHours]);
+
+  const okAvail = availabilityPct >= 85;
+
+  const microInsight = useMemo(() => {
+    if (totalStopHours <= 0.01) return "";
+    const tA = stopsByType?.[0];
+    const tB = stopsByType?.[1];
+    const dA = stopsByDesc?.[0];
+
+    const pct = (h?: number) => {
+      const v = Number(h || 0);
+      return totalStopHours > 0 ? Math.round((v / totalStopHours) * 100) : 0;
+    };
+
+    const parts: string[] = [];
+    if (tA) parts.push(`${tA.name} (${pct(tA.hours)}%)`);
+    if (tB) parts.push(`${tB.name} (${pct(tB.hours)}%)`);
+
+    const head = parts.length ? `Principais perdas: ${parts.join(" e ")}.` : "";
+    const cause = dA ? ` Causa líder: ${dA.name} (${pct(dA.hours)}%).` : "";
+    return (head + cause).trim();
+  }, [totalStopHours, stopsByType, stopsByDesc]);
 
   return (
     <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -699,13 +804,39 @@ export default function Statistics() {
           ok={projection.projected_pct >= 100}
         />
 
+        <MetricCard
+          title="Disponibilidade"
+          value={fmtPct(availabilityPct, 0)}
+          sub={`⏱ Paradas: ${fmtBR1(totalStopHours)} h • Operado: ${fmtBR1(totalWorkedHours)} h`}
+          ok={okAvail}
+          chip={<StatusChip ok={okAvail} label={okAvail ? "Boa" : "Atenção"} />}
+        />
+
         <MetricCard title="Frequência média" value={fmtPct(freqAvg, 0)} sub="📊 Média agregada do mês" ok={freqAvg >= 85} />
         <MetricCard title="Produção média" value={`${fmtBR0(avgTonH)} t/h`} sub="⛏ Média agregada do mês" ok={avgTonH > 0} />
       </div>
 
-      {
+      {/* Micro-insights + legenda global */}
+      <div
+        style={{
+          borderRadius: 18,
+          border: `1px solid ${COLORS.stroke}`,
+          background: "rgba(0,0,0,0.18)",
+          padding: 12,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900, fontSize: 12, minWidth: 0 }}>
+          {microInsight ? `💡 ${microInsight}` : "💡 Insights: sem paradas registradas no período."}
+        </div>
+        <MiniLegend />
+      </div>
 
-      <SectionHeader icon="🧭" title="Diagnóstico Operacional" sub="produção diária, turnos e horímetros" />
+      <SectionHeader icon="🧭" title="Diagnóstico Operacional" sub="produção diária, turnos, horímetros e paradas" />
 
       {/* Produção diária + Turnos + Horas operadas */}
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1.15fr 0.85fr" }}>
@@ -842,7 +973,122 @@ export default function Statistics() {
               </div>
             </div>
           </Card>
+
+          <Card title="Horas operadas por equipamento" sub="Horímetro (Top 10)">
+            <div style={{ height: 220, minHeight: 220 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={workedHoursByEq} layout="vertical" margin={{ top: 6, right: 16, left: 14, bottom: 6 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                  <XAxis type="number" tick={yTick} />
+                  <YAxis type="category" dataKey="name" width={80} tick={xTick} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
+                  <Bar dataKey="hours" fill={COLORS.slate as any} radius={[10, 10, 10, 10]}>
+                    <LabelList
+                      dataKey="hours"
+                      position="insideRight"
+                      formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
+                      style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
         </div>
+      </div>
+
+      <SectionHeader icon="🛠" title="Paradas" sub="horas por tipo e por equipamento" />
+
+      {/* Paradas: horas por tipo e por equipamento */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 14 }}>
+        <Card title="Paradas por tipo" sub="Horas paradas agregadas no mês (apontamentos)">
+          <div style={{ height: 280, minHeight: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stopsByType} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                <XAxis dataKey="name" interval={0} tick={xTick} />
+                <YAxis tick={yTick} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
+                <Bar dataKey="hours" fill={COLORS.orange} radius={[10, 10, 0, 0]}>
+                  <LabelList
+                    dataKey="hours"
+                    position="insideTop"
+                    formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
+                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card title="Top equipamentos por paradas" sub="Horas paradas (Top 10)">
+          <div style={{ height: 280, minHeight: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stopsByEq} layout="vertical" margin={{ top: 6, right: 16, left: 14, bottom: 6 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                <XAxis type="number" tick={yTick} />
+                <YAxis type="category" dataKey="name" width={80} tick={xTick} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
+                <Bar dataKey="hours" fill={COLORS.cyan} radius={[10, 10, 10, 10]}>
+                  <LabelList
+                    dataKey="hours"
+                    position="insideRight"
+                    formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
+                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+
+      <SectionHeader icon="📊" title="Frequência e Descrições" sub="paradas por período e principais causas" />
+
+      {/* Número de paradas por período + horas por descrição */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <Card title="Número de paradas por período" sub="Contagem por hora (ex.: 07-08, 08-09)">
+          <div style={{ height: 360, minHeight: 360 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stopsCountByPeriod} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={0} angle={-35} textAnchor="end" height={70} tick={xTick} />
+                <YAxis tick={yTick} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR0(Number(v || 0))}`, "Paradas"]} />
+                <Bar dataKey="count" fill={COLORS.slate as any} radius={[10, 10, 0, 0]}>
+                  <LabelList
+                    dataKey="count"
+                    position="insideTop"
+                    formatter={(v: any) => `${fmtBR0(Number(v || 0))}`}
+                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card title="Horas paradas por descrição" sub="Top 8 + Outros (campo Descrição do apontamento)">
+          <div style={{ height: 460, minHeight: 460 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stopsByDesc} layout="vertical" margin={{ top: 6, right: 34, left: 22, bottom: 6 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                <XAxis type="number" tick={yTick} />
+                <YAxis type="category" dataKey="name" width={300} tick={xTick} tickFormatter={(v) => truncLabel(String(v), 34)} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
+                <Bar dataKey="hours" fill={COLORS.orange} radius={[10, 10, 10, 10]}>
+                  <LabelList
+                    dataKey="hours"
+                    position="insideRight"
+                    formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
+                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
       </div>
 
       <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
