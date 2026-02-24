@@ -431,10 +431,12 @@ export default function Ritmo() {
   const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
 
   const projectionTon = useMemo(() => {
+    // Projeção correta: o que já foi produzido + (média real t/h * horas restantes)
+    // (antes estava multiplicando por 24 e inflando a projeção)
     if (isClosedDay) return produced;
-    if (avgRealTPH <= 0) return 0;
-    return avgRealTPH * 24;
-  }, [avgRealTPH, isClosedDay, produced]);
+    if (avgRealTPH <= 0) return produced; // sem média, projeta o que já tem
+    return produced + avgRealTPH * remainingH;
+  }, [avgRealTPH, isClosedDay, produced, remainingH]);
 
   const projectedDiff = useMemo(() => {
     if (metaDay === null) return null;
