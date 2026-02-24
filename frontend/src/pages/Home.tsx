@@ -35,8 +35,8 @@ export default function Home() {
       <div className="mp-container relative px-4 sm:px-6 lg:px-8 py-10">
         {/* HERO */}
         <section className="mp-card" style={{ borderRadius: 28, overflow: "hidden" }}>
-          {/* Banner */}
-          <div style={{ position: "relative", height: 300 }}>
+          {/* Banner (public/assets/monplant-banner.png) */}
+          <div style={{ position: "relative", height: 280 }}>
             <div
               style={{
                 position: "absolute",
@@ -49,13 +49,53 @@ export default function Home() {
               style={{
                 position: "absolute",
                 inset: 0,
-                opacity: 0.12,
-                backgroundImage: "url('/banner-placeholder.png')",
+                opacity: 0.92,
+                backgroundImage: "url('/assets/monplant-banner.png')",
                 backgroundSize: "cover",
                 backgroundPosition: "center",
               }}
             />
-            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.25)" }} />
+
+            {/* Overlay escuro + gloss */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "linear-gradient(to bottom, rgba(0,0,0,.15), rgba(0,0,0,.55)), radial-gradient(700px 240px at 20% 10%, rgba(52,211,153,.22), transparent 60%)",
+              }}
+            />
+
+            {/* Título em cima do banner */}
+            <div
+              style={{
+                position: "absolute",
+                left: 18,
+                right: 18,
+                bottom: 16,
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "space-between",
+                gap: 14,
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.7, color: "rgba(255,255,255,.70)" }}>
+                  MonPlant • Operação em tempo real
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 900, marginTop: 6, lineHeight: 1.15 }}>
+                  Visão executiva da planta
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span className="mp-chip">Produção</span>
+                <span className="mp-chip">Paradas</span>
+                <span className="mp-chip">Ritmo</span>
+                <span className="mp-chip">UF/DF</span>
+              </div>
+            </div>
           </div>
 
           <div style={{ padding: 18 }}>
@@ -130,7 +170,8 @@ export default function Home() {
                   </div>
 
                   <div className="mp-help">
-                    Banner: substitua <b>/banner-placeholder.png</b> por uma imagem real (planta/CCO/mineração).
+                    Dica: coloque prints das telas abaixo (Dashboard, Ritmo, UF/DF) para deixar essa página ainda mais
+                    profissional.
                   </div>
                 </div>
               </div>
