@@ -304,9 +304,8 @@ export default function PlantProduction() {
     const startH = (endH + 23) % 24;
     const targetPeriod = `${String(startH).padStart(2, "0")}:00-${String(endH).padStart(2, "0")}:00`;
 
-    const line = `• [${nowBRTime()}] ${calcEq}: ${fmtBR2(c)} conchadas × ${fmtBR2(a)} t = ${fmtBR2(t)} t${
-      calcObs.trim() ? ` | Obs: ${calcObs.trim()}` : ""
-    }`;
+    const obsText = calcObs.trim();
+    const line = obsText ? `• [${nowBRTime()}] ${obsText}` : "";
 
     setPayload((p) => {
       // 1) grava tonelagem no período-alvo somando com o que já tiver
@@ -319,7 +318,7 @@ export default function PlantProduction() {
 
       // 2) grava observação no campo de observação do dia
       const prev = (p.obs || "").trim();
-      const nextObs = prev ? `${prev}\n${line}` : line;
+      const nextObs = line ? (prev ? `${prev}\n${line}` : line) : prev;
 
       return { ...p, rows: nextRows, obs: nextObs };
     });
