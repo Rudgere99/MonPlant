@@ -276,11 +276,21 @@ export default function UfDF() {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 12, marginTop: 14 }}>
             <div style={{ gridColumn: "span 12" }}>
-              <Kpi
-                title={`Total de horas paradas no mês (${monthLabel})`}
-                value={`${fmt1(agg.totalH)} h`}
-                sub={`TP: ${fmt1(agg.TP)} h (${agg.days} dias × 24h)`}
-              />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 12 }}>
+                <div style={{ gridColumn: "span 4" }}>
+                  <Kpi title={`Horas Horizonte (${monthLabel})`} value={`${fmt1(agg.TP)} h`} sub={`${agg.days} dias × 24h`} />
+                </div>
+                <div style={{ gridColumn: "span 4" }}>
+                  <Kpi
+                    title="Horas Operando"
+                    value={`${fmt1(Math.max(0, agg.TP - agg.totalH))} h`}
+                    sub="Horizonte − Parada"
+                  />
+                </div>
+                <div style={{ gridColumn: "span 4" }}>
+                  <Kpi title="Horas Parada" value={`${fmt1(agg.totalH)} h`} sub="Soma das paradas" />
+                </div>
+              </div>
             </div>
 
             <div style={{ gridColumn: "span 4" }}>
