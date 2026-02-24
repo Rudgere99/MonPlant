@@ -653,11 +653,21 @@ useEffect(() => {
 
   
   // ===== projeção (mesma lógica do Ritmo) =====
-  // Projeção = média real (t/h) * 24h
-  const projectionTon24 = useMemo(() => {
-    if ((Number(avgTonPerHour) || 0) <= 0) return 0;
-    return (Number(avgTonPerHour) || 0) * 24;
-  }, [avgTonPerHour]);
+// Projeção (HOJE): produzido até agora + (média real t/h * horas restantes do dia)
+// Projeção (DIA PASSADO): total do dia (sem projeção)
+const projectionTon24 = useMemo(() => {
+  const avg = Number(avgTonPerHour) || 0;
+  if (!avg) return totalTonDay;
+
+  const isToday = day === isoTodayLocal();
+  if (!isToday) return totalTonDay;
+
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const remainingH = Math.max(0, (1440 - mins) / 60);
+
+  return totalTonDay + avg * remainingH;
+}, [avgTonPerHour, day, totalTonDay]);
 
   const projectionDiffTon = useMemo(() => {
     if (!metaDia || metaDia <= 0) return 0;
