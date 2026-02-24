@@ -803,8 +803,6 @@ export default function Statistics() {
           sub={`${projection.projected_pct >= 100 ? "🟢" : "🔴"} Projeção do mês: ${fmtPct(projection.projected_pct, 0)} • Mantido o ritmo atual (dias produtivos)`}
           ok={projection.projected_pct >= 100}
         />
-}
-        />
 
         <MetricCard title="Frequência média" value={fmtPct(freqAvg, 0)} sub="📊 Média agregada do mês" ok={freqAvg >= 85} />
         <MetricCard title="Produção média" value={`${fmtBR0(avgTonH)} t/h`} sub="⛏ Média agregada do mês" ok={avgTonH > 0} />
