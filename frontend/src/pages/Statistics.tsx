@@ -972,95 +972,13 @@ export default function Statistics() {
 
       {/* Paradas: horas por tipo e por equipamento */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 14 }}>
-        <Card title="Paradas por tipo" sub="Horas paradas agregadas no mês (apontamentos)">
-          <div style={{ height: 280, minHeight: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stopsByType} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                <XAxis dataKey="name" interval={0} tick={xTick} />
-                <YAxis tick={yTick} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
-                <Bar dataKey="hours" fill={COLORS.orange} radius={[10, 10, 0, 0]}>
-                  <LabelList
-                    dataKey="hours"
-                    position="insideTop"
-                    formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
-                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card title="Top equipamentos por paradas" sub="Horas paradas (Top 10)">
-          <div style={{ height: 280, minHeight: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stopsByEq} layout="vertical" margin={{ top: 6, right: 16, left: 14, bottom: 6 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                <XAxis type="number" tick={yTick} />
-                <YAxis type="category" dataKey="name" width={80} tick={xTick} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
-                <Bar dataKey="hours" fill={COLORS.cyan} radius={[10, 10, 10, 10]}>
-                  <LabelList
-                    dataKey="hours"
-                    position="insideRight"
-                    formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
-                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
+</div>
 
       <SectionHeader icon="📊" title="Frequência e Descrições" sub="paradas por período e principais causas" />
 
       {/* Número de paradas por período + horas por descrição */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <Card title="Número de paradas por período" sub="Contagem por hora (ex.: 07-08, 08-09)">
-          <div style={{ height: 360, minHeight: 360 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stopsCountByPeriod} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={0} angle={-35} textAnchor="end" height={70} tick={xTick} />
-                <YAxis tick={yTick} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR0(Number(v || 0))}`, "Paradas"]} />
-                <Bar dataKey="count" fill={COLORS.slate as any} radius={[10, 10, 0, 0]}>
-                  <LabelList
-                    dataKey="count"
-                    position="insideTop"
-                    formatter={(v: any) => `${fmtBR0(Number(v || 0))}`}
-                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card title="Horas paradas por descrição" sub="Top 8 + Outros (campo Descrição do apontamento)">
-          <div style={{ height: 460, minHeight: 460 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stopsByDesc} layout="vertical" margin={{ top: 6, right: 34, left: 22, bottom: 6 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                <XAxis type="number" tick={yTick} />
-                <YAxis type="category" dataKey="name" width={300} tick={xTick} tickFormatter={(v) => truncLabel(String(v), 34)} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
-                <Bar dataKey="hours" fill={COLORS.orange} radius={[10, 10, 10, 10]}>
-                  <LabelList
-                    dataKey="hours"
-                    position="insideRight"
-                    formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
-                    style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
+</div>
 
       <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
         {err ? `Erro: ${err}` : api ? `Mês ${month} • API ${api}` : "Configure VITE_API_BASE"}
