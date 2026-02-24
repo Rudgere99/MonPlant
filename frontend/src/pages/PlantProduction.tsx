@@ -298,17 +298,33 @@ export default function PlantProduction() {
       return;
     }
 
+    // ✅ Regra: registra sempre na HORA ANTERIOR (ex.: 23:xx -> 22:00-23:00 | 00:xx -> 23:00-00:00)
+    const now = new Date();
+    const endH = now.getHours();
+    const startH = (endH + 23) % 24;
+    const targetPeriod = `${String(startH).padStart(2, "0")}:00-${String(endH).padStart(2, "0")}:00`;
+
     const line = `• [${nowBRTime()}] ${calcEq}: ${fmtBR2(c)} conchadas × ${fmtBR2(a)} t = ${fmtBR2(t)} t${
       calcObs.trim() ? ` | Obs: ${calcObs.trim()}` : ""
     }`;
 
     setPayload((p) => {
+      // 1) grava tonelagem no período-alvo somando com o que já tiver
+      const nextRows = (p.rows || []).map((r) => {
+        if (String(r.period) !== targetPeriod) return r;
+        const prevTon = parseBRNumber(String(r.ton ?? "")) || 0;
+        const nextTon = prevTon + (Number(t) || 0);
+        return { ...r, ton: fmtBR2(nextTon) };
+      });
+
+      // 2) grava observação no campo de observação do dia
       const prev = (p.obs || "").trim();
       const nextObs = prev ? `${prev}\n${line}` : line;
-      return { ...p, obs: nextObs };
+
+      return { ...p, rows: nextRows, obs: nextObs };
     });
 
-    setInfo("Registro adicionado na Observação do dia. Clique em Salvar para gravar.");
+    setInfo(`Produção registrada em ${targetPeriod}. Clique em Salvar para gravar.`);
     setCalcOpen(false);
   }
 
