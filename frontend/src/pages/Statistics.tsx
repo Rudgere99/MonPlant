@@ -967,22 +967,6 @@ export default function Statistics() {
           </Card>
 </div>
       </div>
-
-      <SectionHeader icon="🛠" title="Paradas" sub="horas por tipo e por equipamento" />
-
-      {/* Paradas: horas por tipo e por equipamento */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(560px, 1fr))", gap: 14 }}>
-</div>
-
-      <SectionHeader icon="📊" title="Frequência e Descrições" sub="paradas por período e principais causas" />
-
-      {/* Número de paradas por período + horas por descrição */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-</div>
-
-      <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
-        {err ? `Erro: ${err}` : api ? `Mês ${month} • API ${api}` : "Configure VITE_API_BASE"}
-      </div>
     </div>
   );
 }
