@@ -150,14 +150,6 @@ export default function Home() {
                         >
                         Abrir Dashboard
                       </button>
-                      <button className="mp-btn" onClick={() => nav("/producao-planta")}
-                        >
-                        Produção da Planta
-                      </button>
-                      <button className="mp-btn" onClick={() => nav("/ritmo")}
-                        >
-                        Ritmo do Dia
-                      </button>
                     </div>
                   </div>
 
