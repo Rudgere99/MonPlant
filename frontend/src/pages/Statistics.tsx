@@ -1015,7 +1015,7 @@ export default function Statistics() {
               >
                 <div
                   style={{
-                    width: "min(1120px, 96vw)",
+                    width: "min(1320px, 98vw)",
                     borderRadius: 22,
                     border: "1px solid rgba(255,255,255,0.10)",
                     background: "rgba(10,12,14,0.72)",
@@ -1039,7 +1039,7 @@ export default function Statistics() {
                         Produção diária do mês
                       </div>
                       <div style={{ marginTop: 2, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
-                        Barras (com acumulado) ou Linha.
+                        Barras (diário) • Tooltip mostra acumulado • ou Linha.
                       </div>
                     </div>
       
@@ -1073,12 +1073,12 @@ export default function Statistics() {
                         padding: 12,
                       }}
                     >
-                      <div style={{ height: 380, minHeight: 380 }}>
+                      <div style={{ height: 520, minHeight: 520 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           {dailyModalMode === "bar" ? (
                             <BarChart data={dailyModalData} margin={{ top: 22, right: 18, left: 0, bottom: 8 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                              <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={16} angle={-25} textAnchor="end" height={54} tick={xTick as any} />
+                              <XAxis dataKey="day" interval={0} minTickGap={0} angle={-40} textAnchor="end" height={66} tick={xTick as any} />
                               <YAxis tick={yTick as any} />
                               <Tooltip
                                 contentStyle={tooltipStyle}
@@ -1091,9 +1091,9 @@ export default function Statistics() {
                                   return [fmtBR0(n), name];
                                 }}
                               />
-                              <Bar dataKey="produced" name="Produção" radius={[14, 14, 6, 6]}>
+                              <Bar dataKey="produced" name="Produção" fill="rgba(0,180,255,0.95)" radius={[14, 14, 6, 6]}>
                                 <LabelList
-                                  dataKey="accProduced"
+                                  dataKey="produced"
                                   position="top"
                                   formatter={(v: any) => fmtBR0(Number(v || 0))}
                                   style={{ fill: "rgba(255,255,255,0.80)", fontWeight: 900, fontSize: 11 }}
@@ -1103,7 +1103,7 @@ export default function Statistics() {
                           ) : (
                             <LineChart data={dailyModalData} margin={{ top: 16, right: 22, left: 0, bottom: 8 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                              <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={16} angle={-25} textAnchor="end" height={54} tick={xTick as any} />
+                              <XAxis dataKey="day" interval={0} minTickGap={0} angle={-40} textAnchor="end" height={66} tick={xTick as any} />
                               <YAxis tick={yTick as any} />
                               <Tooltip contentStyle={tooltipStyle} />
                               <Legend />
