@@ -6,8 +6,8 @@ export default function Home() {
   const year = useMemo(() => new Date().getFullYear(), []);
 
   return (
-    <div className="min-h-screen text-white relative overflow-hidden bg-[#07090c]">
-      {/* Fundo (mesma pegada MonPlant: dark + grid leve + glow discreto) */}
+    <div className="min-h-screen bg-[#07090c] text-white relative overflow-hidden">
+      {/* fundo MonPlant */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-44 -left-44 h-[560px] w-[560px] rounded-full bg-emerald-500/10 blur-[140px]" />
         <div className="absolute top-0 right-[-120px] h-[620px] w-[620px] rounded-full bg-amber-500/10 blur-[150px]" />
@@ -22,12 +22,12 @@ export default function Home() {
         />
       </div>
 
-      <div className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
-        {/* ===== HERO com espaço para banner ===== */}
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+        {/* HERO / BANNER */}
         <section className="rounded-[28px] border border-white/10 bg-white/[0.03] overflow-hidden shadow-[0_30px_120px_rgba(0,0,0,0.55)]">
-          {/* Slot do banner (coloque uma imagem real aqui) */}
+          {/* banner slot */}
           <div className="relative h-[220px] sm:h-[260px] lg:h-[320px]">
-            {/* Se tiver imagem, substitua por <img src="/seu-banner.png" .../> */}
+            {/* Troque por uma imagem real: <img src="/banner.png" className="absolute inset-0 w-full h-full object-cover" /> */}
             <div className="absolute inset-0 bg-[radial-gradient(900px_360px_at_50%_20%,rgba(255,255,255,0.10),transparent_55%)]" />
             <div className="absolute inset-0 bg-gradient-to-b from-white/[0.06] via-transparent to-[#07090c]" />
             <div className="absolute inset-0 opacity-[0.12] bg-[url('/banner-placeholder.png')] bg-cover bg-center" />
@@ -35,7 +35,7 @@ export default function Home() {
           </div>
 
           <div className="p-6 sm:p-8 lg:p-10">
-            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
+            <div className="flex flex-col lg:flex-row gap-8 lg:items-start lg:justify-between">
               <div className="max-w-3xl">
                 <div className="flex items-center gap-3">
                   <div className="h-11 w-11 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 grid place-items-center font-black text-emerald-200">
@@ -56,7 +56,7 @@ export default function Home() {
                   produção por hora, ritmo necessário, paradas por período/causa, horímetros e visão executiva.
                   <br />
                   Com o <span className="font-extrabold text-orange-200">BucketVision</span>, a IA conta conchadas em RTSP e
-                  pode <span className="font-extrabold">gerar a produção automaticamente</span> no MonPlant{" "}
+                  <span className="font-extrabold"> gera a produção automaticamente</span> no MonPlant{" "}
                   <span className="font-extrabold">em tempo real</span>.
                 </p>
 
@@ -80,13 +80,9 @@ export default function Home() {
                     Ritmo do Dia
                   </button>
                 </div>
-
-                <div className="mt-4 text-[12px] text-white/50">
-                  Banner: substitua <span className="font-bold text-white/70">/banner-placeholder.png</span> por uma imagem real (planta/CCO/mineração).
-                </div>
               </div>
 
-              {/* Cartão de destaque (mesma pegada dos cards do MonPlant) */}
+              {/* destaque */}
               <div className="w-full lg:w-[380px] rounded-[22px] border border-white/10 bg-black/25 p-5 backdrop-blur">
                 <div className="text-xs font-extrabold text-white/55">Destaque</div>
                 <div className="mt-2 text-lg font-black leading-tight">
@@ -104,7 +100,7 @@ export default function Home() {
                     ROI precisa
                   </span>
                   <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs font-extrabold text-amber-100">
-                    XLSX/Tempo real
+                    Tempo real
                   </span>
                 </div>
 
@@ -128,48 +124,36 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ===== MonPlant (conteúdo) ===== */}
+        {/* O que o MonPlant entrega */}
         <section className="mt-10">
           <div className="flex items-end justify-between gap-4">
             <div>
               <div className="text-xs font-extrabold tracking-wide text-white/55">PLATAFORMA</div>
               <h2 className="mt-1 text-2xl sm:text-3xl font-black">O que o MonPlant entrega</h2>
               <p className="mt-2 text-sm text-white/70 max-w-3xl">
-                Tudo que a operação precisa para controle do turno e acompanhamento gerencial — com leitura rápida e registro padronizado.
+                Controle do turno e leitura gerencial — com registro padronizado e visão rápida do que importa.
               </p>
-            </div>
-
-            {/* Slot de imagem 16:9 (ex.: print do dashboard) */}
-            <div className="hidden lg:block w-[420px] h-[170px] rounded-[22px] border border-white/10 bg-white/[0.03] overflow-hidden">
-              <div className="h-full w-full relative">
-                <div className="absolute inset-0 bg-[radial-gradient(420px_170px_at_20%_20%,rgba(34,197,94,0.18),transparent_60%)]" />
-                <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-cyan-500/10" />
-                <div className="absolute inset-0 p-4 flex flex-col justify-between">
-                  <div className="text-xs font-extrabold text-white/70">Imagem • Dashboard</div>
-                  <div className="text-[12px] text-white/55">Coloque um print aqui.</div>
-                </div>
-              </div>
             </div>
           </div>
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Feature title="Dashboard executivo" badge="KPI" desc="Meta, produzido, projeção, ritmo acumulado e status do dia para decisão rápida." />
-            <Feature title="Ritmo do Dia" badge="Ritmo" desc="Necessário vs média real, projeção e alertas visuais no padrão MonPlant." />
-            <Feature title="Paradas e causas" badge="Paradas" desc="Registro por período, tipificação e descrições para atacar gargalos e perdas." />
-            <Feature title="Produção por hora" badge="Ton/H" desc="Tabela por período com observações e exportação para governança do turno." />
-            <Feature title="UF e DF" badge="UF/DF" desc="Horas horizonte, operando e parada, com visão por cadeia de equipamentos." />
-            <Feature title="Permissões por perfil" badge="Acesso" desc="Apontador, supervisor, controlador e gerência com menus/páginas corretas." />
+            <Feature title="Dashboard executivo" badge="KPI" desc="Meta, produzido, projeção, ritmo acumulado e status do dia." />
+            <Feature title="Ritmo do Dia" badge="Ritmo" desc="Necessário vs média real, projeção e alertas visuais." />
+            <Feature title="Paradas e causas" badge="Paradas" desc="Registro por período/causa e descrições para ação." />
+            <Feature title="Produção por hora" badge="Ton/H" desc="Tabela por período com observações e exportação." />
+            <Feature title="UF e DF" badge="UF/DF" desc="Horas horizonte, operando e parada por cadeia de equipamentos." />
+            <Feature title="Permissões por perfil" badge="Acesso" desc="Apontador, supervisor, controlador e gerência com menus corretos." />
           </div>
 
           {/* Slots para prints */}
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <ImageSlot label="Imagem 01 • Dashboard" hint="Print do Dashboard (KPI + gráfico)." />
-            <ImageSlot label="Imagem 02 • Ritmo do Dia" hint="Print do Ritmo (meta, necessário, projeção)." />
-            <ImageSlot label="Imagem 03 • UF/DF ou Paradas" hint="Print UF/DF ou Paradas." />
+            <ImageSlot label="Imagem 01 • Dashboard" hint="Coloque um print do Dashboard." />
+            <ImageSlot label="Imagem 02 • Ritmo do Dia" hint="Coloque um print do Ritmo." />
+            <ImageSlot label="Imagem 03 • UF/DF ou Paradas" hint="Coloque um print UF/DF ou Paradas." />
           </div>
         </section>
 
-        {/* ===== BucketVision ===== */}
+        {/* BucketVision */}
         <section className="mt-12 rounded-[28px] border border-white/10 bg-white/[0.03] overflow-hidden shadow-[0_24px_90px_rgba(0,0,0,0.45)]">
           <div className="p-6 sm:p-8">
             <div className="flex flex-col lg:flex-row gap-8 lg:items-start lg:justify-between">
@@ -179,17 +163,15 @@ export default function Home() {
                   BucketVision <span className="text-orange-200">integrado</span> ao MonPlant
                 </h2>
                 <p className="mt-2 text-sm text-white/70 leading-relaxed">
-                  O BucketVision conta conchadas via IA em vídeo/RTSP com ROI precisa e estabilidade operacional.
-                  A produção estimada é gerada automaticamente em tempo real:
-                  <span className="font-extrabold"> conchadas × média (t) → Ton/H</span>.
-                  Isso reduz atraso, retrabalho e melhora a consistência do dado.
+                  IA conta conchadas via RTSP com ROI precisa. A produção é gerada em tempo real:
+                  <span className="font-extrabold"> conchadas × média (t) → Ton/H</span>, alimentando o MonPlant automaticamente.
                 </p>
 
                 <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Step n="01" title="Captura RTSP" desc="Conexão estável com reconexão e buffer otimizado." />
-                  <Step n="02" title="Detecção + ROI" desc="IA detecta conchadas só na área útil, reduzindo falsos positivos." />
-                  <Step n="03" title="Produção em tempo real" desc="Atualiza Ton/H e acumulados automaticamente, sem digitação." />
-                  <Step n="04" title="Pronto para gestão" desc="Relatórios e telas do MonPlant sempre consistentes com o que está no campo." />
+                  <Step n="01" title="Captura RTSP" desc="Conexão estável com reconexão e buffer." />
+                  <Step n="02" title="Detecção + ROI" desc="Filtra a área útil e reduz falsos positivos." />
+                  <Step n="03" title="Produção em tempo real" desc="Ton/H e acumulados atualizados automaticamente." />
+                  <Step n="04" title="Pronto para gestão" desc="Dados consistentes para supervisão e gerência." />
                 </div>
 
                 <div className="mt-6 flex flex-wrap gap-3">
@@ -208,7 +190,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Slots de imagem (prints do HUD/ROI e câmera) */}
               <div className="w-full lg:w-[440px] grid gap-4">
                 <ImageSlot label="Imagem • Câmera/RTSP" hint="Frame do vídeo ou foto da câmera." tall />
                 <ImageSlot label="Imagem • ROI / HUD" hint="Print do ROI + contagem + HUD." tall />
@@ -217,7 +198,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Footer */}
         <footer className="mt-12 pb-6 text-center text-xs text-white/45">
           © {year} MonPlant • Operação em tempo real • BucketVision integrado
         </footer>
