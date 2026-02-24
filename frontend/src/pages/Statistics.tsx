@@ -786,37 +786,7 @@ export default function Statistics() {
           </div>
         </div>
       </div>
-
-      {/* KPIs de suporte */}
-      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-        <MetricCard
-          title="Atingimento"
-          tone="low"
-          value={fmtPct(attainmentPct, 0)}
-          sub={`${okAtt ? "🟢" : "🔴"} ${okAtt ? "Acima da meta" : "Abaixo da meta"} • (${deltaTon >= 0 ? "+" : "-"}${fmtBR0(Math.abs(deltaTon))} t)`}
-          ok={okAtt}
-        />
-
-        <MetricCard
-          title="Projeção (run-rate)"
-          value={`${fmtBR0(projection.projected_ton)} t`}
-          sub={`${projection.projected_pct >= 100 ? "🟢" : "🔴"} Projeção do mês: ${fmtPct(projection.projected_pct, 0)} • Mantido o ritmo atual (dias produtivos)`}
-          ok={projection.projected_pct >= 100}
-        />
-
-        <MetricCard
-          title="Disponibilidade"
-          value={fmtPct(availabilityPct, 0)}
-          sub={`⏱ Paradas: ${fmtBR1(totalStopHours)} h • Operado: ${fmtBR1(totalWorkedHours)} h`}
-          ok={okAvail}
-          chip={<StatusChip ok={okAvail} label={okAvail ? "Boa" : "Atenção"} />}
-        />
-
-        <MetricCard title="Frequência média" value={fmtPct(freqAvg, 0)} sub="📊 Média agregada do mês" ok={freqAvg >= 85} />
-        <MetricCard title="Produção média" value={`${fmtBR0(avgTonH)} t/h`} sub="⛏ Média agregada do mês" ok={avgTonH > 0} />
-      </div>
-
-      {/* Micro-insights + legenda global */}
+{/* Micro-insights + legenda global */}
       <div
         style={{
           borderRadius: 18,
