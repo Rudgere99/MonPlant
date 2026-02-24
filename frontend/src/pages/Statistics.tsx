@@ -171,6 +171,149 @@ function Card({
         </div>
         {right ? <div style={{ flex: "0 0 auto" }}>{right}</div> : null}
       </div>
+
+      {/* Modal: detalhe Produção diária do mês */}
+      {dailyModalOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.62)",
+            backdropFilter: "blur(8px)",
+            display: "grid",
+            placeItems: "center",
+            padding: 18,
+            zIndex: 9999,
+          }}
+          onClick={() => setDailyModalOpen(false)}
+        >
+          <div
+            style={{
+              width: "min(1120px, 96vw)",
+              borderRadius: 22,
+              border: "1px solid rgba(255,255,255,0.10)",
+              background: "rgba(10,12,14,0.72)",
+              boxShadow: "0 40px 90px rgba(0,0,0,0.70)",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: 14,
+                borderBottom: "1px solid rgba(255,255,255,0.10)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 980, fontSize: 16, color: "rgba(255,255,255,0.92)", letterSpacing: -0.2 }}>
+                  Produção diária do mês
+                </div>
+                <div style={{ marginTop: 2, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                  Barras (com acumulado) ou Linha.
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <button
+                  className={"mp-btn" + (dailyModalMode === "bar" ? " mp-btn-primary" : "")}
+                  style={{ height: 38 }}
+                  onClick={() => setDailyModalMode("bar")}
+                >
+                  Barras
+                </button>
+                <button
+                  className={"mp-btn" + (dailyModalMode === "line" ? " mp-btn-primary" : "")}
+                  style={{ height: 38 }}
+                  onClick={() => setDailyModalMode("line")}
+                >
+                  Linha
+                </button>
+                <button className="mp-btn" style={{ height: 38 }} onClick={() => setDailyModalOpen(false)}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            <div style={{ padding: 14 }}>
+              <div
+                style={{
+                  borderRadius: 18,
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(0,0,0,0.22)",
+                  padding: 12,
+                }}
+              >
+                <div style={{ height: 380, minHeight: 380 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    {dailyModalMode === "bar" ? (
+                      <BarChart data={dailyModalData} margin={{ top: 22, right: 18, left: 0, bottom: 8 }}>
+                        <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                        <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={16} angle={-25} textAnchor="end" height={54} tick={xTick as any} />
+                        <YAxis tick={yTick as any} />
+                        <Tooltip
+                          contentStyle={tooltipStyle}
+                          formatter={(v: any, name: any, props: any) => {
+                            const n = Number(v || 0);
+                            if (name === "produced") {
+                              const acc = Number(props?.payload?.accProduced || 0);
+                              return [`${fmtBR0(n)} t (Acum: ${fmtBR0(acc)} t)`, "Produção"];
+                            }
+                            return [fmtBR0(n), name];
+                          }}
+                        />
+                        <Bar dataKey="produced" name="Produção" radius={[14, 14, 6, 6]}>
+                          <LabelList
+                            dataKey="accProduced"
+                            position="top"
+                            formatter={(v: any) => fmtBR0(Number(v || 0))}
+                            style={{ fill: "rgba(255,255,255,0.80)", fontWeight: 900, fontSize: 11 }}
+                          />
+                        </Bar>
+                      </BarChart>
+                    ) : (
+                      <LineChart data={dailyModalData} margin={{ top: 16, right: 22, left: 0, bottom: 8 }}>
+                        <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                        <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={16} angle={-25} textAnchor="end" height={54} tick={xTick as any} />
+                        <YAxis tick={yTick as any} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Legend />
+                        <Line type="monotone" dataKey="meta" name="Meta" stroke="rgba(148,163,184,0.55)" strokeWidth={1.4} strokeDasharray="6 6" dot={false} />
+                        <Line type="monotone" dataKey="produced" name="Produção" stroke={COLORS.cyan} strokeWidth={3} dot={false} />
+                      </LineChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 10,
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(0,0,0,0.18)", padding: 12 }}>
+                    <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Meta do mês</div>
+                    <div style={{ marginTop: 6, fontWeight: 980, fontSize: 22, color: "rgba(255,255,255,0.92)" }}>
+                      {fmtBR0(Number(data?.meta_month_ton || 0))} t
+                    </div>
+                  </div>
+                  <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(0,0,0,0.18)", padding: 12 }}>
+                    <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Produzido</div>
+                    <div style={{ marginTop: 6, fontWeight: 980, fontSize: 22, color: "rgba(255,255,255,0.92)" }}>
+                      {fmtBR0(Number(data?.produced_month_ton || 0))} t
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div style={{ marginTop: 10 }}>{children}</div>
     </div>
   );
@@ -427,6 +570,10 @@ export default function Statistics() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Modal: detalhe do gráfico de Produção diária (mesmo conceito do modal de exportação do Dashboard)
+  const [dailyModalOpen, setDailyModalOpen] = useState(false);
+  const [dailyModalMode, setDailyModalMode] = useState<"bar" | "line">("bar");
+
   const api = apiBase();
 
   useEffect(() => {
@@ -498,6 +645,18 @@ export default function Statistics() {
       return { day: ymdToDM(d.day), produced, meta, pct, noProd };
     });
   }, [daily]);
+
+  const dailyModalData = useMemo(() => {
+    let acc = 0;
+    return (dailySeries || []).map((d: any) => {
+      const produced = Number(d.produced || 0);
+      acc += produced;
+      return {
+        ...d,
+        accProduced: acc,
+      };
+    });
+  }, [dailySeries]);
 
   const xTick = { fill: "rgba(255,255,255,0.55)", fontSize: 11 } as const;
   const yTick = { fill: "rgba(255,255,255,0.55)", fontSize: 11 } as const;
@@ -833,9 +992,19 @@ export default function Statistics() {
       {/* Produção diária + Turnos + Horas operadas */}
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1.15fr 0.85fr" }}>
         <Card title="Produção diária x Meta diária" sub="Produção vs meta (a % aparece no tooltip)">
-          <div style={{ height: 320, minHeight: 320 }}>
+          <div
+            style={{ height: 320, minHeight: 320, cursor: "pointer" }}
+            title="Clique para detalhar a produção do mês"
+          >
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={dailySeries} margin={{ top: 16, right: 22, left: 0, bottom: 0 }}>
+              <LineChart
+                data={dailySeries}
+                margin={{ top: 16, right: 22, left: 0, bottom: 0 }}
+                onClick={() => {
+                  setDailyModalMode("bar");
+                  setDailyModalOpen(true);
+                }}
+              >
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
                 <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={18} angle={-30} textAnchor="end" height={54} tick={xTick} />
                 <YAxis tick={yTick} />
@@ -847,6 +1016,10 @@ export default function Statistics() {
                 <Line type="monotone" dataKey="produced" stroke={COLORS.cyan} strokeWidth={3} dot={false} />
               </LineChart>
             </ResponsiveContainer>
+          </div>
+
+          <div style={{ marginTop: 8, color: "rgba(255,255,255,0.50)", fontSize: 11, fontWeight: 850 }}>
+            Dica: clique no gráfico para abrir o detalhamento do mês.
           </div>
 
           <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
