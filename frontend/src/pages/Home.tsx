@@ -6,191 +6,240 @@ export default function Home() {
   const year = useMemo(() => new Date().getFullYear(), []);
 
   return (
-    <div className="min-h-screen bg-[#07090c] text-white relative overflow-hidden">
-      {/* fundo MonPlant */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-44 -left-44 h-[560px] w-[560px] rounded-full bg-emerald-500/10 blur-[140px]" />
-        <div className="absolute top-0 right-[-120px] h-[620px] w-[620px] rounded-full bg-amber-500/10 blur-[150px]" />
-        <div className="absolute -bottom-56 left-1/3 h-[700px] w-[700px] rounded-full bg-cyan-500/10 blur-[160px]" />
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Glows de fundo (estética MonPlant) */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
         <div
-          className="absolute inset-0 opacity-[0.06]"
+          className="absolute -top-48 -left-48 h-[620px] w-[620px] rounded-full"
+          style={{ background: "rgba(52,211,153,.10)", filter: "blur(150px)" }}
+        />
+        <div
+          className="absolute top-[-140px] right-[-140px] h-[660px] w-[660px] rounded-full"
+          style={{ background: "rgba(56,189,248,.08)", filter: "blur(160px)" }}
+        />
+        <div
+          className="absolute -bottom-56 left-1/3 h-[760px] w-[760px] rounded-full"
+          style={{ background: "rgba(251,146,60,.08)", filter: "blur(170px)" }}
+        />
+        <div
+          className="absolute inset-0"
           style={{
+            opacity: 0.05,
             backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.14) 1px, transparent 1px)",
+              "linear-gradient(rgba(255,255,255,.16) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.16) 1px, transparent 1px)",
             backgroundSize: "44px 44px",
           }}
         />
       </div>
 
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
-        {/* HERO / BANNER */}
-        <section className="rounded-[28px] border border-white/10 bg-white/[0.03] overflow-hidden shadow-[0_30px_120px_rgba(0,0,0,0.55)]">
-          {/* banner slot */}
-          <div className="relative h-[220px] sm:h-[260px] lg:h-[320px]">
-            {/* Troque por uma imagem real: <img src="/banner.png" className="absolute inset-0 w-full h-full object-cover" /> */}
-            <div className="absolute inset-0 bg-[radial-gradient(900px_360px_at_50%_20%,rgba(255,255,255,0.10),transparent_55%)]" />
-            <div className="absolute inset-0 bg-gradient-to-b from-white/[0.06] via-transparent to-[#07090c]" />
-            <div className="absolute inset-0 opacity-[0.12] bg-[url('/banner-placeholder.png')] bg-cover bg-center" />
-            <div className="absolute inset-0 bg-black/25" />
+      <div className="mp-container relative px-4 sm:px-6 lg:px-8 py-10">
+        {/* HERO */}
+        <section className="mp-card" style={{ borderRadius: 28, overflow: "hidden" }}>
+          {/* Banner */}
+          <div style={{ position: "relative", height: 300 }}>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "radial-gradient(900px 360px at 50% 20%, rgba(255,255,255,.10), transparent 55%), linear-gradient(to bottom, rgba(255,255,255,.06), transparent, #0b0f14)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                opacity: 0.12,
+                backgroundImage: "url('/banner-placeholder.png')",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+            />
+            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.25)" }} />
           </div>
 
-          <div className="p-6 sm:p-8 lg:p-10">
-            <div className="flex flex-col lg:flex-row gap-8 lg:items-start lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="flex items-center gap-3">
-                  <div className="h-11 w-11 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 grid place-items-center font-black text-emerald-200">
-                    MP
+          <div style={{ padding: 18 }}>
+            <div className="mp-card" style={{ borderRadius: 22, background: "rgba(0,0,0,.18)" }}>
+              <div className="mp-card-b" style={{ padding: 18 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 14,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div
+                        style={{
+                          height: 44,
+                          width: 44,
+                          borderRadius: 16,
+                          border: "1px solid rgba(52,211,153,.25)",
+                          background: "rgba(52,211,153,.10)",
+                          display: "grid",
+                          placeItems: "center",
+                          fontWeight: 900,
+                          color: "rgba(167,243,208,.95)",
+                        }}
+                      >
+                        MP
+                      </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 900,
+                            letterSpacing: 0.6,
+                            color: "rgba(255,255,255,.55)",
+                          }}
+                        >
+                          MonPlant • Gestão Operacional
+                        </div>
+                        <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: 0.2, marginTop: 6 }}>
+                          Produção, paradas e ritmo{" "}
+                          <span style={{ color: "rgba(167,243,208,.95)" }}>em tempo real</span>.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <button className="mp-btn mp-btn-primary" onClick={() => nav("/dashboard")}
+                        >
+                        Abrir Dashboard
+                      </button>
+                      <button className="mp-btn" onClick={() => nav("/producao-planta")}
+                        >
+                        Produção da Planta
+                      </button>
+                      <button className="mp-btn" onClick={() => nav("/ritmo")}
+                        >
+                        Ritmo do Dia
+                      </button>
+                    </div>
                   </div>
-                  <div className="text-xs sm:text-sm font-extrabold tracking-wide text-white/65">
-                    MonPlant • Gestão Operacional
+
+                  <div style={{ color: "rgba(255,255,255,.70)", fontSize: 13, lineHeight: 1.6 }}>
+                    O <b style={{ color: "rgba(255,255,255,.90)" }}>MonPlant</b> centraliza a operação da planta:
+                    produção por hora, ritmo necessário, paradas por período/causa, horímetros e visão executiva.
+                    <br />
+                    Com o <b style={{ color: "rgba(253,186,116,.95)" }}>BucketVision</b>, a IA conta conchadas em RTSP e
+                    pode <b>gerar a produção automaticamente</b> no MonPlant <b>em tempo real</b>.
                   </div>
-                </div>
 
-                <h1 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
-                  Produção, paradas e ritmo{" "}
-                  <span className="text-emerald-200">em tempo real</span>.
-                </h1>
-
-                <p className="mt-3 text-sm sm:text-base text-white/72 leading-relaxed">
-                  O <span className="font-extrabold text-white/90">MonPlant</span> centraliza a operação da planta:
-                  produção por hora, ritmo necessário, paradas por período/causa, horímetros e visão executiva.
-                  <br />
-                  Com o <span className="font-extrabold text-orange-200">BucketVision</span>, a IA conta conchadas em RTSP e
-                  <span className="font-extrabold"> gera a produção automaticamente</span> no MonPlant{" "}
-                  <span className="font-extrabold">em tempo real</span>.
-                </p>
-
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    className="px-5 py-3 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 hover:bg-emerald-500/25 transition font-extrabold"
-                    onClick={() => nav("/dashboard")}
-                  >
-                    Abrir Dashboard
-                  </button>
-                  <button
-                    className="px-5 py-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition font-extrabold"
-                    onClick={() => nav("/producao-planta")}
-                  >
-                    Produção da Planta
-                  </button>
-                  <button
-                    className="px-5 py-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition font-extrabold"
-                    onClick={() => nav("/ritmo")}
-                  >
-                    Ritmo do Dia
-                  </button>
-                </div>
-              </div>
-
-              {/* destaque */}
-              <div className="w-full lg:w-[380px] rounded-[22px] border border-white/10 bg-black/25 p-5 backdrop-blur">
-                <div className="text-xs font-extrabold text-white/55">Destaque</div>
-                <div className="mt-2 text-lg font-black leading-tight">
-                  BucketVision → Produção automática
-                </div>
-                <div className="mt-2 text-sm text-white/70 leading-relaxed">
-                  Conchadas contadas por IA (RTSP) × média (t) → Ton/H e acumulados, publicados no MonPlant sem digitação.
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-xs font-extrabold text-cyan-200">
-                    RTSP
-                  </span>
-                  <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-xs font-extrabold text-emerald-200">
-                    ROI precisa
-                  </span>
-                  <span className="inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs font-extrabold text-amber-100">
-                    Tempo real
-                  </span>
-                </div>
-
-                <div className="mt-5 flex gap-3">
-                  <button
-                    className="flex-1 px-4 py-3 rounded-2xl bg-orange-500/15 border border-orange-500/30 hover:bg-orange-500/20 transition font-extrabold"
-                    onClick={() => nav("/bucketvision")}
-                  >
-                    Ver BucketVision
-                  </button>
-                  <button
-                    className="px-4 py-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition font-extrabold"
-                    onClick={() => nav("/update-notes")}
-                    title="Gerar nota de atualização"
-                  >
-                    Notas
-                  </button>
+                  <div className="mp-help">
+                    Banner: substitua <b>/banner-placeholder.png</b> por uma imagem real (planta/CCO/mineração).
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* O que o MonPlant entrega */}
-        <section className="mt-10">
-          <div className="flex items-end justify-between gap-4">
+        {/* Plataforma */}
+        <section style={{ marginTop: 22 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
             <div>
-              <div className="text-xs font-extrabold tracking-wide text-white/55">PLATAFORMA</div>
-              <h2 className="mt-1 text-2xl sm:text-3xl font-black">O que o MonPlant entrega</h2>
-              <p className="mt-2 text-sm text-white/70 max-w-3xl">
-                Controle do turno e leitura gerencial — com registro padronizado e visão rápida do que importa.
-              </p>
+              <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.6, color: "rgba(255,255,255,.55)" }}>
+                PLATAFORMA
+              </div>
+              <div className="mp-page-title" style={{ marginTop: 6 }}>
+                O que o MonPlant entrega
+              </div>
+              <div className="mp-page-sub" style={{ maxWidth: 860 }}>
+                Tudo que a operação precisa para controle do turno e acompanhamento gerencial — com leitura rápida e registro
+                padronizado.
+              </div>
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Feature title="Dashboard executivo" badge="KPI" desc="Meta, produzido, projeção, ritmo acumulado e status do dia." />
-            <Feature title="Ritmo do Dia" badge="Ritmo" desc="Necessário vs média real, projeção e alertas visuais." />
-            <Feature title="Paradas e causas" badge="Paradas" desc="Registro por período/causa e descrições para ação." />
-            <Feature title="Produção por hora" badge="Ton/H" desc="Tabela por período com observações e exportação." />
-            <Feature title="UF e DF" badge="UF/DF" desc="Horas horizonte, operando e parada por cadeia de equipamentos." />
-            <Feature title="Permissões por perfil" badge="Acesso" desc="Apontador, supervisor, controlador e gerência com menus corretos." />
+          <div
+            style={{
+              marginTop: 14,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: 12,
+            }}
+          >
+            <Feature title="Dashboard executivo" badge="KPI" desc="Meta, produzido, projeção, ritmo acumulado e status do dia para decisão rápida." />
+            <Feature title="Ritmo do Dia" badge="Ritmo" desc="Necessário vs média real, projeção e alertas visuais no padrão MonPlant." />
+            <Feature title="Paradas e causas" badge="Paradas" desc="Registro por período, tipificação e descrições para atacar gargalos e perdas." />
+            <Feature title="Produção por hora" badge="Ton/H" desc="Tabela por período com observações e exportação para governança do turno." />
+            <Feature title="UF e DF" badge="UF/DF" desc="Horas horizonte, operando e parada, com visão por cadeia de equipamentos." />
+            <Feature title="Permissões por perfil" badge="Acesso" desc="Apontador, supervisor, controlador e gerência com menus/páginas corretas." />
           </div>
 
-          {/* Slots para prints */}
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <ImageSlot label="Imagem 01 • Dashboard" hint="Coloque um print do Dashboard." />
-            <ImageSlot label="Imagem 02 • Ritmo do Dia" hint="Coloque um print do Ritmo." />
-            <ImageSlot label="Imagem 03 • UF/DF ou Paradas" hint="Coloque um print UF/DF ou Paradas." />
+          <div
+            style={{
+              marginTop: 12,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: 12,
+            }}
+          >
+            <ImageSlot label="Imagem 01 • Dashboard" hint="Print do Dashboard (KPI + gráfico)." />
+            <ImageSlot label="Imagem 02 • Ritmo do Dia" hint="Print do Ritmo (meta, necessário, projeção)." />
+            <ImageSlot label="Imagem 03 • UF/DF ou Paradas" hint="Print UF/DF ou Paradas." />
           </div>
         </section>
 
         {/* BucketVision */}
-        <section className="mt-12 rounded-[28px] border border-white/10 bg-white/[0.03] overflow-hidden shadow-[0_24px_90px_rgba(0,0,0,0.45)]">
-          <div className="p-6 sm:p-8">
-            <div className="flex flex-col lg:flex-row gap-8 lg:items-start lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="text-xs font-extrabold tracking-wide text-white/55">IA NA PRODUÇÃO</div>
-                <h2 className="mt-1 text-2xl sm:text-3xl font-black">
-                  BucketVision <span className="text-orange-200">integrado</span> ao MonPlant
-                </h2>
-                <p className="mt-2 text-sm text-white/70 leading-relaxed">
-                  IA conta conchadas via RTSP com ROI precisa. A produção é gerada em tempo real:
-                  <span className="font-extrabold"> conchadas × média (t) → Ton/H</span>, alimentando o MonPlant automaticamente.
-                </p>
-
-                <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Step n="01" title="Captura RTSP" desc="Conexão estável com reconexão e buffer." />
-                  <Step n="02" title="Detecção + ROI" desc="Filtra a área útil e reduz falsos positivos." />
-                  <Step n="03" title="Produção em tempo real" desc="Ton/H e acumulados atualizados automaticamente." />
-                  <Step n="04" title="Pronto para gestão" desc="Dados consistentes para supervisão e gerência." />
+        <section className="mp-card" style={{ marginTop: 18, borderRadius: 28 }}>
+          <div className="mp-card-b" style={{ padding: 18 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.6, color: "rgba(255,255,255,.55)" }}>
+                  IA NA PRODUÇÃO
                 </div>
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <button
-                    className="px-5 py-3 rounded-2xl bg-orange-500/15 border border-orange-500/30 hover:bg-orange-500/20 transition font-extrabold"
-                    onClick={() => nav("/bucketvision")}
-                  >
-                    Abrir BucketVision
-                  </button>
-                  <button
-                    className="px-5 py-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition font-extrabold"
-                    onClick={() => nav("/update-notes")}
-                  >
-                    Gerar Nota de Atualização
-                  </button>
+                <div style={{ marginTop: 6, fontSize: 26, fontWeight: 900 }}>
+                  BucketVision <span style={{ color: "rgba(253,186,116,.95)" }}>integrado</span> ao MonPlant
+                </div>
+                <div style={{ marginTop: 8, fontSize: 13, color: "rgba(255,255,255,.70)", lineHeight: 1.6 }}>
+                  O BucketVision conta conchadas via IA em vídeo/RTSP com ROI precisa e estabilidade operacional. A produção
+                  estimada é gerada automaticamente em tempo real: <b>conchadas × média (t) → Ton/H</b>. Isso reduz atraso,
+                  retrabalho e melhora a consistência do dado.
                 </div>
               </div>
 
-              <div className="w-full lg:w-[440px] grid gap-4">
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: 12,
+                }}
+              >
+                <Step n="01" title="Captura RTSP" desc="Conexão estável com reconexão e buffer otimizado." />
+                <Step n="02" title="Detecção + ROI" desc="IA detecta conchadas só na área útil, reduzindo falsos positivos." />
+                <Step n="03" title="Produção em tempo real" desc="Atualiza Ton/H e acumulados automaticamente, sem digitação." />
+                <Step n="04" title="Pronto para gestão" desc="Relatórios e telas do MonPlant sempre consistentes com o que está no campo." />
+              </div>
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button className="mp-btn" onClick={() => nav("/bucketvision")}>
+                  Abrir BucketVision
+                </button>
+                <button className="mp-btn" onClick={() => nav("/update-notes")}>
+                  Gerar Nota de Atualização
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: 12,
+                }}
+              >
                 <ImageSlot label="Imagem • Câmera/RTSP" hint="Frame do vídeo ou foto da câmera." tall />
                 <ImageSlot label="Imagem • ROI / HUD" hint="Print do ROI + contagem + HUD." tall />
               </div>
@@ -198,7 +247,7 @@ export default function Home() {
           </div>
         </section>
 
-        <footer className="mt-12 pb-6 text-center text-xs text-white/45">
+        <footer style={{ marginTop: 18, paddingBottom: 18, textAlign: "center", fontSize: 12, color: "rgba(255,255,255,.45)" }}>
           © {year} MonPlant • Operação em tempo real • BucketVision integrado
         </footer>
       </div>
@@ -208,27 +257,32 @@ export default function Home() {
 
 function Feature({ title, desc, badge }: { title: string; desc: string; badge: string }) {
   return (
-    <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-lg font-black">{title}</div>
-        <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold text-white/70">
-          {badge}
-        </span>
+    <div className="mp-card">
+      <div className="mp-card-h">
+        <div style={{ fontSize: 16, fontWeight: 900 }}>{title}</div>
+        <span className="mp-chip">{badge}</span>
       </div>
-      <div className="mt-2 text-sm text-white/70 leading-relaxed">{desc}</div>
+      <div className="mp-card-b" style={{ paddingTop: 12 }}>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,.70)", lineHeight: 1.6 }}>{desc}</div>
+      </div>
     </div>
   );
 }
 
 function ImageSlot({ label, hint, tall }: { label: string; hint: string; tall?: boolean }) {
   return (
-    <div className={`rounded-[22px] border border-white/10 bg-white/[0.03] overflow-hidden ${tall ? "h-[190px] sm:h-[230px]" : "h-[160px]"}`}>
-      <div className="h-full w-full relative">
-        <div className="absolute inset-0 bg-[radial-gradient(520px_220px_at_15%_20%,rgba(255,255,255,0.08),transparent_55%)]" />
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-orange-500/10" />
-        <div className="absolute inset-0 p-4 flex flex-col justify-between">
-          <div className="text-xs font-extrabold text-white/70">{label}</div>
-          <div className="text-[12px] text-white/55">{hint}</div>
+    <div className="mp-card" style={{ overflow: "hidden", minHeight: tall ? 220 : 160 }}>
+      <div
+        style={{
+          height: "100%",
+          position: "relative",
+          background:
+            "radial-gradient(520px 220px at 15% 20%, rgba(255,255,255,.08), transparent 55%), linear-gradient(to bottom right, rgba(52,211,153,.10), transparent, rgba(251,146,60,.10))",
+        }}
+      >
+        <div style={{ position: "absolute", inset: 0, padding: 14, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,.70)" }}>{label}</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.55)" }}>{hint}</div>
         </div>
       </div>
     </div>
@@ -237,14 +291,28 @@ function ImageSlot({ label, hint, tall }: { label: string; hint: string; tall?: 
 
 function Step({ n, title, desc }: { n: string; title: string; desc: string }) {
   return (
-    <div className="rounded-[18px] border border-white/10 bg-black/25 p-4">
-      <div className="flex items-center gap-3">
-        <div className="h-9 w-9 rounded-2xl border border-orange-500/25 bg-orange-500/10 grid place-items-center font-black text-orange-200">
-          {n}
+    <div className="mp-card" style={{ background: "rgba(0,0,0,.20)" }}>
+      <div className="mp-card-b" style={{ padding: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              height: 38,
+              width: 38,
+              borderRadius: 16,
+              border: "1px solid rgba(251,146,60,.25)",
+              background: "rgba(251,146,60,.10)",
+              display: "grid",
+              placeItems: "center",
+              fontWeight: 900,
+              color: "rgba(253,186,116,.95)",
+            }}
+          >
+            {n}
+          </div>
+          <div style={{ fontWeight: 900 }}>{title}</div>
         </div>
-        <div className="font-black">{title}</div>
+        <div style={{ marginTop: 8, fontSize: 13, color: "rgba(255,255,255,.70)", lineHeight: 1.6 }}>{desc}</div>
       </div>
-      <div className="mt-2 text-sm text-white/70 leading-relaxed">{desc}</div>
     </div>
   );
 }
