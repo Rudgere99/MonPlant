@@ -803,13 +803,7 @@ export default function Statistics() {
           sub={`${projection.projected_pct >= 100 ? "🟢" : "🔴"} Projeção do mês: ${fmtPct(projection.projected_pct, 0)} • Mantido o ritmo atual (dias produtivos)`}
           ok={projection.projected_pct >= 100}
         />
-
-        <MetricCard
-          title="Disponibilidade"
-          value={fmtPct(availabilityPct, 0)}
-          sub={`⏱ Paradas: ${fmtBR1(totalStopHours)} h • Operado: ${fmtBR1(totalWorkedHours)} h`}
-          ok={okAvail}
-          chip={<StatusChip ok={okAvail} label={okAvail ? "Boa" : "Atenção"} />}
+}
         />
 
         <MetricCard title="Frequência média" value={fmtPct(freqAvg, 0)} sub="📊 Média agregada do mês" ok={freqAvg >= 85} />
@@ -973,28 +967,7 @@ export default function Statistics() {
               </div>
             </div>
           </Card>
-
-          <Card title="Horas operadas por equipamento" sub="Horímetro (Top 10)">
-            <div style={{ height: 220, minHeight: 220 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={workedHoursByEq} layout="vertical" margin={{ top: 6, right: 16, left: 14, bottom: 6 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                  <XAxis type="number" tick={yTick} />
-                  <YAxis type="category" dataKey="name" width={80} tick={xTick} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${fmtBR1(Number(v || 0))} h`, "Horas"]} />
-                  <Bar dataKey="hours" fill={COLORS.slate as any} radius={[10, 10, 10, 10]}>
-                    <LabelList
-                      dataKey="hours"
-                      position="insideRight"
-                      formatter={(v: any) => `${fmtBR1(Number(v || 0))} h`}
-                      style={{ fill: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 12, textShadow: "0 1px 2px rgba(0,0,0,.6)" }}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-        </div>
+</div>
       </div>
 
       <SectionHeader icon="🛠" title="Paradas" sub="horas por tipo e por equipamento" />
