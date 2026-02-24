@@ -213,7 +213,7 @@ function HeroKPI(props: {
       />
       <div style={{ position: "relative" }}>
         <div style={label}>{title}</div>
-        <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 30, marginTop: 6 }}>{value}</div>
+        <div style={{ color: accent === "neutral" ? "rgba(255,255,255,0.94)" : accentMap[accent], fontWeight: 980, fontSize: 30, marginTop: 6 }}>{value}</div>
         {sub ? <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>{sub}</div> : null}
       </div>
     </div>
@@ -721,7 +721,7 @@ export default function Ritmo() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 12 }}>
             <div style={{ gridColumn: "span 6", ...card, background: "rgba(255,255,255,0.03)" }}>
               <div style={label}>Necessário</div>
-              <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 30, marginTop: 6 }}>
+              <div style={{ color: neededTPH !== null && avgRealTPH < neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)", fontWeight: 980, fontSize: 30, marginTop: 6 }}>
                 {neededTPH === null ? "—" : `${fmtBR(neededTPH, dTPH)} t/h`}
               </div>
               <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>
@@ -760,7 +760,7 @@ export default function Ritmo() {
               </div>
               <div style={exportLineRow}>
                 <span style={exportLabel}>Projeção:</span>
-                <span style={exportValue}>{`${fmtBR(projectionTon, dTon)} t`}</span>
+                <span style={{ ...exportValue, color: metaDay !== null && projectionTon < metaDay ? "rgba(248,113,113,0.95)" : metaDay !== null ? "rgba(34,197,94,0.95)" : exportValue.color }}>{`${fmtBR(projectionTon, dTon)} t`}</span>
               </div>
 
 
@@ -795,7 +795,7 @@ export default function Ritmo() {
 
               <div style={exportLineRow}>
                 <span style={exportLabel}>Necessário:</span>
-                <span style={{ ...exportValue, color: "rgba(34,197,94,0.95)" }}>
+                <span style={{ ...exportValue, color: neededTPH !== null && avgRealTPH < neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)" }}>
                   {neededTPH === null ? "—" : `${fmtBR(neededTPH, dTPH)} t/h`}
                   {neededBucketsH === null ? "" : `  ≈ ${fmtBR0(neededBucketsH)} conchadas/h`}
                 </span>
