@@ -861,7 +861,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
   return (
     <div className="mp-container">
       {/* TOP BAR */}
-      <div style={topBar} className="mp-topbar">
+      <div style={topBar}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ ...subStyle, marginRight: 6 }}>Data</span>
           <input
@@ -1030,7 +1030,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                     </div>
                   </div>
 
-                  <div className="mp-main-grid">
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
                     {/* PRODUÇÃO HORÁRIA (grande) */}
                     {exportSel.prod_horaria ? (
                       <div style={{ ...cardBase, padding: 16, gridColumn: "span 12" }}>
@@ -1058,11 +1058,11 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </span>
                         </div>
 
-                        <div className="mp-chart-h-mobile">
+                        <div style={{ height: 420 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={0} angle={-45} textAnchor="end" height={60} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis
                                 yAxisId="left"
                                 domain={tonDomain}
@@ -1383,7 +1383,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </div>
                         </div>
 
-                        <div className="mp-mini-grid">
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
                           <MiniStat
                             icon="⏸"
                             title="Última Parada"
@@ -1487,7 +1487,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
       ) : null}
 
       {/* ===================== MAIN DASHBOARD GRID (MESMO FORMATO DO EXPORT) ===================== */}
-      <div className="mp-main-grid" style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
         {/* PRODUÇÃO HORÁRIA (12 col) */}
         <div
           style={{ ...cardBase, padding: 16, gridColumn: "span 12", cursor: "pointer" }}
@@ -1517,11 +1517,11 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </span>
           </div>
 
-          <div className="mp-chart-h-lg">
+          <div style={{ height: 420 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={0} angle={-45} textAnchor="end" height={60} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <YAxis
                   yAxisId="left"
                   domain={tonDomain}
@@ -1865,7 +1865,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </div>
           </div>
 
-          <div className="mp-mini-grid">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             <MiniStat
               icon="⏸"
               title="Última Parada"
