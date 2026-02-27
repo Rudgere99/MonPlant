@@ -578,6 +578,21 @@ export default function Statistics() {
   }, [shiftTotal, t1Month, t2Month]);
 
 
+
+  // ✅ horas operadas dos equipamentos (horímetro do backend)
+  const totalWorkedHoursRaw = Number(data?.hours_worked?.total_hours || 0);
+  const eqCountAll = useMemo(() => {
+    const arr = (data?.hours_worked?.by_equipment || []) as any[];
+    const n = Number((data as any)?.hours_worked?.equipment_count || 0);
+    return arr.length > 0 ? arr.length : (Number.isFinite(n) && n > 0 ? n : 0);
+  }, [data]);
+  const isCurrentMonth = useMemo(() => {
+    const now = new Date();
+    const [yy, mm] = String(month || "").split("-").map((x) => Number(x));
+    if (!yy || !mm) return false;
+    return yy === now.getFullYear() && mm === now.getMonth() + 1;
+  }, [month]);
+
   const horizonDays = useMemo(() => {
     const now = new Date();
     if (!isCurrentMonth) return dim;
@@ -660,19 +675,6 @@ export default function Statistics() {
   const freqAvg = Number(data?.kpis?.freq_avg_pct || 0);
   const avgTonH = Number(data?.kpis?.avg_ton_per_hour || 0);
 
-  // ✅ horas operadas dos equipamentos (horímetro do backend)
-  const totalWorkedHoursRaw = Number(data?.hours_worked?.total_hours || 0);
-  const eqCountAll = useMemo(() => {
-    const arr = (data?.hours_worked?.by_equipment || []) as any[];
-    const n = Number((data as any)?.hours_worked?.equipment_count || 0);
-    return arr.length > 0 ? arr.length : (Number.isFinite(n) && n > 0 ? n : 0);
-  }, [data]);
-  const isCurrentMonth = useMemo(() => {
-    const now = new Date();
-    const [yy, mm] = String(month || "").split("-").map((x) => Number(x));
-    if (!yy || !mm) return false;
-    return yy === now.getFullYear() && mm === now.getMonth() + 1;
-  }, [month]);
 
   const availabilityPct = useMemo(() => {
     if (totalWorkedHours <= 0) return 0;
