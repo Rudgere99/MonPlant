@@ -1,3 +1,42 @@
+
+        // 🔹 Paradas (mesmo endpoint da página UF/DF) para calcular Horas Operando no mesmo padrão
+        try {
+          const [yy, mm] = String(month || "").split("-").map((x) => Number(x));
+          if (yy && mm) {
+            const now = new Date();
+            const isCurrent = now.getFullYear() === yy && now.getMonth() + 1 === mm;
+            const limit = isCurrent ? now.getDate() : daysInMonth(month);
+
+            const byEqMin: Record<string, number> = {};
+            let totalMin = 0;
+
+            for (let d = 1; d <= limit; d++) {
+              const day = isoDate(yy, mm, d);
+              const qs = `day=${encodeURIComponent(day)}`;
+              const r2 = await fetch(`${api}/api/stops-launch?${qs}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+              });
+              if (!r2.ok) continue;
+              const js = (await r2.json()) as StopDayPayload;
+
+              const rows = Array.isArray(js?.rows) ? js.rows : [];
+              for (const row of rows) {
+                const min = Number((row as any)?.minutos || 0);
+                if (!Number.isFinite(min) || min <= 0) continue;
+                totalMin += min;
+
+                const eq = String((row as any)?.equipamento || "—").trim() || "—";
+                byEqMin[eq] = (byEqMin[eq] || 0) + min;
+              }
+            }
+
+            setStopsLaunchMonth({ totalMin, byEqMin });
+          } else {
+            setStopsLaunchMonth(null);
+          }
+        } catch {
+          setStopsLaunchMonth(null);
+        }
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
@@ -21,6 +60,15 @@ import { useAuth } from "../auth/AuthProvider";
 type StopKV = { type?: string; equipment?: string; hours?: number };
 type StopDesc = { description?: string; hours?: number };
 type StopCountPeriod = { period?: string; count?: number };
+
+type StopRow = {
+  period: string;
+  equipamento: string;
+  tipo_parada: string;
+  descricao: string;
+  minutos: number;
+};
+type StopDayPayload = { day: string; rows: StopRow[] };
 
 type DailyRow = {
   day: string; // YYYY-MM-DD
@@ -112,6 +160,12 @@ function daysInMonth(ym: string) {
   const [y, m] = ym.split("-").map((x) => Number(x));
   if (!y || !m) return 30;
   return new Date(y, m, 0).getDate();
+}
+
+function isoDate(yyyy: number, mm1: number, dd: number) {
+  const mm = String(mm1).padStart(2, "0");
+  const d = String(dd).padStart(2, "0");
+  return `${yyyy}-${mm}-${d}`;
 }
 function monthToLabel(ym: string) {
   if (!ym || ym.length < 7) return ym;
@@ -429,6 +483,7 @@ export default function Statistics() {
 
   // Modal: detalhe do gráfico de Produção diária (mesmo conceito do modal de exportação do Dashboard)
   const [dailyModalOpen, setDailyModalOpen] = useState(false);
+const [stopsLaunchMonth, setStopsLaunchMonth] = useState<{ totalMin: number; byEqMin: Record<string, number> } | null>(null);
   const [dailyModalMode, setDailyModalMode] = useState<"bar" | "line">("bar");
 
   const api = apiBase();
@@ -580,12 +635,16 @@ export default function Statistics() {
 
 
   // ✅ horas operadas dos equipamentos (horímetro do backend)
-  const totalWorkedHoursRaw = Number(data?.hours_worked?.total_hours || 0);
-  const eqCountAll = useMemo(() => {
+    const eqCountAll = useMemo(() => {
     const arr = (data?.hours_worked?.by_equipment || []) as any[];
     const n = Number((data as any)?.hours_worked?.equipment_count || 0);
-    return arr.length > 0 ? arr.length : (Number.isFinite(n) && n > 0 ? n : 0);
-  }, [data]);
+
+    if (arr.length > 0) return arr.length;
+    if (Number.isFinite(n) && n > 0) return n;
+
+    const fromStops = stopsLaunchMonth?.byEqMin ? Object.keys(stopsLaunchMonth.byEqMin).length : 0;
+    return fromStops > 0 ? fromStops : 0;
+  }, [data, stopsLaunchMonth]);
   const isCurrentMonth = useMemo(() => {
     const now = new Date();
     const [yy, mm] = String(month || "").split("-").map((x) => Number(x));
@@ -604,21 +663,49 @@ export default function Statistics() {
     const base = horizonDays * 24;
     return eqCountAll > 0 ? base * eqCountAll : base;
   }, [horizonDays, eqCountAll]);
-  const totalWorkedHours = useMemo(() => {
+  
+  const stopHoursTotal = useMemo(() => {
+    const min = Number(stopsLaunchMonth?.totalMin || 0);
+    return Number.isFinite(min) ? min / 60 : 0;
+  }, [stopsLaunchMonth]);
+
+  // Horas operando no mesmo padrão UF/DF: horizonte - horas paradas (capado)
+  const totalWorkedHoursRaw = useMemo(() => {
+    if (horizonHoursTotal <= 0) return 0;
+    if (stopsLaunchMonth) return Math.max(0, horizonHoursTotal - stopHoursTotal);
+
+    // fallback antigo (caso não tenha paradas)
+    return Number(data?.hours_worked?.total_hours || 0);
+  }, [data, stopsLaunchMonth, stopHoursTotal, horizonHoursTotal]);
+const totalWorkedHours = useMemo(() => {
     if (horizonHoursTotal > 0) return Math.min(totalWorkedHoursRaw, horizonHoursTotal);
     return totalWorkedHoursRaw;
   }, [totalWorkedHoursRaw, horizonHoursTotal]);
-  const workedHoursByEq = useMemo(
-    () =>
-      (data?.hours_worked?.by_equipment || [])
-        .map((x) => {
-          const perEqCap = horizonDays * 24;
-          const h = Number(x.hours || 0);
-          return { name: x.equipment || "—", hours: perEqCap > 0 ? Math.min(h, perEqCap) : h };
+  const workedHoursByEq = useMemo(() => {
+    const perEqCap = horizonDays * 24;
+
+    // Se temos paradas (UF/DF), calcula operando por equipamento = horizonte - parada
+    if (stopsLaunchMonth?.byEqMin) {
+      const entries = Object.entries(stopsLaunchMonth.byEqMin);
+      return entries
+        .map(([name, min]) => {
+          const stopH = Number(min || 0) / 60;
+          const stopCap = perEqCap > 0 ? Math.min(stopH, perEqCap) : stopH;
+          const op = perEqCap > 0 ? Math.max(0, perEqCap - stopCap) : Math.max(0, -stopCap);
+          return { name: name || "—", hours: perEqCap > 0 ? Math.min(op, perEqCap) : op };
         })
-        .slice(0, 10),
-    [data, horizonDays]
-  );
+        .sort((a, b) => b.hours - a.hours);
+    }
+
+    // fallback antigo
+    return (data?.hours_worked?.by_equipment || [])
+      .map((x: any) => {
+        const h = Number(x.hours || 0);
+        return { name: x.equipment || "—", hours: perEqCap > 0 ? Math.min(h, perEqCap) : h };
+      })
+      .sort((a: any, b: any) => b.hours - a.hours);
+  }, [data, stopsLaunchMonth, horizonDays]);
+
 
   const stopsByType = useMemo(
     () => (data?.stops?.by_type || []).map((x) => ({ name: x.type || "—", hours: Number(x.hours || 0) })),
