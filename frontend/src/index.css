@@ -217,6 +217,9 @@ a { color: inherit; text-decoration: none; }
   }
 }
 
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#0b1220" />
+
 .mp-offroad-pulse {
   animation: mpPulse 6s ease-in-out infinite;
 }
