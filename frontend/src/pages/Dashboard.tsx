@@ -861,7 +861,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
   return (
     <div className="mp-container">
       {/* TOP BAR */}
-      <div style={topBar}>
+      <div style={topBar} className="mp-topbar">
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ ...subStyle, marginRight: 6 }}>Data</span>
           <input
@@ -1058,11 +1058,11 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </span>
                         </div>
 
-                        <div className="mp-chart-h-lg">
+                        <div className="mp-chart-h-mobile">
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <XAxis dataKey="period" interval={0} angle={-45} textAnchor="end" height={60} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis
                                 yAxisId="left"
                                 domain={tonDomain}
@@ -1383,7 +1383,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </div>
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                        <div className="mp-mini-grid">
                           <MiniStat
                             icon="⏸"
                             title="Última Parada"
@@ -1521,7 +1521,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <XAxis dataKey="period" interval={0} angle={-45} textAnchor="end" height={60} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <YAxis
                   yAxisId="left"
                   domain={tonDomain}
@@ -1865,7 +1865,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+          <div className="mp-mini-grid">
             <MiniStat
               icon="⏸"
               title="Última Parada"
