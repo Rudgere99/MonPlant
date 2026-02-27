@@ -631,7 +631,7 @@ export default function Statistics() {
     [data]
   );
 
-  const totalStopHours = useMemo(
+  const totalStopHoursFromData = useMemo(
     () => stopsByType.reduce((a, b) => a + (Number(b.hours) || 0), 0),
     [stopsByType]
   );
@@ -656,8 +656,8 @@ export default function Statistics() {
   const now = useMemo(() => new Date(), []);
   const [yy, mm] = useMemo(() => String(month || "").split("-").map((x) => Number(x)), [month]);
   const isCurrentMonth = useMemo(() => yy === now.getFullYear() && mm === now.getMonth() + 1, [yy, mm, now]);
-  const daysInMonth = useMemo(() => (yy && mm ? new Date(yy, mm, 0).getDate() : 30), [yy, mm]);
-  const horizonDays = useMemo(() => (isCurrentMonth ? now.getDate() : daysInMonth), [isCurrentMonth, now, daysInMonth]);
+  const daysInMonthNum = useMemo(() => (yy && mm ? new Date(yy, mm, 0).getDate() : 30), [yy, mm]);
+  const horizonDays = useMemo(() => (isCurrentMonth ? now.getDate() : daysInMonthNum), [isCurrentMonth, now, daysInMonthNum]);
   const horizonHours = useMemo(() => horizonDays * 24, [horizonDays]);
 
   const [stopsLaunchMinTotal, setStopsLaunchMinTotal] = useState(0);
@@ -671,7 +671,7 @@ export default function Statistics() {
         const pad = (n: number) => String(n).padStart(2, "0");
         const days = Array.from({ length: horizonDays }, (_, i) => `${yy}-${pad(mm)}-${pad(i + 1)}`);
         // busca em paralelo (máx 31 dias)
-        const payloads = await Promise.all(days.map((d) => fetchStopsLaunchDay(api, d, token)));
+        const payloads = await Promise.all(days.map((d) => fetchStopsLaunchDay(api, d, token || undefined)));
         if (!alive) return;
 
         let totalMin = 0;
