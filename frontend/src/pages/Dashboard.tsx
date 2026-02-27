@@ -1030,7 +1030,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                     </div>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
+                  <div className="mp-main-grid">
                     {/* PRODUÇÃO HORÁRIA (grande) */}
                     {exportSel.prod_horaria ? (
                       <div style={{ ...cardBase, padding: 16, gridColumn: "span 12" }}>
@@ -1058,7 +1058,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </span>
                         </div>
 
-                        <div style={{ height: 420 }}>
+                        <div className="mp-chart-h-lg">
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -1487,7 +1487,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
       ) : null}
 
       {/* ===================== MAIN DASHBOARD GRID (MESMO FORMATO DO EXPORT) ===================== */}
-      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
+      <div className="mp-main-grid" style={{ marginTop: 14 }}>
         {/* PRODUÇÃO HORÁRIA (12 col) */}
         <div
           style={{ ...cardBase, padding: 16, gridColumn: "span 12", cursor: "pointer" }}
@@ -1517,7 +1517,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </span>
           </div>
 
-          <div style={{ height: 420 }}>
+          <div className="mp-chart-h-lg">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
