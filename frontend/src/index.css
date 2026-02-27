@@ -272,3 +272,31 @@ a { color: inherit; text-decoration: none; }
   .mp-chart-h-md{ height: 240px; }
   .mp-chart-h-sm{ height: 220px; }
 }
+
+/* ===== Dashboard Mobile tweaks ===== */
+.mp-topbar{ min-width:0; }
+@media (max-width: 640px){
+  .mp-topbar{
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .mp-topbar > *{
+    width: 100%;
+  }
+}
+
+/* Mini cards grid (Hoje) */
+.mp-mini-grid{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap:12px;
+}
+@media (max-width: 980px){
+  .mp-mini-grid{ grid-template-columns: 1fr; }
+}
+
+/* Chart height tuned for mobile */
+.mp-chart-h-mobile{ height: 380px; }
+@media (max-width: 640px){
+  .mp-chart-h-mobile{ height: 260px; }
+}
