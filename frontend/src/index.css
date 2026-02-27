@@ -217,86 +217,10 @@ a { color: inherit; text-decoration: none; }
   }
 }
 
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#0b1220" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
 .mp-offroad-pulse {
   animation: mpPulse 6s ease-in-out infinite;
-}
-
-/* =========================
-   MonPlant • Mobile Pack (Responsivo)
-   ========================= */
-.mp-container { min-width: 0; }
-
-/* grid principal do Dashboard (12 col desktop, 1 col mobile) */
-.mp-main-grid{
-  display:grid;
-  grid-template-columns:repeat(12, 1fr);
-  gap:14px;
-  align-items:start;
-}
-@media (max-width: 980px){
-  .mp-main-grid{
-    grid-template-columns:1fr;
-    gap:12px;
-  }
-}
-
-/* alturas adaptáveis para gráficos */
-.mp-chart-h-lg{ height: 420px; }
-.mp-chart-h-md{ height: 320px; }
-.mp-chart-h-sm{ height: 260px; }
-
-@media (max-width: 640px){
-  .mp-container{
-    padding-left: 12px;
-    padding-right: 12px;
-    padding-bottom: 84px; /* espaço pro gesto/home bar */
-  }
-
-  .mp-card{
-    padding: 12px !important;
-    border-radius: 18px;
-  }
-
-  /* headers que tinham flex row: viram coluna no mobile */
-  .mp-card-h{
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 10px !important;
-  }
-
-  /* inputs e botões ocupando largura */
-  .mp-input{ width: 100%; }
-  .mp-btn{ width: 100%; }
-
-  .mp-chart-h-lg{ height: 280px; }
-  .mp-chart-h-md{ height: 240px; }
-  .mp-chart-h-sm{ height: 220px; }
-}
-
-/* ===== Dashboard Mobile tweaks ===== */
-.mp-topbar{ min-width:0; }
-@media (max-width: 640px){
-  .mp-topbar{
-    grid-template-columns: 1fr !important;
-    gap: 10px !important;
-  }
-  .mp-topbar > *{
-    width: 100%;
-  }
-}
-
-/* Mini cards grid (Hoje) */
-.mp-mini-grid{
-  display:grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap:12px;
-}
-@media (max-width: 980px){
-  .mp-mini-grid{ grid-template-columns: 1fr; }
-}
-
-/* Chart height tuned for mobile */
-.mp-chart-h-mobile{ height: 380px; }
-@media (max-width: 640px){
-  .mp-chart-h-mobile{ height: 260px; }
 }
