@@ -579,14 +579,18 @@ export default function Statistics() {
 
   const stopsByType = useMemo(
     () => (data?.stops?.by_type || []).map((x) => ({ name: x.type || "—", hours: Number(x.hours || 0) })),
-    [data]
+    [data, horizonDays]
   );
   const stopsByEq = useMemo(
     () =>
       (data?.stops?.by_equipment || [])
-        .map((x) => ({ name: x.equipment || "—", hours: Number(x.hours || 0) }))
+        .map((x) => {
+          const perEqCap = horizonDays * 24;
+          const h = Number(x.hours || 0);
+          return { name: x.equipment || "—", hours: perEqCap > 0 ? Math.min(h, perEqCap) : h };
+        })
         .slice(0, 10),
-    [data]
+    [data, horizonDays]
   );
   const stopsByDesc = useMemo(
     () => {
@@ -600,11 +604,11 @@ export default function Statistics() {
       const otherHours = rest.reduce((a, b) => a + (Number(b.hours) || 0), 0);
       return otherHours > 0.01 ? [...top, { name: "Outros", hours: otherHours }] : top;
     },
-    [data]
+    [data, horizonDays]
   );
   const stopsCountByPeriod = useMemo(
     () => (data?.stops?.count_by_period || []).map((x) => ({ period: x.period || "—", count: Number(x.count || 0) })),
-    [data]
+    [data, horizonDays]
   );
 
   const totalStopHours = useMemo(
@@ -629,13 +633,43 @@ export default function Statistics() {
   const avgTonH = Number(data?.kpis?.avg_ton_per_hour || 0);
 
   // ✅ horas operadas dos equipamentos (horímetro do backend)
-  const totalWorkedHours = Number(data?.hours_worked?.total_hours || 0);
+  const totalWorkedHoursRaw = Number(data?.hours_worked?.total_hours || 0);
+  const eqCountAll = useMemo(() => {
+    const arr = (data?.hours_worked?.by_equipment || []) as any[];
+    const n = Number((data as any)?.hours_worked?.equipment_count || 0);
+    return arr.length > 0 ? arr.length : (Number.isFinite(n) && n > 0 ? n : 0);
+  }, [data]);
+  const isCurrentMonth = useMemo(() => {
+    const now = new Date();
+    const [yy, mm] = String(month || "").split("-").map((x) => Number(x));
+    if (!yy || !mm) return false;
+    return yy === now.getFullYear() && mm === now.getMonth() + 1;
+  }, [month]);
+  const horizonDays = useMemo(() => {
+    const now = new Date();
+    if (!isCurrentMonth) return dim;
+    return Math.max(1, Math.min(Number(now.getDate() || 1), dim));
+  }, [isCurrentMonth, dim]);
+  const horizonHoursTotal = useMemo(() => {
+    // Padrão UF/DF: horizonte cresce conforme o dia do mês.
+    // Se não houver contagem de equipamentos, usamos somente dias*24.
+    const base = horizonDays * 24;
+    return eqCountAll > 0 ? base * eqCountAll : base;
+  }, [horizonDays, eqCountAll]);
+  const totalWorkedHours = useMemo(() => {
+    if (horizonHoursTotal > 0) return Math.min(totalWorkedHoursRaw, horizonHoursTotal);
+    return totalWorkedHoursRaw;
+  }, [totalWorkedHoursRaw, horizonHoursTotal]);
   const workedHoursByEq = useMemo(
     () =>
       (data?.hours_worked?.by_equipment || [])
-        .map((x) => ({ name: x.equipment || "—", hours: Number(x.hours || 0) }))
+        .map((x) => {
+          const perEqCap = horizonDays * 24;
+          const h = Number(x.hours || 0);
+          return { name: x.equipment || "—", hours: perEqCap > 0 ? Math.min(h, perEqCap) : h };
+        })
         .slice(0, 10),
-    [data]
+    [data, horizonDays]
   );
 
   const availabilityPct = useMemo(() => {
@@ -901,7 +935,7 @@ export default function Statistics() {
             <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
               <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Horas operadas</div>
               <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{fmtBR1(totalWorkedHours)} h</div>
-              <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Horímetro (mês)</div>
+              <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>{isCurrentMonth ? `Horímetro (até dia ${String(horizonDays).padStart(2,"0")})` : "Horímetro (mês)"}</div>
             </div>
           </div>
         </Card>
