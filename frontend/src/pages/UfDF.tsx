@@ -345,7 +345,7 @@ export default function UfDF() {
             <div style={{ gridColumn: "span 4" }}>
               <Kpi
                 title="RO (Rendimento Operacional)"
-                value={fmtPct(agg.UF * agg.DF)}
+                value={fmtPct((agg.UF * agg.DF) / 100)}
                 sub="RO = UF × DF"
               />
             </div>
@@ -357,7 +357,7 @@ export default function UfDF() {
               <div><b>Total parado:</b> {fmt1(agg.totalH)} h</div>
               <div><b>PM (Manutenção):</b> {fmt1(agg.PM)} h (Corretiva + Preventiva + Elétrica)</div>
               <div><b>PO (Operacional):</b> {fmt1(agg.PO)} h (Operacional + Segurança + Outros)</div>
-              <div><b>RO:</b> {fmtPct(agg.UF * agg.DF)} (UF × DF)</div>
+              <div><b>RO:</b> {fmtPct((agg.UF * agg.DF) / 100)} (UF × DF)</div>
               <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
                 Observação: este cálculo considera o total de paradas do mês <b>independente do equipamento</b>.
               </div>
