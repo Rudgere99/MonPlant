@@ -60,6 +60,20 @@ function daysInMonth(yyyy: number, mm1: number) {
   return new Date(yyyy, mm1, 0).getDate();
 }
 
+
+
+function effectiveDaysForMonth(month: string, daysTotal: number) {
+  // Para o mês atual, considera somente até o dia de hoje (horizonte gradual).
+  // Para meses passados, usa o total do mês.
+  const [yS, mS] = month.split("-");
+  const y = Number(yS);
+  const m1 = Number(mS);
+  const now = new Date();
+  const isCurrent = now.getFullYear() === y && now.getMonth() + 1 === m1;
+  if (!isCurrent) return daysTotal;
+  const today = now.getDate();
+  return Math.max(1, Math.min(daysTotal, today));
+}
 function isoDate(yyyy: number, mm1: number, dd: number) {
   const mm = String(mm1).padStart(2, "0");
   const d = String(dd).padStart(2, "0");
@@ -189,7 +203,8 @@ export default function UfDF() {
       const mm1 = Number(mmS);
       if (!yyyy || !mm1) throw new Error("Mês inválido.");
 
-      const days = daysInMonth(yyyy, mm1);
+      const daysTotal = daysInMonth(yyyy, mm1);
+      const days = effectiveDaysForMonth(m, daysTotal);
       const daysList = Array.from({ length: days }, (_, i) => isoDate(yyyy, mm1, i + 1));
 
       const payloads = await Promise.all(
@@ -278,7 +293,7 @@ export default function UfDF() {
             <div style={{ gridColumn: "span 12" }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 12 }}>
                 <div style={{ gridColumn: "span 4" }}>
-                  <Kpi title={`Horas Horizonte (${monthLabel})`} value={`${fmt1(agg.TP)} h`} sub={`${agg.days} dias × 24h`} />
+                  <Kpi title={`Horas Horizonte (${monthLabel})`} value={`${fmt1(agg.TP)} h`} sub={`${agg.days} dias${month === monthStr() ? " (até hoje)" : ""} × 24h`} />
                 </div>
                 <div style={{ gridColumn: "span 4" }}>
                   <Kpi
