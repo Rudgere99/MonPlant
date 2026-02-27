@@ -328,18 +328,25 @@ export default function UfDF() {
               <Kpi title="Outros (mês)" value={`${fmt1(agg.outrosH)} h`} sub="Conta em PO" />
             </div>
 
-            <div style={{ gridColumn: "span 6" }}>
+            <div style={{ gridColumn: "span 4" }}>
               <Kpi
                 title="DF da Planta (mês)"
                 value={fmtPct(agg.DF)}
                 sub={`DF = (TP − PM) / TP • PM: ${fmt1(agg.PM)} h`}
               />
             </div>
-            <div style={{ gridColumn: "span 6" }}>
+            <div style={{ gridColumn: "span 4" }}>
               <Kpi
                 title="UF da Planta (mês)"
                 value={fmtPct(agg.UF)}
                 sub={`UF = (TP − PM − PO) / (TP − PM) • PO: ${fmt1(agg.PO)} h`}
+              />
+            </div>
+            <div style={{ gridColumn: "span 4" }}>
+              <Kpi
+                title="RO (Rendimento Operacional)"
+                value={fmtPct(agg.UF * agg.DF)}
+                sub="RO = UF × DF"
               />
             </div>
           </div>
@@ -350,6 +357,7 @@ export default function UfDF() {
               <div><b>Total parado:</b> {fmt1(agg.totalH)} h</div>
               <div><b>PM (Manutenção):</b> {fmt1(agg.PM)} h (Corretiva + Preventiva + Elétrica)</div>
               <div><b>PO (Operacional):</b> {fmt1(agg.PO)} h (Operacional + Segurança + Outros)</div>
+              <div><b>RO:</b> {fmtPct(agg.UF * agg.DF)} (UF × DF)</div>
               <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
                 Observação: este cálculo considera o total de paradas do mês <b>independente do equipamento</b>.
               </div>
