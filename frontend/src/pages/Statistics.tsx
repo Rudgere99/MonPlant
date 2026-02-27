@@ -577,6 +577,34 @@ export default function Statistics() {
     ];
   }, [shiftTotal, t1Month, t2Month]);
 
+
+  const horizonDays = useMemo(() => {
+    const now = new Date();
+    if (!isCurrentMonth) return dim;
+    return Math.max(1, Math.min(Number(now.getDate() || 1), dim));
+  }, [isCurrentMonth, dim]);
+  const horizonHoursTotal = useMemo(() => {
+    // Padrão UF/DF: horizonte cresce conforme o dia do mês.
+    // Se não houver contagem de equipamentos, usamos somente dias*24.
+    const base = horizonDays * 24;
+    return eqCountAll > 0 ? base * eqCountAll : base;
+  }, [horizonDays, eqCountAll]);
+  const totalWorkedHours = useMemo(() => {
+    if (horizonHoursTotal > 0) return Math.min(totalWorkedHoursRaw, horizonHoursTotal);
+    return totalWorkedHoursRaw;
+  }, [totalWorkedHoursRaw, horizonHoursTotal]);
+  const workedHoursByEq = useMemo(
+    () =>
+      (data?.hours_worked?.by_equipment || [])
+        .map((x) => {
+          const perEqCap = horizonDays * 24;
+          const h = Number(x.hours || 0);
+          return { name: x.equipment || "—", hours: perEqCap > 0 ? Math.min(h, perEqCap) : h };
+        })
+        .slice(0, 10),
+    [data, horizonDays]
+  );
+
   const stopsByType = useMemo(
     () => (data?.stops?.by_type || []).map((x) => ({ name: x.type || "—", hours: Number(x.hours || 0) })),
     [data, horizonDays]
@@ -645,32 +673,6 @@ export default function Statistics() {
     if (!yy || !mm) return false;
     return yy === now.getFullYear() && mm === now.getMonth() + 1;
   }, [month]);
-  const horizonDays = useMemo(() => {
-    const now = new Date();
-    if (!isCurrentMonth) return dim;
-    return Math.max(1, Math.min(Number(now.getDate() || 1), dim));
-  }, [isCurrentMonth, dim]);
-  const horizonHoursTotal = useMemo(() => {
-    // Padrão UF/DF: horizonte cresce conforme o dia do mês.
-    // Se não houver contagem de equipamentos, usamos somente dias*24.
-    const base = horizonDays * 24;
-    return eqCountAll > 0 ? base * eqCountAll : base;
-  }, [horizonDays, eqCountAll]);
-  const totalWorkedHours = useMemo(() => {
-    if (horizonHoursTotal > 0) return Math.min(totalWorkedHoursRaw, horizonHoursTotal);
-    return totalWorkedHoursRaw;
-  }, [totalWorkedHoursRaw, horizonHoursTotal]);
-  const workedHoursByEq = useMemo(
-    () =>
-      (data?.hours_worked?.by_equipment || [])
-        .map((x) => {
-          const perEqCap = horizonDays * 24;
-          const h = Number(x.hours || 0);
-          return { name: x.equipment || "—", hours: perEqCap > 0 ? Math.min(h, perEqCap) : h };
-        })
-        .slice(0, 10),
-    [data, horizonDays]
-  );
 
   const availabilityPct = useMemo(() => {
     if (totalWorkedHours <= 0) return 0;
