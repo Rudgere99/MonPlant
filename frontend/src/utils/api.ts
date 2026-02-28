@@ -29,3 +29,29 @@ export async function apiFetch<T>(
 
   return (await res.json()) as T;
 }
+
+// Helpers (pra ficar simples nas páginas)
+export function apiGet<T>(path: string): Promise<T> {
+  return apiFetch<T>(path, { method: "GET" });
+}
+
+export function apiPost<T>(path: string, body?: any): Promise<T> {
+  return apiFetch<T>(path, {
+    method: "POST",
+    ...(typeof body !== "undefined" ? { body: JSON.stringify(body) } : {}),
+  });
+}
+
+export function apiPut<T>(path: string, body?: any): Promise<T> {
+  return apiFetch<T>(path, {
+    method: "PUT",
+    ...(typeof body !== "undefined" ? { body: JSON.stringify(body) } : {}),
+  });
+}
+
+export function apiDelete<T>(path: string, body?: any): Promise<T> {
+  return apiFetch<T>(path, {
+    method: "DELETE",
+    ...(typeof body !== "undefined" ? { body: JSON.stringify(body) } : {}),
+  });
+}
