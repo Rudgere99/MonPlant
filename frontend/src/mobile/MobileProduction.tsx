@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import MobileShell from "./MobileShell";
 import { useAuth } from "../auth/AuthProvider";
-import { apiGet, apiPut } from "../lib/api"; // se você não tiver apiPut, eu deixei alternativa logo abaixo
+import { apiGet, apiPut } from "../utils/api"; // se você não tiver apiPut, eu deixei alternativa logo abaixo
 import { Save, RefreshCw } from "lucide-react";
 
 type Row = { label: string; value: number };
