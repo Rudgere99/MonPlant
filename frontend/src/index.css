@@ -243,3 +243,21 @@ a { color: inherit; text-decoration: none; }
   .mp-btn{ width: 100%; }
   .mp-input{ width: 100%; }
 }
+
+/* ===== MonPlant Mobile Pages (tabs + charts) ===== */
+.mp-card-h-mobile{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.mp-chart-h-sm{ height: 180px; }
+.mp-chart-h-md{ height: 280px; }
+
+@media (max-width: 640px){
+  .mp-card-h-mobile{ flex-direction: column; align-items: stretch; }
+  .mp-btn{ width: 100%; }
+  .mp-input{ width: 100%; }
+  .mp-chart-h-md{ height: 240px; }
+}
