@@ -1,9 +1,7 @@
-
 import { useEffect, useMemo, useState } from "react";
+import { RefreshCw, Save } from "lucide-react";
 import MobileShell from "./MobileShell";
-import { useAuth } from "../auth/AuthProvider";
-import { apiGet, apiPut } from "../utils/api"; // se você não tiver apiPut, eu deixei alternativa logo abaixo
-import { Save, RefreshCw } from "lucide-react";
+import { apiGet, apiPut } from "../utils/api";
 
 type Row = { label: string; value: number };
 
@@ -17,12 +15,13 @@ function todayISO() {
 
 function fmt(v: number, digits = 0) {
   if (!Number.isFinite(v)) return "-";
-  return v.toLocaleString("pt-BR", { maximumFractionDigits: digits, minimumFractionDigits: digits });
+  return v.toLocaleString("pt-BR", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
+  });
 }
 
 export default function MobileProduction() {
-  const { token } = useAuth();
-
   const [day, setDay] = useState(todayISO());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -30,21 +29,30 @@ export default function MobileProduction() {
 
   const [metaDay, setMetaDay] = useState<number>(0);
   const [rows, setRows] = useState<Row[]>([]);
-  const totalDay = useMemo(() => rows.reduce((a, r) => a + (Number(r.value) || 0), 0), [rows]);
-  const pct = useMemo(() => (metaDay > 0 ? Math.min(100, (totalDay / metaDay) * 100) : 0), [metaDay, totalDay]);
+
+  const totalDay = useMemo(
+    () => rows.reduce((a, r) => a + (Number(r.value) || 0), 0),
+    [rows]
+  );
+  const pct = useMemo(
+    () => (metaDay > 0 ? Math.min(100, (totalDay / metaDay) * 100) : 0),
+    [metaDay, totalDay]
+  );
 
   async function load() {
     setLoading(true);
     setErr(null);
     try {
-      const data = await apiGet(token, `/api/plant-production/${day}`);
+      const data = await apiGet<any>(`/api/plant-production/${day}`);
       const r = (data?.rows || []) as any[];
-      setMetaDay(Number(data?.meta_day || data?.metaDia || 0));
+
+      setMetaDay(Number(data?.meta_day ?? data?.metaDia ?? 0));
       setRows(
         r
           .filter((x) => x?.label)
           .map((x) => ({ label: String(x.label), value: Number(x.value) || 0 }))
       );
+
       setLoading(false);
     } catch (e: any) {
       setLoading(false);
@@ -56,13 +64,16 @@ export default function MobileProduction() {
     setSaving(true);
     setErr(null);
     try {
-      // payload padrão (ajusta se seu backend usar outro formato)
       const payload = {
         day,
         meta_day: metaDay,
-        rows: rows.map((r) => ({ label: r.label, value: Number(r.value) || 0 })),
+        rows: rows.map((r) => ({
+          label: r.label,
+          value: Number(r.value) || 0,
+        })),
       };
-      await apiPut(token, `/api/plant-production/${day}`, payload);
+
+      await apiPut(`/api/plant-production/${day}`, payload);
       setSaving(false);
     } catch (e: any) {
       setSaving(false);
@@ -77,7 +88,6 @@ export default function MobileProduction() {
 
   return (
     <MobileShell title="Produção">
-      {/* Cabeçalho compacto */}
       <div className="mp-card" style={{ borderRadius: 18 }}>
         <div className="mp-card-h mp-card-h-mobile">
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -102,11 +112,11 @@ export default function MobileProduction() {
             />
           </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="mp-btn" onClick={load} disabled={loading || saving}>
+          <div style={{ display: "flex", gap: 10, width: "100%" }}>
+            <button className="mp-btn" onClick={load} disabled={loading || saving} style={{ flex: 1 }}>
               <RefreshCw size={16} /> Atualizar
             </button>
-            <button className="mp-btn primary" onClick={save} disabled={loading || saving}>
+            <button className="mp-btn primary" onClick={save} disabled={loading || saving} style={{ flex: 1 }}>
               <Save size={16} /> {saving ? "Salvando..." : "Salvar"}
             </button>
           </div>
@@ -130,7 +140,6 @@ export default function MobileProduction() {
         ) : null}
       </div>
 
-      {/* Lista de horas (edição rápida) */}
       <div className="mp-card" style={{ borderRadius: 18, marginTop: 12 }}>
         <div className="mp-card-h mp-card-h-mobile">
           <div style={{ fontWeight: 900 }}>Produção por hora</div>
