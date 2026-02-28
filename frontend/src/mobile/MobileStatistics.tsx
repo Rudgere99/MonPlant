@@ -1,1 +1,1 @@
-// MobileStatistics.tsx
+export default function MobileStatistics(){ return null; }
