@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { RequireAuth } from "../auth/RequireAuth";
 import AppShell from "../components/AppShell";
@@ -27,6 +28,10 @@ import DevUsers from "../pages/DevUsers";
 import PlantProductionDayView from "../pages/PlantProductionDayView";
 import Last7DaysView from "../pages/Last7DaysView";
 import UfDF from "../pages/UfDF";
+
+// 📱 Mobile-only (Produção)
+import MobileProduction from "../mobile/MobileProduction";
+import { isMobileViewport } from "../mobile/isMobile";
 
 function defaultPathFor(role: ReturnType<typeof getUserRole>) {
   // Gerência também cai no dashboard
@@ -61,10 +66,51 @@ function RoleIndexRedirect() {
 }
 
 export function AppRoutes() {
+  const loc = useLocation();
+  const nav = useNavigate();
+
+  useEffect(() => {
+    const onResize = () => {
+      const mobile = isMobileViewport();
+      const path = loc.pathname;
+      const isMobileRoute = path.startsWith("/m");
+      const isAuthRoute = path.startsWith("/login") || path.startsWith("/home");
+
+      // No celular: força modo mobile (exceto login/home)
+      if (mobile && !isMobileRoute && !isAuthRoute) {
+        nav("/m/production", { replace: true });
+      }
+    };
+
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loc.pathname]);
+
   return (
     <Routes>
       <Route path="/home" element={<Home />} />
       <Route path="/login" element={<Login />} />
+
+      {/* 📱 Mobile: somente Produção (requer login) */}
+      <Route
+        path="/m"
+        element={
+          <RequireAuth>
+            <Navigate to="/m/production" replace />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/production"
+        element={
+          <RequireAuth>
+            <MobileProduction />
+          </RequireAuth>
+        }
+      />
+
 
       <Route
         path="/"
