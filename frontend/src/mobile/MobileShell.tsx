@@ -1,5 +1,5 @@
-import { ReactNode } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import type { ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, LayoutGrid, LogOut } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 
@@ -12,13 +12,12 @@ export default function MobileShell({
 }) {
   const nav = useNavigate();
   const loc = useLocation();
-  const { logout } = useAuth();
+  const { logout } = useAuth() as any;
 
   const canGoBack = loc.pathname !== "/m/production";
 
   return (
     <div className="mp-container" style={{ paddingTop: 12 }}>
-      {/* Topbar compacta */}
       <div className="mp-card mp-top" style={{ borderRadius: 18, padding: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
@@ -62,8 +61,6 @@ export default function MobileShell({
       </div>
 
       <div style={{ marginTop: 12 }}>{children}</div>
-
-      {/* Espaço para gesto do celular */}
       <div style={{ height: 72 }} />
     </div>
   );
