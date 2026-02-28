@@ -31,6 +31,10 @@ import UfDF from "../pages/UfDF";
 
 // 📱 Mobile-only (Produção)
 import MobileProduction from "../mobile/MobileProduction";
+import MobileDashboard from "../mobile/MobileDashboard";
+import MobileRitmo from "../mobile/MobileRitmo";
+import MobileStatistics from "../mobile/MobileStatistics";
+import MobileUfDF from "../mobile/MobileUfDF";
 import { isMobileViewport } from "../mobile/isMobile";
 
 function defaultPathFor(role: ReturnType<typeof getUserRole>) {
@@ -107,6 +111,39 @@ export function AppRoutes() {
         element={
           <RequireAuth>
             <MobileProduction />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/m/dashboard"
+        element={
+          <RequireAuth>
+            <MobileDashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/ritmo"
+        element={
+          <RequireAuth>
+            <MobileRitmo />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/stats"
+        element={
+          <RequireAuth>
+            <MobileStatistics />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/ufdf"
+        element={
+          <RequireAuth>
+            <MobileUfDF />
           </RequireAuth>
         }
       />
