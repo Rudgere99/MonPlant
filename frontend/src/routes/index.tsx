@@ -78,7 +78,7 @@ export function AppRoutes() {
       const mobile = isMobileViewport();
       const path = loc.pathname;
       const isMobileRoute = path.startsWith("/m");
-      const isAuthRoute = path.startsWith("/login") || path.startsWith("/home");
+      const isAuthRoute = path.startsWith("/login") || path.startsWith("/auth") || path.startsWith("/home");
 
       // No celular: força modo mobile (exceto login/home)
       if (mobile && !isMobileRoute && !isAuthRoute) {
