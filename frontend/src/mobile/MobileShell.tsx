@@ -86,9 +86,6 @@ export default function MobileShell({
         <Link className={`mp-tab ${active === "dashboard" ? "is-active" : ""}`} to="/m/dashboard">
           Dashboard
         </Link>
-        <Link className={`mp-tab ${active === "production" ? "is-active" : ""}`} to="/m/production">
-          Produção
-        </Link>
         <Link className={`mp-tab ${active === "ritmo" ? "is-active" : ""}`} to="/m/ritmo">
           Ritmo
         </Link>
