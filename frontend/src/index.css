@@ -511,3 +511,21 @@ a { color: inherit; text-decoration: none; }
   color: rgba(255,255,255,0.92);
   font-weight: 900;
   font-size: 13px;
+
+  /* Dashboard charts: reduzir poluição no mobile */
+@media (max-width: 860px) {
+  /* diminui fonte dos eixos */
+  .recharts-cartesian-axis-tick-value {
+    font-size: 10px !important;
+  }
+
+  /* esconde os números em cima das barras (LabelList) no mobile */
+  .recharts-label-list text {
+    display: none !important;
+  }
+
+  /* esconde textos “soltos” dentro do gráfico (geralmente labels) */
+  .recharts-text.recharts-label {
+    display: none !important;
+  }
+}
