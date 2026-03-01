@@ -1065,7 +1065,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={mobile ? 1 : 0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: mobile ? 10 : 11 }} />
+                              <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                               <YAxis
                                 yAxisId="left"
                                 domain={tonDomain}
@@ -1082,14 +1082,14 @@ const EXPECTED_TON_H = metaHoraEsperada;
                               <Tooltip content={(p: any) => <TooltipStopsHour {...p} stopsMap={stopsByPeriod} />} />
 <Legend
                                 verticalAlign="bottom"
-                                height={mobile ? 24 : 30}
+                                height={30}
                                 iconType="circle"
                                 formatter={(value) => (value === "freq" ? "Frequência (%)" : value === "ton" ? "Ton/H" : value)}
                                 wrapperStyle={{ color: "#00CCFF", fontWeight: 900 }}
                               />
 
-                              <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={mobile ? 28 : 38}>
-                                {!mobile && <LabelList dataKey="ton" content={BarValueLabel} />}
+                              <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={38}>
+                                <LabelList dataKey="ton" content={BarValueLabel} />
                               </Bar>
 
                               <Line
@@ -1101,7 +1101,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                                 dot={{ r: 4 }}
                                 activeDot={{ r: 5 }}
                               >
-                                {!mobile && <LabelList dataKey="freq" content={FreqPointLabel} />}
+                                <LabelList dataKey="freq" content={FreqPointLabel} />
                               </Line>
                             </ComposedChart>
                           </ResponsiveContainer>
@@ -1111,7 +1111,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
                     {/* TAXA */}
                     {exportSel.taxa ? (
-                      <div style={{ ...cardBase, padding: mobile ? 12 : 14, gridColumn: mobile ? "span 12" : "span 4", minHeight: mobile ? 220 : 310 }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 4", minHeight: 310 }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Taxa Média</div>
@@ -1171,7 +1171,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
                     {/* META */}
                     {exportSel.meta_dia ? (
-                      <div style={{ ...cardBase, padding: mobile ? 12 : 14, gridColumn: mobile ? "span 12" : "span 4", minHeight: mobile ? 220 : 310 }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 4", minHeight: 310 }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Produção do dia</div>
@@ -1204,7 +1204,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
                     {/* MÉDIA */}
                     {exportSel.media_hora ? (
-                      <div style={{ ...cardBase, padding: mobile ? 12 : 14, gridColumn: mobile ? "span 12" : "span 4", minHeight: mobile ? 220 : 310 }}>
+                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 4", minHeight: 310 }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Média/Hora</div>
@@ -1524,7 +1524,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={mobile ? 1 : 0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: mobile ? 10 : 11 }} />
+                <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <YAxis
                   yAxisId="left"
                   domain={tonDomain}
@@ -1547,8 +1547,8 @@ const EXPECTED_TON_H = metaHoraEsperada;
                   wrapperStyle={{ color: "#00CCFF", fontWeight: 900 }}
                 />
 
-                <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={mobile ? 28 : 38}>
-                  {!mobile && <LabelList dataKey="ton" content={BarValueLabel} />}
+                <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={38}>
+                  <LabelList dataKey="ton" content={BarValueLabel} />
                 </Bar>
 
                 <Line
@@ -1560,7 +1560,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                   dot={{ r: 4 }}
                   activeDot={{ r: 5 }}
                 >
-                  {!mobile && <LabelList dataKey="freq" content={FreqPointLabel} />}
+                  <LabelList dataKey="freq" content={FreqPointLabel} />
                 </Line>
               </ComposedChart>
             </ResponsiveContainer>
