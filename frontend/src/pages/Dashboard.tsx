@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+
+import { useIsMobile } from "../mobile/useIsMobile";
 import { useNavigate } from "react-router-dom";
 import html2canvas from "html2canvas";
 import {
@@ -387,6 +389,7 @@ export default function Dashboard() {
   const nav = useNavigate();
   const { token, loading: authLoading } = useAuth();
   const [day, setDay] = useState<string>(isoTodayLocal());
+  const mobile = useIsMobile();
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1030,7 +1033,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                     </div>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
                     {/* PRODUÇÃO HORÁRIA (grande) */}
                     {exportSel.prod_horaria ? (
                       <div style={{ ...cardBase, padding: 16, gridColumn: "span 12" }}>
@@ -1058,7 +1061,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </span>
                         </div>
 
-                        <div style={{ height: 420 }}>
+                        <div style={{ height: mobile ? 300 : 420 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -1131,7 +1134,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </span>
                         </div>
 
-                        <div style={{ height: 190 }}>
+                        <div style={{ height: mobile ? 160 : 190 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -1176,7 +1179,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </div>
                         </div>
 
-                        <div style={{ height: 190, position: "relative" }}>
+                        <div style={{ height: mobile ? 160 : 190, position: "relative" }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
                               <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
@@ -1277,7 +1280,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </div>
                         </div>
 
-                        <div style={{ height: 190 }}>
+                        <div style={{ height: mobile ? 160 : 190 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -1335,7 +1338,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </div>
                         </div>
 
-                        <div style={{ height: 180 }}>
+                        <div style={{ height: mobile ? 150 : 180 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={last7Series} margin={{ top: 22, right: 26, left: 10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -1383,7 +1386,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </div>
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: mobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 12 }}>
                           <MiniStat
                             icon="⏸"
                             title="Última Parada"
@@ -1487,7 +1490,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
       ) : null}
 
       {/* ===================== MAIN DASHBOARD GRID (MESMO FORMATO DO EXPORT) ===================== */}
-      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
+      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(12, 1fr)", gap: 14, alignItems: "start" }}>
         {/* PRODUÇÃO HORÁRIA (12 col) */}
         <div
           style={{ ...cardBase, padding: 16, gridColumn: "span 12", cursor: "pointer" }}
@@ -1517,7 +1520,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </span>
           </div>
 
-          <div style={{ height: 420 }}>
+          <div style={{ height: mobile ? 300 : 420 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -1588,7 +1591,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </span>
           </div>
 
-          <div style={{ height: 190 }}>
+          <div style={{ height: mobile ? 160 : 190 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -1650,7 +1653,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
 </div>
           </div>
 
-          <div style={{ height: 190, position: "relative" }}>
+          <div style={{ height: mobile ? 160 : 190, position: "relative" }}>
             <ResponsiveContainer width="100%" height="100%">
               <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
                 <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
@@ -1750,7 +1753,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </div>
           </div>
 
-          <div style={{ height: 190 }}>
+          <div style={{ height: mobile ? 160 : 190 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -1810,7 +1813,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </div>
           </div>
 
-          <div style={{ height: 180 }}>
+          <div style={{ height: mobile ? 150 : 180 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={last7Series} margin={{ top: 22, right: 26, left: 10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -1865,7 +1868,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: mobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 12 }}>
             <MiniStat
               icon="⏸"
               title="Última Parada"
