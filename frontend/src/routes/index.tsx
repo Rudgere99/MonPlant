@@ -132,16 +132,6 @@ export function AppRoutes() {
         }
       />
       <Route
-        path="/m/production"
-        element={
-          <RequireAuth>
-            <MobileWrap title="Produção" tab="production">
-              <PlantProduction />
-            </MobileWrap>
-          </RequireAuth>
-        }
-      />
-      <Route
         path="/m/ritmo"
         element={
           <RequireAuth>
