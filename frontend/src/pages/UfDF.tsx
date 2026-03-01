@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useIsMobile } from "../mobile/useIsMobile";
 
 type StopRow = {
   period: string;
@@ -189,6 +190,8 @@ function Kpi({ title, value, sub }: { title: string; value: React.ReactNode; sub
 }
 
 export default function UfDF() {
+  const mobile = useIsMobile();
+
   const [month, setMonth] = useState<string>(monthStr());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
