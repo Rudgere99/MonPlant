@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-type Tab = "dashboard" | "production" | "ritmo" | "stats" | "ufdf";
+type Tab = "dashboard" | "ritmo" | "stats" | "ufdf";
 
 function doLogout() {
   // remove tokens used in MonPlant (compat com variações)
