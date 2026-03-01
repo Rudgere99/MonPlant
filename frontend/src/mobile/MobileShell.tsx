@@ -1,26 +1,60 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-type Tab = "dashboard" | "production" | "ritmo" | "stats" | "ufdf";
+type Tab = "dashboard" | "ritmo" | "stats" | "ufdf";
 
 function doLogout() {
-  // remove tokens used in MonPlant (compat com variações)
-  const keys = [
-    "token",
-    "mp_token",
-    "auth_token",
-    "access_token",
-    "user",
-    "mp_user",
-  ];
+  const keys = ["token", "mp_token", "auth_token", "access_token", "user", "mp_user"];
   for (const k of keys) {
-    try {
-      localStorage.removeItem(k);
-    } catch {}
+    try { localStorage.removeItem(k); } catch {}
   }
-  try {
-    sessionStorage.clear();
-  } catch {}
+  try { sessionStorage.clear(); } catch {}
+}
+
+function useIsLandscape(): boolean {
+  const get = () => {
+    if (typeof window === "undefined") return false;
+    // Prefer orientation media query when available
+    const mq = window.matchMedia?.("(orientation: landscape)");
+    if (mq && typeof mq.matches === "boolean") return mq.matches;
+    return window.innerWidth > window.innerHeight;
+  };
+
+  const [land, setLand] = useState(get);
+
+  useEffect(() => {
+    const on = () => setLand(get());
+    window.addEventListener("resize", on);
+    window.addEventListener("orientationchange", on as any);
+
+    // also listen to media query changes
+    const mq = window.matchMedia?.("(orientation: landscape)");
+    const onMq = () => on();
+    try {
+      mq?.addEventListener?.("change", onMq);
+    } catch {}
+
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("orientationchange", on as any);
+      try {
+        mq?.removeEventListener?.("change", onMq);
+      } catch {}
+    };
+  }, []);
+
+  return land;
+}
+
+function TopTabs({ active }: { active: Tab }) {
+  return (
+    <div className="mp-top-tabs" role="tablist" aria-label="Navegação">
+      <Link className={`mp-top-tab ${active === "dashboard" ? "is-active" : ""}`} to="/m/dashboard">Dashboard</Link>
+      <Link className={`mp-top-tab ${active === "ritmo" ? "is-active" : ""}`} to="/m/ritmo">Ritmo</Link>
+      <Link className={`mp-top-tab ${active === "stats" ? "is-active" : ""}`} to="/m/stats">Stats</Link>
+      <Link className={`mp-top-tab ${active === "ufdf" ? "is-active" : ""}`} to="/m/ufdf">UF/DF</Link>
+    </div>
+  );
 }
 
 export default function MobileShell({
@@ -40,9 +74,12 @@ export default function MobileShell({
 }) {
   const loc = useLocation();
   const nav = useNavigate();
+  const landscape = useIsLandscape();
+
+  // In landscape, put tabs in the topbar (where there is extra space) and hide bottom tabs.
+  const showTopTabs = landscape;
 
   const goBack = () => {
-    // no mobile: volta pro dashboard mobile; fora do /m, volta normal
     if (loc.pathname.startsWith("/m")) nav("/m/dashboard");
     else nav(-1);
   };
@@ -50,11 +87,8 @@ export default function MobileShell({
   const onLogout = () => {
     doLogout();
     nav("/login", { replace: true });
-    // garante reset total (evita ficar preso em tela antiga)
     setTimeout(() => {
-      try {
-        window.location.reload();
-      } catch {}
+      try { window.location.reload(); } catch {}
     }, 50);
   };
 
@@ -80,22 +114,26 @@ export default function MobileShell({
         </div>
       </div>
 
-      <div className="mp-content">{children}</div>
+      {showTopTabs ? <TopTabs active={active} /> : null}
 
-      <nav className="mp-bottom">
-        <Link className={`mp-tab ${active === "dashboard" ? "is-active" : ""}`} to="/m/dashboard">
-          Dashboard
-        </Link>
-        <Link className={`mp-tab ${active === "ritmo" ? "is-active" : ""}`} to="/m/ritmo">
-          Ritmo
-        </Link>
-        <Link className={`mp-tab ${active === "stats" ? "is-active" : ""}`} to="/m/stats">
-          Stats
-        </Link>
-        <Link className={`mp-tab ${active === "ufdf" ? "is-active" : ""}`} to="/m/ufdf">
-          UF/DF
-        </Link>
-      </nav>
+      <div className={`mp-content ${showTopTabs ? "has-top-tabs" : ""}`}>{children}</div>
+
+      {!showTopTabs ? (
+        <nav className="mp-bottom">
+          <Link className={`mp-tab ${active === "dashboard" ? "is-active" : ""}`} to="/m/dashboard">
+            Dashboard
+          </Link>
+          <Link className={`mp-tab ${active === "ritmo" ? "is-active" : ""}`} to="/m/ritmo">
+            Ritmo
+          </Link>
+          <Link className={`mp-tab ${active === "stats" ? "is-active" : ""}`} to="/m/stats">
+            Stats
+          </Link>
+          <Link className={`mp-tab ${active === "ufdf" ? "is-active" : ""}`} to="/m/ufdf">
+            UF/DF
+          </Link>
+        </nav>
+      ) : null}
     </div>
   );
 }
