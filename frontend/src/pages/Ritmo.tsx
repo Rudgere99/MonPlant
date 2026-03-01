@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useIsMobile } from "../mobile/useIsMobile";
 
 /**
  * Ritmo — Executivo Premium
@@ -181,8 +182,9 @@ function HeroKPI(props: {
   sub?: React.ReactNode;
   colSpan?: number;
   accent?: "green" | "yellow" | "red" | "neutral";
+  mobile?: boolean;
 }) {
-  const { title, value, sub, colSpan = 4, accent = "neutral" } = props;
+  const { title, value, sub, colSpan = 4, accent = "neutral", mobile = false } = props;
   const accentMap: Record<string, string> = {
     green: "rgba(34,197,94,0.95)",
     yellow: "rgba(250,204,21,0.95)",
@@ -213,7 +215,7 @@ function HeroKPI(props: {
       />
       <div style={{ position: "relative" }}>
         <div style={label}>{title}</div>
-        <div style={{ color: accent === "neutral" ? "rgba(255,255,255,0.94)" : accentMap[accent], fontWeight: 980, fontSize: 30, marginTop: 6 }}>{value}</div>
+        <div style={{ color: accent === "neutral" ? "rgba(255,255,255,0.94)" : accentMap[accent], fontWeight: 980, fontSize: mobile ? 24 : 30, marginTop: 6 }}>{value}</div>
         {sub ? <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>{sub}</div> : null}
       </div>
     </div>
@@ -302,6 +304,7 @@ const exportSep: React.CSSProperties = {
 
 
 export default function Ritmo() {
+  const mobile = useIsMobile();
   const [day, setDay] = useState<string>(isoTodayLocal());
   const exportCompactRef = useRef<HTMLDivElement | null>(null);
 
@@ -593,20 +596,20 @@ export default function Ritmo() {
 
       {/* HERO KPIs */}
       <div style={heroGrid}>
-        <HeroKPI title="Meta" value={metaDay !== null ? `${fmtBR(metaDay, dTon)} t` : "—"} colSpan={4} accent="neutral" />
-        <HeroKPI title="Produzido" value={`${fmtBR(produced, dTon)} t`} colSpan={4} accent="neutral" />
-        <HeroKPI title="Projeção" value={`${fmtBR(projectionTon, dTon)} t`} colSpan={4} accent={metaDay && projectionTon >= metaDay ? "green" : metaDay ? "red" : "neutral"} />
+        <HeroKPI title="Meta" value={metaDay !== null ? `${fmtBR(metaDay, dTon)} t` : "—"} colSpan={mobile ? 6 : 4} accent="neutral"  mobile={mobile} />
+        <HeroKPI title="Produzido" value={`${fmtBR(produced, dTon)} t`} colSpan={mobile ? 6 : 4} accent="neutral"  mobile={mobile} />
+        <HeroKPI title="Projeção" value={`${fmtBR(projectionTon, dTon)} t`} colSpan={mobile ? 6 : 4} accent={metaDay && projectionTon  mobile={mobile}>= metaDay ? "green" : metaDay ? "red" : "neutral"} />
 
         <HeroKPI
           title="Atingimento"
           value={attainment !== null ? fmtPct(attainment, dPct) : "—"}
-          colSpan={4}
+          colSpan={mobile ? 6 : 4}
           accent={status.kind === "green" ? "green" : status.kind === "yellow" ? "yellow" : "red"}
-        />
+         mobile={mobile} />
         <HeroKPI
           title="Desvio"
-          value={diff !== null ? `${diff >= 0 ? "+" : ""}${fmtBR(diff, dTon)} t` : "—"}
-          colSpan={4}
+          value={diff !== null ? `${diff  mobile={mobile}>= 0 ? "+" : ""}${fmtBR(diff, dTon)} t` : "—"}
+          colSpan={mobile ? 6 : 4}
           accent={diff !== null && diff >= 0 ? "green" : diff !== null ? "red" : "neutral"}
           sub={projectedDiff !== null ? (
             <span>
@@ -618,7 +621,7 @@ export default function Ritmo() {
             </span>
           ) : undefined}
         />
-        <HeroKPI title="Tempo restante" value={isClosedDay ? "0h" : `${fmtBR(remainingH, 1)}h`} colSpan={4} accent="neutral" />
+        <HeroKPI title="Tempo restante" value={isClosedDay ? "0h" : `${fmtBR(remainingH, 1)}h`} colSpan={mobile ? 6 : 4} accent="neutral"  mobile={mobile} />
       </div>
 
       {/* Barra de progresso */}
@@ -660,7 +663,7 @@ export default function Ritmo() {
           </div>
         </div>
 
-        <div style={{ height: 220, width: "100%", minWidth: 0, marginTop: 10 }}>
+        <div style={{ height: mobile ? 180 : 220, width: "100%", minWidth: 0, marginTop: 10 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={series} margin={{ top: 10, right: 14, left: 0, bottom: 0 }}>
               <XAxis dataKey="hour" tick={{ fill: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }} />
@@ -685,7 +688,7 @@ export default function Ritmo() {
 
       {/* Período atual + Ritmo (necessário vs média real) + Resumo exportável */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 12 }}>
-        <div style={{ gridColumn: "span 7", ...card }}>
+        <div style={{ gridColumn: mobile ? "span 12" : "span 7", ...card }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div>
               <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 16 }}>Período atual</div>
@@ -719,9 +722,9 @@ export default function Ritmo() {
           <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "12px 0" }} />
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 12 }}>
-            <div style={{ gridColumn: "span 6", ...card, background: "rgba(255,255,255,0.03)" }}>
+            <div style={{ gridColumn: mobile ? "span 12" : "span 6", ...card, background: "rgba(255,255,255,0.03)" }}>
               <div style={label}>Necessário</div>
-              <div style={{ color: neededTPH !== null && avgRealTPH < neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)", fontWeight: 980, fontSize: 30, marginTop: 6 }}>
+              <div style={{ color: neededTPH !== null && avgRealTPH < neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)", fontWeight: 980, fontSize: mobile ? 24 : 30, marginTop: 6 }}>
                 {neededTPH === null ? "—" : `${fmtBR(neededTPH, dTPH)} t/h`}
               </div>
               <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>
@@ -729,9 +732,9 @@ export default function Ritmo() {
               </div>
             </div>
 
-            <div style={{ gridColumn: "span 6", ...card, background: "rgba(255,255,255,0.03)" }}>
+            <div style={{ gridColumn: mobile ? "span 12" : "span 6", ...card, background: "rgba(255,255,255,0.03)" }}>
               <div style={label}>Média real</div>
-              <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 30, marginTop: 6 }}>
+              <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: mobile ? 24 : 30, marginTop: 6 }}>
                 {`${fmtBR(avgRealTPH, dTPH)} t/h`}
               </div>
               <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>
@@ -741,7 +744,7 @@ export default function Ritmo() {
           </div>
         </div>
 
-        <div style={{ gridColumn: "span 5", ...card }}>
+        <div style={{ gridColumn: mobile ? "span 12" : "span 5", ...card }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
             <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 16 }}>Resumo</div>
             <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>{dayBR}</div>
