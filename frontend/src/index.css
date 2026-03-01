@@ -577,3 +577,20 @@ a { color: inherit; text-decoration: none; }
   }
 }
 
+/* ===== MobileShell: Tabs na TOPBAR quando em landscape ===== */
+.mp-top.is-landscape{ gap: 10px; }
+
+.mp-top-tabs-inline{
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 6px;
+}
+
+/* Em landscape muito baixo, deixa tabs mais compactas */
+@media (orientation: landscape) and (max-height: 520px){
+  .mp-top-tab{ padding: 8px 10px; border-radius: 14px; font-size: 12px; }
+}
