@@ -90,20 +90,25 @@ export function AppRoutes() {
 
   useEffect(() => {
     const onResize = () => {
-      const mobile = isMobileViewport();
+      const coarse = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
+      const mobile = isMobileViewport() || !!coarse || (typeof window !== "undefined" && window.innerWidth <= 980);
       const path = loc.pathname;
       const isMobileRoute = path.startsWith("/m");
       const isAuthRoute = path.startsWith("/login") || path.startsWith("/home");
 
       // 📱 No celular: força modo mobile (exceto login/home)
       if (mobile && !isMobileRoute && !isAuthRoute) {
-        nav("/m/production", { replace: true });
+        nav("/m/dashboard", { replace: true });
       }
     };
 
     onResize();
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize as any);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize as any);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc.pathname]);
 
