@@ -792,7 +792,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
   const topBar: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "1fr auto auto auto",
+    gridTemplateColumns: mobile ? "1fr" : "1fr auto auto auto",
     gap: 12,
     alignItems: "center",
     marginTop: 10,
@@ -869,21 +869,21 @@ const EXPECTED_TON_H = metaHoraEsperada;
           <span style={{ ...subStyle, marginRight: 6 }}>Data</span>
           <input
             className="mp-input"
-            style={{ width: 160, height: 42, borderRadius: 14 }}
+            style={{ width: mobile ? "100%" : 160, height: 42, borderRadius: 14 }}
             type="date"
             value={day}
             onChange={(e) => setDay(e.target.value)}
           />
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={smallPill}>{loading ? "Atualizando..." : err ? "Erro" : "Online"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: mobile ? "wrap" : "nowrap", justifyContent: mobile ? "flex-start" : "flex-end" }}>
+          <span style={{ ...smallPill, flex: mobile ? "1 1 100%" : undefined }}>{loading ? "Atualizando..." : err ? "Erro" : "Online"}</span>
 
-          <button className="mp-btn" onClick={() => setExportOpen(true)} style={{ height: 42 }}>
+          <button className="mp-btn" onClick={() => setExportOpen(true)} style={{ height: 42, flex: mobile ? "1 1 120px" : undefined }}>
             Exportar
           </button>
 
-          <button className="mp-btn mp-btn-primary" onClick={loadAll} disabled={loading} style={{ height: 42 }}>
+          <button className="mp-btn mp-btn-primary" onClick={loadAll} disabled={loading} style={{ height: 42, flex: mobile ? "1 1 120px" : undefined }}>
             Atualizar
           </button>
         </div>
