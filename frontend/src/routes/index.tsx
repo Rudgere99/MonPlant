@@ -33,6 +33,14 @@ import UfDF from "../pages/UfDF";
 import MobileShell from "../mobile/MobileShell";
 import { isMobileViewport } from "../mobile/isMobile";
 
+function MobileWrap({ title, active, children }: { title: string; active: "dashboard" | "production" | "ritmo" | "stats" | "ufdf"; children: ReactNode }) {
+  return (
+    <MobileShell title={title} active={active}>
+      {children}
+    </MobileShell>
+  );
+}
+
 function defaultPathFor(role: ReturnType<typeof getUserRole>) {
   // Gerência também cai no dashboard
   return role === "apontador" ? "/producao-planta" : "/dashboard";
@@ -123,14 +131,55 @@ export function AppRoutes() {
         path="/m/production"
         element={
           <RequireAuth>
-            <MobileProduction />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/m/dashboard"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Dashboard" active="dashboard">
+              <Dashboard />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/ritmo"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Ritmo" active="ritmo">
+              <Ritmo />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/stats"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Estatísticas" active="stats">
+              <Statistics />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/ufdf"
+        element={
+          <RequireAuth>
+            <MobileWrap title="UF/DF" active="ufdf">
+              <UfDF />
+            </MobileWrap>
           </RequireAuth>
         }
       />
 
 
+
       <Route
-        path="/"
+        path="/" 
         element={
           <RequireAuth>
             <AppShell />
