@@ -117,7 +117,7 @@ export function AppRoutes() {
         path="/m"
         element={
           <RequireAuth>
-            <Navigate to="/m/production" replace />
+            <Navigate to="/m/dashboard" replace />
           </RequireAuth>
         }
       />
