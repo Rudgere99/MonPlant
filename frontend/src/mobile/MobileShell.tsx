@@ -1,8 +1,27 @@
-// src/mobile/MobileShell.tsx
 import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 type Tab = "dashboard" | "production" | "ritmo" | "stats" | "ufdf";
+
+function doLogout() {
+  // remove tokens used in MonPlant (compat com variações)
+  const keys = [
+    "token",
+    "mp_token",
+    "auth_token",
+    "access_token",
+    "user",
+    "mp_user",
+  ];
+  for (const k of keys) {
+    try {
+      localStorage.removeItem(k);
+    } catch {}
+  }
+  try {
+    sessionStorage.clear();
+  } catch {}
+}
 
 export default function MobileShell({
   title,
@@ -10,20 +29,33 @@ export default function MobileShell({
   active,
   children,
   right,
+  showLogout = true,
 }: {
   title: string;
   subtitle?: string;
   active: Tab;
   children: ReactNode;
   right?: ReactNode;
+  showLogout?: boolean;
 }) {
   const loc = useLocation();
   const nav = useNavigate();
 
   const goBack = () => {
-    // se quiser sempre voltar pro dashboard mobile:
+    // no mobile: volta pro dashboard mobile; fora do /m, volta normal
     if (loc.pathname.startsWith("/m")) nav("/m/dashboard");
     else nav(-1);
+  };
+
+  const onLogout = () => {
+    doLogout();
+    nav("/login", { replace: true });
+    // garante reset total (evita ficar preso em tela antiga)
+    setTimeout(() => {
+      try {
+        window.location.reload();
+      } catch {}
+    }, 50);
   };
 
   return (
@@ -38,7 +70,14 @@ export default function MobileShell({
           {subtitle ? <div className="mp-top-sub">{subtitle}</div> : null}
         </div>
 
-        <div className="mp-top-right">{right}</div>
+        <div className="mp-top-right">
+          {right}
+          {showLogout ? (
+            <button className="mp-logout" type="button" onClick={onLogout} aria-label="Sair">
+              Sair
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="mp-content">{children}</div>
