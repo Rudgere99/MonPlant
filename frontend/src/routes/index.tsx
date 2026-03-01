@@ -1,48 +1,43 @@
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
+
 import { RequireAuth } from "../auth/RequireAuth";
 import AppShell from "../components/AppShell";
 import { useAuth } from "../auth/AuthProvider";
 import { canAccess as canAccessRole, getUserRole } from "../auth/roleGuard";
-import Historico from "../pages/Historico";
 
 import Login from "../pages/Login";
 import Home from "../pages/Home";
+
 import Dashboard from "../pages/Dashboard";
 import PlantProduction from "../pages/PlantProduction";
+import Ritmo from "../pages/Ritmo";
+import Statistics from "../pages/Statistics";
+import UfDF from "../pages/UfDF";
+
 import Horimetros from "../pages/Horimetros";
 import Paradas from "../pages/Paradas";
+import LancamentoParadas from "../pages/LancamentoParadas";
 import Exportar from "../pages/Exportar";
 import MetasMes from "../pages/MetasMes";
-import Statistics from "../pages/Statistics";
-import Ritmo from "../pages/Ritmo";
 import AvisosSupervisor from "../pages/AvisosSupervisor";
-
-// ✅ NOVO
-import LancamentoParadas from "../pages/LancamentoParadas";
+import Historico from "../pages/Historico";
 
 import DevLogs from "../pages/Devlogs";
 import DevUsers from "../pages/DevUsers";
 
 import PlantProductionDayView from "../pages/PlantProductionDayView";
 import Last7DaysView from "../pages/Last7DaysView";
-import UfDF from "../pages/UfDF";
 
-// 📱 Mobile-only (Produção)
+// 📱 Mobile shell + detector (Opção B)
 import MobileShell from "../mobile/MobileShell";
 import { isMobileViewport } from "../mobile/isMobile";
 
-function MobileWrap({ title, active, children }: { title: string; active: "dashboard" | "production" | "ritmo" | "stats" | "ufdf"; children: ReactNode }) {
-  return (
-    <MobileShell title={title} active={active}>
-      {children}
-    </MobileShell>
-  );
-}
+type Role = ReturnType<typeof getUserRole>;
 
-function defaultPathFor(role: ReturnType<typeof getUserRole>) {
-  // Gerência também cai no dashboard
+function defaultPathFor(role: Role) {
+  // apontador cai direto na Produção
   return role === "apontador" ? "/producao-planta" : "/dashboard";
 }
 
@@ -51,7 +46,7 @@ function RequireRole({ children }: { children: ReactNode }) {
   const location = useLocation();
   const path = location.pathname;
 
-  // ✅ não redireciona durante hidratação (evita piscar/loop no F5)
+  // ✅ evita loop/piscar no F5 durante hidratação
   if (loading) return <>{children}</>;
   if (!user && token) return <>{children}</>;
 
@@ -63,7 +58,6 @@ function RequireRole({ children }: { children: ReactNode }) {
 
   return <>{children}</>;
 }
-
 
 function MobileWrap({
   title,
@@ -101,7 +95,7 @@ export function AppRoutes() {
       const isMobileRoute = path.startsWith("/m");
       const isAuthRoute = path.startsWith("/login") || path.startsWith("/home");
 
-      // No celular: força modo mobile (exceto login/home)
+      // 📱 No celular: força modo mobile (exceto login/home)
       if (mobile && !isMobileRoute && !isAuthRoute) {
         nav("/m/production", { replace: true });
       }
@@ -118,7 +112,7 @@ export function AppRoutes() {
       <Route path="/home" element={<Home />} />
       <Route path="/login" element={<Login />} />
 
-      {/* 📱 Mobile: somente Produção (requer login) */}
+      {/* 📱 Rotas Mobile (Opção B): mesmas páginas, só “casca” mobile */}
       <Route
         path="/m"
         element={
@@ -128,19 +122,21 @@ export function AppRoutes() {
         }
       />
       <Route
-        path="/m/production"
-        element={
-          <RequireAuth>
-          </RequireAuth>
-        }
-      />
-
-      <Route
         path="/m/dashboard"
         element={
           <RequireAuth>
-            <MobileWrap title="Dashboard" active="dashboard">
+            <MobileWrap title="Dashboard" tab="dashboard">
               <Dashboard />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/production"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Produção" tab="production">
+              <PlantProduction />
             </MobileWrap>
           </RequireAuth>
         }
@@ -149,7 +145,7 @@ export function AppRoutes() {
         path="/m/ritmo"
         element={
           <RequireAuth>
-            <MobileWrap title="Ritmo" active="ritmo">
+            <MobileWrap title="Ritmo" tab="ritmo">
               <Ritmo />
             </MobileWrap>
           </RequireAuth>
@@ -159,7 +155,7 @@ export function AppRoutes() {
         path="/m/stats"
         element={
           <RequireAuth>
-            <MobileWrap title="Estatísticas" active="stats">
+            <MobileWrap title="Estatísticas" tab="stats">
               <Statistics />
             </MobileWrap>
           </RequireAuth>
@@ -169,17 +165,16 @@ export function AppRoutes() {
         path="/m/ufdf"
         element={
           <RequireAuth>
-            <MobileWrap title="UF/DF" active="ufdf">
+            <MobileWrap title="UF/DF" tab="ufdf">
               <UfDF />
             </MobileWrap>
           </RequireAuth>
         }
       />
 
-
-
+      {/* App (desktop) */}
       <Route
-        path="/" 
+        path="/"
         element={
           <RequireAuth>
             <AppShell />
@@ -188,7 +183,6 @@ export function AppRoutes() {
       >
         <Route index element={<RoleIndexRedirect />} />
 
-        {/* Dashboard */}
         <Route
           path="dashboard"
           element={
@@ -214,6 +208,101 @@ export function AppRoutes() {
           }
         />
 
+        {/* Páginas */}
+        <Route
+          path="producao-planta"
+          element={
+            <RequireRole>
+              <PlantProduction />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="ritmo"
+          element={
+            <RequireRole>
+              <Ritmo />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="statisticas"
+          element={
+            <RequireRole>
+              <Statistics />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="ufdf"
+          element={
+            <RequireRole>
+              <UfDF />
+            </RequireRole>
+          }
+        />
+
+        {/* Supervisor */}
+        <Route
+          path="avisos"
+          element={
+            <RequireRole>
+              <AvisosSupervisor />
+            </RequireRole>
+          }
+        />
+
+        {/* Paradas / Horímetros */}
+        <Route
+          path="paradas"
+          element={
+            <RequireRole>
+              <Paradas />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="lancamento-paradas"
+          element={
+            <RequireRole>
+              <LancamentoParadas />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="horimetros"
+          element={
+            <RequireRole>
+              <Horimetros />
+            </RequireRole>
+          }
+        />
+
+        <Route
+          path="exportar"
+          element={
+            <RequireRole>
+              <Exportar />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="metas"
+          element={
+            <RequireRole>
+              <MetasMes />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="historico"
+          element={
+            <RequireRole>
+              <Historico />
+            </RequireRole>
+          }
+        />
+
         {/* DEV */}
         <Route
           path="dev/logs"
@@ -231,110 +320,8 @@ export function AppRoutes() {
             </RequireRole>
           }
         />
-
-        {/* App */}
-        <Route
-          path="producao-planta"
-          element={
-            <RequireRole>
-              <PlantProduction />
-            </RequireRole>
-          }
-        />
-
-            <Route
-          path="ritmo"
-          element={
-            <RequireRole>
-              <Ritmo />
-            </RequireRole>
-          }
-        />
-
-        {/* Avisos (Supervisor) */}
-        <Route
-          path="avisos"
-          element={
-            <RequireRole>
-              <AvisosSupervisor />
-            </RequireRole>
-          }
-        />
-        
-        <Route
-          path="horimetros"
-          element={
-            <RequireRole>
-              <Horimetros />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="paradas"
-          element={
-            <RequireRole>
-              <Paradas />
-            </RequireRole>
-          }
-        />
-
-        {/* ✅ NOVO */}
-        <Route
-          path="lancamento-paradas"
-          element={
-            <RequireRole>
-              <LancamentoParadas />
-            </RequireRole>
-          }
-        />
-
-        <Route
-          path="historico"
-          element={
-            <RequireRole>
-              <Historico />
-            </RequireRole>
-          }
-        />
-
-        <Route
-          path="metas"
-          element={
-            <RequireRole>
-              <MetasMes />
-            </RequireRole>
-          }
-        />
-
-        <Route
-          path="statisticas"
-          element={
-            <RequireRole>
-              <Statistics />
-            </RequireRole>
-          }
-        />
-
-        <Route
-          path="exportar"
-          element={
-            <RequireRole>
-              <Exportar />
-            </RequireRole>
-          }
-        />
-
-        <Route
-          path="ufdf"
-          element={
-            <RequireRole>
-              <UfDF />
-            </RequireRole>
-          }
-        />
       </Route>
 
-      {/* cai aqui se digitarem URL inválida: volta pro app e o index decide por role */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
