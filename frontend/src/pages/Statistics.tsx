@@ -17,6 +17,7 @@ import {
   ReferenceArea,
 } from "recharts";
 import { useAuth } from "../auth/AuthProvider";
+import { useIsMobile } from "../mobile/useIsMobile";
 
 type StopRow = {
   period: string;
@@ -442,6 +443,7 @@ function unitStyle() {
 
 export default function Statistics() {
   const { token } = useAuth();
+  const mobile = useIsMobile();
   const [month, setMonth] = useState(() => {
     const d = new Date();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -834,15 +836,15 @@ export default function Statistics() {
       <SectionHeader icon="📌" title="Visão Executiva" sub="KPIs do mês" />
 
       {/* KPI rei + barras meta x produzido */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 14 }}>
-        <div style={{ gridColumn: "span 7" }}>
+      <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(12, minmax(0, 1fr))", gap: 14 }}>
+        <div style={{ gridColumn: mobile ? "auto" : "span 7" }}>
           <MonthBars producedTon={prodMonth} metaTon={metaMonth} />
         </div>
 
         {/* KPI Rei: Diferença vs Meta */}
         <div
           style={{
-            gridColumn: "span 5",
+            gridColumn: mobile ? "auto" : "span 5",
             borderRadius: 22,
             border: `1px solid ${COLORS.stroke}`,
             background: COLORS.bgCard,
@@ -927,10 +929,10 @@ export default function Statistics() {
       <SectionHeader icon="🧭" title="Diagnóstico Operacional" sub="produção diária, turnos, horímetros e paradas" />
 
       {/* Produção diária + Turnos + Horas operadas */}
-      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1.15fr 0.85fr" }}>
+      <div style={{ display: "grid", gap: 14, gridTemplateColumns: mobile ? "1fr" : "1.15fr 0.85fr" }}>
         <Card title="Produção diária x Meta diária" sub="Produção vs meta (a % aparece no tooltip)">
           <div
-            style={{ height: 320, minHeight: 320, cursor: "pointer" }}
+            style={{ height: mobile ? 240 : 320, minHeight: mobile ? 240 : 320, cursor: "pointer" }}
             title="Clique para detalhar a produção do mês"
           >
             <ResponsiveContainer width="100%" height="100%">
@@ -959,7 +961,7 @@ export default function Statistics() {
             Dica: clique no gráfico para abrir o detalhamento do mês.
           </div>
 
-          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
+          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: mobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))", gap: 10 }}>
             <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
               <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Dias produzidos</div>
               <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{producedDays}</div>
