@@ -1,20 +1,27 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-type Tab = "dashboard" | "ritmo" | "stats" | "ufdf";
+/**
+ * Compat: mantemos "production" no tipo Tab porque algumas rotas antigas ainda passam active="production".
+ * A aba Produção NÃO aparece na navegação (nem em portrait nem em landscape).
+ */
+type Tab = "dashboard" | "ritmo" | "stats" | "ufdf" | "production";
 
 function doLogout() {
   const keys = ["token", "mp_token", "auth_token", "access_token", "user", "mp_user"];
   for (const k of keys) {
-    try { localStorage.removeItem(k); } catch {}
+    try {
+      localStorage.removeItem(k);
+    } catch {}
   }
-  try { sessionStorage.clear(); } catch {}
+  try {
+    sessionStorage.clear();
+  } catch {}
 }
 
 function useIsLandscape(): boolean {
   const get = () => {
     if (typeof window === "undefined") return false;
-    // Prefer orientation media query when available
     const mq = window.matchMedia?.("(orientation: landscape)");
     if (mq && typeof mq.matches === "boolean") return mq.matches;
     return window.innerWidth > window.innerHeight;
@@ -27,7 +34,6 @@ function useIsLandscape(): boolean {
     window.addEventListener("resize", on);
     window.addEventListener("orientationchange", on as any);
 
-    // also listen to media query changes
     const mq = window.matchMedia?.("(orientation: landscape)");
     const onMq = () => on();
     try {
@@ -49,10 +55,18 @@ function useIsLandscape(): boolean {
 function TopTabs({ active }: { active: Tab }) {
   return (
     <div className="mp-top-tabs" role="tablist" aria-label="Navegação">
-      <Link className={`mp-top-tab ${active === "dashboard" ? "is-active" : ""}`} to="/m/dashboard">Dashboard</Link>
-      <Link className={`mp-top-tab ${active === "ritmo" ? "is-active" : ""}`} to="/m/ritmo">Ritmo</Link>
-      <Link className={`mp-top-tab ${active === "stats" ? "is-active" : ""}`} to="/m/stats">Stats</Link>
-      <Link className={`mp-top-tab ${active === "ufdf" ? "is-active" : ""}`} to="/m/ufdf">UF/DF</Link>
+      <Link className={`mp-top-tab ${active === "dashboard" ? "is-active" : ""}`} to="/m/dashboard">
+        Dashboard
+      </Link>
+      <Link className={`mp-top-tab ${active === "ritmo" ? "is-active" : ""}`} to="/m/ritmo">
+        Ritmo
+      </Link>
+      <Link className={`mp-top-tab ${active === "stats" ? "is-active" : ""}`} to="/m/stats">
+        Stats
+      </Link>
+      <Link className={`mp-top-tab ${active === "ufdf" ? "is-active" : ""}`} to="/m/ufdf">
+        UF/DF
+      </Link>
     </div>
   );
 }
@@ -76,7 +90,7 @@ export default function MobileShell({
   const nav = useNavigate();
   const landscape = useIsLandscape();
 
-  // In landscape, put tabs in the topbar (where there is extra space) and hide bottom tabs.
+  // Em landscape, tabs no topo e some a barra inferior
   const showTopTabs = landscape;
 
   const goBack = () => {
@@ -88,7 +102,9 @@ export default function MobileShell({
     doLogout();
     nav("/login", { replace: true });
     setTimeout(() => {
-      try { window.location.reload(); } catch {}
+      try {
+        window.location.reload();
+      } catch {}
     }, 50);
   };
 
