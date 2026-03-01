@@ -577,12 +577,18 @@ a { color: inherit; text-decoration: none; }
   }
 }
 
-/* ===== MobileShell: Tabs na TOPBAR quando em landscape ===== */
-.mp-top.is-landscape{ gap: 10px; }
+/* ===== MobileShell: Tabs na TOPBAR quando em landscape (INLINE) ===== */
+/* Obs: usamos seletor mais forte para não ser sobrescrito por estilos globais de <a> ou nav */
+.mp-top.is-landscape{
+  gap: 10px;
+}
 
-.mp-top-tabs-inline{
+/* container das tabs dentro da topbar */
+.mp-top .mp-top-tabs-inline{
   flex: 1;
+  min-width: 0;
   display: flex;
+  align-items: center;
   justify-content: center;
   gap: 10px;
   overflow-x: auto;
@@ -590,7 +596,34 @@ a { color: inherit; text-decoration: none; }
   padding: 0 6px;
 }
 
+/* garante que os links fiquem como "pill" e não quebrem layout */
+.mp-top .mp-top-tabs-inline .mp-top-tab{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  text-decoration: none;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-weight: 900;
+  font-size: 13px;
+  line-height: 1;
+  color: rgba(255,255,255,0.75);
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+}
+
+.mp-top .mp-top-tabs-inline .mp-top-tab.is-active{
+  color: rgba(255,255,255,0.95);
+  border-color: rgba(59,130,246,0.35);
+  background: rgba(59,130,246,0.12);
+}
+
 /* Em landscape muito baixo, deixa tabs mais compactas */
 @media (orientation: landscape) and (max-height: 520px){
-  .mp-top-tab{ padding: 8px 10px; border-radius: 14px; font-size: 12px; }
+  .mp-top .mp-top-tabs-inline .mp-top-tab{
+    padding: 8px 10px;
+    border-radius: 14px;
+    font-size: 12px;
+  }
 }
