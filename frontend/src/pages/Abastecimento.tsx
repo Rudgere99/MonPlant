@@ -2,17 +2,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Settings } from "lucide-react";
 
 /**
- * Abastecimento BT-01
- * - Botão (ícone engrenagem) para configurar Capacidade/Consumo/etc via UI (sem DBeaver)
- * - Barra horizontal grande (estilo "Progresso da meta") simulando nível do tanque
- * - Mantém lógica v1: consumo abatendo paradas (stops-launch somado no dia)
+ * Abastecimento BT-01 (v2)
+ * Fixes:
+ * - Inputs do modal são NUMÉRICOS (evita salvar texto como "tank_capacity_l")
+ * - Após salvar config: chama fetchAll() e fecha modal
+ * - Se backend retornar algo inesperado, mostra alerta com o conteúdo
+ * - Tabela hora: evita NaN:NaN
  *
- * Endpoints:
- *  GET  /api/ab/assets/BT-01
- *  PUT  /api/ab/assets/BT-01
- *  GET  /api/ab/refuels?day=YYYY-MM-DD&asset=BT-01
- *  POST /api/ab/refuels
- *  GET  /api/stops-launch?day=YYYY-MM-DD
+ * OBS: Se mesmo assim os cards ficarem "—", então o backend NÃO está retornando o objeto do asset
+ * no PUT/GET. Nesse caso, precisamos ajustar o abastecimento.py para retornar os campos numéricos.
  */
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
@@ -130,13 +128,14 @@ function barColor(f: Farol) {
   return "rgba(148,163,184,.55)";
 }
 
-function fmtErr(e: unknown) {
-  if (e instanceof Error) return e.message;
-  try {
-    return JSON.stringify(e);
-  } catch {
-    return String(e);
-  }
+function isAssetLike(x: any): x is Asset {
+  return (
+    x &&
+    typeof x === "object" &&
+    typeof x.asset_tag === "string" &&
+    typeof x.tank_capacity_l === "number" &&
+    typeof x.consumption_max_lph === "number"
+  );
 }
 
 export default function AbastecimentoBT01() {
@@ -160,34 +159,28 @@ export default function AbastecimentoBT01() {
   const [rfLevelPct, setRfLevelPct] = useState<string>("100");
   const [rfNote, setRfNote] = useState<string>("");
 
-  // modal config (engrenagem)
+  // modal config
   const [cfgOpen, setCfgOpen] = useState(false);
   const [cfgSaving, setCfgSaving] = useState(false);
   const [cfg, setCfg] = useState({
-    tank_capacity_l: "100",
-    consumption_max_lph: "10",
-    consumption_factor: "1.0",
-    yellow_pct: "35",
-    red_pct: "20",
+    tank_capacity_l: 100,
+    consumption_max_lph: 10,
+    consumption_factor: 1.0,
+    yellow_pct: 35,
+    red_pct: 20,
   });
 
   function syncCfgFromAsset(a: Asset | null) {
     if (!a) {
-      setCfg({
-        tank_capacity_l: "100",
-        consumption_max_lph: "10",
-        consumption_factor: "1.0",
-        yellow_pct: "35",
-        red_pct: "20",
-      });
+      setCfg({ tank_capacity_l: 100, consumption_max_lph: 10, consumption_factor: 1.0, yellow_pct: 35, red_pct: 20 });
       return;
     }
     setCfg({
-      tank_capacity_l: String(a.tank_capacity_l ?? 100),
-      consumption_max_lph: String(a.consumption_max_lph ?? 10),
-      consumption_factor: String(a.consumption_factor ?? 1.0),
-      yellow_pct: String(a.yellow_pct ?? 35),
-      red_pct: String(a.red_pct ?? 20),
+      tank_capacity_l: Number(a.tank_capacity_l ?? 100),
+      consumption_max_lph: Number(a.consumption_max_lph ?? 10),
+      consumption_factor: Number(a.consumption_factor ?? 1.0),
+      yellow_pct: Number(a.yellow_pct ?? 35),
+      red_pct: Number(a.red_pct ?? 20),
     });
   }
 
@@ -204,7 +197,7 @@ export default function AbastecimentoBT01() {
       const rJson = rRes.ok ? await rRes.json() : [];
       const sJson = sRes.ok ? await sRes.json() : null;
 
-      setAsset(aJson);
+      setAsset(isAssetLike(aJson) ? aJson : null);
       setRefuels(Array.isArray(rJson) ? rJson : []);
 
       const rows: StopLaunchRow[] = sJson?.rows && Array.isArray(sJson.rows) ? sJson.rows : [];
@@ -220,7 +213,6 @@ export default function AbastecimentoBT01() {
   }, [day]);
 
   useEffect(() => {
-    // sempre que carregar o asset, sincroniza o modal
     syncCfgFromAsset(asset);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asset?.id]);
@@ -244,7 +236,7 @@ export default function AbastecimentoBT01() {
         autonomiaH: NaN,
         previsaoHora: "—",
         farol: "gray" as Farol,
-        baseInfo: "Sem configuração do BT-01",
+        baseInfo: "Sem dados de configuração (clique na engrenagem)",
         capacity: NaN,
         yellowPct: NaN,
         redPct: NaN,
@@ -281,7 +273,6 @@ export default function AbastecimentoBT01() {
 
     const autonomiaH = consumoLh > 0 ? nivelAtualL / consumoLh : NaN;
 
-    // previsão simples: quando chega no limite vermelho
     const limiteL = capacidade * (Number(asset.red_pct) / 100);
     const litrosAteLimite = nivelAtualL - limiteL;
     const horasAteLimite = consumoLh > 0 ? litrosAteLimite / consumoLh : NaN;
@@ -328,24 +319,42 @@ export default function AbastecimentoBT01() {
         body: JSON.stringify(payload),
       });
 
+      const txt = await res.text();
       if (!res.ok) {
-        const t = await res.text();
-        alert(`Erro ao salvar config: ${t}`);
+        alert(`Erro ao salvar config: ${txt}`);
         return;
       }
 
-      const json = await res.json();
+      // tenta parsear JSON (o backend PRECISA retornar o objeto do asset)
+      let json: any = null;
+      try {
+        json = txt ? JSON.parse(txt) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!isAssetLike(json)) {
+        alert(
+          "Config salvou, mas o backend NÃO retornou o Asset (JSON esperado). " +
+            "Abra o log/Network e verifique o retorno do PUT /api/ab/assets/BT-01.\n\nResposta recebida:\n" +
+            (txt || "(vazio)")
+        );
+        // Mesmo assim, tenta recarregar via GET
+        await fetchAll();
+        setCfgOpen(false);
+        return;
+      }
+
       setAsset(json);
+      await fetchAll();
       setCfgOpen(false);
-    } catch (e) {
-      alert(`Erro: ${fmtErr(e)}`);
     } finally {
       setCfgSaving(false);
     }
   }
 
   async function submitRefuel() {
-    // se não tiver asset ainda, cria com defaults atuais do modal
+    // se não tiver asset ainda, salva config primeiro
     if (!asset) {
       await saveAssetConfig();
     }
@@ -398,7 +407,7 @@ export default function AbastecimentoBT01() {
 
   return (
     <div className="mp-container" style={{ paddingTop: 12, paddingBottom: 28 }}>
-      {/* Header (card) */}
+      {/* Header */}
       <div className="mp-card" style={{ marginBottom: 14 }}>
         <div className="mp-card-b">
           <div style={{ display: "flex", gap: 12, alignItems: "end", justifyContent: "space-between", flexWrap: "wrap" }}>
@@ -490,7 +499,7 @@ export default function AbastecimentoBT01() {
         </div>
       </div>
 
-      {/* PROGRESSO DO TANQUE (barra grande horizontal, estilo Ritmo) */}
+      {/* Barra tanque grande */}
       <div className="mp-card" style={{ marginBottom: 14 }}>
         <div className="mp-card-b">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -504,14 +513,17 @@ export default function AbastecimentoBT01() {
 
           <div className="mp-help" style={{ marginTop: 8 }}>
             Nível atual: <b style={{ color: "rgba(255,255,255,.92)" }}>{formatNum(computed.nivelAtualL, 1)} L</b>{" "}
-            {asset ? <span>• Capacidade: <b style={{ color: "rgba(255,255,255,.92)" }}>{formatNum(computed.capacity, 0)} L</b></span> : null}
+            {asset ? (
+              <span>
+                • Capacidade: <b style={{ color: "rgba(255,255,255,.92)" }}>{formatNum(computed.capacity, 0)} L</b>
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
 
-      {/* Grid principal (12 col) */}
+      {/* Grid principal */}
       <div className="mp-main-grid">
-        {/* KPIs linha 1 (3 cards) */}
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
           <div className="mp-card-b">
             <div className="mp-label">CAPACIDADE</div>
@@ -562,7 +574,6 @@ export default function AbastecimentoBT01() {
           </div>
         </div>
 
-        {/* Linha 2 */}
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
           <div className="mp-card-b">
             <div className="mp-label">CONSUMO DECORRIDO</div>
@@ -600,12 +611,13 @@ export default function AbastecimentoBT01() {
               {formatNum(computed.nivelAtualL, 1)} L
             </div>
             <div className="mp-help" style={{ marginTop: 6 }}>
-              {formatNum(progressPct, 0)}% • Farol: <b style={{ color: "rgba(255,255,255,.92)" }}>{farolLabel(computed.farol)}</b>
+              {formatNum(progressPct, 0)}% • Farol:{" "}
+              <b style={{ color: "rgba(255,255,255,.92)" }}>{farolLabel(computed.farol)}</b>
             </div>
           </div>
         </div>
 
-        {/* Parâmetros (span 4) */}
+        {/* Parâmetros */}
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
           <div className="mp-card-h">
             <div style={{ fontWeight: 950 }}>Parâmetros do turno</div>
@@ -639,7 +651,7 @@ export default function AbastecimentoBT01() {
           </div>
         </div>
 
-        {/* Registrar abastecimento (span 8) */}
+        {/* Registrar abastecimento */}
         <div className="mp-card" style={{ gridColumn: "span 8" }}>
           <div className="mp-card-h">
             <div>
@@ -695,7 +707,7 @@ export default function AbastecimentoBT01() {
           </div>
         </div>
 
-        {/* Tabela (span 12) */}
+        {/* Tabela */}
         <div className="mp-card" style={{ gridColumn: "span 12" }}>
           <div className="mp-card-h">
             <div style={{ fontWeight: 950 }}>Abastecimentos do dia</div>
@@ -737,7 +749,9 @@ export default function AbastecimentoBT01() {
                   return (
                     <tr key={r.id} style={{ borderBottom: "1px solid rgba(255,255,255,.06)" }}>
                       <td style={{ padding: "10px 8px" }}>
-                        <span style={{ fontWeight: 950 }}>{hh}:{mm}</span>
+                        <span style={{ fontWeight: 950 }}>
+                          {hh}:{mm}
+                        </span>
                       </td>
                       <td style={{ padding: "10px 8px" }}>{r.horimetro ?? "—"}</td>
                       <td style={{ padding: "10px 8px" }}>{formatNum(Number(r.liters_added), 1)}</td>
@@ -775,7 +789,7 @@ export default function AbastecimentoBT01() {
           <div
             className="mp-card"
             onClick={(e) => e.stopPropagation()}
-            style={{ width: "min(720px, 100%)", borderColor: "rgba(255,255,255,.14)" }}
+            style={{ width: "min(820px, 100%)", borderColor: "rgba(255,255,255,.14)" }}
           >
             <div className="mp-card-h">
               <div style={{ fontWeight: 950, display: "flex", alignItems: "center", gap: 10 }}>
@@ -789,45 +803,73 @@ export default function AbastecimentoBT01() {
 
             <div className="mp-card-b">
               <div className="mp-help" style={{ marginBottom: 12 }}>
-                Aqui você define a <b>capacidade do tanque</b> e o <b>consumo máximo</b>. A página usa esses valores para
-                calcular autonomia, farol e previsão.
+                Defina <b>capacidade</b> e <b>consumo</b>. (Vermelho ≤ Amarelo)
               </div>
 
-              <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+              <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
                 <div>
                   <div className="mp-label">CAPACIDADE (L)</div>
-                  <input className="mp-input" value={cfg.tank_capacity_l} onChange={(e) => setCfg((s) => ({ ...s, tank_capacity_l: e.target.value }))} />
+                  <input
+                    className="mp-input"
+                    type="number"
+                    value={cfg.tank_capacity_l}
+                    onChange={(e) => setCfg((s) => ({ ...s, tank_capacity_l: Number(e.target.value) }))}
+                  />
                 </div>
 
                 <div>
                   <div className="mp-label">CONSUMO MÁX (L/H)</div>
-                  <input className="mp-input" value={cfg.consumption_max_lph} onChange={(e) => setCfg((s) => ({ ...s, consumption_max_lph: e.target.value }))} />
+                  <input
+                    className="mp-input"
+                    type="number"
+                    value={cfg.consumption_max_lph}
+                    onChange={(e) => setCfg((s) => ({ ...s, consumption_max_lph: Number(e.target.value) }))}
+                  />
                 </div>
 
                 <div>
                   <div className="mp-label">FATOR</div>
-                  <input className="mp-input" value={cfg.consumption_factor} onChange={(e) => setCfg((s) => ({ ...s, consumption_factor: e.target.value }))} />
+                  <input
+                    className="mp-input"
+                    type="number"
+                    step="0.01"
+                    value={cfg.consumption_factor}
+                    onChange={(e) => setCfg((s) => ({ ...s, consumption_factor: Number(e.target.value) }))}
+                  />
                 </div>
 
                 <div>
                   <div className="mp-label">AMARELO (%)</div>
-                  <input className="mp-input" value={cfg.yellow_pct} onChange={(e) => setCfg((s) => ({ ...s, yellow_pct: e.target.value }))} />
+                  <input
+                    className="mp-input"
+                    type="number"
+                    value={cfg.yellow_pct}
+                    onChange={(e) => setCfg((s) => ({ ...s, yellow_pct: Number(e.target.value) }))}
+                  />
                 </div>
 
                 <div>
                   <div className="mp-label">VERMELHO (%)</div>
-                  <input className="mp-input" value={cfg.red_pct} onChange={(e) => setCfg((s) => ({ ...s, red_pct: e.target.value }))} />
-                </div>
-
-                <div style={{ display: "flex", alignItems: "end", gap: 10 }}>
-                  <button className="mp-btn mp-btn-primary" onClick={saveAssetConfig} disabled={cfgSaving}>
-                    {cfgSaving ? "Salvando..." : "Salvar configurações"}
-                  </button>
+                  <input
+                    className="mp-input"
+                    type="number"
+                    value={cfg.red_pct}
+                    onChange={(e) => setCfg((s) => ({ ...s, red_pct: Number(e.target.value) }))}
+                  />
                 </div>
               </div>
 
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
+                <button className="mp-btn" onClick={() => syncCfgFromAsset(asset)} disabled={cfgSaving}>
+                  Recarregar
+                </button>
+                <button className="mp-btn mp-btn-primary" onClick={saveAssetConfig} disabled={cfgSaving}>
+                  {cfgSaving ? "Salvando..." : "Salvar configurações"}
+                </button>
+              </div>
+
               <div className="mp-help" style={{ marginTop: 12 }}>
-                Regras: <b>vermelho ≤ amarelo</b>. Ex: amarelo 35% / vermelho 20%.
+                Se salvar e os cards não mudarem, o backend está retornando errado no PUT/GET do asset.
               </div>
             </div>
           </div>
