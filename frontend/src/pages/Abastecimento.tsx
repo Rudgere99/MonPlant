@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 /**
- * Página Abastecimento BT-01 (MonPlant dark)
- * - Puxa:
- *   - /api/ab/assets/BT-01
- *   - /api/ab/refuels?day=YYYY-MM-DD&asset=BT-01
- *   - /api/stops-launch?day=YYYY-MM-DD
- * - Calcula:
- *   - Consumo abatendo paradas (minutos) do BT-01 no dia
- *   - Nível atual / % / autonomia / farol / previsão simples
+ * Abastecimento BT-01 — estilo alinhado com a página "Ritmo do turno"
+ * - Header em card com controles à direita
+ * - Banner de semáforo (verde/amarelo/vermelho)
+ * - KPIs em cards grandes (grid 3 + 3)
+ * - Barra de progresso do tanque
+ * - Área operacional em cards (parâmetros / registrar abastecimento)
+ * - Tabela em card
+ *
+ * Observação: Mantém a lógica v1 (paradas somadas do stops-launch no dia).
  */
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
@@ -64,12 +65,12 @@ function clamp(n: number, a: number, b: number) {
 }
 
 function formatNum(n: number, digits = 1) {
-  if (!Number.isFinite(n)) return "-";
+  if (!Number.isFinite(n)) return "—";
   return n.toFixed(digits);
 }
 
 function formatHM(hours: number) {
-  if (!Number.isFinite(hours) || hours < 0) return "-";
+  if (!Number.isFinite(hours) || hours < 0) return "—";
   const h = Math.floor(hours);
   const m = Math.round((hours - h) * 60);
   return `${h}h ${String(m).padStart(2, "0")}m`;
@@ -101,30 +102,66 @@ function farolFromPct(levelPct: number, yellow: number, red: number): Farol {
   return "green";
 }
 
-function farolStyles(f: Farol) {
+function farolLabel(f: Farol) {
+  if (f === "green") return "OK";
+  if (f === "yellow") return "ATENÇÃO";
+  if (f === "red") return "CRÍTICO";
+  return "INDISPONÍVEL";
+}
+
+function farolDotClass(f: Farol) {
+  if (f === "green") return "bg-emerald-400";
+  if (f === "yellow") return "bg-amber-400";
+  if (f === "red") return "bg-red-400";
+  return "bg-slate-400";
+}
+
+function bannerBorder(f: Farol) {
+  if (f === "green") return "border-emerald-500/25";
+  if (f === "yellow") return "border-amber-500/25";
+  if (f === "red") return "border-red-500/25";
+  return "border-slate-700/50";
+}
+
+function bannerGradient(f: Farol) {
+  // imita o "banner" do Ritmo: degradê sutil e escuro
   if (f === "green")
-    return "bg-emerald-500/15 text-emerald-300 border-emerald-500/25";
+    return "bg-gradient-to-r from-emerald-900/35 via-slate-950/35 to-emerald-900/10";
   if (f === "yellow")
-    return "bg-amber-500/15 text-amber-300 border-amber-500/25";
-  if (f === "red") return "bg-red-500/15 text-red-300 border-red-500/25";
-  return "bg-slate-500/10 text-slate-300 border-slate-500/20";
+    return "bg-gradient-to-r from-amber-900/35 via-slate-950/35 to-amber-900/10";
+  if (f === "red")
+    return "bg-gradient-to-r from-red-900/35 via-slate-950/35 to-red-900/10";
+  return "bg-gradient-to-r from-slate-900/30 via-slate-950/35 to-slate-900/10";
 }
 
-function farolText(f: Farol) {
-  if (f === "green") return "VERDE";
-  if (f === "yellow") return "AMARELO";
-  if (f === "red") return "VERMELHO";
-  return "—";
+function bigCardClass() {
+  return "rounded-2xl border border-slate-800/70 bg-slate-950/45 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]";
 }
 
-function tankBar(pct: number) {
+function subtleCardClass() {
+  return "rounded-2xl border border-slate-800/70 bg-slate-950/35 p-5";
+}
+
+function progressBar(pct: number, farol: Farol) {
   const p = clamp(Number.isFinite(pct) ? pct : 0, 0, 100);
+  const fill =
+    farol === "green"
+      ? "bg-emerald-500/80"
+      : farol === "yellow"
+      ? "bg-amber-500/80"
+      : farol === "red"
+      ? "bg-red-500/80"
+      : "bg-slate-400/60";
+
   return (
-    <div className="mt-3">
-      <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
-        <div className="h-full bg-slate-200/70" style={{ width: `${p}%` }} />
+    <div className="mt-4">
+      <div className="h-2.5 w-full rounded-full bg-slate-800/70 overflow-hidden">
+        <div className={`h-full ${fill}`} style={{ width: `${p}%` }} />
       </div>
-      <div className="mt-1 text-[11px] text-slate-400">{formatNum(p, 0)}%</div>
+      <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+        <span>Nível</span>
+        <span className="text-slate-200">{formatNum(p, 0)}%</span>
+      </div>
     </div>
   );
 }
@@ -138,7 +175,7 @@ export default function AbastecimentoBT01() {
   const [stopRows, setStopRows] = useState<StopLaunchRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Inputs operacionais (teste) — depois plugar no turno real
+  // Inputs operacionais (teste)
   const [turnHours, setTurnHours] = useState<number>(12);
   const [cargaPct, setCargaPct] = useState<number>(83);
 
@@ -198,6 +235,9 @@ export default function AbastecimentoBT01() {
         previsaoHora: "—",
         farol: "gray" as Farol,
         baseInfo: "Sem configuração do BT-01",
+        capacity: NaN,
+        redPct: NaN,
+        yellowPct: NaN,
       };
     }
 
@@ -208,8 +248,6 @@ export default function AbastecimentoBT01() {
     );
 
     const capacidade = Number(asset.tank_capacity_l);
-
-    // Base do nível: último abastecimento do dia, senão assume cheio (v1)
     const last = refuels.length ? refuels[refuels.length - 1] : null;
 
     let nivelBaseL = capacidade;
@@ -233,7 +271,6 @@ export default function AbastecimentoBT01() {
 
     const autonomiaH = consumoLh > 0 ? nivelAtualL / consumoLh : NaN;
 
-    // Previsão simples: quando atinge red_pct
     const limiteL = capacidade * (Number(asset.red_pct) / 100);
     const litrosAteLimite = nivelAtualL - limiteL;
     const horasAteLimite = consumoLh > 0 ? litrosAteLimite / consumoLh : NaN;
@@ -243,7 +280,19 @@ export default function AbastecimentoBT01() {
 
     const farol = farolFromPct(nivelAtualPct, Number(asset.yellow_pct), Number(asset.red_pct));
 
-    return { consumoLh, consumoDecorridoL, nivelAtualL, nivelAtualPct, autonomiaH, previsaoHora, farol, baseInfo };
+    return {
+      consumoLh,
+      consumoDecorridoL,
+      nivelAtualL,
+      nivelAtualPct,
+      autonomiaH,
+      previsaoHora,
+      farol,
+      baseInfo,
+      capacity: capacidade,
+      redPct: Number(asset.red_pct),
+      yellowPct: Number(asset.yellow_pct),
+    };
   }, [asset, cargaPct, horasRodando, refuels]);
 
   async function ensureAssetDefaultIfMissing() {
@@ -305,106 +354,40 @@ export default function AbastecimentoBT01() {
     await fetchAll();
   }
 
+  const bannerText =
+    computed.farol === "green"
+      ? "Nível OK"
+      : computed.farol === "yellow"
+      ? "Atenção: programar abastecimento"
+      : computed.farol === "red"
+      ? "Crítico: abastecer o quanto antes"
+      : "Sem dados de configuração";
+
   return (
     <div className="min-h-screen p-4 md:p-6 text-slate-100">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-          <div>
-            <div className="text-xs uppercase tracking-widest text-slate-400">Operação • Abastecimento</div>
-            <h1 className="text-2xl md:text-3xl font-semibold mt-1">{assetTag}</h1>
-            <div className="text-xs text-slate-500 mt-1">{computed.baseInfo}</div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="text-sm text-slate-300">Dia</label>
-            <input
-              type="date"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-              className="bg-slate-900/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm"
-            />
-            <button
-              onClick={fetchAll}
-              className="px-3 py-2 rounded-lg text-sm bg-slate-800 hover:bg-slate-700 border border-slate-700/70"
-            >
-              {loading ? "Atualizando..." : "Atualizar"}
-            </button>
-          </div>
-        </div>
-
-        {/* KPI cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-            <div className="text-xs text-slate-400">Nível atual</div>
-            <div className="mt-1 flex items-center gap-2">
-              <div className="text-2xl font-semibold">{formatNum(computed.nivelAtualL, 1)} L</div>
-              <span className={`text-[11px] px-2 py-1 rounded-full border ${farolStyles(computed.farol)}`}>
-                {farolText(computed.farol)}
-              </span>
-            </div>
-            {tankBar(computed.nivelAtualPct)}
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-            <div className="text-xs text-slate-400">Consumo (L/h)</div>
-            <div className="mt-1 text-2xl font-semibold">{formatNum(computed.consumoLh, 2)}</div>
-            <div className="mt-2 text-xs text-slate-400">
-              Carga: <span className="text-slate-200">{clamp(cargaPct, 0, 100)}%</span>
-            </div>
-            <div className="mt-1 text-xs text-slate-500">
-              Max: {asset ? formatNum(Number(asset.consumption_max_lph), 2) : "-"} L/h • Fator:{" "}
-              {asset ? formatNum(Number(asset.consumption_factor), 3) : "-"}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-            <div className="text-xs text-slate-400">Consumo decorrido</div>
-            <div className="mt-1 text-2xl font-semibold">{formatNum(computed.consumoDecorridoL, 1)} L</div>
-            <div className="mt-2 text-xs text-slate-400">
-              Rodando: <span className="text-slate-200">{formatHM(horasRodando)}</span>
-            </div>
-            <div className="mt-1 text-xs text-slate-400">
-              Parado: <span className="text-slate-200">{formatHM(horasParadas)}</span> • {Math.round(minutosParadosBT01)}{" "}
-              min
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-            <div className="text-xs text-slate-400">Autonomia / Próximo abastecimento</div>
-            <div className="mt-1 text-2xl font-semibold">{formatHM(computed.autonomiaH)}</div>
-            <div className="mt-2 text-xs text-slate-400">
-              Provável: <span className="text-slate-200">{computed.previsaoHora}</span>
-            </div>
-            <div className="mt-1 text-xs text-slate-500">* Previsão simples usando limite vermelho.</div>
-          </div>
-        </div>
-
-        {/* Operação */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Parâmetros */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">Parâmetros do turno</div>
-              <span className="text-[11px] text-slate-500">v1 (teste)</span>
+      <div className="max-w-[1400px] mx-auto space-y-4">
+        {/* Header card (igual Ritmo) */}
+        <div className="rounded-2xl border border-slate-800/70 bg-slate-950/40 p-5">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <div className="text-xs uppercase tracking-widest text-slate-400">Operação • Abastecimento</div>
+              <div className="mt-1 text-2xl font-semibold">Abastecimento — {assetTag}</div>
+              <div className="mt-1 text-xs text-slate-500">{computed.baseInfo}</div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="text-xs text-slate-400">Horas do turno</label>
+                <div className="text-[11px] text-slate-400 font-semibold">DATA</div>
                 <input
-                  type="number"
-                  value={turnHours}
-                  min={1}
-                  max={24}
-                  step={1}
-                  onChange={(e) => setTurnHours(Number(e.target.value))}
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm"
+                  type="date"
+                  value={day}
+                  onChange={(e) => setDay(e.target.value)}
+                  className="mt-1 bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm w-[160px]"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-slate-400">Carga (%)</label>
+                <div className="text-[11px] text-slate-400 font-semibold">CARGA (%)</div>
                 <input
                   type="number"
                   value={cargaPct}
@@ -412,23 +395,150 @@ export default function AbastecimentoBT01() {
                   max={100}
                   step={1}
                   onChange={(e) => setCargaPct(Number(e.target.value))}
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm"
+                  className="mt-1 bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm w-[140px]"
                 />
+              </div>
+
+              <button
+                onClick={fetchAll}
+                className="h-[42px] px-4 rounded-xl text-sm bg-slate-800 hover:bg-slate-700 border border-slate-700/70"
+              >
+                {loading ? "Atualizando..." : "Atualizar"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Banner semáforo (igual Ritmo) */}
+        <div className={`rounded-2xl border ${bannerBorder(computed.farol)} ${bannerGradient(computed.farol)} p-5`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className={`h-3 w-3 rounded-full ${farolDotClass(computed.farol)}`} />
+              <div>
+                <div className="text-lg font-semibold">{farolLabel(computed.farol)}</div>
+                <div className="text-sm text-slate-300/80">{bannerText}</div>
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/30 p-3">
-              <div className="text-xs text-slate-400">Paradas BT-01 no dia</div>
-              <div className="mt-1 text-lg font-semibold">{Math.round(minutosParadosBT01)} min</div>
-              <div className="text-[11px] text-slate-500 mt-1">
-                * Na v2 vamos conectar com ShiftBar (07–19 / 19–07) e calcular automaticamente.
+            <div className="text-right">
+              <div className="text-[11px] text-slate-400 font-semibold">SEMÁFORO</div>
+              <div className="mt-1 flex items-center justify-end gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${farolDotClass(computed.farol)}`} />
+                <span
+                  className={
+                    computed.farol === "green"
+                      ? "text-emerald-300 font-semibold"
+                      : computed.farol === "yellow"
+                      ? "text-amber-300 font-semibold"
+                      : computed.farol === "red"
+                      ? "text-red-300 font-semibold"
+                      : "text-slate-300 font-semibold"
+                  }
+                >
+                  {farolLabel(computed.farol).toUpperCase()}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* KPIs (grid 3 + 3 como no Ritmo) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className={bigCardClass()}>
+            <div className="text-[11px] text-slate-400 font-semibold">CAPACIDADE</div>
+            <div className="mt-2 text-3xl font-semibold">{asset ? `${formatNum(computed.capacity, 0)} L` : "—"}</div>
+            <div className="mt-1 text-xs text-slate-500">
+              Limites: amarelo {asset ? `${formatNum(computed.yellowPct, 0)}%` : "—"} • vermelho{" "}
+              {asset ? `${formatNum(computed.redPct, 0)}%` : "—"}
+            </div>
+          </div>
+
+          <div className={bigCardClass()}>
+            <div className="text-[11px] text-slate-400 font-semibold">NÍVEL ATUAL</div>
+            <div className="mt-2 text-3xl font-semibold">{formatNum(computed.nivelAtualL, 1)} L</div>
+            {progressBar(computed.nivelAtualPct, computed.farol)}
+          </div>
+
+          <div className={bigCardClass()}>
+            <div className="text-[11px] text-slate-400 font-semibold">PRÓXIMO ABASTECIMENTO</div>
+            <div
+              className={`mt-2 text-3xl font-semibold ${
+                computed.farol === "red" ? "text-red-300" : computed.farol === "yellow" ? "text-amber-300" : ""
+              }`}
+            >
+              {computed.previsaoHora}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">Previsão simples (limite vermelho).</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className={subtleCardClass()}>
+            <div className="text-[11px] text-slate-400 font-semibold">CONSUMO (L/H)</div>
+            <div className="mt-2 text-3xl font-semibold">{formatNum(computed.consumoLh, 2)}</div>
+            <div className="mt-1 text-xs text-slate-500">
+              Max {asset ? formatNum(Number(asset.consumption_max_lph), 2) : "—"} • fator{" "}
+              {asset ? formatNum(Number(asset.consumption_factor), 3) : "—"}
+            </div>
+          </div>
+
+          <div className={subtleCardClass()}>
+            <div className="text-[11px] text-slate-400 font-semibold">CONSUMO DECORRIDO</div>
+            <div className="mt-2 text-3xl font-semibold">{formatNum(computed.consumoDecorridoL, 1)} L</div>
+            <div className="mt-1 text-xs text-slate-500">Rodando: {formatHM(horasRodando)}</div>
+          </div>
+
+          <div className={subtleCardClass()}>
+            <div className="text-[11px] text-slate-400 font-semibold">TEMPO (TURNO)</div>
+            <div className="mt-2 flex items-end justify-between">
+              <div>
+                <div className="text-3xl font-semibold">{formatHM(horasRodando)}</div>
+                <div className="text-xs text-slate-500">Rodando</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xl font-semibold text-slate-200">{formatHM(horasParadas)}</div>
+                <div className="text-xs text-slate-500">{Math.round(minutosParadosBT01)} min parado</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Operação */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Parâmetros */}
+          <div className={subtleCardClass()}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold">Parâmetros do turno</div>
+              <span className="text-[11px] text-slate-500">v1 (teste)</span>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-[11px] text-slate-400 font-semibold">HORAS DO TURNO</label>
+                <input
+                  type="number"
+                  value={turnHours}
+                  min={1}
+                  max={24}
+                  step={1}
+                  onChange={(e) => setTurnHours(Number(e.target.value))}
+                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-900/25 p-3">
+                <div className="text-xs text-slate-400">Paradas BT-01 no dia</div>
+                <div className="mt-1 text-lg font-semibold">{Math.round(minutosParadosBT01)} min</div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Na v2: conectar ShiftBar (07–19 / 19–07) e calcular automaticamente.
+                </div>
               </div>
             </div>
           </div>
 
           {/* Registrar abastecimento */}
-          <div className="md:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
-            <div className="flex items-center justify-between gap-3">
+          <div className={`lg:col-span-2 ${subtleCardClass()}`}>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold">Registrar abastecimento</div>
                 <div className="text-[11px] text-slate-500 mt-1">
@@ -437,7 +547,7 @@ export default function AbastecimentoBT01() {
               </div>
               <button
                 onClick={submitRefuel}
-                className="px-4 py-2 rounded-lg text-sm bg-emerald-600/80 hover:bg-emerald-600 border border-emerald-500/40"
+                className="px-4 py-2 rounded-xl text-sm bg-emerald-600/80 hover:bg-emerald-600 border border-emerald-500/40"
               >
                 Salvar
               </button>
@@ -445,32 +555,32 @@ export default function AbastecimentoBT01() {
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
               <div className="md:col-span-2">
-                <label className="text-xs text-slate-400">Data/hora</label>
+                <label className="text-[11px] text-slate-400 font-semibold">DATA/HORA</label>
                 <input
                   type="datetime-local"
                   value={rfTs}
                   onChange={(e) => setRfTs(e.target.value)}
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm"
+                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-slate-400">Horímetro</label>
+                <label className="text-[11px] text-slate-400 font-semibold">HORÍMETRO</label>
                 <input
                   value={rfHorimetro}
                   onChange={(e) => setRfHorimetro(e.target.value)}
                   placeholder="ex: 1234.5"
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm"
+                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-slate-400">Litros abastecidos</label>
+                <label className="text-[11px] text-slate-400 font-semibold">LITROS</label>
                 <input
                   value={rfLitros}
                   onChange={(e) => setRfLitros(e.target.value)}
                   placeholder="ex: 40"
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm"
+                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
                 />
               </div>
             </div>
@@ -484,23 +594,23 @@ export default function AbastecimentoBT01() {
 
                 {!rfTankFull && (
                   <div className="flex items-center gap-2">
-                    <label className="text-xs text-slate-400">Nível após (%)</label>
+                    <label className="text-[11px] text-slate-400 font-semibold">NÍVEL APÓS (%)</label>
                     <input
                       value={rfLevelPct}
                       onChange={(e) => setRfLevelPct(e.target.value)}
-                      className="w-24 bg-slate-900/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm"
+                      className="w-24 bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
                     />
                   </div>
                 )}
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-xs text-slate-400">Observação</label>
+                <label className="text-[11px] text-slate-400 font-semibold">OBSERVAÇÃO</label>
                 <input
                   value={rfNote}
                   onChange={(e) => setRfNote(e.target.value)}
                   placeholder="Opcional"
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm"
+                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
                 />
               </div>
             </div>
@@ -508,12 +618,12 @@ export default function AbastecimentoBT01() {
         </div>
 
         {/* Tabela */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+        <div className={subtleCardClass()}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold">Abastecimentos do dia</div>
               <div className="text-[11px] text-slate-500 mt-1">
-                * Nesta v1, o consumo decorrido usa as paradas somadas do BT-01 no dia (stops-launch).
+                * Consumo decorrido usa as paradas somadas do BT-01 no dia (stops-launch).
               </div>
             </div>
           </div>
@@ -547,9 +657,9 @@ export default function AbastecimentoBT01() {
                   return (
                     <tr key={r.id} className="border-b border-slate-900/60">
                       <td className="py-2 pr-3">{hh}:{mm}</td>
-                      <td className="py-2 pr-3">{r.horimetro ?? "-"}</td>
+                      <td className="py-2 pr-3">{r.horimetro ?? "—"}</td>
                       <td className="py-2 pr-3">{formatNum(Number(r.liters_added), 1)}</td>
-                      <td className="py-2 pr-3">{r.level_after_pct ?? (r.tank_full ? 100 : "-")}</td>
+                      <td className="py-2 pr-3">{r.level_after_pct ?? (r.tank_full ? 100 : "—")}</td>
                       <td className="py-2 pr-3">{r.tank_full ? "Sim" : "Não"}</td>
                       <td className="py-2 pr-3 text-slate-400">{r.note ?? ""}</td>
                     </tr>
@@ -560,9 +670,8 @@ export default function AbastecimentoBT01() {
           </div>
         </div>
 
-        {/* Rodapé */}
         <div className="text-[11px] text-slate-500">
-          Próximos passos: conectar turno real (07–19 / 19–07) e prever abastecimento descontando paradas futuras.
+          Próximos passos: turno real (07–19 / 19–07) + previsão descontando paradas futuras (planejadas).
         </div>
       </div>
     </div>
