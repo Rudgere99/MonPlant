@@ -906,26 +906,6 @@ export default function Statistics() {
         <MetricCard title="Produção média" value={`${fmtBR0(avgTonH)} t/h`} sub="⛏ Média agregada do mês" ok={avgTonH > 0} />
       </div>
 
-      {/* Micro-insights + legenda global */}
-      <div
-        style={{
-          borderRadius: 18,
-          border: `1px solid ${COLORS.stroke}`,
-          background: "rgba(0,0,0,0.18)",
-          padding: 12,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900, fontSize: 12, minWidth: 0 }}>
-          {microInsight ? `💡 ${microInsight}` : "💡 Insights: sem paradas registradas no período."}
-        </div>
-        <MiniLegend />
-      </div>
-
       <SectionHeader icon="🧭" title="Diagnóstico Operacional" sub="produção diária, turnos, horímetros e paradas" />
 
       {/* Produção diária + Turnos + Horas operadas */}
