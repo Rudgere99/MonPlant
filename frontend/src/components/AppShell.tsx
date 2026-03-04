@@ -23,6 +23,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   User as UserIcon,
+  Fuel,
 } from "lucide-react";
 
 type NavItem = {
@@ -48,6 +49,7 @@ const nav: NavItem[] = [
   { to: "/producao-planta", label: "Produção da Planta", icon: Factory, group: "Produção" },
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
+  { to: "/abastecimento", label: "Abastecimento", icon: Fuel, group: "Operação" },
 
   // ✅ Ritmo (Necessário vs Real) — usa tonelada por conchada manual, resto automático
   { to: "/ritmo", label: "Ritmo do turno", icon: Calculator, group: "Produção" },
