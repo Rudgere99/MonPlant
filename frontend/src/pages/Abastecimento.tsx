@@ -1,12 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Settings } from "lucide-react";
 
 /**
  * Abastecimento BT-01
- * Estilização baseada no seu index.css (classes .mp-*)
+ * - Botão (ícone engrenagem) para configurar Capacidade/Consumo/etc via UI (sem DBeaver)
+ * - Barra horizontal grande (estilo "Progresso da meta") simulando nível do tanque
+ * - Mantém lógica v1: consumo abatendo paradas (stops-launch somado no dia)
  *
- * Requer no index.css:
- * - .mp-container, .mp-main-grid, .mp-card, .mp-card-h, .mp-card-b
- * - .mp-label, .mp-input, .mp-btn, .mp-btn-primary, .mp-help, .mp-muted, .mp-chip
+ * Endpoints:
+ *  GET  /api/ab/assets/BT-01
+ *  PUT  /api/ab/assets/BT-01
+ *  GET  /api/ab/refuels?day=YYYY-MM-DD&asset=BT-01
+ *  POST /api/ab/refuels
+ *  GET  /api/stops-launch?day=YYYY-MM-DD
  */
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
@@ -124,6 +130,15 @@ function barColor(f: Farol) {
   return "rgba(148,163,184,.55)";
 }
 
+function fmtErr(e: unknown) {
+  if (e instanceof Error) return e.message;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
+}
+
 export default function AbastecimentoBT01() {
   const assetTag = "BT-01";
 
@@ -137,13 +152,44 @@ export default function AbastecimentoBT01() {
   const [turnHours, setTurnHours] = useState<number>(12);
   const [cargaPct, setCargaPct] = useState<number>(83);
 
-  // form
+  // form abastecimento
   const [rfTs, setRfTs] = useState<string>(() => new Date().toISOString().slice(0, 16));
   const [rfHorimetro, setRfHorimetro] = useState<string>("");
   const [rfLitros, setRfLitros] = useState<string>("0");
   const [rfTankFull, setRfTankFull] = useState<boolean>(true);
   const [rfLevelPct, setRfLevelPct] = useState<string>("100");
   const [rfNote, setRfNote] = useState<string>("");
+
+  // modal config (engrenagem)
+  const [cfgOpen, setCfgOpen] = useState(false);
+  const [cfgSaving, setCfgSaving] = useState(false);
+  const [cfg, setCfg] = useState({
+    tank_capacity_l: "100",
+    consumption_max_lph: "10",
+    consumption_factor: "1.0",
+    yellow_pct: "35",
+    red_pct: "20",
+  });
+
+  function syncCfgFromAsset(a: Asset | null) {
+    if (!a) {
+      setCfg({
+        tank_capacity_l: "100",
+        consumption_max_lph: "10",
+        consumption_factor: "1.0",
+        yellow_pct: "35",
+        red_pct: "20",
+      });
+      return;
+    }
+    setCfg({
+      tank_capacity_l: String(a.tank_capacity_l ?? 100),
+      consumption_max_lph: String(a.consumption_max_lph ?? 10),
+      consumption_factor: String(a.consumption_factor ?? 1.0),
+      yellow_pct: String(a.yellow_pct ?? 35),
+      red_pct: String(a.red_pct ?? 20),
+    });
+  }
 
   async function fetchAll() {
     setLoading(true);
@@ -172,6 +218,12 @@ export default function AbastecimentoBT01() {
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day]);
+
+  useEffect(() => {
+    // sempre que carregar o asset, sincroniza o modal
+    syncCfgFromAsset(asset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asset?.id]);
 
   const minutosParadosBT01 = useMemo(() => {
     return stopRows
@@ -229,6 +281,7 @@ export default function AbastecimentoBT01() {
 
     const autonomiaH = consumoLh > 0 ? nivelAtualL / consumoLh : NaN;
 
+    // previsão simples: quando chega no limite vermelho
     const limiteL = capacidade * (Number(asset.red_pct) / 100);
     const litrosAteLimite = nivelAtualL - limiteL;
     const horasAteLimite = consumoLh > 0 ? litrosAteLimite / consumoLh : NaN;
@@ -252,30 +305,50 @@ export default function AbastecimentoBT01() {
     };
   }, [asset, cargaPct, horasRodando, refuels]);
 
-  async function ensureAssetDefaultIfMissing() {
-    if (asset) return;
+  async function saveAssetConfig() {
+    setCfgSaving(true);
+    try {
+      const payload = {
+        asset_tag: assetTag,
+        tank_capacity_l: Number(cfg.tank_capacity_l) || 100,
+        consumption_max_lph: Number(cfg.consumption_max_lph) || 10,
+        consumption_factor: Number(cfg.consumption_factor) || 1.0,
+        yellow_pct: clamp(Number(cfg.yellow_pct) || 35, 0, 100),
+        red_pct: clamp(Number(cfg.red_pct) || 20, 0, 100),
+      };
 
-    const payload = {
-      asset_tag: assetTag,
-      tank_capacity_l: 100,
-      consumption_max_lph: 10,
-      consumption_factor: 1.0,
-      yellow_pct: 35,
-      red_pct: 20,
-    };
+      if (payload.red_pct > payload.yellow_pct) {
+        alert("O limite VERMELHO deve ser menor ou igual ao AMARELO.");
+        return;
+      }
 
-    const res = await fetch(`${API_BASE}/api/ab/assets/${assetTag}`, {
-      method: "PUT",
-      headers: authHeaders(),
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("Falha ao criar asset BT-01.");
-    const json = await res.json();
-    setAsset(json);
+      const res = await fetch(`${API_BASE}/api/ab/assets/${assetTag}`, {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        alert(`Erro ao salvar config: ${t}`);
+        return;
+      }
+
+      const json = await res.json();
+      setAsset(json);
+      setCfgOpen(false);
+    } catch (e) {
+      alert(`Erro: ${fmtErr(e)}`);
+    } finally {
+      setCfgSaving(false);
+    }
   }
 
   async function submitRefuel() {
-    await ensureAssetDefaultIfMissing();
+    // se não tiver asset ainda, cria com defaults atuais do modal
+    if (!asset) {
+      await saveAssetConfig();
+    }
 
     const litros = Number(rfLitros) || 0;
     const hor = rfHorimetro.trim() ? Number(rfHorimetro) : null;
@@ -333,8 +406,16 @@ export default function AbastecimentoBT01() {
               <div className="mp-page-sub" style={{ marginTop: 0 }}>
                 Operação • Abastecimento
               </div>
-              <div className="mp-page-title" style={{ fontSize: 26 }}>
+              <div className="mp-page-title" style={{ fontSize: 26, display: "flex", alignItems: "center", gap: 10 }}>
                 Abastecimento — {assetTag}
+                <button
+                  className="mp-btn"
+                  title="Configurar tanque/consumo"
+                  onClick={() => setCfgOpen(true)}
+                  style={{ padding: "8px 10px", height: 38 }}
+                >
+                  <Settings size={16} />
+                </button>
               </div>
               <div className="mp-help" style={{ marginTop: 6 }}>
                 {computed.baseInfo}
@@ -368,7 +449,7 @@ export default function AbastecimentoBT01() {
         </div>
       </div>
 
-      {/* Banner semáforo (card + gradiente inline) */}
+      {/* Banner semáforo */}
       <div
         className="mp-card"
         style={{
@@ -409,6 +490,25 @@ export default function AbastecimentoBT01() {
         </div>
       </div>
 
+      {/* PROGRESSO DO TANQUE (barra grande horizontal, estilo Ritmo) */}
+      <div className="mp-card" style={{ marginBottom: 14 }}>
+        <div className="mp-card-b">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div className="mp-label">PROGRESSO DO TANQUE</div>
+            <div style={{ fontWeight: 950, color: "rgba(255,255,255,.90)" }}>{formatNum(progressPct, 0)}%</div>
+          </div>
+
+          <div style={{ marginTop: 10, height: 12, borderRadius: 999, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.10)", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${progressPct}%`, background: barColor(computed.farol) }} />
+          </div>
+
+          <div className="mp-help" style={{ marginTop: 8 }}>
+            Nível atual: <b style={{ color: "rgba(255,255,255,.92)" }}>{formatNum(computed.nivelAtualL, 1)} L</b>{" "}
+            {asset ? <span>• Capacidade: <b style={{ color: "rgba(255,255,255,.92)" }}>{formatNum(computed.capacity, 0)} L</b></span> : null}
+          </div>
+        </div>
+      </div>
+
       {/* Grid principal (12 col) */}
       <div className="mp-main-grid">
         {/* KPIs linha 1 (3 cards) */}
@@ -427,28 +527,13 @@ export default function AbastecimentoBT01() {
 
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
           <div className="mp-card-b">
-            <div className="mp-label">NÍVEL ATUAL</div>
+            <div className="mp-label">CONSUMO (L/H)</div>
             <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>
-              {formatNum(computed.nivelAtualL, 1)} L
+              {formatNum(computed.consumoLh, 2)}
             </div>
-
-            {/* barra */}
-            <div style={{ marginTop: 14 }}>
-              <div
-                style={{
-                  height: 10,
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,.08)",
-                  border: "1px solid rgba(255,255,255,.10)",
-                  overflow: "hidden",
-                }}
-              >
-                <div style={{ height: "100%", width: `${progressPct}%`, background: barColor(computed.farol) }} />
-              </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-                <span className="mp-help">Nível</span>
-                <span style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{formatNum(progressPct, 0)}%</span>
-              </div>
+            <div className="mp-help" style={{ marginTop: 6 }}>
+              Max {asset ? formatNum(Number(asset.consumption_max_lph), 2) : "—"} • fator{" "}
+              {asset ? formatNum(Number(asset.consumption_factor), 3) : "—"}
             </div>
           </div>
         </div>
@@ -477,20 +562,7 @@ export default function AbastecimentoBT01() {
           </div>
         </div>
 
-        {/* KPIs linha 2 (3 cards) */}
-        <div className="mp-card" style={{ gridColumn: "span 4" }}>
-          <div className="mp-card-b">
-            <div className="mp-label">CONSUMO (L/H)</div>
-            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>
-              {formatNum(computed.consumoLh, 2)}
-            </div>
-            <div className="mp-help" style={{ marginTop: 6 }}>
-              Max {asset ? formatNum(Number(asset.consumption_max_lph), 2) : "—"} • fator{" "}
-              {asset ? formatNum(Number(asset.consumption_factor), 3) : "—"}
-            </div>
-          </div>
-        </div>
-
+        {/* Linha 2 */}
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
           <div className="mp-card-b">
             <div className="mp-label">CONSUMO DECORRIDO</div>
@@ -517,6 +589,18 @@ export default function AbastecimentoBT01() {
                 <div style={{ fontWeight: 950, fontSize: 20, color: "rgba(255,255,255,.90)" }}>{formatHM(horasParadas)}</div>
                 <div className="mp-help">{Math.round(minutosParadosBT01)} min parado</div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-b">
+            <div className="mp-label">NÍVEL ATUAL</div>
+            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>
+              {formatNum(computed.nivelAtualL, 1)} L
+            </div>
+            <div className="mp-help" style={{ marginTop: 6 }}>
+              {formatNum(progressPct, 0)}% • Farol: <b style={{ color: "rgba(255,255,255,.92)" }}>{farolLabel(computed.farol)}</b>
             </div>
           </div>
         </div>
@@ -561,7 +645,7 @@ export default function AbastecimentoBT01() {
             <div>
               <div style={{ fontWeight: 950 }}>Registrar abastecimento</div>
               <div className="mp-help" style={{ marginTop: 2 }}>
-                {asset ? "Config OK" : "Sem config do BT-01 — ao salvar, será criada com padrão (100L / 10Lh)."}
+                {asset ? "Config OK" : "Sem config — clique na engrenagem para definir capacidade/consumo."}
               </div>
             </div>
 
@@ -640,9 +724,15 @@ export default function AbastecimentoBT01() {
                 )}
 
                 {refuels.map((r) => {
-                  const d = new Date(r.ts);
-                  const hh = String(d.getHours()).padStart(2, "0");
-                  const mm = String(d.getMinutes()).padStart(2, "0");
+                  let hh = "--";
+                  let mm = "--";
+                  if (r.ts) {
+                    const d = new Date(r.ts);
+                    if (!Number.isNaN(d.getTime())) {
+                      hh = String(d.getHours()).padStart(2, "0");
+                      mm = String(d.getMinutes()).padStart(2, "0");
+                    }
+                  }
 
                   return (
                     <tr key={r.id} style={{ borderBottom: "1px solid rgba(255,255,255,.06)" }}>
@@ -661,11 +751,88 @@ export default function AbastecimentoBT01() {
             </table>
 
             <div className="mp-help" style={{ marginTop: 10 }}>
-              Próximos passos: turno real (07–19 / 19–07) + previsão descontando paradas futuras (planejadas).
+              Dica: clique na <b>engrenagem</b> para configurar capacidade/consumo.
             </div>
           </div>
         </div>
       </div>
+
+      {/* MODAL CONFIG */}
+      {cfgOpen && (
+        <div
+          onClick={() => (cfgSaving ? null : setCfgOpen(false))}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 60,
+          }}
+        >
+          <div
+            className="mp-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "min(720px, 100%)", borderColor: "rgba(255,255,255,.14)" }}
+          >
+            <div className="mp-card-h">
+              <div style={{ fontWeight: 950, display: "flex", alignItems: "center", gap: 10 }}>
+                <Settings size={16} />
+                Configurar BT-01
+              </div>
+              <button className="mp-btn" onClick={() => (cfgSaving ? null : setCfgOpen(false))}>
+                Fechar
+              </button>
+            </div>
+
+            <div className="mp-card-b">
+              <div className="mp-help" style={{ marginBottom: 12 }}>
+                Aqui você define a <b>capacidade do tanque</b> e o <b>consumo máximo</b>. A página usa esses valores para
+                calcular autonomia, farol e previsão.
+              </div>
+
+              <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+                <div>
+                  <div className="mp-label">CAPACIDADE (L)</div>
+                  <input className="mp-input" value={cfg.tank_capacity_l} onChange={(e) => setCfg((s) => ({ ...s, tank_capacity_l: e.target.value }))} />
+                </div>
+
+                <div>
+                  <div className="mp-label">CONSUMO MÁX (L/H)</div>
+                  <input className="mp-input" value={cfg.consumption_max_lph} onChange={(e) => setCfg((s) => ({ ...s, consumption_max_lph: e.target.value }))} />
+                </div>
+
+                <div>
+                  <div className="mp-label">FATOR</div>
+                  <input className="mp-input" value={cfg.consumption_factor} onChange={(e) => setCfg((s) => ({ ...s, consumption_factor: e.target.value }))} />
+                </div>
+
+                <div>
+                  <div className="mp-label">AMARELO (%)</div>
+                  <input className="mp-input" value={cfg.yellow_pct} onChange={(e) => setCfg((s) => ({ ...s, yellow_pct: e.target.value }))} />
+                </div>
+
+                <div>
+                  <div className="mp-label">VERMELHO (%)</div>
+                  <input className="mp-input" value={cfg.red_pct} onChange={(e) => setCfg((s) => ({ ...s, red_pct: e.target.value }))} />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "end", gap: 10 }}>
+                  <button className="mp-btn mp-btn-primary" onClick={saveAssetConfig} disabled={cfgSaving}>
+                    {cfgSaving ? "Salvando..." : "Salvar configurações"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mp-help" style={{ marginTop: 12 }}>
+                Regras: <b>vermelho ≤ amarelo</b>. Ex: amarelo 35% / vermelho 20%.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
