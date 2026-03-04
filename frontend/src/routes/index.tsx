@@ -15,6 +15,7 @@ import PlantProduction from "../pages/PlantProduction";
 import Ritmo from "../pages/Ritmo";
 import Statistics from "../pages/Statistics";
 import UfDF from "../pages/UfDF";
+import AbastecimentoBT01 from "@/pages/Abastecimento
 
 import Horimetros from "../pages/Horimetros";
 import Paradas from "../pages/Paradas";
@@ -294,6 +295,14 @@ export function AppRoutes() {
           element={
             <RequireRole>
               <Historico />
+            </RequireRole>
+          }
+        />
+          <Route
+          path="abastecimento"
+          element={
+            <RequireRole>
+              <Abastecimento />
             </RequireRole>
           }
         />
