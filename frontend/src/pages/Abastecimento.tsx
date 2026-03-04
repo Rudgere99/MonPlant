@@ -1,15 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 /**
- * Abastecimento BT-01 — estilo alinhado com a página "Ritmo do turno"
- * - Header em card com controles à direita
- * - Banner de semáforo (verde/amarelo/vermelho)
- * - KPIs em cards grandes (grid 3 + 3)
- * - Barra de progresso do tanque
- * - Área operacional em cards (parâmetros / registrar abastecimento)
- * - Tabela em card
+ * Abastecimento BT-01
+ * Estilização baseada no seu index.css (classes .mp-*)
  *
- * Observação: Mantém a lógica v1 (paradas somadas do stops-launch no dia).
+ * Requer no index.css:
+ * - .mp-container, .mp-main-grid, .mp-card, .mp-card-h, .mp-card-b
+ * - .mp-label, .mp-input, .mp-btn, .mp-btn-primary, .mp-help, .mp-muted, .mp-chip
  */
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
@@ -37,11 +34,11 @@ type Refuel = {
 };
 
 type StopLaunchRow = {
-  period: string; // "03-04"
-  equipamento: string; // "BT-01"
+  period: string;
+  equipamento: string;
+  minutos: number;
   tipo_parada?: string;
   descricao?: string;
-  minutos: number;
 };
 
 function authHeaders() {
@@ -85,10 +82,7 @@ function addHoursToNow(h: number) {
   return `${hh}:${mm}`;
 }
 
-/**
- * Modelo v1 (simples):
- * consumo_Lh = max_Lh * (carga%/100) * fator
- */
+/** v1 */
 function calcConsumptionLh(maxLh: number, cargaPct: number, fator: number) {
   return maxLh * (cargaPct / 100) * fator;
 }
@@ -116,54 +110,18 @@ function farolDotClass(f: Farol) {
   return "bg-slate-400";
 }
 
-function bannerBorder(f: Farol) {
-  if (f === "green") return "border-emerald-500/25";
-  if (f === "yellow") return "border-amber-500/25";
-  if (f === "red") return "border-red-500/25";
-  return "border-slate-700/50";
-}
-
 function bannerGradient(f: Farol) {
-  // imita o "banner" do Ritmo: degradê sutil e escuro
-  if (f === "green")
-    return "bg-gradient-to-r from-emerald-900/35 via-slate-950/35 to-emerald-900/10";
-  if (f === "yellow")
-    return "bg-gradient-to-r from-amber-900/35 via-slate-950/35 to-amber-900/10";
-  if (f === "red")
-    return "bg-gradient-to-r from-red-900/35 via-slate-950/35 to-red-900/10";
-  return "bg-gradient-to-r from-slate-900/30 via-slate-950/35 to-slate-900/10";
+  if (f === "green") return "linear-gradient(90deg, rgba(6,95,70,.35), rgba(2,6,23,.35), rgba(6,95,70,.12))";
+  if (f === "yellow") return "linear-gradient(90deg, rgba(120,53,15,.35), rgba(2,6,23,.35), rgba(120,53,15,.12))";
+  if (f === "red") return "linear-gradient(90deg, rgba(127,29,29,.35), rgba(2,6,23,.35), rgba(127,29,29,.12))";
+  return "linear-gradient(90deg, rgba(30,41,59,.28), rgba(2,6,23,.35), rgba(30,41,59,.10))";
 }
 
-function bigCardClass() {
-  return "rounded-2xl border border-slate-800/70 bg-slate-950/45 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]";
-}
-
-function subtleCardClass() {
-  return "rounded-2xl border border-slate-800/70 bg-slate-950/35 p-5";
-}
-
-function progressBar(pct: number, farol: Farol) {
-  const p = clamp(Number.isFinite(pct) ? pct : 0, 0, 100);
-  const fill =
-    farol === "green"
-      ? "bg-emerald-500/80"
-      : farol === "yellow"
-      ? "bg-amber-500/80"
-      : farol === "red"
-      ? "bg-red-500/80"
-      : "bg-slate-400/60";
-
-  return (
-    <div className="mt-4">
-      <div className="h-2.5 w-full rounded-full bg-slate-800/70 overflow-hidden">
-        <div className={`h-full ${fill}`} style={{ width: `${p}%` }} />
-      </div>
-      <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-        <span>Nível</span>
-        <span className="text-slate-200">{formatNum(p, 0)}%</span>
-      </div>
-    </div>
-  );
+function barColor(f: Farol) {
+  if (f === "green") return "rgba(52,211,153,.85)";
+  if (f === "yellow") return "rgba(251,191,36,.85)";
+  if (f === "red") return "rgba(248,113,113,.85)";
+  return "rgba(148,163,184,.55)";
 }
 
 export default function AbastecimentoBT01() {
@@ -175,11 +133,11 @@ export default function AbastecimentoBT01() {
   const [stopRows, setStopRows] = useState<StopLaunchRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Inputs operacionais (teste)
+  // v1 (teste)
   const [turnHours, setTurnHours] = useState<number>(12);
   const [cargaPct, setCargaPct] = useState<number>(83);
 
-  // Form abastecimento
+  // form
   const [rfTs, setRfTs] = useState<string>(() => new Date().toISOString().slice(0, 16));
   const [rfHorimetro, setRfHorimetro] = useState<string>("");
   const [rfLitros, setRfLitros] = useState<string>("0");
@@ -236,8 +194,8 @@ export default function AbastecimentoBT01() {
         farol: "gray" as Farol,
         baseInfo: "Sem configuração do BT-01",
         capacity: NaN,
-        redPct: NaN,
         yellowPct: NaN,
+        redPct: NaN,
       };
     }
 
@@ -274,7 +232,6 @@ export default function AbastecimentoBT01() {
     const limiteL = capacidade * (Number(asset.red_pct) / 100);
     const litrosAteLimite = nivelAtualL - limiteL;
     const horasAteLimite = consumoLh > 0 ? litrosAteLimite / consumoLh : NaN;
-
     const previsaoHora =
       Number.isFinite(horasAteLimite) && horasAteLimite > 0 ? addHoursToNow(horasAteLimite) : "—";
 
@@ -290,13 +247,14 @@ export default function AbastecimentoBT01() {
       farol,
       baseInfo,
       capacity: capacidade,
-      redPct: Number(asset.red_pct),
       yellowPct: Number(asset.yellow_pct),
+      redPct: Number(asset.red_pct),
     };
   }, [asset, cargaPct, horasRodando, refuels]);
 
   async function ensureAssetDefaultIfMissing() {
     if (asset) return;
+
     const payload = {
       asset_tag: assetTag,
       tank_capacity_l: 100,
@@ -363,288 +321,319 @@ export default function AbastecimentoBT01() {
       ? "Crítico: abastecer o quanto antes"
       : "Sem dados de configuração";
 
+  const progressPct = clamp(Number.isFinite(computed.nivelAtualPct) ? computed.nivelAtualPct : 0, 0, 100);
+
   return (
-    <div className="min-h-screen p-4 md:p-6 text-slate-100">
-      <div className="max-w-[1400px] mx-auto space-y-4">
-        {/* Header card (igual Ritmo) */}
-        <div className="rounded-2xl border border-slate-800/70 bg-slate-950/40 p-5">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <div className="text-xs uppercase tracking-widest text-slate-400">Operação • Abastecimento</div>
-              <div className="mt-1 text-2xl font-semibold">Abastecimento — {assetTag}</div>
-              <div className="mt-1 text-xs text-slate-500">{computed.baseInfo}</div>
+    <div className="mp-container" style={{ paddingTop: 12, paddingBottom: 28 }}>
+      {/* Header (card) */}
+      <div className="mp-card" style={{ marginBottom: 14 }}>
+        <div className="mp-card-b">
+          <div style={{ display: "flex", gap: 12, alignItems: "end", justifyContent: "space-between", flexWrap: "wrap" }}>
+            <div style={{ minWidth: 260 }}>
+              <div className="mp-page-sub" style={{ marginTop: 0 }}>
+                Operação • Abastecimento
+              </div>
+              <div className="mp-page-title" style={{ fontSize: 26 }}>
+                Abastecimento — {assetTag}
+              </div>
+              <div className="mp-help" style={{ marginTop: 6 }}>
+                {computed.baseInfo}
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <div className="text-[11px] text-slate-400 font-semibold">DATA</div>
-                <input
-                  type="date"
-                  value={day}
-                  onChange={(e) => setDay(e.target.value)}
-                  className="mt-1 bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm w-[160px]"
-                />
+            <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+              <div style={{ width: 160 }}>
+                <div className="mp-label">DATA</div>
+                <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
               </div>
 
-              <div>
-                <div className="text-[11px] text-slate-400 font-semibold">CARGA (%)</div>
+              <div style={{ width: 140 }}>
+                <div className="mp-label">CARGA (%)</div>
                 <input
+                  className="mp-input"
                   type="number"
                   value={cargaPct}
                   min={0}
                   max={100}
                   step={1}
                   onChange={(e) => setCargaPct(Number(e.target.value))}
-                  className="mt-1 bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm w-[140px]"
                 />
               </div>
 
-              <button
-                onClick={fetchAll}
-                className="h-[42px] px-4 rounded-xl text-sm bg-slate-800 hover:bg-slate-700 border border-slate-700/70"
-              >
+              <button className="mp-btn" onClick={fetchAll} style={{ height: 40 }}>
                 {loading ? "Atualizando..." : "Atualizar"}
               </button>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Banner semáforo (igual Ritmo) */}
-        <div className={`rounded-2xl border ${bannerBorder(computed.farol)} ${bannerGradient(computed.farol)} p-5`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+      {/* Banner semáforo (card + gradiente inline) */}
+      <div
+        className="mp-card"
+        style={{
+          marginBottom: 14,
+          borderColor:
+            computed.farol === "green"
+              ? "rgba(16,185,129,.25)"
+              : computed.farol === "yellow"
+              ? "rgba(245,158,11,.25)"
+              : computed.farol === "red"
+              ? "rgba(239,68,68,.25)"
+              : "rgba(255,255,255,.10)",
+          background: bannerGradient(computed.farol),
+        }}
+      >
+        <div className="mp-card-b">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span className={`h-3 w-3 rounded-full ${farolDotClass(computed.farol)}`} />
               <div>
-                <div className="text-lg font-semibold">{farolLabel(computed.farol)}</div>
-                <div className="text-sm text-slate-300/80">{bannerText}</div>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>{farolLabel(computed.farol)}</div>
+                <div className="mp-help" style={{ color: "rgba(255,255,255,.80)" }}>
+                  {bannerText}
+                </div>
               </div>
             </div>
 
-            <div className="text-right">
-              <div className="text-[11px] text-slate-400 font-semibold">SEMÁFORO</div>
-              <div className="mt-1 flex items-center justify-end gap-2">
-                <span className={`h-2.5 w-2.5 rounded-full ${farolDotClass(computed.farol)}`} />
-                <span
-                  className={
-                    computed.farol === "green"
-                      ? "text-emerald-300 font-semibold"
-                      : computed.farol === "yellow"
-                      ? "text-amber-300 font-semibold"
-                      : computed.farol === "red"
-                      ? "text-red-300 font-semibold"
-                      : "text-slate-300 font-semibold"
-                  }
-                >
-                  {farolLabel(computed.farol).toUpperCase()}
-                </span>
+            <div style={{ textAlign: "right" }}>
+              <div className="mp-label" style={{ marginBottom: 6 }}>
+                SEMÁFORO
               </div>
+              <span className="mp-chip" style={{ background: "rgba(255,255,255,.04)", borderColor: "rgba(255,255,255,.10)" }}>
+                <span className={`h-2.5 w-2.5 rounded-full ${farolDotClass(computed.farol)}`} />
+                {farolLabel(computed.farol).toUpperCase()}
+              </span>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* KPIs (grid 3 + 3 como no Ritmo) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className={bigCardClass()}>
-            <div className="text-[11px] text-slate-400 font-semibold">CAPACIDADE</div>
-            <div className="mt-2 text-3xl font-semibold">{asset ? `${formatNum(computed.capacity, 0)} L` : "—"}</div>
-            <div className="mt-1 text-xs text-slate-500">
+      {/* Grid principal (12 col) */}
+      <div className="mp-main-grid">
+        {/* KPIs linha 1 (3 cards) */}
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-b">
+            <div className="mp-label">CAPACIDADE</div>
+            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>
+              {asset ? `${formatNum(computed.capacity, 0)} L` : "—"}
+            </div>
+            <div className="mp-help" style={{ marginTop: 6 }}>
               Limites: amarelo {asset ? `${formatNum(computed.yellowPct, 0)}%` : "—"} • vermelho{" "}
               {asset ? `${formatNum(computed.redPct, 0)}%` : "—"}
             </div>
           </div>
+        </div>
 
-          <div className={bigCardClass()}>
-            <div className="text-[11px] text-slate-400 font-semibold">NÍVEL ATUAL</div>
-            <div className="mt-2 text-3xl font-semibold">{formatNum(computed.nivelAtualL, 1)} L</div>
-            {progressBar(computed.nivelAtualPct, computed.farol)}
-          </div>
-
-          <div className={bigCardClass()}>
-            <div className="text-[11px] text-slate-400 font-semibold">PRÓXIMO ABASTECIMENTO</div>
-            <div
-              className={`mt-2 text-3xl font-semibold ${
-                computed.farol === "red" ? "text-red-300" : computed.farol === "yellow" ? "text-amber-300" : ""
-              }`}
-            >
-              {computed.previsaoHora}
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-b">
+            <div className="mp-label">NÍVEL ATUAL</div>
+            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>
+              {formatNum(computed.nivelAtualL, 1)} L
             </div>
-            <div className="mt-1 text-xs text-slate-500">Previsão simples (limite vermelho).</div>
+
+            {/* barra */}
+            <div style={{ marginTop: 14 }}>
+              <div
+                style={{
+                  height: 10,
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,.08)",
+                  border: "1px solid rgba(255,255,255,.10)",
+                  overflow: "hidden",
+                }}
+              >
+                <div style={{ height: "100%", width: `${progressPct}%`, background: barColor(computed.farol) }} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+                <span className="mp-help">Nível</span>
+                <span style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{formatNum(progressPct, 0)}%</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className={subtleCardClass()}>
-            <div className="text-[11px] text-slate-400 font-semibold">CONSUMO (L/H)</div>
-            <div className="mt-2 text-3xl font-semibold">{formatNum(computed.consumoLh, 2)}</div>
-            <div className="mt-1 text-xs text-slate-500">
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-b">
+            <div className="mp-label">PRÓXIMO ABASTECIMENTO</div>
+            <div
+              className="big-number"
+              style={{
+                marginTop: 8,
+                fontWeight: 950,
+                color:
+                  computed.farol === "red"
+                    ? "rgba(248,113,113,.95)"
+                    : computed.farol === "yellow"
+                    ? "rgba(251,191,36,.95)"
+                    : "rgba(255,255,255,.92)",
+              }}
+            >
+              {computed.previsaoHora}
+            </div>
+            <div className="mp-help" style={{ marginTop: 6 }}>
+              Autonomia: {formatHM(computed.autonomiaH)}
+            </div>
+          </div>
+        </div>
+
+        {/* KPIs linha 2 (3 cards) */}
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-b">
+            <div className="mp-label">CONSUMO (L/H)</div>
+            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>
+              {formatNum(computed.consumoLh, 2)}
+            </div>
+            <div className="mp-help" style={{ marginTop: 6 }}>
               Max {asset ? formatNum(Number(asset.consumption_max_lph), 2) : "—"} • fator{" "}
               {asset ? formatNum(Number(asset.consumption_factor), 3) : "—"}
             </div>
           </div>
+        </div>
 
-          <div className={subtleCardClass()}>
-            <div className="text-[11px] text-slate-400 font-semibold">CONSUMO DECORRIDO</div>
-            <div className="mt-2 text-3xl font-semibold">{formatNum(computed.consumoDecorridoL, 1)} L</div>
-            <div className="mt-1 text-xs text-slate-500">Rodando: {formatHM(horasRodando)}</div>
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-b">
+            <div className="mp-label">CONSUMO DECORRIDO</div>
+            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>
+              {formatNum(computed.consumoDecorridoL, 1)} L
+            </div>
+            <div className="mp-help" style={{ marginTop: 6 }}>
+              Rodando: {formatHM(horasRodando)}
+            </div>
           </div>
+        </div>
 
-          <div className={subtleCardClass()}>
-            <div className="text-[11px] text-slate-400 font-semibold">TEMPO (TURNO)</div>
-            <div className="mt-2 flex items-end justify-between">
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-b">
+            <div className="mp-label">TEMPO (TURNO)</div>
+            <div style={{ display: "flex", alignItems: "end", justifyContent: "space-between", gap: 10, marginTop: 8 }}>
               <div>
-                <div className="text-3xl font-semibold">{formatHM(horasRodando)}</div>
-                <div className="text-xs text-slate-500">Rodando</div>
+                <div className="big-number" style={{ fontWeight: 950 }}>
+                  {formatHM(horasRodando)}
+                </div>
+                <div className="mp-help">Rodando</div>
               </div>
-              <div className="text-right">
-                <div className="text-xl font-semibold text-slate-200">{formatHM(horasParadas)}</div>
-                <div className="text-xs text-slate-500">{Math.round(minutosParadosBT01)} min parado</div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontWeight: 950, fontSize: 20, color: "rgba(255,255,255,.90)" }}>{formatHM(horasParadas)}</div>
+                <div className="mp-help">{Math.round(minutosParadosBT01)} min parado</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Operação */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Parâmetros */}
-          <div className={subtleCardClass()}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">Parâmetros do turno</div>
-              <span className="text-[11px] text-slate-500">v1 (teste)</span>
-            </div>
-
-            <div className="mt-4 space-y-3">
+        {/* Parâmetros (span 4) */}
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-h">
+            <div style={{ fontWeight: 950 }}>Parâmetros do turno</div>
+            <span className="mp-muted">v1 (teste)</span>
+          </div>
+          <div className="mp-card-b">
+            <div className="mp-form-grid">
               <div>
-                <label className="text-[11px] text-slate-400 font-semibold">HORAS DO TURNO</label>
+                <div className="mp-label">HORAS DO TURNO</div>
                 <input
+                  className="mp-input"
                   type="number"
                   value={turnHours}
                   min={1}
                   max={24}
                   step={1}
                   onChange={(e) => setTurnHours(Number(e.target.value))}
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
                 />
               </div>
 
-              <div className="rounded-xl border border-slate-800 bg-slate-900/25 p-3">
-                <div className="text-xs text-slate-400">Paradas BT-01 no dia</div>
-                <div className="mt-1 text-lg font-semibold">{Math.round(minutosParadosBT01)} min</div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  Na v2: conectar ShiftBar (07–19 / 19–07) e calcular automaticamente.
+              <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,.10)", background: "rgba(255,255,255,.03)" }}>
+                <div className="mp-label" style={{ marginBottom: 4 }}>
+                  PARADAS BT-01 NO DIA
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Registrar abastecimento */}
-          <div className={`lg:col-span-2 ${subtleCardClass()}`}>
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold">Registrar abastecimento</div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  {asset ? "Config OK" : "Sem config do BT-01 — ao salvar, será criada com padrão (100L / 10Lh)."}
+                <div style={{ fontWeight: 950, fontSize: 18 }}>{Math.round(minutosParadosBT01)} min</div>
+                <div className="mp-help" style={{ marginTop: 6 }}>
+                  Na v2: conectar ShiftBar (07–19 / 19–07).
                 </div>
-              </div>
-              <button
-                onClick={submitRefuel}
-                className="px-4 py-2 rounded-xl text-sm bg-emerald-600/80 hover:bg-emerald-600 border border-emerald-500/40"
-              >
-                Salvar
-              </button>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="md:col-span-2">
-                <label className="text-[11px] text-slate-400 font-semibold">DATA/HORA</label>
-                <input
-                  type="datetime-local"
-                  value={rfTs}
-                  onChange={(e) => setRfTs(e.target.value)}
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] text-slate-400 font-semibold">HORÍMETRO</label>
-                <input
-                  value={rfHorimetro}
-                  onChange={(e) => setRfHorimetro(e.target.value)}
-                  placeholder="ex: 1234.5"
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] text-slate-400 font-semibold">LITROS</label>
-                <input
-                  value={rfLitros}
-                  onChange={(e) => setRfLitros(e.target.value)}
-                  placeholder="ex: 40"
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="md:col-span-2 flex items-center gap-3">
-                <label className="flex items-center gap-2 text-sm text-slate-200">
-                  <input type="checkbox" checked={rfTankFull} onChange={(e) => setRfTankFull(e.target.checked)} />
-                  Tanque cheio
-                </label>
-
-                {!rfTankFull && (
-                  <div className="flex items-center gap-2">
-                    <label className="text-[11px] text-slate-400 font-semibold">NÍVEL APÓS (%)</label>
-                    <input
-                      value={rfLevelPct}
-                      onChange={(e) => setRfLevelPct(e.target.value)}
-                      className="w-24 bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="text-[11px] text-slate-400 font-semibold">OBSERVAÇÃO</label>
-                <input
-                  value={rfNote}
-                  onChange={(e) => setRfNote(e.target.value)}
-                  placeholder="Opcional"
-                  className="mt-1 w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-sm"
-                />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Tabela */}
-        <div className={subtleCardClass()}>
-          <div className="flex items-center justify-between gap-3">
+        {/* Registrar abastecimento (span 8) */}
+        <div className="mp-card" style={{ gridColumn: "span 8" }}>
+          <div className="mp-card-h">
             <div>
-              <div className="text-sm font-semibold">Abastecimentos do dia</div>
-              <div className="text-[11px] text-slate-500 mt-1">
-                * Consumo decorrido usa as paradas somadas do BT-01 no dia (stops-launch).
+              <div style={{ fontWeight: 950 }}>Registrar abastecimento</div>
+              <div className="mp-help" style={{ marginTop: 2 }}>
+                {asset ? "Config OK" : "Sem config do BT-01 — ao salvar, será criada com padrão (100L / 10Lh)."}
+              </div>
+            </div>
+
+            <button className="mp-btn mp-btn-primary" onClick={submitRefuel}>
+              Salvar
+            </button>
+          </div>
+
+          <div className="mp-card-b">
+            <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
+              <div style={{ gridColumn: "span 2" }}>
+                <div className="mp-label">DATA/HORA</div>
+                <input className="mp-input" type="datetime-local" value={rfTs} onChange={(e) => setRfTs(e.target.value)} />
+              </div>
+
+              <div>
+                <div className="mp-label">HORÍMETRO</div>
+                <input className="mp-input" value={rfHorimetro} onChange={(e) => setRfHorimetro(e.target.value)} placeholder="ex: 1234.5" />
+              </div>
+
+              <div>
+                <div className="mp-label">LITROS</div>
+                <input className="mp-input" value={rfLitros} onChange={(e) => setRfLitros(e.target.value)} placeholder="ex: 40" />
+              </div>
+
+              <div style={{ gridColumn: "span 2", display: "flex", alignItems: "center", gap: 10 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 850 }}>
+                  <input type="checkbox" checked={rfTankFull} onChange={(e) => setRfTankFull(e.target.checked)} />
+                  Tanque cheio
+                </label>
+
+                {!rfTankFull && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div className="mp-label" style={{ marginBottom: 0 }}>
+                      NÍVEL APÓS (%)
+                    </div>
+                    <input className="mp-input" style={{ width: 110 }} value={rfLevelPct} onChange={(e) => setRfLevelPct(e.target.value)} />
+                  </div>
+                )}
+              </div>
+
+              <div style={{ gridColumn: "span 2" }}>
+                <div className="mp-label">OBSERVAÇÃO</div>
+                <input className="mp-input" value={rfNote} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="mt-4 overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="text-slate-400">
-                <tr className="border-b border-slate-800">
-                  <th className="text-left py-2 pr-3">Hora</th>
-                  <th className="text-left py-2 pr-3">Horímetro</th>
-                  <th className="text-left py-2 pr-3">Litros</th>
-                  <th className="text-left py-2 pr-3">Pós (%)</th>
-                  <th className="text-left py-2 pr-3">Cheio</th>
-                  <th className="text-left py-2 pr-3">Obs</th>
+        {/* Tabela (span 12) */}
+        <div className="mp-card" style={{ gridColumn: "span 12" }}>
+          <div className="mp-card-h">
+            <div style={{ fontWeight: 950 }}>Abastecimentos do dia</div>
+            <div className="mp-help">* Consumo decorrido usa paradas somadas (stops-launch).</div>
+          </div>
+
+          <div className="mp-card-b" style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(255,255,255,.10)", color: "rgba(255,255,255,.60)" }}>
+                  <th style={{ textAlign: "left", padding: "10px 8px" }}>Hora</th>
+                  <th style={{ textAlign: "left", padding: "10px 8px" }}>Horímetro</th>
+                  <th style={{ textAlign: "left", padding: "10px 8px" }}>Litros</th>
+                  <th style={{ textAlign: "left", padding: "10px 8px" }}>Pós (%)</th>
+                  <th style={{ textAlign: "left", padding: "10px 8px" }}>Cheio</th>
+                  <th style={{ textAlign: "left", padding: "10px 8px" }}>Obs</th>
                 </tr>
               </thead>
-
-              <tbody className="text-slate-200">
+              <tbody>
                 {refuels.length === 0 && (
                   <tr>
-                    <td className="py-4 text-slate-500" colSpan={6}>
+                    <td colSpan={6} style={{ padding: 14, color: "rgba(255,255,255,.45)" }}>
                       Nenhum abastecimento registrado.
                     </td>
                   </tr>
@@ -654,24 +643,27 @@ export default function AbastecimentoBT01() {
                   const d = new Date(r.ts);
                   const hh = String(d.getHours()).padStart(2, "0");
                   const mm = String(d.getMinutes()).padStart(2, "0");
+
                   return (
-                    <tr key={r.id} className="border-b border-slate-900/60">
-                      <td className="py-2 pr-3">{hh}:{mm}</td>
-                      <td className="py-2 pr-3">{r.horimetro ?? "—"}</td>
-                      <td className="py-2 pr-3">{formatNum(Number(r.liters_added), 1)}</td>
-                      <td className="py-2 pr-3">{r.level_after_pct ?? (r.tank_full ? 100 : "—")}</td>
-                      <td className="py-2 pr-3">{r.tank_full ? "Sim" : "Não"}</td>
-                      <td className="py-2 pr-3 text-slate-400">{r.note ?? ""}</td>
+                    <tr key={r.id} style={{ borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+                      <td style={{ padding: "10px 8px" }}>
+                        <span style={{ fontWeight: 950 }}>{hh}:{mm}</span>
+                      </td>
+                      <td style={{ padding: "10px 8px" }}>{r.horimetro ?? "—"}</td>
+                      <td style={{ padding: "10px 8px" }}>{formatNum(Number(r.liters_added), 1)}</td>
+                      <td style={{ padding: "10px 8px" }}>{r.level_after_pct ?? (r.tank_full ? 100 : "—")}</td>
+                      <td style={{ padding: "10px 8px" }}>{r.tank_full ? "Sim" : "Não"}</td>
+                      <td style={{ padding: "10px 8px", color: "rgba(255,255,255,.60)" }}>{r.note ?? ""}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </div>
-        </div>
 
-        <div className="text-[11px] text-slate-500">
-          Próximos passos: turno real (07–19 / 19–07) + previsão descontando paradas futuras (planejadas).
+            <div className="mp-help" style={{ marginTop: 10 }}>
+              Próximos passos: turno real (07–19 / 19–07) + previsão descontando paradas futuras (planejadas).
+            </div>
+          </div>
         </div>
       </div>
     </div>
