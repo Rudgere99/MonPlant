@@ -522,6 +522,101 @@ export default function AbastecimentoBT01() {
         </div>
       </div>
 
+
+      {/* VISUAL DO TANQUE (imagem com preenchimento laranja) */}
+      <div className="mp-card" style={{ marginBottom: 14 }}>
+        <div className="mp-card-h">
+          <div style={{ fontWeight: 950 }}>Visual do tanque</div>
+          <div className="mp-help">Preenchimento laranja acompanha o nível (%)</div>
+        </div>
+        <div className="mp-card-b">
+          <div
+            style={{
+              position: "relative",
+              width: "100%",
+              height: 230,
+              borderRadius: 16,
+              border: "1px solid rgba(255,255,255,.10)",
+              background: "rgba(255,255,255,.02)",
+              overflow: "hidden",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {/* Camada de preenchimento (laranja) - usa a imagem como MÁSCARA */}
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "transparent",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: `${progressPct}%`,
+                  background: "rgba(249,115,22,.95)", // laranja
+                  filter: "drop-shadow(0 0 16px rgba(249,115,22,.25))",
+                  // máscara com a própria imagem (precisa de PNG com transparência)
+                  WebkitMaskImage: "url(/assets/BT-01.png)",
+                  WebkitMaskRepeat: "no-repeat",
+                  WebkitMaskPosition: "center",
+                  WebkitMaskSize: "contain",
+                  maskImage: "url(/assets/BT-01.png)",
+                  maskRepeat: "no-repeat",
+                  maskPosition: "center",
+                  maskSize: "contain",
+                }}
+              />
+            </div>
+
+            {/* Camada do desenho (por cima) */}
+            <img
+              src="/assets/BT-01.png"
+              alt="BT-01"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                opacity: 0.95,
+                // destaca traços brancos/pretos sem estourar
+                filter: "contrast(1.05)",
+              }}
+            />
+
+            {/* Badge do % */}
+            <div
+              style={{
+                position: "absolute",
+                right: 12,
+                top: 12,
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: "rgba(0,0,0,.35)",
+                border: "1px solid rgba(255,255,255,.10)",
+                fontWeight: 950,
+                color: "rgba(255,255,255,.92)",
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              <span className={`h-2.5 w-2.5 rounded-full ${farolDotClass(computed.farol)}`} />
+              {formatNum(progressPct, 0)}%
+            </div>
+          </div>
+
+          <div className="mp-help" style={{ marginTop: 10 }}>
+            Se o laranja “pintar” a imagem inteira, o PNG está sem transparência. Exporte o BT-01.png com fundo transparente.
+          </div>
+        </div>
+      </div>
+
       {/* Grid principal */}
       <div className="mp-main-grid">
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
