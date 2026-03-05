@@ -128,6 +128,67 @@ function barColor(f: Farol) {
   return "rgba(148,163,184,.55)";
 }
 
+function BT01FuelVisual({ pct, farol }: { pct: number; farol: Farol }) {
+  const p = clamp(pct, 0, 100);
+  const W = 1920;
+  const H = 1080;
+  const y = (1 - p / 100) * H;
+  const maskId = "bt01MaskSvg";
+
+  return (
+    <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+      <div
+        style={{
+          width: "min(980px, 100%)",
+          borderRadius: 16,
+          border: "1px solid rgba(255,255,255,.10)",
+          background: "rgba(255,255,255,.02)",
+          overflow: "hidden",
+        }}
+      >
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="auto" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            {/* máscara pela transparência do PNG */}
+            <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width={W} height={H}>
+              <image href="/assets/BT-01.png" x="0" y="0" width={W} height={H} />
+            </mask>
+
+            <linearGradient id="fuelGrad" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0%" stopColor="rgba(249,115,22,.95)" />
+              <stop offset="100%" stopColor="rgba(251,146,60,.70)" />
+            </linearGradient>
+          </defs>
+
+          {/* Preenchimento (laranja) recortado pela forma do equipamento */}
+          <g mask={`url(#${maskId})`}>
+            <rect x="0" y={y} width={W} height={H - y} fill="url(#fuelGrad)" />
+          </g>
+
+          {/* Desenho por cima */}
+          <image href="/assets/BT-01.png" x="0" y="0" width={W} height={H} />
+        </svg>
+
+        <div style={{ padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="mp-help">Laranja = combustível • Visual acompanha o nível</div>
+          <div
+            style={{
+              fontWeight: 950,
+              color: "rgba(255,255,255,.92)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${farolDotClass(farol)}`} />
+            {Math.round(p)}%
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function isAssetLike(x: any): x is Asset {
   return (
     x &&
@@ -530,50 +591,12 @@ export default function AbastecimentoBT01() {
           <div className="mp-help">Preenchimento laranja acompanha o nível (%)</div>
         </div>
         <div className="mp-card-b">
-          <div
-            style={{
-              position: "relative",
-              width: "100%",
-              height: 230,
-              borderRadius: 16,
-              border: "1px solid rgba(255,255,255,.10)",
-              background: "rgba(255,255,255,.02)",
-              overflow: "hidden",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {/* Camada de preenchimento (laranja) - usa a imagem como MÁSCARA */}
-            <div
-              aria-hidden
-              style={{
-                position: "absolute",
-                inset: 0,
-                background: "transparent",
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: `${progressPct}%`,
-                  background: "rgba(249,115,22,.95)", // laranja
-                  filter: "drop-shadow(0 0 16px rgba(249,115,22,.25))",
-                  // máscara com a própria imagem (precisa de PNG com transparência)
-                  WebkitMaskImage: "url(/assets/BT-01.png)",
-                  WebkitMaskRepeat: "no-repeat",
-                  WebkitMaskPosition: "center",
-                  WebkitMaskSize: "contain",
-                  maskImage: "url(/assets/BT-01.png)",
-                  maskRepeat: "no-repeat",
-                  maskPosition: "center",
-                  maskSize: "contain",
-                }}
-              />
-            </div>
+          <BT01FuelVisual pct={progressPct} farol={computed.farol} />
+          <div className="mp-help" style={{ marginTop: 10 }}>
+            * Usa máscara SVG com o PNG em <b>public/assets/BT-01.png</b>.
+          </div>
+        </div>
+      </div>
 
             {/* Camada do desenho (por cima) */}
             <img
