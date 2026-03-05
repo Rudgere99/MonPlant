@@ -199,7 +199,7 @@ function isAssetLike(x: any): x is Asset {
   );
 }
 
-export default function AbastecimentoBT01() {
+export default function Abastecimento() {
   const assetTag = "BT-01";
 
   const [day, setDay] = useState<string>(todayYMD());
