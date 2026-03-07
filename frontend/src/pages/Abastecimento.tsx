@@ -159,6 +159,17 @@ function selectedDayEnd(day: string) {
   return new Date(`${day}T23:59:59`);
 }
 
+
+function toLocalIsoNoZ(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
+}
+
 function isSameYmd(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
