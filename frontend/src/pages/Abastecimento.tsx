@@ -715,16 +715,6 @@ export default function Abastecimento() {
                   Tanque cheio
                 </label>
 
-                {!rfTankFull && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div className="mp-label" style={{ marginBottom: 0 }}>
-                      NÍVEL APÓS (%)
-                    </div>
-                    <input className="mp-input" style={{ width: 110 }} value={rfLevelPct} onChange={(e) => setRfLevelPct(e.target.value)} />
-                  </div>
-                )}
-              </div>
-
               <div style={{ gridColumn: "span 2" }}>
                 <div className="mp-label">OBSERVAÇÃO</div>
                 <input className="mp-input" value={rfNote} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
