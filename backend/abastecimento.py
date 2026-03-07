@@ -38,18 +38,12 @@ def _row_to_dict(cur) -> Optional[Dict[str, Any]]:
     row = cur.fetchone()
     if not row:
         return None
-    if isinstance(row, dict):
-        return dict(row)
     cols = [c.name if hasattr(c, "name") else c[0] for c in cur.description]
     return dict(zip(cols, row))
 
 
 def _rows_to_dicts(cur) -> List[Dict[str, Any]]:
     rows = cur.fetchall()
-    if not rows:
-        return []
-    if isinstance(rows[0], dict):
-        return [dict(r) for r in rows]
     cols = [c.name if hasattr(c, "name") else c[0] for c in cur.description]
     return [dict(zip(cols, r)) for r in rows]
 
@@ -139,41 +133,29 @@ def list_refuels(
 
 
 
-@router.get("/refuels/latest")
-def get_latest_refuel(
+@router.get("/refuels/latest-before")
+def get_latest_refuel_before(
     asset: str = Query("BT-01"),
-    until: Optional[datetime] = Query(None),
+    before: datetime = Query(...),
     owner_id: str = Depends(require_owner_id),
 ):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            until_sql = until
-            if until_sql is not None and getattr(until_sql, "tzinfo", None) is not None:
-                until_sql = until_sql.replace(tzinfo=None)
+            before_sql = before
+            if before_sql is not None and getattr(before_sql, "tzinfo", None) is not None:
+                before_sql = before_sql.replace(tzinfo=None)
 
-            if until_sql is None:
-                cur.execute(
-                    """
-                    SELECT id, owner_id, asset_tag, day, ts, horimetro, liters_added, tank_full, level_after_pct, note
-                    FROM "AB_refuels"
-                    WHERE owner_id = %s AND asset_tag = %s
-                    ORDER BY ts DESC
-                    LIMIT 1
-                    """,
-                    (owner_id, asset),
-                )
-            else:
-                cur.execute(
-                    """
-                    SELECT id, owner_id, asset_tag, day, ts, horimetro, liters_added, tank_full, level_after_pct, note
-                    FROM "AB_refuels"
-                    WHERE owner_id = %s AND asset_tag = %s AND ts <= %s
-                    ORDER BY ts DESC
-                    LIMIT 1
-                    """,
-                    (owner_id, asset, until_sql),
-                )
+            cur.execute(
+                """
+                SELECT id, owner_id, asset_tag, day, ts, horimetro, liters_added, tank_full, level_after_pct, note
+                FROM "AB_refuels"
+                WHERE owner_id = %s AND asset_tag = %s AND ts < %s
+                ORDER BY ts DESC
+                LIMIT 1
+                """,
+                (owner_id, asset, before_sql),
+            )
             return _row_to_dict(cur)
     finally:
         conn.close()
