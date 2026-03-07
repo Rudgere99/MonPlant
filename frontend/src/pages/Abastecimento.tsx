@@ -254,6 +254,7 @@ export default function Abastecimento() {
   const [rfHorimetro, setRfHorimetro] = useState<string>("");
   const [rfLitros, setRfLitros] = useState<string>("0");
   const [rfTankFull, setRfTankFull] = useState<boolean>(true);
+  const [rfLevelPct, setRfLevelPct] = useState<string>("");
   const [rfNote, setRfNote] = useState<string>("");
 
   // modal config
