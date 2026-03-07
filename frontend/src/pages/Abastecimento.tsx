@@ -1,6 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Settings } from "lucide-react";
 
+/**
+ * Abastecimento BT-01 (v2)
+ * Fixes:
+ * - Inputs do modal são NUMÉRICOS (evita salvar texto como "tank_capacity_l")
+ * - Após salvar config: chama fetchAll() e fecha modal
+ * - Se backend retornar algo inesperado, mostra alerta com o conteúdo
+ * - Tabela hora: evita NaN:NaN
+ *
+ * OBS: Se mesmo assim os cards ficarem "—", então o backend NÃO está retornando o objeto do asset
+ * no PUT/GET. Nesse caso, precisamos ajustar o abastecimento.py para retornar os campos numéricos.
+ */
+
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 type Asset = {
@@ -16,8 +28,8 @@ type Asset = {
 type Refuel = {
   id: number;
   asset_tag: string;
-  day: string;
-  ts: string;
+  day: string; // YYYY-MM-DD
+  ts: string; // ISO
   horimetro?: number | null;
   liters_added: number;
   tank_full: boolean;
@@ -26,27 +38,12 @@ type Refuel = {
 };
 
 type StopLaunchRow = {
-  period: string;       // ex: "03-04"
-  equipamento: string;  // ex: "BT-01"
+  period: string;
+  equipamento: string;
   minutos: number;
   tipo_parada?: string;
   descricao?: string;
 };
-
-type PlantHourRow = {
-  period: string;
-  ton?: string | number | null;
-  freq?: string | number | null;
-};
-
-type PlantDayPayload = {
-  day: string;
-  obs?: string | null;
-  rows: PlantHourRow[];
-  updated_at?: string | null;
-};
-
-type Farol = "green" | "yellow" | "red" | "gray";
 
 function authHeaders() {
   const t = localStorage.getItem("token") || "";
@@ -68,19 +65,6 @@ function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
 }
 
-
-function parseMaybeNumber(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  let s = String(v).trim();
-  if (!s) return null;
-  s = s.replace(/\s+/g, "");
-  if (s.includes(".") && s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
-  else if (s.includes(",")) s = s.replace(",", ".");
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-}
-
 function formatNum(n: number, digits = 1) {
   if (!Number.isFinite(n)) return "—";
   return n.toFixed(digits);
@@ -93,17 +77,21 @@ function formatHM(hours: number) {
   return `${h}h ${String(m).padStart(2, "0")}m`;
 }
 
-function addHoursToDate(d: Date, h: number) {
-  const ms = d.getTime() + h * 3600_000;
-  const out = new Date(ms);
-  const hh = String(out.getHours()).padStart(2, "0");
-  const mm = String(out.getMinutes()).padStart(2, "0");
+function addHoursToNow(h: number) {
+  const now = new Date();
+  const ms = now.getTime() + h * 3600_000;
+  const d = new Date(ms);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
 }
 
+/** v1 */
 function calcConsumptionLh(maxLh: number, cargaPct: number, fator: number) {
   return maxLh * (cargaPct / 100) * fator;
 }
+
+type Farol = "green" | "yellow" | "red" | "gray";
 
 function farolFromPct(levelPct: number, yellow: number, red: number): Farol {
   if (!Number.isFinite(levelPct)) return "gray";
@@ -140,133 +128,76 @@ function barColor(f: Farol) {
   return "rgba(148,163,184,.55)";
 }
 
-function isAssetLike(x: any): x is Asset {
-  return !!x && typeof x === "object" && typeof x.asset_tag === "string" &&
-    typeof x.tank_capacity_l === "number" && typeof x.consumption_max_lph === "number";
-}
-
-function parsePeriodHour(period: string): number | null {
-  const m = /^(\d{1,2})\s*-\s*(\d{1,2})$/.exec((period || "").trim());
-  if (!m) return null;
-  return Number(m[1]);
-}
-
-function selectedDayStart(day: string) {
-  return new Date(`${day}T00:00:00`);
-}
-
-function selectedDayEnd(day: string) {
-  return new Date(`${day}T23:59:59`);
-}
-
-
-function toLocalIsoNoZ(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
-}
-
-function isSameYmd(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
-}
-
-
-function EquipmentFuelIcon({
-  label,
-  kind,
-  pct,
-  farol,
-}: {
-  label: string;
-  kind: "screen" | "crusher";
-  pct: number;
-  farol: Farol;
-}) {
+function BT01FuelVisual({ pct, farol }: { pct: number; farol: Farol }) {
   const p = clamp(pct, 0, 100);
-  const fill = kind === "crusher" ? "rgba(249,115,22,.92)" : "rgba(251,146,60,.88)";
-  const outline = "rgba(255,255,255,.92)";
-  const bg = "rgba(255,255,255,.03)";
-
-  const shape =
-    kind === "crusher" ? (
-      <>
-        <path
-          d="M26 64 L54 48 L96 48 L113 58 L162 58 L174 70 L174 96 L146 114 L88 114 L78 98 L55 98 L42 88 L26 88 Z"
-          fill="none"
-          stroke={outline}
-          strokeWidth="4"
-          strokeLinejoin="round"
-        />
-        <path d="M54 48 L64 28 L124 28 L120 48" fill="none" stroke={outline} strokeWidth="4" strokeLinejoin="round" />
-        <path d="M72 114 H150" fill="none" stroke={outline} strokeWidth="5" strokeLinecap="round" />
-      </>
-    ) : (
-      <>
-        <rect x="28" y="36" width="144" height="84" rx="10" fill="none" stroke={outline} strokeWidth="4" />
-        <rect x="42" y="52" width="116" height="50" rx="6" fill="none" stroke={outline} strokeWidth="3" />
-        <path d="M78 120 L66 142 H134 L122 120" fill="none" stroke={outline} strokeWidth="4" strokeLinejoin="round" />
-      </>
-    );
-
-  const fillShape =
-    kind === "crusher" ? (
-      <>
-        <path d="M26 64 L54 48 L96 48 L113 58 L162 58 L174 70 L174 96 L146 114 L88 114 L78 98 L55 98 L42 88 L26 88 Z" fill={fill} />
-        <path d="M54 48 L64 28 L124 28 L120 48 Z" fill={fill} />
-        <rect x="72" y="110" width="78" height="8" rx="3" fill={fill} />
-      </>
-    ) : (
-      <>
-        <rect x="28" y="36" width="144" height="84" rx="10" fill={fill} />
-        <rect x="42" y="52" width="116" height="50" rx="6" fill={fill} />
-        <path d="M78 120 L66 142 H134 L122 120 Z" fill={fill} />
-      </>
-    );
-
-  const maskId = `mask-${kind}-${label.replace(/\s+/g, "-")}`;
+  const W = 1920;
+  const H = 1080;
+  const y = (1 - p / 100) * H;
+  const maskId = "bt01MaskSvg";
 
   return (
-    <div
-      style={{
-        border: "1px solid rgba(255,255,255,.10)",
-        borderRadius: 16,
-        background: bg,
-        padding: 12,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <div className="mp-label" style={{ marginBottom: 0 }}>{label}</div>
-        <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,.88)" }}>{Math.round(p)}%</div>
-      </div>
+    <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+      <div
+        style={{
+          width: "min(980px, 100%)",
+          borderRadius: 16,
+          border: "1px solid rgba(255,255,255,.10)",
+          background: "rgba(255,255,255,.02)",
+          overflow: "hidden",
+        }}
+      >
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="auto" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            {/* máscara pela transparência do PNG */}
+            <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width={W} height={H}>
+              <image href="/assets/BT-01.png" x="0" y="0" width={W} height={H} />
+            </mask>
 
-      <svg viewBox="0 0 200 150" width="100%" height="130" preserveAspectRatio="xMidYMid meet">
-        <defs>
-          <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="150">
-            <rect x="0" y="0" width="200" height="150" fill="black" />
-            {shape}
-          </mask>
-        </defs>
+            <linearGradient id="fuelGrad" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0%" stopColor="rgba(249,115,22,.95)" />
+              <stop offset="100%" stopColor="rgba(251,146,60,.70)" />
+            </linearGradient>
+          </defs>
 
-        <g mask={`url(#${maskId})`}>
-          <rect x="0" y={150 - (150 * p) / 100} width="200" height={(150 * p) / 100} fill={fill} />
-        </g>
+          {/* Preenchimento (laranja) recortado pela forma do equipamento */}
+          <g mask={`url(#${maskId})`}>
+            <rect x="0" y={y} width={W} height={H - y} fill="url(#fuelGrad)" />
+          </g>
 
-        {shape}
-      </svg>
+          {/* Desenho por cima */}
+          <image href="/assets/BT-01.png" x="0" y="0" width={W} height={H} />
+        </svg>
 
-      <div className="mp-help" style={{ marginTop: 4 }}>
-        {kind === "crusher" ? "Britador móvel" : "Peneira"}
+        <div style={{ padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="mp-help">Laranja = combustível • Visual acompanha o nível</div>
+          <div
+            style={{
+              fontWeight: 950,
+              color: "rgba(255,255,255,.92)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${farolDotClass(farol)}`} />
+            {Math.round(p)}%
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
+
+function isAssetLike(x: any): x is Asset {
+  return (
+    x &&
+    typeof x === "object" &&
+    typeof x.asset_tag === "string" &&
+    typeof x.tank_capacity_l === "number" &&
+    typeof x.consumption_max_lph === "number"
+  );
+}
 
 export default function Abastecimento() {
   const assetTag = "BT-01";
@@ -275,12 +206,12 @@ export default function Abastecimento() {
   const [asset, setAsset] = useState<Asset | null>(null);
   const [refuels, setRefuels] = useState<Refuel[]>([]);
   const [latestRefuel, setLatestRefuel] = useState<Refuel | null>(null);
-  const [previousRefuel, setPreviousRefuel] = useState<Refuel | null>(null);
   const [stopRows, setStopRows] = useState<StopLaunchRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // taxa média vinda da Produção (freq média das horas produzidas)
-  const [cargaPct, setCargaPct] = useState<number>(0);
+  // v1 (teste)
+  const [turnHours, setTurnHours] = useState<number>(12);
+  const [cargaPct, setCargaPct] = useState<number>(83);
 
   // form abastecimento
   const [rfTs, setRfTs] = useState<string>(() => new Date().toISOString().slice(0, 16));
@@ -312,19 +243,6 @@ export default function Abastecimento() {
       yellow_pct: Number(a.yellow_pct ?? 35),
       red_pct: Number(a.red_pct ?? 20),
     });
-  }
-
-
-  function avgFreqFromPayload(p: PlantDayPayload | null): number {
-    const rows = Array.isArray(p?.rows) ? p!.rows : [];
-    const freqs = rows
-      .map((r) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
-      .filter((r) => (r.ton ?? 0) > 0 && r.freq !== null)
-      .map((r) => Number(r.freq));
-
-    if (freqs.length === 0) return 0;
-    const avg = freqs.reduce((acc, n) => acc + n, 0) / freqs.length;
-    return Number.isFinite(avg) ? Math.round(avg) : 0;
   }
 
   async function fetchAll() {
@@ -361,29 +279,16 @@ export default function Abastecimento() {
       const lastGlobalRefuel =
         latestJson && typeof latestJson === "object" && "ts" in latestJson ? (latestJson as Refuel) : null;
 
-      const basisRefuel = lastDayRefuel ?? lastGlobalRefuel;
-      setLatestRefuel(basisRefuel);
+      setLatestRefuel(lastDayRefuel ?? lastGlobalRefuel);
       setStopRows(sJson?.rows && Array.isArray(sJson.rows) ? sJson.rows : []);
 
-      // se o último abastecimento for parcial, busca a referência anterior global
-      if (basisRefuel?.ts && !basisRefuel.tank_full && basisRefuel.level_after_pct == null) {
-        const beforeIso = encodeURIComponent(String(basisRefuel.ts));
-        const prevRes = await fetch(`${API_BASE}/api/ab/refuels/latest-before?asset=${assetTag}&before=${beforeIso}`, {
-          headers: authHeaders(),
-        });
-        const prevJson = prevRes.ok ? await prevRes.json() : null;
-        setPreviousRefuel(prevJson && typeof prevJson === "object" && "ts" in prevJson ? (prevJson as Refuel) : null);
-      } else {
-        setPreviousRefuel(null);
-      }
-
-      // Taxa média = média do freq nas horas produzidas. Se o dia não tiver produção, usa o dia anterior.
       const avgFreqFromPayload = (payload: PlantDayPayload | null) => {
         const prodRows = Array.isArray(payload?.rows) ? payload!.rows : [];
         const freqs = prodRows
           .map((r) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
           .filter((r) => (r.ton ?? 0) > 0 && r.freq !== null)
           .map((r) => Number(r.freq));
+
         if (freqs.length === 0) return 0;
         const avg = freqs.reduce((acc, n) => acc + n, 0) / freqs.length;
         return Number.isFinite(avg) ? Math.round(avg) : 0;
@@ -411,18 +316,24 @@ export default function Abastecimento() {
 
   useEffect(() => {
     fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day]);
 
   useEffect(() => {
     syncCfgFromAsset(asset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asset?.id]);
 
-  const computed = useMemo(() => {
-    const now = new Date();
-    const selectedStart = selectedDayStart(day);
-    const selectedEnd = selectedDayEnd(day);
-    const calcEnd = isSameYmd(now, selectedStart) ? now : selectedEnd;
+  const minutosParadosBT01 = useMemo(() => {
+    return stopRows
+      .filter((r) => (r.equipamento || "").toUpperCase() === assetTag)
+      .reduce((acc, r) => acc + (Number(r.minutos) || 0), 0);
+  }, [stopRows]);
 
+  const horasParadas = minutosParadosBT01 / 60;
+  const horasRodando = Math.max(0, (Number(turnHours) || 0) - horasParadas);
+
+  const computed = useMemo(() => {
     if (!asset) {
       return {
         consumoLh: NaN,
@@ -436,11 +347,6 @@ export default function Abastecimento() {
         capacity: NaN,
         yellowPct: NaN,
         redPct: NaN,
-        startTs: selectedStart,
-        endTs: calcEnd,
-        stopMinutes: 0,
-        runHours: 0,
-        periodsCount: 0,
       };
     }
 
@@ -451,17 +357,11 @@ export default function Abastecimento() {
     );
 
     const capacidade = Number(asset.tank_capacity_l);
-    const last = latestRefuel;
+    const last = refuels.length ? refuels[refuels.length - 1] : null;
 
     let nivelBaseL = capacidade;
-    let baseInfo = "Base: tanque cheio (sem abastecimento anterior)";
-    let startTs = selectedStart;
-
-    if (last?.ts) {
-      const lastTs = new Date(last.ts);
-      if (!Number.isNaN(lastTs.getTime())) {
-        startTs = lastTs;
-      }
+    let baseInfo = "Base: tanque cheio (assumido)";
+    if (last) {
       if (last.tank_full) {
         nivelBaseL = capacidade;
         baseInfo = "Base: tanque cheio (último abastecimento)";
@@ -474,50 +374,17 @@ export default function Abastecimento() {
       }
     }
 
-    // Considera TODAS as paradas após o último abastecimento.
-    // Para não duplicar o mesmo período quando há vários equipamentos,
-    // usa o MAIOR valor de minutos por período.
-    const byPeriod = new Map<string, number>();
-
-    for (const r of stopRows) {
-      const minutos = Number(r.minutos) || 0;
-      if (minutos <= 0) continue;
-
-      const h = parsePeriodHour(r.period);
-      if (h == null) continue;
-
-      const blockStart = new Date(`${day}T${String(h).padStart(2, "0")}:00:00`);
-      const blockEnd = new Date(blockStart.getTime() + 60 * 60 * 1000);
-
-      const overlapStart = Math.max(blockStart.getTime(), startTs.getTime());
-      const overlapEnd = Math.min(blockEnd.getTime(), calcEnd.getTime());
-
-      if (overlapEnd <= overlapStart) continue;
-
-      const overlapMinutes = (overlapEnd - overlapStart) / 60000;
-      const effectiveMinutes = Math.min(minutos, overlapMinutes);
-
-      const current = byPeriod.get(r.period) ?? 0;
-      byPeriod.set(r.period, Math.max(current, effectiveMinutes));
-    }
-
-    const stopMinutes = Array.from(byPeriod.values()).reduce((acc, v) => acc + v, 0);
-    const periodsCount = byPeriod.size;
-
-    const elapsedMinutes = Math.max(0, (calcEnd.getTime() - startTs.getTime()) / 60000);
-    const runningMinutes = Math.max(0, elapsedMinutes - stopMinutes);
-    const runHours = runningMinutes / 60;
-
-    const consumoDecorridoL = consumoLh * runHours;
+    const consumoDecorridoL = consumoLh * horasRodando;
     const nivelAtualL = Math.max(0, nivelBaseL - consumoDecorridoL);
     const nivelAtualPct = capacidade > 0 ? (nivelAtualL / capacidade) * 100 : NaN;
+
     const autonomiaH = consumoLh > 0 ? nivelAtualL / consumoLh : NaN;
 
     const limiteL = capacidade * (Number(asset.red_pct) / 100);
     const litrosAteLimite = nivelAtualL - limiteL;
     const horasAteLimite = consumoLh > 0 ? litrosAteLimite / consumoLh : NaN;
     const previsaoHora =
-      Number.isFinite(horasAteLimite) && horasAteLimite > 0 ? addHoursToDate(calcEnd, horasAteLimite) : "—";
+      Number.isFinite(horasAteLimite) && horasAteLimite > 0 ? addHoursToNow(horasAteLimite) : "—";
 
     const farol = farolFromPct(nivelAtualPct, Number(asset.yellow_pct), Number(asset.red_pct));
 
@@ -533,13 +400,8 @@ export default function Abastecimento() {
       capacity: capacidade,
       yellowPct: Number(asset.yellow_pct),
       redPct: Number(asset.red_pct),
-      startTs,
-      endTs: calcEnd,
-      stopMinutes,
-      runHours,
-      periodsCount,
     };
-  }, [asset, cargaPct, day, latestRefuel, previousRefuel, stopRows]);
+  }, [asset, cargaPct, horasRodando, refuels]);
 
   async function saveAssetConfig() {
     setCfgSaving(true);
@@ -554,7 +416,7 @@ export default function Abastecimento() {
       };
 
       if (payload.red_pct > payload.yellow_pct) {
-        alert("O limite vermelho deve ser menor ou igual ao amarelo.");
+        alert("O limite VERMELHO deve ser menor ou igual ao AMARELO.");
         return;
       }
 
@@ -564,11 +426,33 @@ export default function Abastecimento() {
         body: JSON.stringify(payload),
       });
 
+      const txt = await res.text();
       if (!res.ok) {
-        alert(`Erro ao salvar config: ${await res.text()}`);
+        alert(`Erro ao salvar config: ${txt}`);
         return;
       }
 
+      // tenta parsear JSON (o backend PRECISA retornar o objeto do asset)
+      let json: any = null;
+      try {
+        json = txt ? JSON.parse(txt) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!isAssetLike(json)) {
+        alert(
+          "Config salvou, mas o backend NÃO retornou o Asset (JSON esperado). " +
+            "Abra o log/Network e verifique o retorno do PUT /api/ab/assets/BT-01.\n\nResposta recebida:\n" +
+            (txt || "(vazio)")
+        );
+        // Mesmo assim, tenta recarregar via GET
+        await fetchAll();
+        setCfgOpen(false);
+        return;
+      }
+
+      setAsset(json);
       await fetchAll();
       setCfgOpen(false);
     } finally {
@@ -577,18 +461,23 @@ export default function Abastecimento() {
   }
 
   async function submitRefuel() {
+    // se não tiver asset ainda, salva config primeiro
     if (!asset) {
       await saveAssetConfig();
     }
+
+    const litros = Number(rfLitros) || 0;
+    const hor = rfHorimetro.trim() ? Number(rfHorimetro) : null;
+    const lvlPct = rfTankFull ? null : rfLevelPct.trim() ? Number(rfLevelPct) : null;
 
     const payload = {
       asset_tag: assetTag,
       day,
       ts: new Date(rfTs).toISOString(),
-      horimetro: rfHorimetro.trim() ? Number(rfHorimetro) : null,
-      liters_added: Number(rfLitros) || 0,
+      horimetro: hor,
+      liters_added: litros,
       tank_full: rfTankFull,
-      level_after_pct: null,
+      level_after_pct: lvlPct,
       note: rfNote.trim() || null,
     };
 
@@ -599,7 +488,8 @@ export default function Abastecimento() {
     });
 
     if (!res.ok) {
-      alert(`Erro ao salvar abastecimento: ${await res.text()}`);
+      const t = await res.text();
+      alert(`Erro ao salvar abastecimento: ${t}`);
       return;
     }
 
@@ -610,22 +500,41 @@ export default function Abastecimento() {
     await fetchAll();
   }
 
+  const bannerText =
+    computed.farol === "green"
+      ? "Nível OK"
+      : computed.farol === "yellow"
+      ? "Atenção: programar abastecimento"
+      : computed.farol === "red"
+      ? "Crítico: abastecer o quanto antes"
+      : "Sem dados de configuração";
+
   const progressPct = clamp(Number.isFinite(computed.nivelAtualPct) ? computed.nivelAtualPct : 0, 0, 100);
 
   return (
     <div className="mp-container" style={{ paddingTop: 12, paddingBottom: 28 }}>
+      {/* Header */}
       <div className="mp-card" style={{ marginBottom: 14 }}>
         <div className="mp-card-b">
           <div style={{ display: "flex", gap: 12, alignItems: "end", justifyContent: "space-between", flexWrap: "wrap" }}>
             <div style={{ minWidth: 260 }}>
-              <div className="mp-page-sub" style={{ marginTop: 0 }}>Operação • Abastecimento</div>
+              <div className="mp-page-sub" style={{ marginTop: 0 }}>
+                Operação • Abastecimento
+              </div>
               <div className="mp-page-title" style={{ fontSize: 26, display: "flex", alignItems: "center", gap: 10 }}>
                 Abastecimento — {assetTag}
-                <button className="mp-btn" onClick={() => setCfgOpen(true)} style={{ padding: "8px 10px", height: 38 }}>
+                <button
+                  className="mp-btn"
+                  title="Configurar tanque/consumo"
+                  onClick={() => setCfgOpen(true)}
+                  style={{ padding: "8px 10px", height: 38 }}
+                >
                   <Settings size={16} />
                 </button>
               </div>
-              <div className="mp-help" style={{ marginTop: 6 }}>{computed.baseInfo}</div>
+              <div className="mp-help" style={{ marginTop: 6 }}>
+                {computed.baseInfo}
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
@@ -635,14 +544,15 @@ export default function Abastecimento() {
               </div>
 
               <div style={{ width: 140 }}>
-                <div className="mp-label">CARGA MÉDIA (%)</div>
+                <div className="mp-label">CARGA (%)</div>
                 <input
                   className="mp-input"
                   type="number"
                   value={cargaPct}
-                  readOnly
-                  disabled
-                  title="Vem automaticamente da taxa média das horas produzidas"
+                  min={0}
+                  max={100}
+                  step={1}
+                  onChange={(e) => setCargaPct(Number(e.target.value))}
                 />
               </div>
 
@@ -654,15 +564,19 @@ export default function Abastecimento() {
         </div>
       </div>
 
+      {/* Banner semáforo */}
       <div
         className="mp-card"
         style={{
           marginBottom: 14,
           borderColor:
-            computed.farol === "green" ? "rgba(16,185,129,.25)" :
-            computed.farol === "yellow" ? "rgba(245,158,11,.25)" :
-            computed.farol === "red" ? "rgba(239,68,68,.25)" :
-            "rgba(255,255,255,.10)",
+            computed.farol === "green"
+              ? "rgba(16,185,129,.25)"
+              : computed.farol === "yellow"
+              ? "rgba(245,158,11,.25)"
+              : computed.farol === "red"
+              ? "rgba(239,68,68,.25)"
+              : "rgba(255,255,255,.10)",
           background: bannerGradient(computed.farol),
         }}
       >
@@ -673,13 +587,15 @@ export default function Abastecimento() {
               <div>
                 <div style={{ fontWeight: 900, fontSize: 16 }}>{farolLabel(computed.farol)}</div>
                 <div className="mp-help" style={{ color: "rgba(255,255,255,.80)" }}>
-                  Consumo considera tempo de relógio desde o último abastecimento, abatendo paradas {'>'} 0 min.
+                  {bannerText}
                 </div>
               </div>
             </div>
 
             <div style={{ textAlign: "right" }}>
-              <div className="mp-label" style={{ marginBottom: 6 }}>SEMÁFORO</div>
+              <div className="mp-label" style={{ marginBottom: 6 }}>
+                SEMÁFORO
+              </div>
               <span className="mp-chip" style={{ background: "rgba(255,255,255,.04)", borderColor: "rgba(255,255,255,.10)" }}>
                 <span className={`h-2.5 w-2.5 rounded-full ${farolDotClass(computed.farol)}`} />
                 {farolLabel(computed.farol).toUpperCase()}
@@ -689,6 +605,7 @@ export default function Abastecimento() {
         </div>
       </div>
 
+      {/* Barra tanque grande */}
       <div className="mp-card" style={{ marginBottom: 14 }}>
         <div className="mp-card-b">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -701,12 +618,74 @@ export default function Abastecimento() {
           </div>
 
           <div className="mp-help" style={{ marginTop: 8 }}>
-            Nível atual: <b style={{ color: "rgba(255,255,255,.92)" }}>{formatNum(computed.nivelAtualL, 1)} L</b>
-            {asset ? <span> • Capacidade: <b style={{ color: "rgba(255,255,255,.92)" }}>{formatNum(computed.capacity, 0)} L</b></span> : null}
+            Nível atual: <b style={{ color: "rgba(255,255,255,.92)" }}>{formatNum(computed.nivelAtualL, 1)} L</b>{" "}
+            {asset ? (
+              <span>
+                • Capacidade: <b style={{ color: "rgba(255,255,255,.92)" }}>{formatNum(computed.capacity, 0)} L</b>
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
 
+
+      {/* VISUAL DO TANQUE (imagem com preenchimento laranja) */}
+      <div className="mp-card" style={{ marginBottom: 14 }}>
+        <div className="mp-card-h">
+          <div style={{ fontWeight: 950 }}>Visual do tanque</div>
+          <div className="mp-help">Preenchimento laranja acompanha o nível (%)</div>
+        </div>
+        <div className="mp-card-b">
+          <BT01FuelVisual pct={progressPct} farol={computed.farol} />
+          <div className="mp-help" style={{ marginTop: 10 }}>
+            * Usa máscara SVG com o PNG em <b>public/assets/BT-01.png</b>.
+          </div>
+        </div>
+      </div>
+
+            {/* Camada do desenho (por cima) */}
+            <img
+              src="/assets/BT-01.png"
+              alt="BT-01"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                opacity: 0.95,
+                // destaca traços brancos/pretos sem estourar
+                filter: "contrast(1.05)",
+              }}
+            />
+
+            {/* Badge do % */}
+            <div
+              style={{
+                position: "absolute",
+                right: 12,
+                top: 12,
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: "rgba(0,0,0,.35)",
+                border: "1px solid rgba(255,255,255,.10)",
+                fontWeight: 950,
+                color: "rgba(255,255,255,.92)",
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              <span className={`h-2.5 w-2.5 rounded-full ${farolDotClass(computed.farol)}`} />
+              {formatNum(progressPct, 0)}%
+            </div>
+          </div>
+
+          <div className="mp-help" style={{ marginTop: 10 }}>
+            Se o laranja “pintar” a imagem inteira, o PNG está sem transparência. Exporte o BT-01.png com fundo transparente.
+          </div>
+        </div>
+      </div>
+
+      {/* Grid principal */}
       <div className="mp-main-grid">
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
           <div className="mp-card-b">
@@ -715,17 +694,21 @@ export default function Abastecimento() {
               {asset ? `${formatNum(computed.capacity, 0)} L` : "—"}
             </div>
             <div className="mp-help" style={{ marginTop: 6 }}>
-              Limites: amarelo {asset ? `${formatNum(computed.yellowPct, 0)}%` : "—"} • vermelho {asset ? `${formatNum(computed.redPct, 0)}%` : "—"}
+              Limites: amarelo {asset ? `${formatNum(computed.yellowPct, 0)}%` : "—"} • vermelho{" "}
+              {asset ? `${formatNum(computed.redPct, 0)}%` : "—"}
             </div>
           </div>
         </div>
 
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
           <div className="mp-card-b">
-            <div className="mp-label">CONSUMO MÉDIO (L/H)</div>
-            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>{formatNum(computed.consumoLh, 2)}</div>
+            <div className="mp-label">CONSUMO (L/H)</div>
+            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>
+              {formatNum(computed.consumoLh, 2)}
+            </div>
             <div className="mp-help" style={{ marginTop: 6 }}>
-              Max {asset ? formatNum(Number(asset.consumption_max_lph), 2) : "—"} • fator {asset ? formatNum(Number(asset.consumption_factor), 3) : "—"}
+              Max {asset ? formatNum(Number(asset.consumption_max_lph), 2) : "—"} • fator{" "}
+              {asset ? formatNum(Number(asset.consumption_factor), 3) : "—"}
             </div>
           </div>
         </div>
@@ -733,32 +716,52 @@ export default function Abastecimento() {
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
           <div className="mp-card-b">
             <div className="mp-label">PRÓXIMO ABASTECIMENTO</div>
-            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>{computed.previsaoHora}</div>
-            <div className="mp-help" style={{ marginTop: 6 }}>Autonomia: {formatHM(computed.autonomiaH)}</div>
-          </div>
-        </div>
-
-        <div className="mp-card" style={{ gridColumn: "span 4" }}>
-          <div className="mp-card-b">
-            <div className="mp-label">CONSUMO DECORRIDO</div>
-            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>{formatNum(computed.consumoDecorridoL, 1)} L</div>
+            <div
+              className="big-number"
+              style={{
+                marginTop: 8,
+                fontWeight: 950,
+                color:
+                  computed.farol === "red"
+                    ? "rgba(248,113,113,.95)"
+                    : computed.farol === "yellow"
+                    ? "rgba(251,191,36,.95)"
+                    : "rgba(255,255,255,.92)",
+              }}
+            >
+              {computed.previsaoHora}
+            </div>
             <div className="mp-help" style={{ marginTop: 6 }}>
-              Janela: {computed.startTs.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} → {computed.endTs.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              Autonomia: {formatHM(computed.autonomiaH)}
             </div>
           </div>
         </div>
 
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
           <div className="mp-card-b">
-            <div className="mp-label">TEMPO OPERANDO</div>
+            <div className="mp-label">CONSUMO DECORRIDO</div>
+            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>
+              {formatNum(computed.consumoDecorridoL, 1)} L
+            </div>
+            <div className="mp-help" style={{ marginTop: 6 }}>
+              Rodando: {formatHM(horasRodando)}
+            </div>
+          </div>
+        </div>
+
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-b">
+            <div className="mp-label">TEMPO (TURNO)</div>
             <div style={{ display: "flex", alignItems: "end", justifyContent: "space-between", gap: 10, marginTop: 8 }}>
               <div>
-                <div className="big-number" style={{ fontWeight: 950 }}>{formatHM(computed.runHours)}</div>
+                <div className="big-number" style={{ fontWeight: 950 }}>
+                  {formatHM(horasRodando)}
+                </div>
                 <div className="mp-help">Rodando</div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontWeight: 950, fontSize: 20, color: "rgba(255,255,255,.90)" }}>{Math.round(computed.stopMinutes)} min</div>
-                <div className="mp-help">Paradas abatidas</div>
+                <div style={{ fontWeight: 950, fontSize: 20, color: "rgba(255,255,255,.90)" }}>{formatHM(horasParadas)}</div>
+                <div className="mp-help">{Math.round(minutosParadosBT01)} min parado</div>
               </div>
             </div>
           </div>
@@ -767,52 +770,90 @@ export default function Abastecimento() {
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
           <div className="mp-card-b">
             <div className="mp-label">NÍVEL ATUAL</div>
-            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>{formatNum(computed.nivelAtualL, 1)} L</div>
+            <div className="big-number" style={{ marginTop: 8, fontWeight: 950 }}>
+              {formatNum(computed.nivelAtualL, 1)} L
+            </div>
             <div className="mp-help" style={{ marginTop: 6 }}>
-              {formatNum(progressPct, 0)}% • Farol: <b style={{ color: "rgba(255,255,255,.92)" }}>{farolLabel(computed.farol)}</b>
+              {formatNum(progressPct, 0)}% • Farol:{" "}
+              <b style={{ color: "rgba(255,255,255,.92)" }}>{farolLabel(computed.farol)}</b>
             </div>
           </div>
         </div>
 
-        
+        {/* Parâmetros */}
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-h">
+            <div style={{ fontWeight: 950 }}>Parâmetros do turno</div>
+            <span className="mp-muted">v1 (teste)</span>
+          </div>
+          <div className="mp-card-b">
+            <div className="mp-form-grid">
+              <div>
+                <div className="mp-label">HORAS DO TURNO</div>
+                <input
+                  className="mp-input"
+                  type="number"
+                  value={turnHours}
+                  min={1}
+                  max={24}
+                  step={1}
+                  onChange={(e) => setTurnHours(Number(e.target.value))}
+                />
+              </div>
 
+              <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,.10)", background: "rgba(255,255,255,.03)" }}>
+                <div className="mp-label" style={{ marginBottom: 4 }}>
+                  PARADAS BT-01 NO DIA
+                </div>
+                <div style={{ fontWeight: 950, fontSize: 18 }}>{Math.round(minutosParadosBT01)} min</div>
+                <div className="mp-help" style={{ marginTop: 6 }}>
+                  Na v2: conectar ShiftBar (07–19 / 19–07).
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Registrar abastecimento */}
         <div className="mp-card" style={{ gridColumn: "span 8" }}>
           <div className="mp-card-h">
             <div>
               <div style={{ fontWeight: 950 }}>Registrar abastecimento</div>
               <div className="mp-help" style={{ marginTop: 2 }}>
-                Ao abastecer, a base do cálculo reinicia a partir deste horário.
+                {asset ? "Config OK" : "Sem config — clique na engrenagem para definir capacidade/consumo."}
               </div>
             </div>
-            <button className="mp-btn mp-btn-primary" onClick={submitRefuel}>Salvar</button>
+
+            <button className="mp-btn mp-btn-primary" onClick={submitRefuel}>
+              Salvar
+            </button>
           </div>
 
           <div className="mp-card-b">
-            <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 10 }}>
-              <div style={{ gridColumn: "span 5" }}>
+            <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
+              <div style={{ gridColumn: "span 2" }}>
                 <div className="mp-label">DATA/HORA</div>
                 <input className="mp-input" type="datetime-local" value={rfTs} onChange={(e) => setRfTs(e.target.value)} />
               </div>
 
-              <div style={{ gridColumn: "span 3" }}>
+              <div>
                 <div className="mp-label">HORÍMETRO</div>
                 <input className="mp-input" value={rfHorimetro} onChange={(e) => setRfHorimetro(e.target.value)} placeholder="ex: 1234.5" />
               </div>
 
-              <div style={{ gridColumn: "span 4" }}>
+              <div>
                 <div className="mp-label">LITROS</div>
                 <input className="mp-input" value={rfLitros} onChange={(e) => setRfLitros(e.target.value)} placeholder="ex: 40" />
               </div>
 
-              <div style={{ gridColumn: "span 3", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ gridColumn: "span 2", display: "flex", alignItems: "center", gap: 10 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 850 }}>
                   <input type="checkbox" checked={rfTankFull} onChange={(e) => setRfTankFull(e.target.checked)} />
                   Tanque cheio
                 </label>
-
               </div>
 
-              <div style={{ gridColumn: "span 9" }}>
+              <div style={{ gridColumn: "span 2" }}>
                 <div className="mp-label">OBSERVAÇÃO</div>
                 <input className="mp-input" value={rfNote} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
               </div>
@@ -820,11 +861,11 @@ export default function Abastecimento() {
           </div>
         </div>
 
-      
+        {/* Tabela */}
         <div className="mp-card" style={{ gridColumn: "span 12" }}>
           <div className="mp-card-h">
             <div style={{ fontWeight: 950 }}>Abastecimentos do dia</div>
-            <div className="mp-help">Último abastecimento vira o marco inicial do cálculo.</div>
+            <div className="mp-help">* Consumo decorrido usa paradas somadas (stops-launch).</div>
           </div>
 
           <div className="mp-card-b" style={{ overflowX: "auto" }}>
@@ -861,7 +902,11 @@ export default function Abastecimento() {
 
                   return (
                     <tr key={r.id} style={{ borderBottom: "1px solid rgba(255,255,255,.06)" }}>
-                      <td style={{ padding: "10px 8px" }}><span style={{ fontWeight: 950 }}>{hh}:{mm}</span></td>
+                      <td style={{ padding: "10px 8px" }}>
+                        <span style={{ fontWeight: 950 }}>
+                          {hh}:{mm}
+                        </span>
+                      </td>
                       <td style={{ padding: "10px 8px" }}>{r.horimetro ?? "—"}</td>
                       <td style={{ padding: "10px 8px" }}>{formatNum(Number(r.liters_added), 1)}</td>
                       <td style={{ padding: "10px 8px" }}>{r.level_after_pct ?? (r.tank_full ? 100 : "—")}</td>
@@ -872,10 +917,15 @@ export default function Abastecimento() {
                 })}
               </tbody>
             </table>
+
+            <div className="mp-help" style={{ marginTop: 10 }}>
+              Dica: clique na <b>engrenagem</b> para configurar capacidade/consumo.
+            </div>
           </div>
         </div>
       </div>
 
+      {/* MODAL CONFIG */}
       {cfgOpen && (
         <div
           onClick={() => (cfgSaving ? null : setCfgOpen(false))}
@@ -890,52 +940,90 @@ export default function Abastecimento() {
             zIndex: 60,
           }}
         >
-          <div className="mp-card" onClick={(e) => e.stopPropagation()} style={{ width: "min(820px, 100%)", borderColor: "rgba(255,255,255,.14)" }}>
+          <div
+            className="mp-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "min(820px, 100%)", borderColor: "rgba(255,255,255,.14)" }}
+          >
             <div className="mp-card-h">
               <div style={{ fontWeight: 950, display: "flex", alignItems: "center", gap: 10 }}>
                 <Settings size={16} />
                 Configurar BT-01
               </div>
-              <button className="mp-btn" onClick={() => (cfgSaving ? null : setCfgOpen(false))}>Fechar</button>
+              <button className="mp-btn" onClick={() => (cfgSaving ? null : setCfgOpen(false))}>
+                Fechar
+              </button>
             </div>
 
             <div className="mp-card-b">
               <div className="mp-help" style={{ marginBottom: 12 }}>
-                Defina capacidade e consumo. O cálculo desce pelo relógio e abate paradas {'>'} 0 min.
+                Defina <b>capacidade</b> e <b>consumo</b>. (Vermelho ≤ Amarelo)
               </div>
 
               <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
                 <div>
                   <div className="mp-label">CAPACIDADE (L)</div>
-                  <input className="mp-input" type="number" value={cfg.tank_capacity_l} onChange={(e) => setCfg((s) => ({ ...s, tank_capacity_l: Number(e.target.value) }))} />
+                  <input
+                    className="mp-input"
+                    type="number"
+                    value={cfg.tank_capacity_l}
+                    onChange={(e) => setCfg((s) => ({ ...s, tank_capacity_l: Number(e.target.value) }))}
+                  />
                 </div>
 
                 <div>
                   <div className="mp-label">CONSUMO MÁX (L/H)</div>
-                  <input className="mp-input" type="number" value={cfg.consumption_max_lph} onChange={(e) => setCfg((s) => ({ ...s, consumption_max_lph: Number(e.target.value) }))} />
+                  <input
+                    className="mp-input"
+                    type="number"
+                    value={cfg.consumption_max_lph}
+                    onChange={(e) => setCfg((s) => ({ ...s, consumption_max_lph: Number(e.target.value) }))}
+                  />
                 </div>
 
                 <div>
                   <div className="mp-label">FATOR</div>
-                  <input className="mp-input" type="number" step="0.01" value={cfg.consumption_factor} onChange={(e) => setCfg((s) => ({ ...s, consumption_factor: Number(e.target.value) }))} />
+                  <input
+                    className="mp-input"
+                    type="number"
+                    step="0.01"
+                    value={cfg.consumption_factor}
+                    onChange={(e) => setCfg((s) => ({ ...s, consumption_factor: Number(e.target.value) }))}
+                  />
                 </div>
 
                 <div>
                   <div className="mp-label">AMARELO (%)</div>
-                  <input className="mp-input" type="number" value={cfg.yellow_pct} onChange={(e) => setCfg((s) => ({ ...s, yellow_pct: Number(e.target.value) }))} />
+                  <input
+                    className="mp-input"
+                    type="number"
+                    value={cfg.yellow_pct}
+                    onChange={(e) => setCfg((s) => ({ ...s, yellow_pct: Number(e.target.value) }))}
+                  />
                 </div>
 
                 <div>
                   <div className="mp-label">VERMELHO (%)</div>
-                  <input className="mp-input" type="number" value={cfg.red_pct} onChange={(e) => setCfg((s) => ({ ...s, red_pct: Number(e.target.value) }))} />
+                  <input
+                    className="mp-input"
+                    type="number"
+                    value={cfg.red_pct}
+                    onChange={(e) => setCfg((s) => ({ ...s, red_pct: Number(e.target.value) }))}
+                  />
                 </div>
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-                <button className="mp-btn" onClick={() => syncCfgFromAsset(asset)} disabled={cfgSaving}>Recarregar</button>
+                <button className="mp-btn" onClick={() => syncCfgFromAsset(asset)} disabled={cfgSaving}>
+                  Recarregar
+                </button>
                 <button className="mp-btn mp-btn-primary" onClick={saveAssetConfig} disabled={cfgSaving}>
                   {cfgSaving ? "Salvando..." : "Salvar configurações"}
                 </button>
+              </div>
+
+              <div className="mp-help" style={{ marginTop: 12 }}>
+                Se salvar e os cards não mudarem, o backend está retornando errado no PUT/GET do asset.
               </div>
             </div>
           </div>
@@ -944,3 +1032,14 @@ export default function Abastecimento() {
     </div>
   );
 }
+function toLocalIsoNoZ(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
+}
+
+
