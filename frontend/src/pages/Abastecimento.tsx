@@ -679,47 +679,7 @@ export default function Abastecimento() {
         </div>
       </div>
 
-            {/* Camada do desenho (por cima) */}
-            <img
-              src="/assets/BT-01.png"
-              alt="BT-01"
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",
-                opacity: 0.95,
-                // destaca traços brancos/pretos sem estourar
-                filter: "contrast(1.05)",
-              }}
-            />
 
-            {/* Badge do % */}
-            <div
-              style={{
-                position: "absolute",
-                right: 12,
-                top: 12,
-                padding: "6px 10px",
-                borderRadius: 999,
-                background: "rgba(0,0,0,.35)",
-                border: "1px solid rgba(255,255,255,.10)",
-                fontWeight: 950,
-                color: "rgba(255,255,255,.92)",
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-              }}
-            >
-              <span className={`h-2.5 w-2.5 rounded-full ${farolDotClass(computed.farol)}`} />
-              {formatNum(progressPct, 0)}%
-            </div>
-          </div>
-
-          <div className="mp-help" style={{ marginTop: 10 }}>
-            Se o laranja “pintar” a imagem inteira, o PNG está sem transparência. Exporte o BT-01.png com fundo transparente.
-          </div>
-        </div>
-      </div>
 
       {/* Grid principal */}
       <div className="mp-main-grid">
