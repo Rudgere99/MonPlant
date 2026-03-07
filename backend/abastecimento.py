@@ -149,6 +149,43 @@ def list_refuels(
         conn.close()
 
 
+
+
+@router.get("/refuels/latest")
+def get_latest_refuel(
+    asset: str = Query("BT-01"),
+    until: Optional[datetime] = Query(None),
+    owner_id: str = Depends(require_owner_id),
+):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if until is None:
+                cur.execute(
+                    '''
+                    SELECT id, owner_id, asset_tag, day, ts, horimetro, liters_added, tank_full, level_after_pct, note
+                    FROM "AB_refuels"
+                    WHERE owner_id = %s AND asset_tag = %s
+                    ORDER BY ts DESC
+                    LIMIT 1
+                    ''',
+                    (owner_id, asset),
+                )
+            else:
+                cur.execute(
+                    '''
+                    SELECT id, owner_id, asset_tag, day, ts, horimetro, liters_added, tank_full, level_after_pct, note
+                    FROM "AB_refuels"
+                    WHERE owner_id = %s AND asset_tag = %s AND ts <= %s
+                    ORDER BY ts DESC
+                    LIMIT 1
+                    ''',
+                    (owner_id, asset, until),
+                )
+            return _row_to_dict(cur)
+    finally:
+        conn.close()
+
 @router.post("/refuels")
 def create_refuel(payload: RefuelCreate, owner_id: str = Depends(require_owner_id)):
     conn = get_conn()
