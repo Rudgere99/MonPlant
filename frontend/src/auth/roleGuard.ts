@@ -114,6 +114,7 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/exportar",
       "/historico",
       "/ufdf",
+      "/abastecimento",
     ]);
   }
 
