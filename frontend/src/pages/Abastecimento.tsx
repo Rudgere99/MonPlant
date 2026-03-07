@@ -61,6 +61,15 @@ function todayYMD() {
   return `${y}-${m}-${day}`;
 }
 
+function prevYMD(day: string) {
+  const d = new Date(`${day}T12:00:00`);
+  d.setDate(d.getDate() - 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
 }
@@ -214,6 +223,8 @@ export default function Abastecimento() {
   const [asset, setAsset] = useState<Asset | null>(null);
   const [refuels, setRefuels] = useState<Refuel[]>([]);
   const [stopRows, setStopRows] = useState<StopLaunchRow[]>([]);
+  const [prevDayRefuels, setPrevDayRefuels] = useState<Refuel[]>([]);
+  const [prevDayStops, setPrevDayStops] = useState<StopLaunchRow[]>([]);
   const [loading, setLoading] = useState(false);
 
   // v1 (teste)
@@ -255,21 +266,30 @@ export default function Abastecimento() {
   async function fetchAll() {
     setLoading(true);
     try {
-      const [aRes, rRes, sRes] = await Promise.all([
+      const prevDay = prevYMD(day);
+
+      const [aRes, rRes, sRes, prRes, psRes] = await Promise.all([
         fetch(`${API_BASE}/api/ab/assets/${assetTag}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/ab/refuels?day=${day}&asset=${assetTag}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/stops-launch?day=${day}`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/ab/refuels?day=${prevDay}&asset=${assetTag}`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/stops-launch?day=${prevDay}`, { headers: authHeaders() }),
       ]);
 
       const aJson = aRes.ok ? await aRes.json() : null;
       const rJson = rRes.ok ? await rRes.json() : [];
       const sJson = sRes.ok ? await sRes.json() : null;
+      const prJson = prRes.ok ? await prRes.json() : [];
+      const psJson = psRes.ok ? await psRes.json() : null;
 
       setAsset(isAssetLike(aJson) ? aJson : null);
       setRefuels(Array.isArray(rJson) ? rJson : []);
+      setPrevDayRefuels(Array.isArray(prJson) ? prJson : []);
 
       const rows: StopLaunchRow[] = sJson?.rows && Array.isArray(sJson.rows) ? sJson.rows : [];
+      const prevRows: StopLaunchRow[] = psJson?.rows && Array.isArray(psJson.rows) ? psJson.rows : [];
       setStopRows(rows);
+      setPrevDayStops(prevRows);
     } finally {
       setLoading(false);
     }
@@ -331,11 +351,32 @@ export default function Abastecimento() {
 
     const capacidade = Number(asset.tank_capacity_l);
     const last = refuels.length ? refuels[refuels.length - 1] : null;
-
+    const dayStartTs = new Date(`${day}T00:00:00`);
     let nivelBaseL = capacidade;
     let baseInfo = "Base: tanque cheio (assumido)";
-    let startTs = new Date(`${day}T00:00:00`);
+    let startTs = dayStartTs;
     const endTs = isToday ? new Date() : new Date(`${day}T23:59:59`);
+
+    const calcStopMinutes = (rows: StopLaunchRow[], refDay: string, fromTs: Date, toTs: Date) => {
+      return rows.reduce((acc, r) => {
+        const minutos = Number(r.minutos) || 0;
+        if (minutos <= 0) return acc;
+
+        const h = parsePeriodHour(r.period);
+        if (h == null) return acc;
+
+        const blockStart = new Date(`${refDay}T${String(h).padStart(2, "0")}:00:00`);
+        const blockEnd = new Date(blockStart.getTime() + 60 * 60 * 1000);
+
+        const overlapStart = Math.max(blockStart.getTime(), fromTs.getTime());
+        const overlapEnd = Math.min(blockEnd.getTime(), toTs.getTime());
+
+        if (overlapEnd <= overlapStart) return acc;
+
+        const overlapMinutes = (overlapEnd - overlapStart) / 60000;
+        return acc + Math.min(minutos, overlapMinutes);
+      }, 0);
+    };
 
     if (last?.ts) {
       const lastTs = new Date(last.ts);
@@ -353,9 +394,38 @@ export default function Abastecimento() {
         nivelBaseL = capacidade;
         baseInfo = "Base: tanque cheio (último abastecimento sem %)";
       }
+    } else if (prevDayRefuels.length > 0) {
+      const prevDay = prevYMD(day);
+      const prevLast = prevDayRefuels[prevDayRefuels.length - 1];
+      const prevEndTs = new Date(`${prevDay}T23:59:59`);
+
+      let prevBaseL = capacidade;
+      let prevStartTs = new Date(`${prevDay}T00:00:00`);
+
+      if (prevLast?.ts) {
+        const prevLastTs = new Date(prevLast.ts);
+        if (!Number.isNaN(prevLastTs.getTime())) {
+          prevStartTs = prevLastTs;
+        }
+
+        if (prevLast.tank_full) {
+          prevBaseL = capacidade;
+        } else if (prevLast.level_after_pct != null) {
+          prevBaseL = capacidade * (Number(prevLast.level_after_pct) / 100);
+        }
+      }
+
+      const prevStopMinutes = calcStopMinutes(prevDayStops, prevDay, prevStartTs, prevEndTs);
+      const prevElapsedMinutes = Math.max(0, (prevEndTs.getTime() - prevStartTs.getTime()) / 60000);
+      const prevRunningMinutes = Math.max(0, prevElapsedMinutes - prevStopMinutes);
+      const prevConsumptionL = consumoLh * (prevRunningMinutes / 60);
+
+      nivelBaseL = Math.max(0, prevBaseL - prevConsumptionL);
+      baseInfo = `Base: fechamento de ${prevDay} (${formatNum(nivelBaseL, 1)} L)`;
+      startTs = dayStartTs;
     }
 
-    const stopMinutesAfterLast = stopRows.reduce((acc, r) => {
+    const stopMinutesAfterLast = calcStopMinutes(stopRows, day, startTs, endTs);
       const minutos = Number(r.minutos) || 0;
       if (minutos <= 0) return acc;
 
@@ -409,7 +479,7 @@ export default function Abastecimento() {
       yellowPct: Number(asset.yellow_pct),
       redPct: Number(asset.red_pct),
     };
-  }, [asset, cargaPct, refuels, stopRows, day, isToday]);
+  }, [asset, cargaPct, refuels, stopRows, day, isToday, prevDayRefuels, prevDayStops]);
 
   async function saveAssetConfig() {
     setCfgSaving(true);
