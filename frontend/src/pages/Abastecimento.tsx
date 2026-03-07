@@ -715,6 +715,7 @@ export default function Abastecimento() {
                   Tanque cheio
                 </label>
 
+              </div>
               <div style={{ gridColumn: "span 2" }}>
                 <div className="mp-label">OBSERVAÇÃO</div>
                 <input className="mp-input" value={rfNote} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
