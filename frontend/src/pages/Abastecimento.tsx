@@ -289,6 +289,7 @@ export default function Abastecimento() {
     nowClock.getFullYear() === selectedDate.getFullYear() &&
     nowClock.getMonth() === selectedDate.getMonth() &&
     nowClock.getDate() === selectedDate.getDate();
+  const isHistoricalDay = !isToday;
 
   const minutosDecorridosDoDia = isToday
     ? nowClock.getHours() * 60 + nowClock.getMinutes()
@@ -426,6 +427,7 @@ export default function Abastecimento() {
   }
 
   async function submitRefuel() {
+    if (isHistoricalDay) return;
     // se não tiver asset ainda, salva config primeiro
     if (!asset) {
       await saveAssetConfig();
@@ -503,7 +505,7 @@ export default function Abastecimento() {
                 <button
                   className="mp-btn"
                   title="Configurar tanque/consumo"
-                  onClick={() => setCfgOpen(true)}
+                  onClick={() => (!isHistoricalDay ? setCfgOpen(true) : null)}
                   style={{ padding: "8px 10px", height: 38 }}
                 >
                   <Settings size={16} />
@@ -512,6 +514,11 @@ export default function Abastecimento() {
               <div className="mp-help" style={{ marginTop: 6 }}>
                 {computed.baseInfo}
               </div>
+              {isHistoricalDay && (
+                <div className="mp-help" style={{ marginTop: 6, color: "rgba(255,255,255,.72)" }}>
+                  Dia fechado — visualização histórica. Sem edição e sem recálculo após a virada do dia.
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
@@ -707,11 +714,11 @@ export default function Abastecimento() {
             <div>
               <div style={{ fontWeight: 950 }}>Registrar abastecimento</div>
               <div className="mp-help" style={{ marginTop: 2 }}>
-                {asset ? "Config OK" : "Sem config — clique na engrenagem para definir capacidade/consumo."}
+                {isHistoricalDay ? "Dia fechado — edição bloqueada." : asset ? "Config OK" : "Sem config — clique na engrenagem para definir capacidade/consumo."}
               </div>
             </div>
 
-            <button className="mp-btn mp-btn-primary" onClick={submitRefuel}>
+            <button className="mp-btn mp-btn-primary" onClick={submitRefuel} disabled={isHistoricalDay} style={{ opacity: isHistoricalDay ? 0.55 : 1, cursor: isHistoricalDay ? "not-allowed" : "pointer" }}>
               Salvar
             </button>
           </div>
@@ -720,29 +727,29 @@ export default function Abastecimento() {
             <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
               <div style={{ gridColumn: "span 2" }}>
                 <div className="mp-label">DATA/HORA</div>
-                <input className="mp-input" type="datetime-local" value={rfTs} onChange={(e) => setRfTs(e.target.value)} />
+                <input className="mp-input" type="datetime-local" value={rfTs} disabled={isHistoricalDay} onChange={(e) => setRfTs(e.target.value)} />
               </div>
 
               <div>
                 <div className="mp-label">HORÍMETRO</div>
-                <input className="mp-input" value={rfHorimetro} onChange={(e) => setRfHorimetro(e.target.value)} placeholder="ex: 1234.5" />
+                <input className="mp-input" value={rfHorimetro} disabled={isHistoricalDay} onChange={(e) => setRfHorimetro(e.target.value)} placeholder="ex: 1234.5" />
               </div>
 
               <div>
                 <div className="mp-label">LITROS</div>
-                <input className="mp-input" value={rfLitros} onChange={(e) => setRfLitros(e.target.value)} placeholder="ex: 40" />
+                <input className="mp-input" value={rfLitros} disabled={isHistoricalDay} onChange={(e) => setRfLitros(e.target.value)} placeholder="ex: 40" />
               </div>
 
               <div style={{ gridColumn: "span 2", display: "flex", alignItems: "center", gap: 10 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 850 }}>
-                  <input type="checkbox" checked={rfTankFull} onChange={(e) => setRfTankFull(e.target.checked)} />
+                  <input type="checkbox" checked={rfTankFull} disabled={isHistoricalDay} onChange={(e) => setRfTankFull(e.target.checked)} />
                   Tanque cheio
                 </label>
 
               </div>
               <div style={{ gridColumn: "span 2" }}>
                 <div className="mp-label">OBSERVAÇÃO</div>
-                <input className="mp-input" value={rfNote} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
+                <input className="mp-input" value={rfNote} disabled={isHistoricalDay} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
               </div>
             </div>
           </div>
