@@ -283,8 +283,20 @@ export default function Abastecimento() {
       .reduce((acc, r) => acc + (Number(r.minutos) || 0), 0);
   }, [stopRows]);
 
+  const nowClock = new Date();
+  const selectedDate = new Date(`${day}T00:00:00`);
+  const isToday =
+    nowClock.getFullYear() === selectedDate.getFullYear() &&
+    nowClock.getMonth() === selectedDate.getMonth() &&
+    nowClock.getDate() === selectedDate.getDate();
+
+  const minutosDecorridosDoDia = isToday
+    ? nowClock.getHours() * 60 + nowClock.getMinutes()
+    : 24 * 60;
+
+  const minutosRodando = Math.max(0, minutosDecorridosDoDia - minutosParadosBT01);
   const horasParadas = minutosParadosBT01 / 60;
-  const horasRodando = Math.max(0, (Number(turnHours) || 0) - horasParadas);
+  const horasRodando = minutosRodando / 60;
 
   const computed = useMemo(() => {
     if (!asset) {
