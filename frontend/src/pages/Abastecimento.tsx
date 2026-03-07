@@ -217,7 +217,6 @@ export default function Abastecimento() {
   const [rfHorimetro, setRfHorimetro] = useState<string>("");
   const [rfLitros, setRfLitros] = useState<string>("0");
   const [rfTankFull, setRfTankFull] = useState<boolean>(true);
-  const [rfLevelPct, setRfLevelPct] = useState<string>("100");
   const [rfNote, setRfNote] = useState<string>("");
 
   // modal config
@@ -422,7 +421,7 @@ export default function Abastecimento() {
 
     const litros = Number(rfLitros) || 0;
     const hor = rfHorimetro.trim() ? Number(rfHorimetro) : null;
-    const lvlPct = rfTankFull ? null : rfLevelPct.trim() ? Number(rfLevelPct) : null;
+    const lvlPct = rfTankFull ? 100 : null;
 
     const payload = {
       asset_tag: assetTag,
@@ -450,7 +449,6 @@ export default function Abastecimento() {
     setRfLitros("0");
     setRfHorimetro("");
     setRfTankFull(true);
-    setRfLevelPct("100");
     setRfNote("");
     await fetchAll();
   }
