@@ -421,7 +421,19 @@ export default function Abastecimento() {
 
     const litros = Number(rfLitros) || 0;
     const hor = rfHorimetro.trim() ? Number(rfHorimetro) : null;
-    const lvlPct = rfTankFull ? 100 : null;
+
+    // Regra correta:
+    // - tanque cheio => 100%
+    // - parcial => nível atual + litros abastecidos (limitado à capacidade)
+    const lvlPct =
+      rfTankFull
+        ? 100
+        : asset && Number.isFinite(computed.nivelAtualL) && Number(asset.tank_capacity_l) > 0
+        ? Math.min(
+            100,
+            ((Math.max(0, Number(computed.nivelAtualL)) + litros) / Number(asset.tank_capacity_l)) * 100
+          )
+        : null;
 
     const payload = {
       asset_tag: assetTag,
