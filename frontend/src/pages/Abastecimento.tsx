@@ -33,6 +33,19 @@ type StopLaunchRow = {
   descricao?: string;
 };
 
+type PlantHourRow = {
+  period: string;
+  ton?: string | number | null;
+  freq?: string | number | null;
+};
+
+type PlantDayPayload = {
+  day: string;
+  obs?: string | null;
+  rows: PlantHourRow[];
+  updated_at?: string | null;
+};
+
 type Farol = "green" | "yellow" | "red" | "gray";
 
 function authHeaders() {
@@ -53,6 +66,19 @@ function todayYMD() {
 
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
+}
+
+
+function parseMaybeNumber(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  let s = String(v).trim();
+  if (!s) return null;
+  s = s.replace(/\s+/g, "");
+  if (s.includes(".") && s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
 }
 
 function formatNum(n: number, digits = 1) {
@@ -240,8 +266,8 @@ export default function Abastecimento() {
   const [stopRows, setStopRows] = useState<StopLaunchRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // parâmetro para consumo médio
-  const [cargaPct, setCargaPct] = useState<number>(83);
+  // taxa média vinda da Produção (freq média das horas produzidas)
+  const [cargaPct, setCargaPct] = useState<number>(0);
 
   // form abastecimento
   const [rfTs, setRfTs] = useState<string>(() => new Date().toISOString().slice(0, 16));
@@ -279,19 +305,35 @@ export default function Abastecimento() {
   async function fetchAll() {
     setLoading(true);
     try {
-      const [aRes, rRes, sRes] = await Promise.all([
+      const [aRes, rRes, sRes, pRes] = await Promise.all([
         fetch(`${API_BASE}/api/ab/assets/${assetTag}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/ab/refuels?day=${day}&asset=${assetTag}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/stops-launch?day=${day}`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, { headers: authHeaders() }),
       ]);
 
       const aJson = aRes.ok ? await aRes.json() : null;
       const rJson = rRes.ok ? await rRes.json() : [];
       const sJson = sRes.ok ? await sRes.json() : null;
+      const pJson = pRes.ok ? (await pRes.json() as PlantDayPayload) : null;
 
       setAsset(isAssetLike(aJson) ? aJson : null);
       setRefuels(Array.isArray(rJson) ? rJson : []);
       setStopRows(sJson?.rows && Array.isArray(sJson.rows) ? sJson.rows : []);
+
+      // Taxa média = média do campo freq APENAS nas horas produzidas (ton > 0)
+      const prodRows = Array.isArray(pJson?.rows) ? pJson!.rows : [];
+      const freqs = prodRows
+        .map((r) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
+        .filter((r) => (r.ton ?? 0) > 0 && r.freq !== null)
+        .map((r) => Number(r.freq));
+
+      const avgFreq =
+        freqs.length > 0
+          ? freqs.reduce((acc, n) => acc + n, 0) / freqs.length
+          : 0;
+
+      setCargaPct(Number.isFinite(avgFreq) ? Math.round(avgFreq) : 0);
     } finally {
       setLoading(false);
     }
@@ -529,10 +571,9 @@ export default function Abastecimento() {
                   className="mp-input"
                   type="number"
                   value={cargaPct}
-                  min={0}
-                  max={100}
-                  step={1}
-                  onChange={(e) => setCargaPct(Number(e.target.value))}
+                  readOnly
+                  disabled
+                  title="Vem automaticamente da taxa média das horas produzidas"
                 />
               </div>
 
