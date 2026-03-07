@@ -468,7 +468,7 @@ export default function Abastecimento() {
 
     const litros = Number(rfLitros) || 0;
     const hor = rfHorimetro.trim() ? Number(rfHorimetro) : null;
-    const lvlPct = rfTankFull ? null : rfLevelPct.trim() ? Number(rfLevelPct) : null;
+    const lvlPct = rfTankFull ? null : null;
 
     const payload = {
       asset_tag: assetTag,
@@ -1000,4 +1000,3 @@ function toLocalIsoNoZ(d: Date) {
   const ss = String(d.getSeconds()).padStart(2, "0");
   return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
 }
-
