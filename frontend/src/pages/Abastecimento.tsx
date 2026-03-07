@@ -572,27 +572,7 @@ export default function Abastecimento() {
           </div>
         </div>
 
-        <div className="mp-card" style={{ gridColumn: "span 4" }}>
-          <div className="mp-card-h">
-            <div style={{ fontWeight: 950 }}>Configuração</div>
-            <span className="mp-muted">BT-01</span>
-          </div>
-          <div className="mp-card-b">
-            <div className="mp-form-grid">
-              <div>
-                <div className="mp-label">CAPACIDADE / CONSUMO</div>
-                <button className="mp-btn" onClick={() => setCfgOpen(true)}>Abrir engrenagem</button>
-              </div>
-              <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,.10)", background: "rgba(255,255,255,.03)" }}>
-                <div className="mp-label" style={{ marginBottom: 4 }}>PARADAS CONSIDERADAS</div>
-                <div style={{ fontWeight: 950, fontSize: 18 }}>
-                  {computed.periodsCount}
-                </div>
-                <div className="mp-help" style={{ marginTop: 6 }}>Somente minutos {'>'} 0.</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        
 
         <div className="mp-card" style={{ gridColumn: "span 8" }}>
           <div className="mp-card-h">
