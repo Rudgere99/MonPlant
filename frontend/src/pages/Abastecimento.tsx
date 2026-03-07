@@ -45,49 +45,6 @@ type StopLaunchRow = {
   descricao?: string;
 };
 
-
-type PlantDayRow = {
-  ton?: number | string | null;
-  freq?: number | string | null;
-  [key: string]: unknown;
-};
-
-type PlantDayPayload = {
-  rows?: PlantDayRow[] | null;
-  [key: string]: unknown;
-};
-
-function parseMaybeNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string") {
-    const raw = value.trim();
-    if (!raw) return null;
-    const normalized = raw.includes(",") && raw.includes(".")
-      ? raw.replace(/\./g, "").replace(",", ".")
-      : raw.replace(",", ".");
-    const n = Number(normalized);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
-function selectedDayStart(day: string) {
-  return new Date(`${day}T00:00:00`);
-}
-
-function selectedDayEnd(day: string) {
-  return new Date(`${day}T23:59:59.999`);
-}
-
-function isSameYmd(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
 function authHeaders() {
   const t = localStorage.getItem("token") || "";
   return {
@@ -328,12 +285,12 @@ export default function Abastecimento() {
       const avgFreqFromPayload = (payload: PlantDayPayload | null) => {
         const prodRows = Array.isArray(payload?.rows) ? payload!.rows : [];
         const freqs = prodRows
-          .map((r: PlantDayRow) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
-          .filter((r: { ton: number | null; freq: number | null }) => (r.ton ?? 0) > 0 && r.freq !== null)
-          .map((r: { ton: number | null; freq: number | null }) => Number(r.freq));
+          .map((r) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
+          .filter((r) => (r.ton ?? 0) > 0 && r.freq !== null)
+          .map((r) => Number(r.freq));
 
         if (freqs.length === 0) return 0;
-        const avg = freqs.reduce((acc: number, n: number) => acc + n, 0) / freqs.length;
+        const avg = freqs.reduce((acc, n) => acc + n, 0) / freqs.length;
         return Number.isFinite(avg) ? Math.round(avg) : 0;
       };
 
@@ -511,7 +468,7 @@ export default function Abastecimento() {
 
     const litros = Number(rfLitros) || 0;
     const hor = rfHorimetro.trim() ? Number(rfHorimetro) : null;
-    const lvlPct = rfTankFull ? null : null;
+    const lvlPct = rfTankFull ? null : rfLevelPct.trim() ? Number(rfLevelPct) : null;
 
     const payload = {
       asset_tag: assetTag,
@@ -686,6 +643,47 @@ export default function Abastecimento() {
         </div>
       </div>
 
+            {/* Camada do desenho (por cima) */}
+            <img
+              src="/assets/BT-01.png"
+              alt="BT-01"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                opacity: 0.95,
+                // destaca traços brancos/pretos sem estourar
+                filter: "contrast(1.05)",
+              }}
+            />
+
+            {/* Badge do % */}
+            <div
+              style={{
+                position: "absolute",
+                right: 12,
+                top: 12,
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: "rgba(0,0,0,.35)",
+                border: "1px solid rgba(255,255,255,.10)",
+                fontWeight: 950,
+                color: "rgba(255,255,255,.92)",
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              <span className={`h-2.5 w-2.5 rounded-full ${farolDotClass(computed.farol)}`} />
+              {formatNum(progressPct, 0)}%
+            </div>
+          </div>
+
+          <div className="mp-help" style={{ marginTop: 10 }}>
+            Se o laranja “pintar” a imagem inteira, o PNG está sem transparência. Exporte o BT-01.png com fundo transparente.
+          </div>
+        </div>
+      </div>
 
       {/* Grid principal */}
       <div className="mp-main-grid">
@@ -1043,3 +1041,5 @@ function toLocalIsoNoZ(d: Date) {
   const ss = String(d.getSeconds()).padStart(2, "0");
   return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
 }
+
+
