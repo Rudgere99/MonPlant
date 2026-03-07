@@ -263,6 +263,7 @@ export default function Abastecimento() {
   const [day, setDay] = useState<string>(todayYMD());
   const [asset, setAsset] = useState<Asset | null>(null);
   const [refuels, setRefuels] = useState<Refuel[]>([]);
+  const [latestRefuel, setLatestRefuel] = useState<Refuel | null>(null);
   const [stopRows, setStopRows] = useState<StopLaunchRow[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -300,6 +301,19 @@ export default function Abastecimento() {
       yellow_pct: Number(a.yellow_pct ?? 35),
       red_pct: Number(a.red_pct ?? 20),
     });
+  }
+
+
+  function avgFreqFromPayload(p: PlantDayPayload | null): number {
+    const rows = Array.isArray(p?.rows) ? p!.rows : [];
+    const freqs = rows
+      .map((r) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
+      .filter((r) => (r.ton ?? 0) > 0 && r.freq !== null)
+      .map((r) => Number(r.freq));
+
+    if (freqs.length === 0) return 0;
+    const avg = freqs.reduce((acc, n) => acc + n, 0) / freqs.length;
+    return Number.isFinite(avg) ? Math.round(avg) : 0;
   }
 
   async function fetchAll() {
@@ -381,10 +395,10 @@ export default function Abastecimento() {
     );
 
     const capacidade = Number(asset.tank_capacity_l);
-    const last = refuels.length ? refuels[refuels.length - 1] : null;
+    const last = latestRefuel;
 
     let nivelBaseL = capacidade;
-    let baseInfo = "Base: tanque cheio (assumido)";
+    let baseInfo = "Base: tanque cheio (sem abastecimento anterior)";
     let startTs = selectedStart;
 
     if (last?.ts) {
@@ -469,7 +483,7 @@ export default function Abastecimento() {
       runHours,
       periodsCount,
     };
-  }, [asset, cargaPct, day, refuels, stopRows]);
+  }, [asset, cargaPct, day, latestRefuel, stopRows]);
 
   async function saveAssetConfig() {
     setCfgSaving(true);
