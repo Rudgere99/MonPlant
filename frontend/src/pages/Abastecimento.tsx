@@ -448,6 +448,7 @@ export default function Abastecimento() {
       if (!Number.isNaN(lastTs.getTime())) {
         startTs = lastTs;
       }
+
       if (last.tank_full) {
         nivelBaseL = capacidade;
         baseInfo = "Base: tanque cheio (último abastecimento)";
@@ -455,8 +456,77 @@ export default function Abastecimento() {
         nivelBaseL = capacidade * (Number(last.level_after_pct) / 100);
         baseInfo = `Base: ${formatNum(Number(last.level_after_pct), 0)}% (último abastecimento)`;
       } else {
-        nivelBaseL = capacidade;
-        baseInfo = "Base: tanque cheio (último abastecimento sem %)";
+        // Sem "nível após (%)": usa o abastecimento anterior como referência.
+        // Regra:
+        // 1) procura o refuel anterior ao último lançamento;
+        // 2) calcula o nível que existia imediatamente antes do último lançamento;
+        // 3) soma os litros abastecidos agora, limitado à capacidade.
+        const previousRefuels = [...refuels]
+          .filter((r) => r.id !== last.id && !!r.ts)
+          .filter((r) => {
+            const d = new Date(r.ts);
+            return !Number.isNaN(d.getTime()) && d.getTime() < lastTs.getTime();
+          })
+          .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+
+        const prev = previousRefuels.length ? previousRefuels[previousRefuels.length - 1] : null;
+
+        if (!prev?.ts) {
+          // Se não há referência anterior, NÃO assumir tanque cheio.
+          // Usa pelo menos os litros deste lançamento como base.
+          nivelBaseL = Math.min(capacidade, Number(last.liters_added) || 0);
+          baseInfo = `Base: ${formatNum(nivelBaseL, 1)} L (último abastecimento parcial)`;
+        } else {
+          const prevTs = new Date(prev.ts);
+          let prevBaseL = capacidade;
+          let prevStartTs = selectedStart;
+
+          if (!Number.isNaN(prevTs.getTime())) {
+            prevStartTs = prevTs;
+          }
+
+          if (prev.tank_full) {
+            prevBaseL = capacidade;
+          } else if (prev.level_after_pct != null) {
+            prevBaseL = capacidade * (Number(prev.level_after_pct) / 100);
+          } else {
+            prevBaseL = Math.min(capacidade, Number(prev.liters_added) || 0);
+          }
+
+          const byPeriodPrev = new Map<string, number>();
+
+          for (const r of stopRows) {
+            const minutos = Number(r.minutos) || 0;
+            if (minutos <= 0) continue;
+
+            const h = parsePeriodHour(r.period);
+            if (h == null) continue;
+
+            const blockStart = new Date(`${day}T${String(h).padStart(2, "0")}:00:00`);
+            const blockEnd = new Date(blockStart.getTime() + 60 * 60 * 1000);
+
+            const overlapStart = Math.max(blockStart.getTime(), prevStartTs.getTime());
+            const overlapEnd = Math.min(blockEnd.getTime(), lastTs.getTime());
+
+            if (overlapEnd <= overlapStart) continue;
+
+            const overlapMinutes = (overlapEnd - overlapStart) / 60000;
+            const effectiveMinutes = Math.min(minutos, overlapMinutes);
+
+            const current = byPeriodPrev.get(r.period) ?? 0;
+            byPeriodPrev.set(r.period, Math.max(current, effectiveMinutes));
+          }
+
+          const prevStopMinutes = Array.from(byPeriodPrev.values()).reduce((acc, v) => acc + v, 0);
+          const prevElapsedMinutes = Math.max(0, (lastTs.getTime() - prevStartTs.getTime()) / 60000);
+          const prevRunningMinutes = Math.max(0, prevElapsedMinutes - prevStopMinutes);
+          const prevRunHours = prevRunningMinutes / 60;
+          const prevConsumptionL = consumoLh * prevRunHours;
+
+          const levelBeforeLastRefuel = Math.max(0, prevBaseL - prevConsumptionL);
+          nivelBaseL = Math.min(capacidade, levelBeforeLastRefuel + (Number(last.liters_added) || 0));
+          baseInfo = `Base: ${formatNum(nivelBaseL, 1)} L após último abastecimento`;
+        }
       }
     }
 
@@ -767,7 +837,7 @@ export default function Abastecimento() {
             <div>
               <div style={{ fontWeight: 950 }}>Registrar abastecimento</div>
               <div className="mp-help" style={{ marginTop: 2 }}>
-                Ao abastecer, a base do cálculo reinicia a partir deste horário.
+                Ao abastecer, a base do cálculo reinicia a partir deste horário. Sem "tanque cheio", usa os litros lançados.
               </div>
             </div>
             <button className="mp-btn mp-btn-primary" onClick={submitRefuel}>Salvar</button>
