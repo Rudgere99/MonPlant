@@ -45,6 +45,85 @@ type StopLaunchRow = {
   descricao?: string;
 };
 
+type PlantHourRow = {
+  period: string;
+  ton?: string | number | null;
+  freq?: string | number | null;
+};
+
+type PlantDayPayload = {
+  day: string;
+  obs?: string | null;
+  rows: PlantHourRow[];
+  updated_at?: string | null;
+};
+
+function parseBRNumber(v: unknown): number {
+  if (v === null || v === undefined || v === "") return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  let s = String(v).trim();
+  if (!s) return 0;
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function normalizePeriod(period: string): string {
+  const s0 = String(period || "").trim();
+  if (!s0) return s0;
+
+  const s = s0.replace(/–|—/g, "-");
+  const parts = s
+    .split("-")
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    const h1m = parts[0].match(/^(\d{1,2})/);
+    const h2m = parts[1].match(/^(\d{1,2})/);
+
+    if (h1m && h2m) {
+      const h1 = Math.max(0, Math.min(23, Number(h1m[1])));
+      const h2 = Math.max(0, Math.min(23, Number(h2m[1])));
+      return `${pad2(h1)}-${pad2(h2)}`;
+    }
+  }
+
+  const m = s.match(/^(\d{1,2})\s*-\s*(\d{1,2})$/);
+  if (m) {
+    const h1 = Math.max(0, Math.min(23, Number(m[1])));
+    const h2 = Math.max(0, Math.min(23, Number(m[2])));
+    return `${pad2(h1)}-${pad2(h2)}`;
+  }
+
+  return s0;
+}
+
+function buildHourlyGrid(rows: { period: string; ton: number; freq: number }[]) {
+  const map = new Map<string, { ton: number; freq: number }>();
+
+  for (const r of rows) {
+    const key = normalizePeriod(r.period);
+    const prev = map.get(key);
+    const ton = (prev?.ton || 0) + (Number(r.ton) || 0);
+    const freq = Math.max(prev?.freq || 0, Number(r.freq) || 0);
+    map.set(key, { ton, freq });
+  }
+
+  const result: { period: string; ton: number; freq: number }[] = [];
+  for (let h = 0; h < 24; h++) {
+    const label = `${pad2(h)}-${pad2((h + 1) % 24)}`;
+    const found = map.get(label);
+    result.push({ period: label, ton: found?.ton ?? 0, freq: found?.freq ?? 0 });
+  }
+  return result;
+}
+
 function authHeaders() {
   const t = localStorage.getItem("token") || "";
   return {
@@ -225,11 +304,12 @@ export default function Abastecimento() {
   const [stopRows, setStopRows] = useState<StopLaunchRow[]>([]);
   const [prevDayRefuels, setPrevDayRefuels] = useState<Refuel[]>([]);
   const [prevDayStops, setPrevDayStops] = useState<StopLaunchRow[]>([]);
+  const [prodDay, setProdDay] = useState<PlantDayPayload>({ day: todayYMD(), rows: [], obs: "" });
   const [loading, setLoading] = useState(false);
 
   // v1 (teste)
   const [turnHours, setTurnHours] = useState<number>(12);
-  const [cargaPct, setCargaPct] = useState<number>(83);
+  const [cargaPct, setCargaPct] = useState<number>(0);
 
   // form abastecimento
   const [rfTs, setRfTs] = useState<string>(() => new Date().toISOString().slice(0, 16));
@@ -268,12 +348,13 @@ export default function Abastecimento() {
     try {
       const prevDay = prevYMD(day);
 
-      const [aRes, rRes, sRes, prRes, psRes] = await Promise.all([
+      const [aRes, rRes, sRes, prRes, psRes, pRes] = await Promise.all([
         fetch(`${API_BASE}/api/ab/assets/${assetTag}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/ab/refuels?day=${day}&asset=${assetTag}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/stops-launch?day=${day}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/ab/refuels?day=${prevDay}&asset=${assetTag}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/stops-launch?day=${prevDay}`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, { headers: authHeaders() }),
       ]);
 
       const aJson = aRes.ok ? await aRes.json() : null;
@@ -281,10 +362,12 @@ export default function Abastecimento() {
       const sJson = sRes.ok ? await sRes.json() : null;
       const prJson = prRes.ok ? await prRes.json() : [];
       const psJson = psRes.ok ? await psRes.json() : null;
+      const pJson = pRes.ok ? await pRes.json() : { day, rows: [], obs: "" };
 
       setAsset(isAssetLike(aJson) ? aJson : null);
       setRefuels(Array.isArray(rJson) ? rJson : []);
       setPrevDayRefuels(Array.isArray(prJson) ? prJson : []);
+      setProdDay(pJson && typeof pJson === "object" ? pJson as PlantDayPayload : { day, rows: [], obs: "" });
 
       const rows: StopLaunchRow[] = sJson?.rows && Array.isArray(sJson.rows) ? sJson.rows : [];
       const prevRows: StopLaunchRow[] = psJson?.rows && Array.isArray(psJson.rows) ? psJson.rows : [];
@@ -325,6 +408,26 @@ export default function Abastecimento() {
   const minutosRodando = Math.max(0, minutosDecorridosDoDia - minutosParadosBT01);
   const horasParadas = minutosParadosBT01 / 60;
   const horasRodando = minutosRodando / 60;
+
+  const cargaMediaDashboard = useMemo(() => {
+    const rows = prodDay?.rows || [];
+    const data = rows.map((r) => ({
+      period: normalizePeriod(r.period),
+      ton: parseBRNumber(r.ton),
+      freq: parseBRNumber(r.freq),
+    }));
+    const hourlySeries = buildHourlyGrid(data);
+    const filled = hourlySeries.filter((r) => r.freq > 0 || r.ton > 0);
+    const last = filled.slice(-6);
+    if (!last.length) return 0;
+    const s = last.reduce((acc, r) => acc + (Number(r.freq) || 0), 0);
+    return s / last.length;
+  }, [prodDay]);
+
+  useEffect(() => {
+    setCargaPct(Math.round(cargaMediaDashboard));
+  }, [cargaMediaDashboard]);
+
 
   const computed = useMemo(() => {
     if (!asset) {
