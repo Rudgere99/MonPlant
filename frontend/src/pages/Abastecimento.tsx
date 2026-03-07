@@ -716,21 +716,7 @@ export default function Abastecimento() {
           </div>
         </div>
 
-        <div className="mp-card" style={{ gridColumn: "span 4" }}>
-          <div className="mp-card-h">
-            <div style={{ fontWeight: 950 }}>Nível por equipamento</div>
-            <div className="mp-help">Visual do combustível</div>
-          </div>
-          <div className="mp-card-b">
-            <div style={{ display: "grid", gap: 10 }}>
-              <EquipmentFuelIcon label="PN-01" kind="screen" pct={progressPct} farol={computed.farol} />
-              <EquipmentFuelIcon label="PN-02" kind="screen" pct={progressPct} farol={computed.farol} />
-              <EquipmentFuelIcon label="BT-01" kind="crusher" pct={progressPct} farol={computed.farol} />
-            </div>
-          </div>
-        </div>
-
-
+      
         <div className="mp-card" style={{ gridColumn: "span 12" }}>
           <div className="mp-card-h">
             <div style={{ fontWeight: 950 }}>Abastecimentos do dia</div>
