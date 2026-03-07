@@ -193,6 +193,35 @@ def get_latest_refuel(
     finally:
         conn.close()
 
+
+
+@router.get("/refuels/latest-before")
+def get_latest_refuel_before(
+    asset: str = Query("BT-01"),
+    before: datetime = Query(...),
+    owner_id: str = Depends(require_owner_id),
+):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            before_sql = before
+            if getattr(before_sql, "tzinfo", None) is not None:
+                before_sql = before_sql.replace(tzinfo=None)
+
+            cur.execute(
+                """
+                SELECT id, owner_id, asset_tag, day, ts, horimetro, liters_added, tank_full, level_after_pct, note
+                FROM "AB_refuels"
+                WHERE owner_id = %s AND asset_tag = %s AND ts < %s
+                ORDER BY ts DESC
+                LIMIT 1
+                """,
+                (owner_id, asset, before_sql),
+            )
+            return _row_to_dict(cur)
+    finally:
+        conn.close()
+
 @router.post("/refuels")
 def create_refuel(payload: RefuelCreate, owner_id: str = Depends(require_owner_id)):
     conn = get_conn()
