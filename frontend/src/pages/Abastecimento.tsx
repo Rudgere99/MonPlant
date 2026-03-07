@@ -236,6 +236,7 @@ export default function Abastecimento() {
         endTs: calcEnd,
         stopMinutes: 0,
         runHours: 0,
+        periodsCount: 0,
       };
     }
 
@@ -264,30 +265,40 @@ export default function Abastecimento() {
         nivelBaseL = capacidade * (Number(last.level_after_pct) / 100);
         baseInfo = `Base: ${formatNum(Number(last.level_after_pct), 0)}% (último abastecimento)`;
       } else {
-        // fallback se não veio pct
         nivelBaseL = capacidade;
         baseInfo = "Base: tanque cheio (último abastecimento sem %)";
       }
     }
 
-    // soma apenas paradas > 0 e com sobreposição ao intervalo desde o último abastecimento até agora/fim do dia
-    const stopMinutes = stopRows
-      .filter((r) => (r.equipamento || "").toUpperCase() === assetTag && Number(r.minutos) > 0)
-      .reduce((acc, r) => {
-        const h = parsePeriodHour(r.period);
-        if (h == null) return acc;
+    // Considera TODAS as paradas após o último abastecimento.
+    // Para não duplicar o mesmo período quando há vários equipamentos,
+    // usa o MAIOR valor de minutos por período.
+    const byPeriod = new Map<string, number>();
 
-        const blockStart = new Date(`${day}T${String(h).padStart(2, "0")}:00:00`);
-        const blockEnd = new Date(blockStart.getTime() + 60 * 60 * 1000);
+    for (const r of stopRows) {
+      const minutos = Number(r.minutos) || 0;
+      if (minutos <= 0) continue;
 
-        const overlapStart = Math.max(blockStart.getTime(), startTs.getTime());
-        const overlapEnd = Math.min(blockEnd.getTime(), calcEnd.getTime());
+      const h = parsePeriodHour(r.period);
+      if (h == null) continue;
 
-        if (overlapEnd <= overlapStart) return acc;
+      const blockStart = new Date(`${day}T${String(h).padStart(2, "0")}:00:00`);
+      const blockEnd = new Date(blockStart.getTime() + 60 * 60 * 1000);
 
-        const overlapMinutes = (overlapEnd - overlapStart) / 60000;
-        return acc + Math.min(Number(r.minutos) || 0, overlapMinutes);
-      }, 0);
+      const overlapStart = Math.max(blockStart.getTime(), startTs.getTime());
+      const overlapEnd = Math.min(blockEnd.getTime(), calcEnd.getTime());
+
+      if (overlapEnd <= overlapStart) continue;
+
+      const overlapMinutes = (overlapEnd - overlapStart) / 60000;
+      const effectiveMinutes = Math.min(minutos, overlapMinutes);
+
+      const current = byPeriod.get(r.period) ?? 0;
+      byPeriod.set(r.period, Math.max(current, effectiveMinutes));
+    }
+
+    const stopMinutes = Array.from(byPeriod.values()).reduce((acc, v) => acc + v, 0);
+    const periodsCount = byPeriod.size;
 
     const elapsedMinutes = Math.max(0, (calcEnd.getTime() - startTs.getTime()) / 60000);
     const runningMinutes = Math.max(0, elapsedMinutes - stopMinutes);
@@ -322,6 +333,7 @@ export default function Abastecimento() {
       endTs: calcEnd,
       stopMinutes,
       runHours,
+      periodsCount,
     };
   }, [asset, cargaPct, day, refuels, stopRows]);
 
@@ -574,7 +586,7 @@ export default function Abastecimento() {
               <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,.10)", background: "rgba(255,255,255,.03)" }}>
                 <div className="mp-label" style={{ marginBottom: 4 }}>PARADAS CONSIDERADAS</div>
                 <div style={{ fontWeight: 950, fontSize: 18 }}>
-                  {stopRows.filter(r => (r.equipamento || "").toUpperCase() === assetTag && Number(r.minutos) > 0).length}
+                  {computed.periodsCount}
                 </div>
                 <div className="mp-help" style={{ marginTop: 6 }}>Somente minutos {'>'} 0.</div>
               </div>
