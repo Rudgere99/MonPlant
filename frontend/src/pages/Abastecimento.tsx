@@ -139,6 +139,98 @@ function isSameYmd(a: Date, b: Date) {
     a.getDate() === b.getDate();
 }
 
+
+function EquipmentFuelIcon({
+  label,
+  kind,
+  pct,
+  farol,
+}: {
+  label: string;
+  kind: "screen" | "crusher";
+  pct: number;
+  farol: Farol;
+}) {
+  const p = clamp(pct, 0, 100);
+  const fill = kind === "crusher" ? "rgba(249,115,22,.92)" : "rgba(251,146,60,.88)";
+  const outline = "rgba(255,255,255,.92)";
+  const bg = "rgba(255,255,255,.03)";
+
+  const shape =
+    kind === "crusher" ? (
+      <>
+        <path
+          d="M26 64 L54 48 L96 48 L113 58 L162 58 L174 70 L174 96 L146 114 L88 114 L78 98 L55 98 L42 88 L26 88 Z"
+          fill="none"
+          stroke={outline}
+          strokeWidth="4"
+          strokeLinejoin="round"
+        />
+        <path d="M54 48 L64 28 L124 28 L120 48" fill="none" stroke={outline} strokeWidth="4" strokeLinejoin="round" />
+        <path d="M72 114 H150" fill="none" stroke={outline} strokeWidth="5" strokeLinecap="round" />
+      </>
+    ) : (
+      <>
+        <rect x="28" y="36" width="144" height="84" rx="10" fill="none" stroke={outline} strokeWidth="4" />
+        <rect x="42" y="52" width="116" height="50" rx="6" fill="none" stroke={outline} strokeWidth="3" />
+        <path d="M78 120 L66 142 H134 L122 120" fill="none" stroke={outline} strokeWidth="4" strokeLinejoin="round" />
+      </>
+    );
+
+  const fillShape =
+    kind === "crusher" ? (
+      <>
+        <path d="M26 64 L54 48 L96 48 L113 58 L162 58 L174 70 L174 96 L146 114 L88 114 L78 98 L55 98 L42 88 L26 88 Z" fill={fill} />
+        <path d="M54 48 L64 28 L124 28 L120 48 Z" fill={fill} />
+        <rect x="72" y="110" width="78" height="8" rx="3" fill={fill} />
+      </>
+    ) : (
+      <>
+        <rect x="28" y="36" width="144" height="84" rx="10" fill={fill} />
+        <rect x="42" y="52" width="116" height="50" rx="6" fill={fill} />
+        <path d="M78 120 L66 142 H134 L122 120 Z" fill={fill} />
+      </>
+    );
+
+  const maskId = `mask-${kind}-${label.replace(/\s+/g, "-")}`;
+
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(255,255,255,.10)",
+        borderRadius: 16,
+        background: bg,
+        padding: 12,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div className="mp-label" style={{ marginBottom: 0 }}>{label}</div>
+        <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,.88)" }}>{Math.round(p)}%</div>
+      </div>
+
+      <svg viewBox="0 0 200 150" width="100%" height="130" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="150">
+            <rect x="0" y="0" width="200" height="150" fill="black" />
+            {shape}
+          </mask>
+        </defs>
+
+        <g mask={`url(#${maskId})`}>
+          <rect x="0" y={150 - (150 * p) / 100} width="200" height={(150 * p) / 100} fill={fill} />
+        </g>
+
+        {shape}
+      </svg>
+
+      <div className="mp-help" style={{ marginTop: 4 }}>
+        {kind === "crusher" ? "Britador móvel" : "Peneira"}
+      </div>
+    </div>
+  );
+}
+
+
 export default function Abastecimento() {
   const assetTag = "BT-01";
 
@@ -586,23 +678,23 @@ export default function Abastecimento() {
           </div>
 
           <div className="mp-card-b">
-            <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
-              <div style={{ gridColumn: "span 2" }}>
+            <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 10 }}>
+              <div style={{ gridColumn: "span 5" }}>
                 <div className="mp-label">DATA/HORA</div>
                 <input className="mp-input" type="datetime-local" value={rfTs} onChange={(e) => setRfTs(e.target.value)} />
               </div>
 
-              <div>
+              <div style={{ gridColumn: "span 3" }}>
                 <div className="mp-label">HORÍMETRO</div>
                 <input className="mp-input" value={rfHorimetro} onChange={(e) => setRfHorimetro(e.target.value)} placeholder="ex: 1234.5" />
               </div>
 
-              <div>
+              <div style={{ gridColumn: "span 4" }}>
                 <div className="mp-label">LITROS</div>
                 <input className="mp-input" value={rfLitros} onChange={(e) => setRfLitros(e.target.value)} placeholder="ex: 40" />
               </div>
 
-              <div style={{ gridColumn: "span 2", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ gridColumn: "span 5", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 850 }}>
                   <input type="checkbox" checked={rfTankFull} onChange={(e) => setRfTankFull(e.target.checked)} />
                   Tanque cheio
@@ -616,13 +708,28 @@ export default function Abastecimento() {
                 )}
               </div>
 
-              <div style={{ gridColumn: "span 2" }}>
+              <div style={{ gridColumn: "span 7" }}>
                 <div className="mp-label">OBSERVAÇÃO</div>
                 <input className="mp-input" value={rfNote} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
               </div>
             </div>
           </div>
         </div>
+
+        <div className="mp-card" style={{ gridColumn: "span 4" }}>
+          <div className="mp-card-h">
+            <div style={{ fontWeight: 950 }}>Nível por equipamento</div>
+            <div className="mp-help">Visual do combustível</div>
+          </div>
+          <div className="mp-card-b">
+            <div style={{ display: "grid", gap: 10 }}>
+              <EquipmentFuelIcon label="PN-01" kind="screen" pct={progressPct} farol={computed.farol} />
+              <EquipmentFuelIcon label="PN-02" kind="screen" pct={progressPct} farol={computed.farol} />
+              <EquipmentFuelIcon label="BT-01" kind="crusher" pct={progressPct} farol={computed.farol} />
+            </div>
+          </div>
+        </div>
+
 
         <div className="mp-card" style={{ gridColumn: "span 12" }}>
           <div className="mp-card-h">
