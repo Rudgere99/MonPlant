@@ -584,21 +584,6 @@ export default function Abastecimento() {
       </div>
 
 
-      {/* VISUAL DO TANQUE (imagem com preenchimento laranja) */}
-      <div className="mp-card" style={{ marginBottom: 14 }}>
-        <div className="mp-card-h">
-          <div style={{ fontWeight: 950 }}>Visual do tanque</div>
-          <div className="mp-help">Preenchimento laranja acompanha o nível (%)</div>
-        </div>
-        <div className="mp-card-b">
-          <BT01FuelVisual pct={progressPct} farol={computed.farol} />
-          <div className="mp-help" style={{ marginTop: 10 }}>
-            * Usa máscara SVG com o PNG em <b>public/assets/BT-01.png</b>.
-          </div>
-        </div>
-      </div>
-
-
       {/* Grid principal */}
       <div className="mp-main-grid">
         <div className="mp-card" style={{ gridColumn: "span 4" }}>
@@ -690,40 +675,6 @@ export default function Abastecimento() {
             <div className="mp-help" style={{ marginTop: 6 }}>
               {formatNum(progressPct, 0)}% • Farol:{" "}
               <b style={{ color: "rgba(255,255,255,.92)" }}>{farolLabel(computed.farol)}</b>
-            </div>
-          </div>
-        </div>
-
-        {/* Parâmetros */}
-        <div className="mp-card" style={{ gridColumn: "span 4" }}>
-          <div className="mp-card-h">
-            <div style={{ fontWeight: 950 }}>Parâmetros do turno</div>
-            <span className="mp-muted">v1 (teste)</span>
-          </div>
-          <div className="mp-card-b">
-            <div className="mp-form-grid">
-              <div>
-                <div className="mp-label">HORAS DO TURNO</div>
-                <input
-                  className="mp-input"
-                  type="number"
-                  value={turnHours}
-                  min={1}
-                  max={24}
-                  step={1}
-                  onChange={(e) => setTurnHours(Number(e.target.value))}
-                />
-              </div>
-
-              <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,.10)", background: "rgba(255,255,255,.03)" }}>
-                <div className="mp-label" style={{ marginBottom: 4 }}>
-                  PARADAS BT-01 NO DIA
-                </div>
-                <div style={{ fontWeight: 950, fontSize: 18 }}>{Math.round(minutosParadosBT01)} min</div>
-                <div className="mp-help" style={{ marginTop: 6 }}>
-                  Na v2: conectar ShiftBar (07–19 / 19–07).
-                </div>
-              </div>
             </div>
           </div>
         </div>
