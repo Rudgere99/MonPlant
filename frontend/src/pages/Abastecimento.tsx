@@ -426,23 +426,6 @@ export default function Abastecimento() {
     }
 
     const stopMinutesAfterLast = calcStopMinutes(stopRows, day, startTs, endTs);
-      const minutos = Number(r.minutos) || 0;
-      if (minutos <= 0) return acc;
-
-      const h = parsePeriodHour(r.period);
-      if (h == null) return acc;
-
-      const blockStart = new Date(`${day}T${String(h).padStart(2, "0")}:00:00`);
-      const blockEnd = new Date(blockStart.getTime() + 60 * 60 * 1000);
-
-      const overlapStart = Math.max(blockStart.getTime(), startTs.getTime());
-      const overlapEnd = Math.min(blockEnd.getTime(), endTs.getTime());
-
-      if (overlapEnd <= overlapStart) return acc;
-
-      const overlapMinutes = (overlapEnd - overlapStart) / 60000;
-      return acc + Math.min(minutos, overlapMinutes);
-    }, 0);
 
     const elapsedMinutes = Math.max(0, (endTs.getTime() - startTs.getTime()) / 60000);
     const runningMinutesSinceLast = Math.max(0, elapsedMinutes - stopMinutesAfterLast);
