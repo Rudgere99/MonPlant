@@ -86,6 +86,14 @@ function addHoursToNow(h: number) {
   return `${hh}:${mm}`;
 }
 
+function parsePeriodHour(period: string): number | null {
+  const m = /^\s*(\d{1,2})\s*[-–]\s*(\d{1,2})\s*$/.exec(period || "");
+  if (!m) return null;
+  const h = Number(m[1]);
+  return Number.isFinite(h) ? h : null;
+}
+
+
 /** v1 */
 function calcConsumptionLh(maxLh: number, cargaPct: number, fator: number) {
   return maxLh * (cargaPct / 100) * fator;
@@ -289,7 +297,6 @@ export default function Abastecimento() {
     nowClock.getFullYear() === selectedDate.getFullYear() &&
     nowClock.getMonth() === selectedDate.getMonth() &&
     nowClock.getDate() === selectedDate.getDate();
-  const isHistoricalDay = !isToday;
 
   const minutosDecorridosDoDia = isToday
     ? nowClock.getHours() * 60 + nowClock.getMinutes()
@@ -327,7 +334,15 @@ export default function Abastecimento() {
 
     let nivelBaseL = capacidade;
     let baseInfo = "Base: tanque cheio (assumido)";
-    if (last) {
+    let startTs = new Date(`${day}T00:00:00`);
+    const endTs = isToday ? new Date() : new Date(`${day}T23:59:59`);
+
+    if (last?.ts) {
+      const lastTs = new Date(last.ts);
+      if (!Number.isNaN(lastTs.getTime())) {
+        startTs = lastTs;
+      }
+
       if (last.tank_full) {
         nivelBaseL = capacidade;
         baseInfo = "Base: tanque cheio (último abastecimento)";
@@ -340,17 +355,44 @@ export default function Abastecimento() {
       }
     }
 
-    const consumoDecorridoL = consumoLh * horasRodando;
+    const stopMinutesAfterLast = stopRows.reduce((acc, r) => {
+      const minutos = Number(r.minutos) || 0;
+      if (minutos <= 0) return acc;
+
+      const h = parsePeriodHour(r.period);
+      if (h == null) return acc;
+
+      const blockStart = new Date(`${day}T${String(h).padStart(2, "0")}:00:00`);
+      const blockEnd = new Date(blockStart.getTime() + 60 * 60 * 1000);
+
+      const overlapStart = Math.max(blockStart.getTime(), startTs.getTime());
+      const overlapEnd = Math.min(blockEnd.getTime(), endTs.getTime());
+
+      if (overlapEnd <= overlapStart) return acc;
+
+      const overlapMinutes = (overlapEnd - overlapStart) / 60000;
+      return acc + Math.min(minutos, overlapMinutes);
+    }, 0);
+
+    const elapsedMinutes = Math.max(0, (endTs.getTime() - startTs.getTime()) / 60000);
+    const runningMinutesSinceLast = Math.max(0, elapsedMinutes - stopMinutesAfterLast);
+    const consumoDecorridoL = consumoLh * (runningMinutesSinceLast / 60);
+
     const nivelAtualL = Math.max(0, nivelBaseL - consumoDecorridoL);
     const nivelAtualPct = capacidade > 0 ? (nivelAtualL / capacidade) * 100 : NaN;
-
     const autonomiaH = consumoLh > 0 ? nivelAtualL / consumoLh : NaN;
 
     const limiteL = capacidade * (Number(asset.red_pct) / 100);
     const litrosAteLimite = nivelAtualL - limiteL;
     const horasAteLimite = consumoLh > 0 ? litrosAteLimite / consumoLh : NaN;
     const previsaoHora =
-      Number.isFinite(horasAteLimite) && horasAteLimite > 0 ? addHoursToNow(horasAteLimite) : "—";
+      Number.isFinite(horasAteLimite) && horasAteLimite > 0
+        ? (() => {
+            const ms = endTs.getTime() + horasAteLimite * 3600_000;
+            const d = new Date(ms);
+            return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+          })()
+        : "—";
 
     const farol = farolFromPct(nivelAtualPct, Number(asset.yellow_pct), Number(asset.red_pct));
 
@@ -367,7 +409,7 @@ export default function Abastecimento() {
       yellowPct: Number(asset.yellow_pct),
       redPct: Number(asset.red_pct),
     };
-  }, [asset, cargaPct, horasRodando, refuels]);
+  }, [asset, cargaPct, refuels, stopRows, day, isToday]);
 
   async function saveAssetConfig() {
     setCfgSaving(true);
@@ -427,7 +469,6 @@ export default function Abastecimento() {
   }
 
   async function submitRefuel() {
-    if (isHistoricalDay) return;
     // se não tiver asset ainda, salva config primeiro
     if (!asset) {
       await saveAssetConfig();
@@ -505,7 +546,7 @@ export default function Abastecimento() {
                 <button
                   className="mp-btn"
                   title="Configurar tanque/consumo"
-                  onClick={() => (!isHistoricalDay ? setCfgOpen(true) : null)}
+                  onClick={() => setCfgOpen(true)}
                   style={{ padding: "8px 10px", height: 38 }}
                 >
                   <Settings size={16} />
@@ -514,11 +555,6 @@ export default function Abastecimento() {
               <div className="mp-help" style={{ marginTop: 6 }}>
                 {computed.baseInfo}
               </div>
-              {isHistoricalDay && (
-                <div className="mp-help" style={{ marginTop: 6, color: "rgba(255,255,255,.72)" }}>
-                  Dia fechado — visualização histórica. Sem edição e sem recálculo após a virada do dia.
-                </div>
-              )}
             </div>
 
             <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
@@ -714,11 +750,11 @@ export default function Abastecimento() {
             <div>
               <div style={{ fontWeight: 950 }}>Registrar abastecimento</div>
               <div className="mp-help" style={{ marginTop: 2 }}>
-                {isHistoricalDay ? "Dia fechado — edição bloqueada." : asset ? "Config OK" : "Sem config — clique na engrenagem para definir capacidade/consumo."}
+                {asset ? "Config OK" : "Sem config — clique na engrenagem para definir capacidade/consumo."}
               </div>
             </div>
 
-            <button className="mp-btn mp-btn-primary" onClick={submitRefuel} disabled={isHistoricalDay} style={{ opacity: isHistoricalDay ? 0.55 : 1, cursor: isHistoricalDay ? "not-allowed" : "pointer" }}>
+            <button className="mp-btn mp-btn-primary" onClick={submitRefuel}>
               Salvar
             </button>
           </div>
@@ -727,29 +763,29 @@ export default function Abastecimento() {
             <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
               <div style={{ gridColumn: "span 2" }}>
                 <div className="mp-label">DATA/HORA</div>
-                <input className="mp-input" type="datetime-local" value={rfTs} disabled={isHistoricalDay} onChange={(e) => setRfTs(e.target.value)} />
+                <input className="mp-input" type="datetime-local" value={rfTs} onChange={(e) => setRfTs(e.target.value)} />
               </div>
 
               <div>
                 <div className="mp-label">HORÍMETRO</div>
-                <input className="mp-input" value={rfHorimetro} disabled={isHistoricalDay} onChange={(e) => setRfHorimetro(e.target.value)} placeholder="ex: 1234.5" />
+                <input className="mp-input" value={rfHorimetro} onChange={(e) => setRfHorimetro(e.target.value)} placeholder="ex: 1234.5" />
               </div>
 
               <div>
                 <div className="mp-label">LITROS</div>
-                <input className="mp-input" value={rfLitros} disabled={isHistoricalDay} onChange={(e) => setRfLitros(e.target.value)} placeholder="ex: 40" />
+                <input className="mp-input" value={rfLitros} onChange={(e) => setRfLitros(e.target.value)} placeholder="ex: 40" />
               </div>
 
               <div style={{ gridColumn: "span 2", display: "flex", alignItems: "center", gap: 10 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 850 }}>
-                  <input type="checkbox" checked={rfTankFull} disabled={isHistoricalDay} onChange={(e) => setRfTankFull(e.target.checked)} />
+                  <input type="checkbox" checked={rfTankFull} onChange={(e) => setRfTankFull(e.target.checked)} />
                   Tanque cheio
                 </label>
 
               </div>
               <div style={{ gridColumn: "span 2" }}>
                 <div className="mp-label">OBSERVAÇÃO</div>
-                <input className="mp-input" value={rfNote} disabled={isHistoricalDay} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
+                <input className="mp-input" value={rfNote} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
               </div>
             </div>
           </div>
