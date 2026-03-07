@@ -286,7 +286,6 @@ export default function Abastecimento() {
   const [rfHorimetro, setRfHorimetro] = useState<string>("");
   const [rfLitros, setRfLitros] = useState<string>("0");
   const [rfTankFull, setRfTankFull] = useState<boolean>(true);
-  const [rfLevelPct, setRfLevelPct] = useState<string>("100");
   const [rfNote, setRfNote] = useState<string>("");
 
   // modal config
@@ -575,7 +574,7 @@ export default function Abastecimento() {
       horimetro: rfHorimetro.trim() ? Number(rfHorimetro) : null,
       liters_added: Number(rfLitros) || 0,
       tank_full: rfTankFull,
-      level_after_pct: rfTankFull ? null : (rfLevelPct.trim() ? Number(rfLevelPct) : null),
+      level_after_pct: null,
       note: rfNote.trim() || null,
     };
 
@@ -593,7 +592,6 @@ export default function Abastecimento() {
     setRfLitros("0");
     setRfHorimetro("");
     setRfTankFull(true);
-    setRfLevelPct("100");
     setRfNote("");
     await fetchAll();
   }
@@ -792,21 +790,15 @@ export default function Abastecimento() {
                 <input className="mp-input" value={rfLitros} onChange={(e) => setRfLitros(e.target.value)} placeholder="ex: 40" />
               </div>
 
-              <div style={{ gridColumn: "span 5", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ gridColumn: "span 3", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 850 }}>
                   <input type="checkbox" checked={rfTankFull} onChange={(e) => setRfTankFull(e.target.checked)} />
                   Tanque cheio
                 </label>
 
-                {!rfTankFull && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div className="mp-label" style={{ marginBottom: 0 }}>NÍVEL APÓS (%)</div>
-                    <input className="mp-input" style={{ width: 110 }} value={rfLevelPct} onChange={(e) => setRfLevelPct(e.target.value)} />
-                  </div>
-                )}
               </div>
 
-              <div style={{ gridColumn: "span 7" }}>
+              <div style={{ gridColumn: "span 9" }}>
                 <div className="mp-label">OBSERVAÇÃO</div>
                 <input className="mp-input" value={rfNote} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
               </div>
