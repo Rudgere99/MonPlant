@@ -330,35 +330,67 @@ export default function Abastecimento() {
   async function fetchAll() {
     setLoading(true);
     try {
-      const [aRes, rRes, sRes, pRes] = await Promise.all([
+      const now = new Date();
+      const dayStart = selectedDayStart(day);
+      const dayEnd = selectedDayEnd(day);
+      const untilDate = isSameYmd(now, dayStart) ? now : dayEnd;
+      const untilIso = toLocalIsoNoZ(untilDate);
+
+      const [aRes, rRes, latestRes, sRes, pRes] = await Promise.all([
         fetch(`${API_BASE}/api/ab/assets/${assetTag}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/ab/refuels?day=${day}&asset=${assetTag}`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/ab/refuels/latest?asset=${assetTag}&until=${encodeURIComponent(untilIso)}`, {
+          headers: authHeaders(),
+        }),
         fetch(`${API_BASE}/api/stops-launch?day=${day}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, { headers: authHeaders() }),
       ]);
 
       const aJson = aRes.ok ? await aRes.json() : null;
       const rJson = rRes.ok ? await rRes.json() : [];
+      const latestJson = latestRes.ok ? await latestRes.json() : null;
       const sJson = sRes.ok ? await sRes.json() : null;
       const pJson = pRes.ok ? (await pRes.json() as PlantDayPayload) : null;
 
       setAsset(isAssetLike(aJson) ? aJson : null);
-      setRefuels(Array.isArray(rJson) ? rJson : []);
+
+      const refuelsDay = Array.isArray(rJson) ? (rJson as Refuel[]) : [];
+      setRefuels(refuelsDay);
+
+      const lastDayRefuel = refuelsDay.length > 0 ? refuelsDay[refuelsDay.length - 1] : null;
+      const lastGlobalRefuel =
+        latestJson && typeof latestJson === "object" && "ts" in latestJson ? (latestJson as Refuel) : null;
+
+      setLatestRefuel(lastDayRefuel ?? lastGlobalRefuel);
       setStopRows(sJson?.rows && Array.isArray(sJson.rows) ? sJson.rows : []);
 
-      // Taxa média = média do campo freq APENAS nas horas produzidas (ton > 0)
-      const prodRows = Array.isArray(pJson?.rows) ? pJson!.rows : [];
-      const freqs = prodRows
-        .map((r) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
-        .filter((r) => (r.ton ?? 0) > 0 && r.freq !== null)
-        .map((r) => Number(r.freq));
+      // Taxa média = média do freq nas horas produzidas. Se o dia não tiver produção, usa o dia anterior.
+      const avgFreqFromPayload = (payload: PlantDayPayload | null) => {
+        const prodRows = Array.isArray(payload?.rows) ? payload!.rows : [];
+        const freqs = prodRows
+          .map((r) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
+          .filter((r) => (r.ton ?? 0) > 0 && r.freq !== null)
+          .map((r) => Number(r.freq));
+        if (freqs.length === 0) return 0;
+        const avg = freqs.reduce((acc, n) => acc + n, 0) / freqs.length;
+        return Number.isFinite(avg) ? Math.round(avg) : 0;
+      };
 
-      const avgFreq =
-        freqs.length > 0
-          ? freqs.reduce((acc, n) => acc + n, 0) / freqs.length
-          : 0;
+      let avgFreq = avgFreqFromPayload(pJson);
 
-      setCargaPct(Number.isFinite(avgFreq) ? Math.round(avgFreq) : 0);
+      if (avgFreq <= 0) {
+        const prev = new Date(`${day}T12:00:00`);
+        prev.setDate(prev.getDate() - 1);
+        const prevDay = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
+
+        const prevRes = await fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(prevDay)}`, {
+          headers: authHeaders(),
+        });
+        const prevJson = prevRes.ok ? (await prevRes.json() as PlantDayPayload) : null;
+        avgFreq = avgFreqFromPayload(prevJson);
+      }
+
+      setCargaPct(avgFreq);
     } finally {
       setLoading(false);
     }
