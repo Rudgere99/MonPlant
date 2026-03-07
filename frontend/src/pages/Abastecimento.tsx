@@ -45,6 +45,49 @@ type StopLaunchRow = {
   descricao?: string;
 };
 
+
+type PlantDayRow = {
+  ton?: number | string | null;
+  freq?: number | string | null;
+  [key: string]: unknown;
+};
+
+type PlantDayPayload = {
+  rows?: PlantDayRow[] | null;
+  [key: string]: unknown;
+};
+
+function parseMaybeNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (!raw) return null;
+    const normalized = raw.includes(",") && raw.includes(".")
+      ? raw.replace(/\./g, "").replace(",", ".")
+      : raw.replace(",", ".");
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function selectedDayStart(day: string) {
+  return new Date(`${day}T00:00:00`);
+}
+
+function selectedDayEnd(day: string) {
+  return new Date(`${day}T23:59:59.999`);
+}
+
+function isSameYmd(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 function authHeaders() {
   const t = localStorage.getItem("token") || "";
   return {
@@ -285,12 +328,12 @@ export default function Abastecimento() {
       const avgFreqFromPayload = (payload: PlantDayPayload | null) => {
         const prodRows = Array.isArray(payload?.rows) ? payload!.rows : [];
         const freqs = prodRows
-          .map((r) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
-          .filter((r) => (r.ton ?? 0) > 0 && r.freq !== null)
-          .map((r) => Number(r.freq));
+          .map((r: PlantDayRow) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
+          .filter((r: { ton: number | null; freq: number | null }) => (r.ton ?? 0) > 0 && r.freq !== null)
+          .map((r: { ton: number | null; freq: number | null }) => Number(r.freq));
 
         if (freqs.length === 0) return 0;
-        const avg = freqs.reduce((acc, n) => acc + n, 0) / freqs.length;
+        const avg = freqs.reduce((acc: number, n: number) => acc + n, 0) / freqs.length;
         return Number.isFinite(avg) ? Math.round(avg) : 0;
       };
 
