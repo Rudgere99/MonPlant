@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Settings } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from "recharts";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 
@@ -331,35 +330,67 @@ export default function Abastecimento() {
   async function fetchAll() {
     setLoading(true);
     try {
-      const [aRes, rRes, sRes, pRes] = await Promise.all([
+      const now = new Date();
+      const dayStart = selectedDayStart(day);
+      const dayEnd = selectedDayEnd(day);
+      const untilDate = isSameYmd(now, dayStart) ? now : dayEnd;
+      const untilIso = toLocalIsoNoZ(untilDate);
+
+      const [aRes, rRes, latestRes, sRes, pRes] = await Promise.all([
         fetch(`${API_BASE}/api/ab/assets/${assetTag}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/ab/refuels?day=${day}&asset=${assetTag}`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/ab/refuels/latest?asset=${assetTag}&until=${encodeURIComponent(untilIso)}`, {
+          headers: authHeaders(),
+        }),
         fetch(`${API_BASE}/api/stops-launch?day=${day}`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, { headers: authHeaders() }),
       ]);
 
       const aJson = aRes.ok ? await aRes.json() : null;
       const rJson = rRes.ok ? await rRes.json() : [];
+      const latestJson = latestRes.ok ? await latestRes.json() : null;
       const sJson = sRes.ok ? await sRes.json() : null;
       const pJson = pRes.ok ? (await pRes.json() as PlantDayPayload) : null;
 
       setAsset(isAssetLike(aJson) ? aJson : null);
-      setRefuels(Array.isArray(rJson) ? rJson : []);
+
+      const refuelsDay = Array.isArray(rJson) ? (rJson as Refuel[]) : [];
+      setRefuels(refuelsDay);
+
+      const lastDayRefuel = refuelsDay.length > 0 ? refuelsDay[refuelsDay.length - 1] : null;
+      const lastGlobalRefuel =
+        latestJson && typeof latestJson === "object" && "ts" in latestJson ? (latestJson as Refuel) : null;
+
+      setLatestRefuel(lastDayRefuel ?? lastGlobalRefuel);
       setStopRows(sJson?.rows && Array.isArray(sJson.rows) ? sJson.rows : []);
 
-      // Taxa média = média do campo freq APENAS nas horas produzidas (ton > 0)
-      const prodRows = Array.isArray(pJson?.rows) ? pJson!.rows : [];
-      const freqs = prodRows
-        .map((r) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
-        .filter((r) => (r.ton ?? 0) > 0 && r.freq !== null)
-        .map((r) => Number(r.freq));
+      // Taxa média = média do freq nas horas produzidas. Se o dia não tiver produção, usa o dia anterior.
+      const avgFreqFromPayload = (payload: PlantDayPayload | null) => {
+        const prodRows = Array.isArray(payload?.rows) ? payload!.rows : [];
+        const freqs = prodRows
+          .map((r) => ({ ton: parseMaybeNumber(r?.ton), freq: parseMaybeNumber(r?.freq) }))
+          .filter((r) => (r.ton ?? 0) > 0 && r.freq !== null)
+          .map((r) => Number(r.freq));
+        if (freqs.length === 0) return 0;
+        const avg = freqs.reduce((acc, n) => acc + n, 0) / freqs.length;
+        return Number.isFinite(avg) ? Math.round(avg) : 0;
+      };
 
-      const avgFreq =
-        freqs.length > 0
-          ? freqs.reduce((acc, n) => acc + n, 0) / freqs.length
-          : 0;
+      let avgFreq = avgFreqFromPayload(pJson);
 
-      setCargaPct(Number.isFinite(avgFreq) ? Math.round(avgFreq) : 0);
+      if (avgFreq <= 0) {
+        const prev = new Date(`${day}T12:00:00`);
+        prev.setDate(prev.getDate() - 1);
+        const prevDay = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
+
+        const prevRes = await fetch(`${API_BASE}/api/plant-production/${encodeURIComponent(prevDay)}`, {
+          headers: authHeaders(),
+        });
+        const prevJson = prevRes.ok ? (await prevRes.json() as PlantDayPayload) : null;
+        avgFreq = avgFreqFromPayload(prevJson);
+      }
+
+      setCargaPct(avgFreq);
     } finally {
       setLoading(false);
     }
@@ -569,22 +600,6 @@ export default function Abastecimento() {
 
   const progressPct = clamp(Number.isFinite(computed.nivelAtualPct) ? computed.nivelAtualPct : 0, 0, 100);
 
-  const last5RefuelsChart = useMemo(() => {
-    return [...refuels]
-      .slice(-5)
-      .map((r, i) => {
-        const d = r?.ts ? new Date(r.ts) : null;
-        const hh = d && !Number.isNaN(d.getTime()) ? String(d.getHours()).padStart(2, "0") : "--";
-        const mm = d && !Number.isNaN(d.getTime()) ? String(d.getMinutes()).padStart(2, "0") : "--";
-        return {
-          idx: i + 1,
-          hora: `${hh}:${mm}`,
-          litros: Number(r?.liters_added) || 0,
-        };
-      });
-  }, [refuels]);
-
-
   return (
     <div className="mp-container" style={{ paddingTop: 12, paddingBottom: 28 }}>
       <div className="mp-card" style={{ marginBottom: 14 }}>
@@ -761,114 +776,39 @@ export default function Abastecimento() {
           </div>
 
           <div className="mp-card-b">
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 1.5fr) minmax(280px, 0.9fr)",
-                gap: 14,
-                alignItems: "stretch",
-              }}
-            >
-              <div>
-                <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 10 }}>
-                  <div style={{ gridColumn: "span 5" }}>
-                    <div className="mp-label">DATA/HORA</div>
-                    <input className="mp-input" type="datetime-local" value={rfTs} onChange={(e) => setRfTs(e.target.value)} />
-                  </div>
-
-                  <div style={{ gridColumn: "span 3" }}>
-                    <div className="mp-label">HORÍMETRO</div>
-                    <input className="mp-input" value={rfHorimetro} onChange={(e) => setRfHorimetro(e.target.value)} placeholder="ex: 1234.5" />
-                  </div>
-
-                  <div style={{ gridColumn: "span 4" }}>
-                    <div className="mp-label">LITROS</div>
-                    <input className="mp-input" value={rfLitros} onChange={(e) => setRfLitros(e.target.value)} placeholder="ex: 40" />
-                  </div>
-
-                  <div style={{ gridColumn: "span 5", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 850 }}>
-                      <input type="checkbox" checked={rfTankFull} onChange={(e) => setRfTankFull(e.target.checked)} />
-                      Tanque cheio
-                    </label>
-
-                    {!rfTankFull && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div className="mp-label" style={{ marginBottom: 0 }}>NÍVEL APÓS (%)</div>
-                        <input className="mp-input" style={{ width: 110 }} value={rfLevelPct} onChange={(e) => setRfLevelPct(e.target.value)} />
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ gridColumn: "span 7" }}>
-                    <div className="mp-label">OBSERVAÇÃO</div>
-                    <input className="mp-input" value={rfNote} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
-                  </div>
-                </div>
+            <div className="mp-form-grid" style={{ gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 10 }}>
+              <div style={{ gridColumn: "span 5" }}>
+                <div className="mp-label">DATA/HORA</div>
+                <input className="mp-input" type="datetime-local" value={rfTs} onChange={(e) => setRfTs(e.target.value)} />
               </div>
 
-              <div
-                style={{
-                  border: "1px solid rgba(255,255,255,.08)",
-                  borderRadius: 14,
-                  background: "rgba(255,255,255,.02)",
-                  padding: 10,
-                  minHeight: 170,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 900 }}>Últimos 5 abastecimentos</div>
-                    <div className="mp-help">Litros por lançamento</div>
-                  </div>
-                  <div style={{ fontWeight: 900, color: "rgba(255,255,255,.88)" }}>
-                    {last5RefuelsChart.length > 0 ? last5RefuelsChart[last5RefuelsChart.length - 1].litros.toFixed(1) + " L" : "—"}
-                  </div>
-                </div>
+              <div style={{ gridColumn: "span 3" }}>
+                <div className="mp-label">HORÍMETRO</div>
+                <input className="mp-input" value={rfHorimetro} onChange={(e) => setRfHorimetro(e.target.value)} placeholder="ex: 1234.5" />
+              </div>
 
-                {last5RefuelsChart.length === 0 ? (
-                  <div className="mp-help" style={{ paddingTop: 34 }}>
-                    Sem abastecimentos suficientes para exibir gráfico.
-                  </div>
-                ) : (
-                  <div style={{ width: "100%", height: 170 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={last5RefuelsChart} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.07)" />
-                        <XAxis
-                          dataKey="hora"
-                          tick={{ fill: "rgba(255,255,255,.65)", fontSize: 11 }}
-                          axisLine={{ stroke: "rgba(255,255,255,.10)" }}
-                          tickLine={{ stroke: "rgba(255,255,255,.10)" }}
-                        />
-                        <YAxis
-                          tick={{ fill: "rgba(255,255,255,.65)", fontSize: 11 }}
-                          axisLine={{ stroke: "rgba(255,255,255,.10)" }}
-                          tickLine={{ stroke: "rgba(255,255,255,.10)" }}
-                          width={34}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            background: "rgba(15,23,42,.96)",
-                            border: "1px solid rgba(255,255,255,.12)",
-                            borderRadius: 10,
-                            color: "#fff",
-                          }}
-                          labelStyle={{ color: "#fff" }}
-                          formatter={(v: any) => [`${Number(v).toFixed(1)} L`, "Litros"]}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="litros"
-                          stroke="rgba(52,211,153,.95)"
-                          strokeWidth={3}
-                          dot={{ r: 4, fill: "rgba(52,211,153,.95)" }}
-                          activeDot={{ r: 5 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+              <div style={{ gridColumn: "span 4" }}>
+                <div className="mp-label">LITROS</div>
+                <input className="mp-input" value={rfLitros} onChange={(e) => setRfLitros(e.target.value)} placeholder="ex: 40" />
+              </div>
+
+              <div style={{ gridColumn: "span 5", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 850 }}>
+                  <input type="checkbox" checked={rfTankFull} onChange={(e) => setRfTankFull(e.target.checked)} />
+                  Tanque cheio
+                </label>
+
+                {!rfTankFull && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div className="mp-label" style={{ marginBottom: 0 }}>NÍVEL APÓS (%)</div>
+                    <input className="mp-input" style={{ width: 110 }} value={rfLevelPct} onChange={(e) => setRfLevelPct(e.target.value)} />
                   </div>
                 )}
+              </div>
+
+              <div style={{ gridColumn: "span 7" }}>
+                <div className="mp-label">OBSERVAÇÃO</div>
+                <input className="mp-input" value={rfNote} onChange={(e) => setRfNote(e.target.value)} placeholder="Opcional" />
               </div>
             </div>
           </div>
