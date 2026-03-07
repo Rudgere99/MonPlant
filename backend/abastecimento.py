@@ -38,12 +38,24 @@ def _row_to_dict(cur) -> Optional[Dict[str, Any]]:
     row = cur.fetchone()
     if not row:
         return None
+
+    # Suporta DictCursor / RealDictCursor
+    if isinstance(row, dict):
+        return dict(row)
+
     cols = [c.name if hasattr(c, "name") else c[0] for c in cur.description]
     return dict(zip(cols, row))
 
 
 def _rows_to_dicts(cur) -> List[Dict[str, Any]]:
     rows = cur.fetchall()
+    if not rows:
+        return []
+
+    # Suporta DictCursor / RealDictCursor
+    if isinstance(rows[0], dict):
+        return [dict(r) for r in rows]
+
     cols = [c.name if hasattr(c, "name") else c[0] for c in cur.description]
     return [dict(zip(cols, r)) for r in rows]
 
