@@ -160,27 +160,34 @@ def get_latest_refuel(
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            if until is None:
+            until_sql = until
+
+            # Normaliza datetime com timezone para comparação com ts do banco
+            # quando a coluna estiver armazenada sem tz / em horário local.
+            if until_sql is not None and getattr(until_sql, "tzinfo", None) is not None:
+                until_sql = until_sql.replace(tzinfo=None)
+
+            if until_sql is None:
                 cur.execute(
-                    '''
+                    """
                     SELECT id, owner_id, asset_tag, day, ts, horimetro, liters_added, tank_full, level_after_pct, note
                     FROM "AB_refuels"
                     WHERE owner_id = %s AND asset_tag = %s
                     ORDER BY ts DESC
                     LIMIT 1
-                    ''',
+                    """,
                     (owner_id, asset),
                 )
             else:
                 cur.execute(
-                    '''
+                    """
                     SELECT id, owner_id, asset_tag, day, ts, horimetro, liters_added, tank_full, level_after_pct, note
                     FROM "AB_refuels"
                     WHERE owner_id = %s AND asset_tag = %s AND ts <= %s
                     ORDER BY ts DESC
                     LIMIT 1
-                    ''',
-                    (owner_id, asset, until),
+                    """,
+                    (owner_id, asset, until_sql),
                 )
             return _row_to_dict(cur)
     finally:
