@@ -59,7 +59,7 @@ async function apiGet<T>(path: string, token?: string | null): Promise<T> {
 }
 
 type SplitState = {
-  sinter: string;
+  sinter1: string;
   sinter2: string;
   hematita: string;
   granulado: string;
@@ -441,7 +441,7 @@ export default function DesvioProducao() {
 
             <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 14 }}>
               {[
-                { key: "sinter", label: "Sinter" },
+                { key: "sinter1", label: "Sinter 1" },
                 { key: "sinter2", label: "Sinter 2" },
                 { key: "hematita", label: "Hematita" },
                 { key: "granulado", label: "Granulado" },
