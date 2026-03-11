@@ -174,7 +174,7 @@ export default function DesvioProducao() {
       ton: splitBase * (pct / 100),
     });
     return [
-      mk("Sinter", splitNums.sinter1),
+      mk("Sinter1", splitNums.sinter1),
       mk("Sinter 2", splitNums.sinter2),
       mk("Hematita", splitNums.hematita),
       mk("Granulado", splitNums.granulado),
