@@ -476,7 +476,7 @@ export default function DesvioProducao() {
                         fontWeight: 980,
                       }}
                     >
-                      {fmtBR(splitRows.find((r) => r.produto === it.label)?.ton || 0, 5)}
+                      {fmtBR(splitRows.find((r) => r.produto === it.label)?.ton || 0, 2)}
                     </div>
                   </div>
                 </div>
