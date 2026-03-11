@@ -441,7 +441,7 @@ export default function DesvioProducao() {
 
             <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gap: 14 }}>
               {[
-                { key: "sinter", label: "Sinter 1" },
+                { key: "sinter1", label: "Sinter 1" },
                 { key: "sinter2", label: "Sinter 2" },
                 { key: "hematita", label: "Hematita" },
                 { key: "granulado", label: "Granulado" },
