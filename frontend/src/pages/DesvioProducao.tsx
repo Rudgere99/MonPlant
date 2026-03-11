@@ -84,7 +84,7 @@ export default function DesvioProducao() {
   const [splitOpen, setSplitOpen] = useState<boolean>(saved?.splitOpen ?? false);
   const [split, setSplit] = useState<SplitState>(
     saved?.split || {
-      sinter: "52,89",
+      sinter1: "52,89",
       sinter2: "6,60",
       hematita: "18,29",
       granulado: "22,22",
@@ -153,7 +153,7 @@ export default function DesvioProducao() {
 
   const splitNums = useMemo(() => {
     return {
-      sinter: parseBRNumber(split.sinter) || 0,
+      sinter: parseBRNumber(split.sinter1) || 0,
       sinter2: parseBRNumber(split.sinter2) || 0,
       hematita: parseBRNumber(split.hematita) || 0,
       granulado: parseBRNumber(split.granulado) || 0,
@@ -161,7 +161,7 @@ export default function DesvioProducao() {
   }, [split]);
 
   const splitTotalPct = useMemo(
-    () => splitNums.sinter + splitNums.sinter2 + splitNums.hematita + splitNums.granulado,
+    () => splitNums.sinter1 + splitNums.sinter2 + splitNums.hematita + splitNums.granulado,
     [splitNums]
   );
 
@@ -174,7 +174,7 @@ export default function DesvioProducao() {
       ton: splitBase * (pct / 100),
     });
     return [
-      mk("Sinter", splitNums.sinter),
+      mk("Sinter", splitNums.sinter1),
       mk("Sinter 2", splitNums.sinter2),
       mk("Hematita", splitNums.hematita),
       mk("Granulado", splitNums.granulado),
