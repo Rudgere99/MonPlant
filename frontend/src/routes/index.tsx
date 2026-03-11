@@ -214,6 +214,14 @@ export function AppRoutes() {
             </RequireRole>
           }
         />
+         <Route
+          path="desvio-producao"
+          element={
+            <RequireRole>
+              <DesvioProducao />
+            </RequireRole>
+          }
+        />
         <Route
           path="ritmo"
           element={
