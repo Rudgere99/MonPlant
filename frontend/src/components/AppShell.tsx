@@ -62,6 +62,7 @@ const nav: NavItem[] = [
   { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
   { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
   { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
+  { to: "/ufdf", label: "Desvio Produção", icon: Code2, group: "Produção" },
 ];
 
 
