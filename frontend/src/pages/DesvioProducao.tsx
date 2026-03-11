@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
-  Line,
+ Line as ChartLine,
   XAxis,
   YAxis,
   Tooltip,
