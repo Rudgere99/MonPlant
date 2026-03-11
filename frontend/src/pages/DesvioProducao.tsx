@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
-  LineChart,
- Line as ChartLine,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   Tooltip,
@@ -486,26 +486,26 @@ export default function DesvioProducao() {
             <div style={{ marginTop: 18, ...card, padding: 16, background: "rgba(0,0,0,0.18)" }}>
               <div style={{ fontSize: 16, fontWeight: 950, marginBottom: 10 }}>Visualização do Split</div>
               <div style={{ height: 320 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={splitRows} margin={{ top: 16, right: 22, left: 10, bottom: 8 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="produto"
-                      tick={{ fill: "rgba(255,255,255,0.60)", fontSize: 12 }}
-                    />
-                    <YAxis tick={{ fill: "rgba(255,255,255,0.60)", fontSize: 12 }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "rgba(5,7,10,0.92)",
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        borderRadius: 14,
-                        color: "white",
-                      }}
-                      formatter={(v: any) => [fmtBR(Number(v || 0), 5), "Ton"]}
-                    />
-                    <ChartLine type="monotone" dataKey="ton" stroke="#22d3ee" strokeWidth={3} dot={{ r: 4 }} />
-                  </LineChart>
-                </ResponsiveContainer>
+               <ResponsiveContainer width="100%" height="100%">
+  <BarChart data={splitRows} margin={{ top: 16, right: 22, left: 10, bottom: 8 }}>
+    <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+    <XAxis
+      dataKey="produto"
+      tick={{ fill: "rgba(255,255,255,0.60)", fontSize: 12 }}
+    />
+    <YAxis tick={{ fill: "rgba(255,255,255,0.60)", fontSize: 12 }} />
+    <Tooltip
+      contentStyle={{
+        background: "rgba(5,7,10,0.92)",
+        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: 14,
+        color: "white",
+      }}
+      formatter={(v: any) => [fmtBR(Number(v || 0), 2), "Ton"]}
+    />
+    <Bar dataKey="ton" fill="#22d3ee" radius={[10, 10, 0, 0]} />
+  </BarChart>
+</ResponsiveContainer>
               </div>
             </div>
           </div>
