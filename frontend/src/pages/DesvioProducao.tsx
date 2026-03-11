@@ -153,7 +153,7 @@ export default function DesvioProducao() {
 
   const splitNums = useMemo(() => {
     return {
-      sinter: parseBRNumber(split.sinter1) || 0,
+      sinter1: parseBRNumber(split.sinter1) || 0,
       sinter2: parseBRNumber(split.sinter2) || 0,
       hematita: parseBRNumber(split.hematita) || 0,
       granulado: parseBRNumber(split.granulado) || 0,
