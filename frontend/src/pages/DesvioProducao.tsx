@@ -503,7 +503,7 @@ export default function DesvioProducao() {
                       }}
                       formatter={(v: any) => [fmtBR(Number(v || 0), 5), "Ton"]}
                     />
-                    <Line type="monotone" dataKey="ton" stroke="#22d3ee" strokeWidth={3} dot={{ r: 4 }} />
+                    <ChartLine type="monotone" dataKey="ton" stroke="#22d3ee" strokeWidth={3} dot={{ r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
