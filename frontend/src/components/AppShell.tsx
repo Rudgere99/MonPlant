@@ -36,6 +36,8 @@ type NavItem = {
 
 const nav: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Visão geral" },
+  { to: "/desvio-producao", label: "Desvio Produção", icon: LayoutDashboard, group: "Produção" },
+  { to: "/statisticas", label: "Estatísticas", icon: BarChart3, group: "Configurações" },
 
   // ✅ Avisos (somente supervisor / dev)
   { to: "/avisos", label: "Avisos", icon: Bell, group: "Visão geral" },
@@ -49,20 +51,15 @@ const nav: NavItem[] = [
   { to: "/producao-planta", label: "Produção da Planta", icon: Factory, group: "Produção" },
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
-  { to: "/abastecimento", label: "Abastecimento", icon: Fuel, group: "Operação" },
-
-  // ✅ Ritmo (Necessário vs Real) — usa tonelada por conchada manual, resto automático
-  { to: "/ritmo", label: "Ritmo do turno", icon: Calculator, group: "Produção" },
-
-  // ✅ NOVO
   { to: "/lancamento-paradas", label: "Lançamento de Paradas", icon: FileSpreadsheet, group: "Operação" },
+  { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
+  { to: "/abastecimento", label: "Abastecimento", icon: Fuel, group: "Operação" },
+  { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
+
 
   { to: "/historico", label: "Histórico", icon: History, group: "Operação" },
-  { to: "/statisticas", label: "Estatísticas", icon: BarChart3, group: "Configurações" },
   { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
   { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
-  { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
-  { to: "/desvio-producao", label: "Desvio Produção", icon: LayoutDashboard, group: "Produção" },
 ];
 
 
