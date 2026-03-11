@@ -38,6 +38,7 @@ const nav: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Visão geral" },
   { to: "/desvio-producao", label: "Desvio Produção", icon: LayoutDashboard, group: "Produção" },
   { to: "/statisticas", label: "Estatísticas", icon: BarChart3, group: "Configurações" },
+  { to: "/ritmo", label: "Ritmo", icon: Factory, group: "Operação" },
 
   // ✅ Avisos (somente supervisor / dev)
   { to: "/avisos", label: "Avisos", icon: Bell, group: "Visão geral" },
