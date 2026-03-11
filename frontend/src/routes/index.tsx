@@ -15,6 +15,7 @@ import PlantProduction from "../pages/PlantProduction";
 import Ritmo from "../pages/Ritmo";
 import Statistics from "../pages/Statistics";
 import UfDF from "../pages/UfDF";
+import UfDF from "../pages/DesvioProdução";
 import Abastecimento from "../pages/Abastecimento";
 
 import Horimetros from "../pages/Horimetros";
