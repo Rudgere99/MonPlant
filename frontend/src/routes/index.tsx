@@ -164,16 +164,16 @@ export function AppRoutes() {
           </RequireAuth>
         }
       />
-      <Route
-        path="/m/paradas"
-        element={
-          <RequireAuth>
-            <MobileWrap title="Paradas" tab="paradas">
-              <Paradas />
-            </MobileWrap>
-          </RequireAuth>
-        }
-      />
+    <Route
+  path="/m/paradas"
+  element={
+    <RequireAuth>
+      <MobileWrap title="Paradas" tab="paradas">
+        <LancamentoParadas />
+      </MobileWrap>
+    </RequireAuth>
+  }
+/>
 
       {/* Desktop */}
       <Route
