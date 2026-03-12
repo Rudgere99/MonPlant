@@ -35,9 +35,7 @@ function classTipo(tipo: string) {
   const t = norm(tipo);
   if (t.includes("corret")) return "Corretiva";
   if (t.includes("prevent")) return "Preventiva";
-  if (t.includes("eletr")) return "Elétrica";
   if (t.includes("operac")) return "Operacional";
-  if (t.includes("segur")) return "Segurança";
   return "Outros";
 }
 
@@ -97,9 +95,7 @@ type MonthAgg = {
   totalH: number;
   corretivaH: number;
   preventivaH: number;
-  eletricaH: number;
   operacionalH: number;
-  segurancaH: number;
   outrosH: number;
   PM: number;
   PO: number;
@@ -112,9 +108,7 @@ function computeMonthAgg(month: string, days: number, rowsAllDays: StopRow[]): M
   const byTypeMin: Record<string, number> = {
     Corretiva: 0,
     Preventiva: 0,
-    Elétrica: 0,
     Operacional: 0,
-    Segurança: 0,
     Outros: 0,
   };
 
@@ -131,13 +125,11 @@ function computeMonthAgg(month: string, days: number, rowsAllDays: StopRow[]): M
 
   const corretivaH = (byTypeMin["Corretiva"] || 0) / 60;
   const preventivaH = (byTypeMin["Preventiva"] || 0) / 60;
-  const eletricaH = (byTypeMin["Elétrica"] || 0) / 60;
   const operacionalH = (byTypeMin["Operacional"] || 0) / 60;
-  const segurancaH = (byTypeMin["Segurança"] || 0) / 60;
   const outrosH = (byTypeMin["Outros"] || 0) / 60;
 
-  const PM = corretivaH + preventivaH + eletricaH;
-  const PO = operacionalH + segurancaH + outrosH;
+  const PM = corretivaH + preventivaH;
+  const PO = operacionalH + outrosH;
 
   const TP = days * 24;
 
@@ -152,9 +144,7 @@ function computeMonthAgg(month: string, days: number, rowsAllDays: StopRow[]): M
     totalH,
     corretivaH,
     preventivaH,
-    eletricaH,
     operacionalH,
-    segurancaH,
     outrosH,
     PM,
     PO,
@@ -320,13 +310,6 @@ export default function UfDF() {
             <div style={{ gridColumn: "span 4" }}>
               <Kpi title="Operacional (mês)" value={`${fmt1(agg.operacionalH)} h`} sub="Conta em PO" />
             </div>
-
-            <div style={{ gridColumn: "span 4" }}>
-              <Kpi title="Elétrica (mês)" value={`${fmt1(agg.eletricaH)} h`} sub="Conta em PM" />
-            </div>
-            <div style={{ gridColumn: "span 4" }}>
-              <Kpi title="Segurança (mês)" value={`${fmt1(agg.segurancaH)} h`} sub="Conta em PO" />
-            </div>
             <div style={{ gridColumn: "span 4" }}>
               <Kpi title="Outros (mês)" value={`${fmt1(agg.outrosH)} h`} sub="Conta em PO" />
             </div>
@@ -358,8 +341,8 @@ export default function UfDF() {
             <div style={{ fontWeight: 950, letterSpacing: -0.2 }}>Resumo</div>
             <div style={{ marginTop: 8, color: "rgba(255,255,255,0.75)", fontWeight: 800, lineHeight: 1.5 }}>
               <div><b>Total parado:</b> {fmt1(agg.totalH)} h</div>
-              <div><b>PM (Manutenção):</b> {fmt1(agg.PM)} h (Corretiva + Preventiva + Elétrica)</div>
-              <div><b>PO (Operacional):</b> {fmt1(agg.PO)} h (Operacional + Segurança + Outros)</div>
+              <div><b>PM (Manutenção):</b> {fmt1(agg.PM)} h (Corretiva + Preventiva)</div>
+              <div><b>PO (Operacional):</b> {fmt1(agg.PO)} h (Operacional + Outros)</div>
               <div><b>RO:</b> {fmtPct((agg.UF * agg.DF) / 100)} (UF × DF)</div>
               <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
                 Observação: este cálculo considera o total de paradas do mês <b>independente do equipamento</b>.
