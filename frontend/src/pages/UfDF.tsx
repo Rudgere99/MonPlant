@@ -36,7 +36,7 @@ function classTipo(tipo: string) {
   if (t.includes("corret")) return "Corretiva";
   if (t.includes("prevent")) return "Preventiva";
   if (t.includes("operac")) return "Operacional";
-  return "Outros";
+  return;
 }
 
 function fmt1(n: number) {
@@ -96,7 +96,6 @@ type MonthAgg = {
   corretivaH: number;
   preventivaH: number;
   operacionalH: number;
-  outrosH: number;
   PM: number;
   PO: number;
   TP: number;
@@ -109,7 +108,6 @@ function computeMonthAgg(month: string, days: number, rowsAllDays: StopRow[]): M
     Corretiva: 0,
     Preventiva: 0,
     Operacional: 0,
-    Outros: 0,
   };
 
   let totalMin = 0;
@@ -126,10 +124,9 @@ function computeMonthAgg(month: string, days: number, rowsAllDays: StopRow[]): M
   const corretivaH = (byTypeMin["Corretiva"] || 0) / 60;
   const preventivaH = (byTypeMin["Preventiva"] || 0) / 60;
   const operacionalH = (byTypeMin["Operacional"] || 0) / 60;
-  const outrosH = (byTypeMin["Outros"] || 0) / 60;
 
   const PM = corretivaH + preventivaH;
-  const PO = operacionalH + outrosH;
+  const PO = operacionalH;
 
   const TP = days * 24;
 
@@ -145,7 +142,6 @@ function computeMonthAgg(month: string, days: number, rowsAllDays: StopRow[]): M
     corretivaH,
     preventivaH,
     operacionalH,
-    outrosH,
     PM,
     PO,
     TP,
@@ -311,10 +307,6 @@ export default function UfDF() {
               <Kpi title="Operacional (mês)" value={`${fmt1(agg.operacionalH)} h`} sub="Conta em PO" />
             </div>
             <div style={{ gridColumn: "span 4" }}>
-              <Kpi title="Outros (mês)" value={`${fmt1(agg.outrosH)} h`} sub="Conta em PO" />
-            </div>
-
-            <div style={{ gridColumn: "span 4" }}>
               <Kpi
                 title="DF da Planta (mês)"
                 value={fmtPct(agg.DF)}
@@ -342,7 +334,7 @@ export default function UfDF() {
             <div style={{ marginTop: 8, color: "rgba(255,255,255,0.75)", fontWeight: 800, lineHeight: 1.5 }}>
               <div><b>Total parado:</b> {fmt1(agg.totalH)} h</div>
               <div><b>PM (Manutenção):</b> {fmt1(agg.PM)} h (Corretiva + Preventiva)</div>
-              <div><b>PO (Operacional):</b> {fmt1(agg.PO)} h (Operacional + Outros)</div>
+              <div><b>PO (Operacional):</b> {fmt1(agg.PO)} h (Operacional)</div>
               <div><b>RO:</b> {fmtPct((agg.UF * agg.DF) / 100)} (UF × DF)</div>
               <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
                 Observação: este cálculo considera o total de paradas do mês <b>independente do equipamento</b>.
