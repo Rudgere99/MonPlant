@@ -5,7 +5,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
  * Compat: mantemos "production" no tipo Tab porque rotas antigas podem passar active="production".
  * A aba Produção NÃO aparece na navegação.
  */
-type Tab = "dashboard" | "ritmo" | "stats" | "ufdf" | "production";
+type Tab = "dashboard" | "ritmo" | "stats" | "ufdf" | "paradas" | "production";
 
 function doLogout() {
   const keys = ["token", "mp_token", "auth_token", "access_token", "user", "mp_user"];
@@ -66,6 +66,9 @@ function TabsInline({ active }: { active: Tab }) {
       </Link>
       <Link className={`mp-top-tab ${active === "ufdf" ? "is-active" : ""}`} to="/m/ufdf">
         UF/DF
+      </Link>
+      <Link className={`mp-top-tab ${active === "paradas" ? "is-active" : ""}`} to="/m/paradas">
+        Paradas
       </Link>
     </nav>
   );
@@ -149,6 +152,9 @@ export default function MobileShell({
           </Link>
           <Link className={`mp-tab ${active === "ufdf" ? "is-active" : ""}`} to="/m/ufdf">
             UF/DF
+          </Link>
+          <Link className={`mp-tab ${active === "paradas" ? "is-active" : ""}`} to="/m/paradas">
+            Paradas
           </Link>
         </nav>
       ) : null}
