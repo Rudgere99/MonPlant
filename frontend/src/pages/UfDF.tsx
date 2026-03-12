@@ -36,7 +36,7 @@ function classTipo(tipo: string) {
   if (t.includes("corret")) return "Corretiva";
   if (t.includes("prevent")) return "Preventiva";
   if (t.includes("operac")) return "Operacional";
-  return;
+  return "";
 }
 
 function fmt1(n: number) {
