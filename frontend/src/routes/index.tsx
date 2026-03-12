@@ -32,14 +32,12 @@ import DevUsers from "../pages/DevUsers";
 import PlantProductionDayView from "../pages/PlantProductionDayView";
 import Last7DaysView from "../pages/Last7DaysView";
 
-// 📱 Mobile shell + detector (Opção B)
 import MobileShell from "../mobile/MobileShell";
 import { isMobileViewport } from "../mobile/isMobile";
 
 type Role = ReturnType<typeof getUserRole>;
 
 function defaultPathFor(role: Role) {
-  // apontador cai direto na Produção
   return role === "apontador" ? "/producao-planta" : "/dashboard";
 }
 
@@ -48,7 +46,6 @@ function RequireRole({ children }: { children: ReactNode }) {
   const location = useLocation();
   const path = location.pathname;
 
-  // ✅ evita loop/piscar no F5 durante hidratação
   if (loading) return <>{children}</>;
   if (!user && token) return <>{children}</>;
 
@@ -67,7 +64,7 @@ function MobileWrap({
   children,
 }: {
   title: string;
-  tab: "dashboard" | "production" | "ritmo" | "stats" | "ufdf";
+  tab: "dashboard" | "production" | "ritmo" | "stats" | "ufdf" | "paradas";
   children: ReactNode;
 }) {
   return (
@@ -98,7 +95,6 @@ export function AppRoutes() {
       const isMobileRoute = path.startsWith("/m");
       const isAuthRoute = path.startsWith("/login") || path.startsWith("/home");
 
-      // 📱 No celular: força modo mobile (exceto login/home)
       if (mobile && !isMobileRoute && !isAuthRoute) {
         nav("/m/dashboard", { replace: true });
       }
@@ -119,7 +115,7 @@ export function AppRoutes() {
       <Route path="/home" element={<Home />} />
       <Route path="/login" element={<Login />} />
 
-      {/* 📱 Rotas Mobile (Opção B): mesmas páginas, só “casca” mobile */}
+      {/* Mobile */}
       <Route
         path="/m"
         element={
@@ -168,8 +164,18 @@ export function AppRoutes() {
           </RequireAuth>
         }
       />
+      <Route
+        path="/m/paradas"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Paradas" tab="paradas">
+              <Paradas />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
 
-      {/* App (desktop) */}
+      {/* Desktop */}
       <Route
         path="/"
         element={
@@ -205,7 +211,6 @@ export function AppRoutes() {
           }
         />
 
-        {/* Páginas */}
         <Route
           path="producao-planta"
           element={
@@ -214,7 +219,7 @@ export function AppRoutes() {
             </RequireRole>
           }
         />
-         <Route
+        <Route
           path="desvio-producao"
           element={
             <RequireRole>
@@ -247,7 +252,6 @@ export function AppRoutes() {
           }
         />
 
-        {/* Supervisor */}
         <Route
           path="avisos"
           element={
@@ -257,7 +261,6 @@ export function AppRoutes() {
           }
         />
 
-        {/* Paradas / Horímetros */}
         <Route
           path="paradas"
           element={
@@ -265,16 +268,6 @@ export function AppRoutes() {
               <Paradas />
             </RequireRole>
           }
-          <Route
-  path="/m/paradas"
-  element={
-    <RequireAuth>
-      <MobileWrap title="Paradas" tab="paradas">
-        <Paradas />
-      </MobileWrap>
-    </RequireAuth>
-  }
-/>
         />
         <Route
           path="lancamento-paradas"
@@ -317,7 +310,7 @@ export function AppRoutes() {
             </RequireRole>
           }
         />
-          <Route
+        <Route
           path="abastecimento"
           element={
             <RequireRole>
@@ -326,7 +319,6 @@ export function AppRoutes() {
           }
         />
 
-        {/* DEV */}
         <Route
           path="dev/logs"
           element={
