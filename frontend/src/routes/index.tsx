@@ -265,6 +265,16 @@ export function AppRoutes() {
               <Paradas />
             </RequireRole>
           }
+          <Route
+  path="/m/paradas"
+  element={
+    <RequireAuth>
+      <MobileWrap title="Paradas" tab="paradas">
+        <Paradas />
+      </MobileWrap>
+    </RequireAuth>
+  }
+/>
         />
         <Route
           path="lancamento-paradas"
