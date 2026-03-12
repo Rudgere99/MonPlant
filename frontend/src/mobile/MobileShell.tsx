@@ -2,8 +2,8 @@ import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 /**
- * Compat: mantemos "production" no tipo Tab porque algumas rotas antigas ainda passam active="production".
- * A aba Produção NÃO aparece na navegação (nem em portrait nem em landscape).
+ * Compat: mantemos "production" no tipo Tab porque rotas antigas podem passar active="production".
+ * A aba Produção NÃO aparece na navegação.
  */
 type Tab = "dashboard" | "ritmo" | "stats" | "ufdf" | "production";
 
@@ -52,9 +52,9 @@ function useIsLandscape(): boolean {
   return land;
 }
 
-function TopTabs({ active }: { active: Tab }) {
+function TabsInline({ active }: { active: Tab }) {
   return (
-    <div className="mp-top-tabs" role="tablist" aria-label="Navegação">
+    <nav className="mp-top-tabs-inline" aria-label="Navegação">
       <Link className={`mp-top-tab ${active === "dashboard" ? "is-active" : ""}`} to="/m/dashboard">
         Dashboard
       </Link>
@@ -67,7 +67,7 @@ function TopTabs({ active }: { active: Tab }) {
       <Link className={`mp-top-tab ${active === "ufdf" ? "is-active" : ""}`} to="/m/ufdf">
         UF/DF
       </Link>
-    </div>
+    </nav>
   );
 }
 
@@ -90,8 +90,8 @@ export default function MobileShell({
   const nav = useNavigate();
   const landscape = useIsLandscape();
 
-  // Em landscape, tabs no topo e some a barra inferior
-  const showTopTabs = landscape;
+  // Em landscape: tabs DENTRO da topbar; some a barra inferior
+  const showInlineTabs = landscape;
 
   const goBack = () => {
     if (loc.pathname.startsWith("/m")) nav("/m/dashboard");
@@ -110,15 +110,19 @@ export default function MobileShell({
 
   return (
     <div className="mp-root">
-      <div className="mp-top">
+      <div className={`mp-top ${showInlineTabs ? "is-landscape" : ""}`}>
         <button className="mp-icon-btn" onClick={goBack} type="button" aria-label="Voltar">
           ←
         </button>
 
-        <div className="mp-top-title">
-          <div className="mp-top-h1">{title}</div>
-          {subtitle ? <div className="mp-top-sub">{subtitle}</div> : null}
-        </div>
+        {showInlineTabs ? (
+          <TabsInline active={active} />
+        ) : (
+          <div className="mp-top-title">
+            <div className="mp-top-h1">{title}</div>
+            {subtitle ? <div className="mp-top-sub">{subtitle}</div> : null}
+          </div>
+        )}
 
         <div className="mp-top-right">
           {right}
@@ -130,11 +134,9 @@ export default function MobileShell({
         </div>
       </div>
 
-      {showTopTabs ? <TopTabs active={active} /> : null}
+      <div className="mp-content">{children}</div>
 
-      <div className={`mp-content ${showTopTabs ? "has-top-tabs" : ""}`}>{children}</div>
-
-      {!showTopTabs ? (
+      {!showInlineTabs ? (
         <nav className="mp-bottom">
           <Link className={`mp-tab ${active === "dashboard" ? "is-active" : ""}`} to="/m/dashboard">
             Dashboard
