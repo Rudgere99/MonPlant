@@ -73,10 +73,8 @@ function fmt1(n: number) {
 
 const TYPE_COLORS: Record<string, string> = {
   Corretiva: "#EF4444",
-  Elétrica: "#F59E0B",
   Preventiva: "#22C55E",
   Operacional: "#3B82F6",
-  Segurança: "#A855F7",
   Outros: "#94A3B8",
 };
 
@@ -90,10 +88,8 @@ function normType(s: any) {
 function colorForType(type: any) {
   const t = normType(type);
   if (t.includes("corret")) return TYPE_COLORS.Corretiva;
-  if (t.includes("elétr") || t.includes("eletr")) return TYPE_COLORS.Elétrica;
   if (t.includes("prevent")) return TYPE_COLORS.Preventiva;
   if (t.includes("operac")) return TYPE_COLORS.Operacional;
-  if (t.includes("segur")) return TYPE_COLORS.Segurança;
   if (!t) return TYPE_COLORS.Outros;
   return TYPE_COLORS.Outros;
 }
@@ -238,7 +234,7 @@ export default function LancamentoParadas() {
     []
   );
   const stopTypes = useMemo(
-    () => ["Operacional", "Preventiva", "Corretiva", "Elétrica", "Segurança"],
+    () => ["Operacional", "Preventiva", "Corretiva"],
     []
   );
 
