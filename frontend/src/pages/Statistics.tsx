@@ -457,6 +457,20 @@ export default function Statistics() {
   const [dailyModalOpen, setDailyModalOpen] = useState(false);
   const [dailyModalMode, setDailyModalMode] = useState<"bar" | "line">("bar");
 
+  // % de desvio vinda da página Desvio de Produção (LocalStorage)
+  const desvioPctSaved = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("mp_desvio_producao_v2");
+      if (!raw) return 0;
+      const js = JSON.parse(raw);
+      const txt = String(js?.desvioPct ?? "0").replace(/\./g, "").replace(",", ".");
+      const n = Number(txt);
+      return Number.isFinite(n) ? n : 0;
+    } catch {
+      return 0;
+    }
+  }, []);
+
   const api = apiBase();
 
   useEffect(() => {
@@ -493,6 +507,10 @@ export default function Statistics() {
 
   const metaMonth = Number(data?.meta_month_ton || 0);
   const prodMonth = Number(data?.produced_month_ton || 0);
+  const prodMonthCorrigido = useMemo(() => {
+    if (!prodMonth) return 0;
+    return prodMonth * (1 - desvioPctSaved / 100);
+  }, [prodMonth, desvioPctSaved]);
 
   const attainmentPct = useMemo(() => {
     const raw = Number(data?.attainment_pct);
@@ -837,14 +855,14 @@ export default function Statistics() {
 
       {/* KPI rei + barras meta x produzido */}
       <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(12, minmax(0, 1fr))", gap: 14 }}>
-        <div style={{ gridColumn: mobile ? "auto" : "span 7" }}>
+        <div style={{ gridColumn: mobile ? "auto" : "span 8" }}>
           <MonthBars producedTon={prodMonth} metaTon={metaMonth} />
         </div>
 
         {/* KPI Rei: Diferença vs Meta */}
         <div
           style={{
-            gridColumn: mobile ? "auto" : "span 5",
+            gridColumn: mobile ? "auto" : "span 4",
             borderRadius: 22,
             border: `1px solid ${COLORS.stroke}`,
             background: COLORS.bgCard,
@@ -904,6 +922,12 @@ export default function Statistics() {
 
         <MetricCard title="Frequência média" value={fmtPct(freqAvg, 0)} sub="📊 Média agregada do mês" ok={freqAvg >= 85} />
         <MetricCard title="Produção média" value={`${fmtBR0(avgTonH)} t/h`} sub="⛏ Média agregada do mês" ok={avgTonH > 0} />
+        <MetricCard
+          title="Produção corrigida por desvio"
+          value={`${fmtBR0(prodMonthCorrigido)} t`}
+          sub={`Desvio aplicado: ${fmtPct(desvioPctSaved, 2)} • Base da página Desvio de Produção`}
+          ok={prodMonthCorrigido > 0}
+        />
       </div>
 
       <SectionHeader icon="🧭" title="Diagnóstico Operacional" sub="produção diária, turnos, horímetros e paradas" />
