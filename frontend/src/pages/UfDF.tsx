@@ -310,14 +310,14 @@ export default function UfDF() {
               <Kpi
                 title="DF da Planta (mês)"
                 value={fmtPct(agg.DF)}
-                sub={`DF = (HT - HM) / HT × 100: ${fmt1(agg.PM)} h`}
+                sub={`DF = (HT - HM) / HT × 100`}
               />
             </div>
             <div style={{ gridColumn: "span 4" }}>
               <Kpi
                 title="UF da Planta (mês)"
                 value={fmtPct(agg.UF)}
-                sub={`UF = HO / (HT - HM) × 100: ${fmt1(agg.PO)} h`}
+                sub={`UF = HO / (HT - HM) × 100}
               />
             </div>
             <div style={{ gridColumn: "span 4" }}>
