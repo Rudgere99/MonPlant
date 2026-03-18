@@ -454,25 +454,27 @@ function AppShell() {
           style={{
             width: sideW,
             display: "none",
-            padding: 14,
-            background: "rgba(7,9,13,0.92)",
-            borderRight: "1px solid rgba(255,255,255,0.08)",
+            padding: "8px 10px 8px 8px",
+            background: "rgba(5,8,12,0.98)",
+            borderRight: "1px solid rgba(255,255,255,0.06)",
             position: "sticky",
             top: 0,
             height: "100vh",
             transition: "width .16s ease",
+            boxShadow: "inset -1px 0 0 rgba(255,255,255,0.03)",
           }}
           className="mp-sidebar-desktop"
         >
           <div
             style={{
-              ...cardGlass,
-              height: "calc(100vh - 28px)",
-              padding: 4,
+              height: "calc(100vh - 16px)",
+              padding: sideCollapsed ? "10px 6px 10px 6px" : "12px 10px 10px 10px",
               display: "flex",
               flexDirection: "column",
               overflow: "visible",
               minHeight: 0,
+              borderRadius: 0,
+              background: "transparent",
             }}
           >
             {/* topo sidebar: usuário + toggle */}
@@ -730,14 +732,18 @@ function AppShell() {
             <div
               style={{
                 position: "absolute",
-                top: 14,
-                left: 14,
-                right: 14,
-                maxWidth: 440,
+                top: 0,
+                left: 0,
+                bottom: 0,
+                width: "min(320px, 88vw)",
+                background: "rgba(5,8,12,0.98)",
+                borderRight: "1px solid rgba(255,255,255,0.06)",
+                boxShadow: "20px 0 60px rgba(0,0,0,0.45)",
+                padding: 14,
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ ...cardGlass, padding: 14 }}>
+              <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                   <ShellUser to={defaultPathFor(role)} onClick={() => setMobileOpen(false)} userLabel={userLabel} />
                   <button
@@ -805,7 +811,8 @@ function AppShell() {
                   Menu
                 </div>
 
-                <nav style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
+                  <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {navItemsFiltered.map((i) => {
                     const Icon = i.icon;
                     return (
@@ -848,9 +855,10 @@ function AppShell() {
                       </NavLink>
                     );
                   })}
-                </nav>
+                  </nav>
+                </div>
 
-                <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,0.10)", paddingTop: 12 }}>
+                <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,0.10)", paddingTop: 12, flex: "0 0 auto" }}>
                   <button
                     onClick={handleLogout}
                     style={{
