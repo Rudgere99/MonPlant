@@ -282,25 +282,6 @@ function joinDateTime(dateStr: any, hourStr: any) {
   return `${d} ${h}`;
 }
 
-function StatCard({ title, value, sub }: { title: string; value: string | number; sub?: string }) {
-  return (
-    <div
-      style={{
-        border: "1px solid rgba(255,255,255,.08)",
-        background: "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
-        borderRadius: 18,
-        padding: 16,
-        minHeight: 88,
-        boxShadow: "0 10px 30px rgba(0,0,0,.18)",
-      }}
-    >
-      <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)", marginBottom: 8 }}>{title}</div>
-      <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.1 }}>{value}</div>
-      {sub ? <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,.48)" }}>{sub}</div> : null}
-    </div>
-  );
-}
-
 function ToneBadge({ children, tone = "muted" }: { children: any; tone?: "muted" | "info" | "ok" | "warn" }) {
   const styles: Record<string, React.CSSProperties> = {
     muted: {
@@ -341,24 +322,6 @@ function ToneBadge({ children, tone = "muted" }: { children: any; tone?: "muted"
     >
       {children}
     </span>
-  );
-}
-
-function ModeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: any }) {
-  return (
-    <button
-      className={active ? "mp-btn mp-btn-primary" : "mp-btn"}
-      onClick={onClick}
-      style={{
-        minWidth: 180,
-        height: 40,
-        borderRadius: 12,
-        fontWeight: 900,
-        opacity: active ? 1 : 0.92,
-      }}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -1137,22 +1100,7 @@ export default function Exportar() {
           <ToneBadge tone="info">MonPlant • Exportação Assistida</ToneBadge>
         </div>
 
-        <div className="mp-card-b" style={{ padding: 18 }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 12,
-              marginBottom: 18,
-            }}
-          >
-            <StatCard title="Período selecionado" value={days.length} sub={days.length === 1 ? "1 dia" : `${days.length} dias`} />
-            <StatCard title="Data inicial" value={fmtDate(fromDay)} />
-            <StatCard title="Data final" value={fmtDate(toDay)} />
-            <StatCard title="Último arquivo" value={lastFile || "—"} sub={lastFile ? `Modo: ${lastMode === "base" ? "Base" : "Paradas"}` : "Nenhuma exportação ainda"} />
-          </div>
-
-          <div
+        <div className="mp-card-b" style={{ padding: 18 }}>          <div
             style={{
               borderRadius: 20,
               border: "1px solid rgba(255,255,255,.08)",
@@ -1216,10 +1164,7 @@ export default function Exportar() {
                   Cada modo tem sua própria prévia e sua própria exportação.
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <ModeButton active={previewMode === "base"} onClick={() => setPreviewMode("base")}>Relatório Base</ModeButton>
-                <ModeButton active={previewMode === "paradas"} onClick={() => setPreviewMode("paradas")}>Relatório Paradas</ModeButton>
-              </div>
+              <ToneBadge tone="muted">{lastFile ? `Último arquivo: ${lastFile}` : "Pré-visualize antes de exportar"}</ToneBadge>
             </div>
 
             <div
@@ -1250,44 +1195,6 @@ export default function Exportar() {
                 onPreview={() => handlePreview("paradas")}
                 onExport={handleExportModeloParadas}
               />
-            </div>
-
-            <div style={{ height: 14 }} />
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: 12,
-              }}
-            >
-              <div
-                style={{
-                  borderRadius: 16,
-                  border: "1px solid rgba(255,255,255,.06)",
-                  background: "rgba(255,255,255,.03)",
-                  padding: 14,
-                }}
-              >
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>Template principal</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)" }}>
-                  Arquivo esperado em <b>public/BASE_PLANTA.xlsx</b>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderRadius: 16,
-                  border: "1px solid rgba(255,255,255,.06)",
-                  background: "rgba(255,255,255,.03)",
-                  padding: 14,
-                }}
-              >
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>Template de paradas</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)" }}>
-                  Arquivo esperado em <b>public/MODELO_PARADAS.xlsx</b>
-                </div>
-              </div>
             </div>
 
             {msg ? (
