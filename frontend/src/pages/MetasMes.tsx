@@ -523,7 +523,7 @@ export default function MetasMes() {
         {okMsg ? <div style={{ marginTop: 10, color: "rgba(0,204,255,0.90)", fontWeight: 900 }}>{okMsg}</div> : null}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 14, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "0.9fr 1.35fr", gap: 14, alignItems: "start" }}>
         <div style={{ ...card, padding: 0, overflow: "auto", maxHeight: "72vh" }}>
           <div style={{ padding: 16, paddingBottom: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 950 }}>Planejamento base</div>
@@ -532,12 +532,12 @@ export default function MetasMes() {
             </div>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 760, marginTop: 12 }}>
+          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 620, marginTop: 12 }}>
             <thead>
               <tr>
-                <th style={{ ...th, width: 130 }}>Dia</th>
-                <th style={{ ...th, width: 180 }}>Meta do dia (t)</th>
-                <th style={{ ...th, width: 150 }}>Desconto horas</th>
+                <th style={{ ...th, width: 118 }}>Dia</th>
+                <th style={{ ...th, width: 128 }}>Meta do dia (t)</th>
+                <th style={{ ...th, width: 126 }}>Desconto horas</th>
                 <th style={{ ...th, width: 150 }}>Meta/hora</th>
               </tr>
             </thead>
