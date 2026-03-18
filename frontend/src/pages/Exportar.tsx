@@ -352,6 +352,308 @@ function ActionCard({
   );
 }
 
+
+
+const EXPORT_COLUMNS = {
+  base: [
+    {
+      section: "PRODUÇÃO",
+      tone: "info" as const,
+      columns: [
+        ["Data", "Dia de referência da produção exportada."],
+        ["Turno", "Campo reservado no template principal."],
+        ["Produção Total", "Soma de tonelagem do dia no template."],
+        ["Observação", "Observação geral cadastrada para o dia."],
+      ],
+    },
+    {
+      section: "HORÍMETROS",
+      tone: "ok" as const,
+      columns: [
+        ["Data", "Dia de referência do lançamento."],
+        ["BT-01 Inicial", "Horímetro inicial do britador primário."],
+        ["BT-01 Final", "Horímetro final do britador primário."],
+        ["BT-02 Inicial", "Horímetro inicial do britador secundário."],
+        ["BT-02 Final", "Horímetro final do britador secundário."],
+        ["PN-01 Inicial", "Horímetro inicial da peneira PN-01."],
+        ["PN-01 Final", "Horímetro final da peneira PN-01."],
+        ["PN-02 Inicial", "Horímetro inicial da peneira PN-02."],
+        ["PN-02 Final", "Horímetro final da peneira PN-02."],
+        ["Turno", "Turno identificado para o agrupamento."],
+        ["Horas BT-01", "Diferença entre final e inicial do BT-01."],
+        ["Horas BT-02", "Diferença entre final e inicial do BT-02."],
+        ["Horas PN-01", "Diferença entre final e inicial da PN-01."],
+        ["Horas PN-02", "Diferença entre final e inicial da PN-02."],
+      ],
+    },
+    {
+      section: "PARADAS / PARADAS TOTAIS",
+      tone: "warn" as const,
+      columns: [
+        ["Data do turno", "Dia base do lançamento da parada."],
+        ["Turno", "Turno informado no apontamento."],
+        ["Data início", "Data inicial da ocorrência."],
+        ["Data fim", "Data final da ocorrência."],
+        ["Hora início", "Hora inicial da parada."],
+        ["Hora fim", "Hora final da parada."],
+        ["Equipamento", "Equipamento relacionado à ocorrência."],
+        ["Tipo", "Tipo/classificação da parada."],
+        ["Atividade", "Atividade associada."],
+        ["Descrição", "Detalhamento da ocorrência."],
+        ["Tempo (h)", "Duração da parada em horas."],
+      ],
+    },
+    {
+      section: "Planilha1",
+      tone: "muted" as const,
+      columns: [
+        ["Data", "Dia de referência."],
+        ["Campo auxiliar", "Coluna mantida conforme template."],
+        ["Produção Turno 1", "Tonelagem consolidada do turno 1."],
+        ["Produção Turno 2", "Tonelagem consolidada do turno 2."],
+        ["Produção Total", "Soma total dos turnos no dia."],
+      ],
+    },
+  ],
+  paradas: [
+    {
+      section: "Resumo diário",
+      tone: "warn" as const,
+      columns: [
+        ["Data", "Dia de referência do resumo."],
+        ["Corretiva", "Total de horas classificadas como corretivas."],
+        ["Preventiva", "Total de horas classificadas como preventivas."],
+        ["Total", "Total geral de horas paradas no dia."],
+      ],
+    },
+    {
+      section: "Detalhamento",
+      tone: "info" as const,
+      columns: [
+        ["Data", "Dia da ocorrência."],
+        ["Descrição", "Descrição/detalhe da parada."],
+        ["Tipo", "Classificação final: Corretiva ou Preventiva."],
+        ["Horas", "Tempo total em horas da ocorrência."],
+      ],
+    },
+  ],
+};
+
+type PreviewMode = "base" | "paradas";
+
+function ColumnPreviewModal({
+  open,
+  mode,
+  onClose,
+  onChangeMode,
+}: {
+  open: boolean;
+  mode: PreviewMode;
+  onClose: () => void;
+  onChangeMode: (mode: PreviewMode) => void;
+}) {
+  if (!open) return null;
+
+  const sections = EXPORT_COLUMNS[mode];
+  const title = mode === "base" ? "Colunas da exportação base" : "Colunas do modelo de paradas";
+  const subtitle =
+    mode === "base"
+      ? "Visualização das colunas preenchidas no arquivo BASE_PLANTA.xlsx."
+      : "Visualização das colunas preenchidas no arquivo MODELO_PARADAS.xlsx.";
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(2,6,23,.72)",
+        backdropFilter: "blur(8px)",
+        zIndex: 60,
+        display: "flex",
+        justifyContent: "flex-end",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(760px, 100%)",
+          height: "100%",
+          background: "linear-gradient(180deg, rgba(12,18,30,.98), rgba(7,10,18,.98))",
+          borderLeft: "1px solid rgba(255,255,255,.08)",
+          boxShadow: "-18px 0 60px rgba(0,0,0,.35)",
+          overflowY: "auto",
+        }}
+      >
+        <div
+          style={{
+            padding: 20,
+            borderBottom: "1px solid rgba(255,255,255,.06)",
+            position: "sticky",
+            top: 0,
+            background: "rgba(10,14,24,.92)",
+            backdropFilter: "blur(10px)",
+            zIndex: 2,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 22 }}>Colunas da exportação</div>
+              <div style={{ marginTop: 6, color: "rgba(255,255,255,.56)", fontSize: 13 }}>{subtitle}</div>
+            </div>
+
+            <button
+              className="mp-btn"
+              onClick={onClose}
+              style={{ minWidth: 100, height: 40, borderRadius: 12, fontWeight: 800 }}
+            >
+              Fechar
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+            <button
+              className={mode === "base" ? "mp-btn mp-btn-primary" : "mp-btn"}
+              onClick={() => onChangeMode("base")}
+              style={{ minWidth: 170, height: 40, borderRadius: 12, fontWeight: 900 }}
+            >
+              Exportação Base
+            </button>
+            <button
+              className={mode === "paradas" ? "mp-btn mp-btn-primary" : "mp-btn"}
+              onClick={() => onChangeMode("paradas")}
+              style={{ minWidth: 170, height: 40, borderRadius: 12, fontWeight: 900 }}
+            >
+              Modelo Paradas
+            </button>
+            <ToneBadge tone={mode === "base" ? "info" : "warn"}>{title}</ToneBadge>
+          </div>
+        </div>
+
+        <div style={{ padding: 20 }}>
+          <div
+            style={{
+              borderRadius: 16,
+              border: "1px solid rgba(255,255,255,.07)",
+              background: "rgba(255,255,255,.03)",
+              padding: 14,
+              marginBottom: 16,
+            }}
+          >
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>Como interpretar</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,.58)", lineHeight: 1.5 }}>
+              Esta visualização mostra as colunas que o MonPlant preenche automaticamente no Excel e a função de cada uma.
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: 14 }}>
+            {sections.map((section) => (
+              <div
+                key={section.section}
+                style={{
+                  borderRadius: 18,
+                  border: "1px solid rgba(255,255,255,.07)",
+                  background: "rgba(255,255,255,.025)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    padding: 16,
+                    borderBottom: "1px solid rgba(255,255,255,.06)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ fontWeight: 900, fontSize: 16 }}>{section.section}</div>
+                  <ToneBadge tone={section.tone}>{section.columns.length} coluna(s)</ToneBadge>
+                </div>
+
+                <div style={{ overflowX: "auto" }}>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "separate",
+                      borderSpacing: 0,
+                      minWidth: 520,
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: "rgba(255,255,255,.03)" }}>
+                        <th
+                          style={{
+                            textAlign: "left",
+                            padding: "12px 14px",
+                            fontSize: 12,
+                            color: "rgba(255,255,255,.6)",
+                            fontWeight: 800,
+                            borderBottom: "1px solid rgba(255,255,255,.06)",
+                          }}
+                        >
+                          Campo
+                        </th>
+                        <th
+                          style={{
+                            textAlign: "left",
+                            padding: "12px 14px",
+                            fontSize: 12,
+                            color: "rgba(255,255,255,.6)",
+                            fontWeight: 800,
+                            borderBottom: "1px solid rgba(255,255,255,.06)",
+                          }}
+                        >
+                          Descrição
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {section.columns.map(([field, desc], idx) => (
+                        <tr key={field} style={{ background: idx % 2 === 0 ? "rgba(255,255,255,.012)" : "transparent" }}>
+                          <td
+                            style={{
+                              padding: 14,
+                              borderBottom: "1px solid rgba(255,255,255,.05)",
+                              color: "#fff",
+                              fontWeight: 700,
+                              width: "38%",
+                            }}
+                          >
+                            {field}
+                          </td>
+                          <td
+                            style={{
+                              padding: 14,
+                              borderBottom: "1px solid rgba(255,255,255,.05)",
+                              color: "rgba(255,255,255,.74)",
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {desc}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <ColumnPreviewModal
+        open={previewOpen}
+        mode={previewMode}
+        onClose={() => setPreviewOpen(false)}
+        onChangeMode={setPreviewMode}
+      />
+    </div>
+  );
+}
+
 export default function Exportar() {
   const today = useMemo(() => ymd(new Date()), []);
   const [fromDay, setFromDay] = useState(today);
@@ -360,6 +662,8 @@ export default function Exportar() {
   const [msg, setMsg] = useState<string>("");
   const [lastFile, setLastFile] = useState<string>("");
   const [lastMode, setLastMode] = useState<ExportMode | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("base");
 
   const days = useMemo(() => dateRange(fromDay, toDay), [fromDay, toDay]);
   const periodLabel = useMemo(() => {
@@ -828,6 +1132,53 @@ export default function Exportar() {
                 disabled={busy}
                 onClick={handleExportModeloParadas}
               />
+
+              <div
+                style={{
+                  borderRadius: 18,
+                  border: "1px solid rgba(255,255,255,.08)",
+                  background: "rgba(255,255,255,.03)",
+                  padding: 16,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: 16 }}>Visualizar colunas exportadas</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,.56)", marginTop: 6 }}>
+                      Consulte dentro do sistema quais colunas são preenchidas em cada modelo antes de gerar o Excel.
+                    </div>
+                  </div>
+                  <ToneBadge tone="muted">Pré-visualização</ToneBadge>
+                </div>
+
+                <div style={{ height: 14 }} />
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    className="mp-btn"
+                    onClick={() => {
+                      setPreviewMode("base");
+                      setPreviewOpen(true);
+                    }}
+                    disabled={busy}
+                    style={{ minWidth: 190, height: 42, borderRadius: 12, fontWeight: 900 }}
+                  >
+                    Ver colunas da Base
+                  </button>
+
+                  <button
+                    className="mp-btn"
+                    onClick={() => {
+                      setPreviewMode("paradas");
+                      setPreviewOpen(true);
+                    }}
+                    disabled={busy}
+                    style={{ minWidth: 210, height: 42, borderRadius: 12, fontWeight: 900 }}
+                  >
+                    Ver colunas de Paradas
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div style={{ height: 14 }} />
@@ -887,6 +1238,13 @@ export default function Exportar() {
           </div>
         </div>
       </div>
+
+      <ColumnPreviewModal
+        open={previewOpen}
+        mode={previewMode}
+        onClose={() => setPreviewOpen(false)}
+        onChangeMode={setPreviewMode}
+      />
     </div>
   );
 }
