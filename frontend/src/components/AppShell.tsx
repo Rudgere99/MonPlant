@@ -510,34 +510,23 @@ function AppShell() {
               </button>
             </div>
 
-            <div
-              style={{
-                marginTop: 12,
-                marginBottom: 10,
-                paddingBottom: 12,
-                borderBottom: "1px solid rgba(255,255,255,0.10)",
-                boxShadow: "0 1px 0 rgba(255,255,255,0.02)",
-                flex: "0 0 auto",
-              }}
-            >
-              {!sideCollapsed ? (
-                <div
-                  style={{
-                    padding: "0 2px",
-                    fontSize: 11,
-                    fontWeight: 950,
-                    letterSpacing: 1,
-                    color: "rgba(255,255,255,.40)",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Menu
-                </div>
-              ) : null}
-            </div>
+            {!sideCollapsed ? (
+              <div
+                style={{
+                  marginTop: 12,
+                  marginBottom: 12,
+                  height: 1,
+                  background: "linear-gradient(90deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04))",
+                  boxShadow: "0 1px 0 rgba(255,255,255,0.03)",
+                  flex: "0 0 auto",
+                }}
+              />
+            ) : (
+              <div style={{ marginTop: 10, marginBottom: 8, height: 1, background: "rgba(255,255,255,0.06)" }} />
+            )}
 
             {/* Área rolável do menu */}
-            <div style={{ marginTop: 0, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
+            <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
               <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {navItemsFiltered.map((i) => {
                   const Icon = i.icon;
@@ -736,27 +725,29 @@ function AppShell() {
                     <X size={18} />
                   </button>
                 </div>
+                <div
+                  style={{
+                    marginTop: 12,
+                    marginBottom: 12,
+                    height: 1,
+                    background: "linear-gradient(90deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04))",
+                    boxShadow: "0 1px 0 rgba(255,255,255,0.03)",
+                    flex: "0 0 auto",
+                  }}
+                />
 
                 <div
                   style={{
-                    marginTop: 14,
-                    paddingTop: 12,
-                    borderTop: "1px solid rgba(255,255,255,0.10)",
-                    boxShadow: "0 -1px 0 rgba(255,255,255,0.02) inset",
+                    marginTop: 4,
+                    padding: "0 10px",
+                    fontSize: 11,
+                    fontWeight: 950,
+                    letterSpacing: 1,
+                    color: "rgba(255,255,255,.40)",
+                    textTransform: "uppercase",
                   }}
                 >
-                  <div
-                    style={{
-                      padding: "0 10px",
-                      fontSize: 11,
-                      fontWeight: 950,
-                      letterSpacing: 1,
-                      color: "rgba(255,255,255,.40)",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Menu
-                  </div>
+                  Menu
                 </div>
 
                 <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
@@ -836,7 +827,7 @@ function AppShell() {
           </div>
         ) : null}
 
-        {/* ===== Main (sem topbar) ===== */}
+        {/* ===== Main ===== */}
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
           {/* Mobile FAB */}
           <button
@@ -865,21 +856,29 @@ function AppShell() {
             <Menu size={18} />
           </button>
 
-          {/* topbar */}
-          <div style={{ padding: "8px 14px 0 14px" }}>
+          <div
+            style={{
+              position: "sticky",
+              top: 0,
+              zIndex: 40,
+              padding: 0,
+              background: "rgba(7,9,13,0.72)",
+              backdropFilter: "blur(10px)",
+            }}
+          >
             <div
               style={{
                 minHeight: 54,
-                borderRadius: 18,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "linear-gradient(180deg, rgba(8,12,18,0.92), rgba(5,8,12,0.82))",
-                boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: 12,
-                padding: "10px 14px",
-                overflow: "hidden",
+                padding: "10px 18px",
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                borderRight: "1px solid rgba(255,255,255,0.03)",
+                background:
+                  "linear-gradient(180deg, rgba(8,12,18,0.96), rgba(6,10,16,0.92))",
+                boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.02)",
               }}
             >
               <div
@@ -888,48 +887,41 @@ function AppShell() {
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
-                  color: "rgba(255,255,255,0.76)",
-                  fontWeight: 850,
+                  color: "rgba(255,255,255,0.92)",
+                  fontSize: 14,
+                  fontWeight: 900,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
               >
-                <span style={{ fontSize: 13, color: "rgba(255,255,255,0.72)" }}>{pageGroup || "MonPlant"}</span>
-                <span style={{ opacity: 0.35 }}>•</span>
-                <span
-                  style={{
-                    fontSize: 13,
-                    color: "rgba(255,255,255,0.96)",
-                    fontWeight: 950,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {pageTitle}
-                </span>
+                {pageGroup ? (
+                  <>
+                    <span style={{ color: "rgba(255,255,255,0.62)", fontWeight: 800 }}>{pageGroup}</span>
+                    <span style={{ color: "rgba(255,255,255,0.28)" }}>•</span>
+                  </>
+                ) : null}
+                <span>{pageTitle}</span>
               </div>
 
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
                   flex: "0 0 auto",
+                  maxWidth: "32%",
+                  padding: "7px 12px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(255,255,255,0.88)",
+                  fontSize: 12,
+                  fontWeight: 900,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
+                title={userLabel}
               >
-                <div
-                  style={{
-                    padding: "7px 12px",
-                    borderRadius: 999,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(255,255,255,0.04)",
-                    color: "rgba(255,255,255,0.82)",
-                    fontSize: 12,
-                    fontWeight: 900,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {userLabel}
-                </div>
+                {userLabel}
               </div>
             </div>
           </div>
@@ -939,7 +931,7 @@ function AppShell() {
               position: "relative",
               flex: 1,
               minWidth: 0,
-              padding: "12px 14px 16px 14px",
+              padding: "14px 14px 16px 14px",
               overflow: "hidden",
             }}
           >
