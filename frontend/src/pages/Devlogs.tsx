@@ -94,12 +94,11 @@ function StatCard({
   return (
     <div
       style={{
-        border: "1px solid rgba(255,255,255,.08)",
-        background: "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
+        border: "1px solid rgba(255,255,255,.07)",
+        background: "linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.01))",
         borderRadius: 18,
         padding: 16,
         minHeight: 88,
-        boxShadow: "0 10px 30px rgba(0,0,0,.18)",
       }}
     >
       <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)", marginBottom: 8 }}>{title}</div>
@@ -156,295 +155,274 @@ export default function DevLogs() {
   }, [rows]);
 
   return (
-    <div style={{ padding: 18 }}>
+    <div style={{ padding: 24 }}>
       <div
-        className="mp-card"
         style={{
-          borderRadius: 24,
-          overflow: "hidden",
-          border: "1px solid rgba(255,255,255,.08)",
-          background:
-            "radial-gradient(circle at top right, rgba(59,130,246,.10), transparent 24%), linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
-          boxShadow: "0 20px 60px rgba(0,0,0,.22)",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          marginBottom: 18,
         }}
       >
-        <div
-          className="mp-card-h"
+        <div>
+          <div style={{ fontWeight: 900, fontSize: 28, letterSpacing: 0.2 }}>Logs do Sistema</div>
+          <div style={{ marginTop: 6, color: "rgba(255,255,255,.58)", fontSize: 14 }}>
+            Auditoria de acessos, alterações, salvamentos e exclusões do MonPlant.
+          </div>
+        </div>
+
+        <button
+          className="mp-btn"
+          onClick={load}
+          disabled={loading}
           style={{
-            padding: "18px 18px 8px 18px",
-            borderBottom: "1px solid rgba(255,255,255,.06)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
+            minWidth: 120,
+            height: 40,
+            borderRadius: 12,
+            border: "1px solid rgba(255,255,255,.10)",
+            background: loading ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.08)",
+            fontWeight: 800,
           }}
         >
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: 0.2 }}>Logs do Sistema</div>
-            <div style={{ marginTop: 4, color: "rgba(255,255,255,.58)", fontSize: 13 }}>
-              Auditoria de acessos, alterações, salvamentos e exclusões do MonPlant.
-            </div>
-          </div>
+          {loading ? "Atualizando..." : "Atualizar"}
+        </button>
+      </div>
 
-          <button
-            className="mp-btn"
-            onClick={load}
-            disabled={loading}
-            style={{
-              minWidth: 120,
-              height: 40,
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,.10)",
-              background: loading ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.08)",
-              fontWeight: 800,
-            }}
-          >
-            {loading ? "Atualizando..." : "Atualizar"}
-          </button>
+      {err && (
+        <div
+          className="mp-error"
+          style={{
+            marginBottom: 16,
+            borderRadius: 14,
+            border: "1px solid rgba(239,68,68,.25)",
+            background: "rgba(239,68,68,.10)",
+            padding: 12,
+          }}
+        >
+          {err}
         </div>
+      )}
 
-        <div className="mp-card-b" style={{ padding: 18 }}>
-          {err && (
-            <div
-              className="mp-error"
-              style={{
-                marginBottom: 16,
-                borderRadius: 14,
-                border: "1px solid rgba(239,68,68,.25)",
-                background: "rgba(239,68,68,.10)",
-                padding: 12,
-              }}
-            >
-              {err}
-            </div>
-          )}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 12,
+          marginBottom: 18,
+        }}
+      >
+        <StatCard title="Total de registros" value={stats.total} />
+        <StatCard title="Acessos" value={stats.acessos} />
+        <StatCard title="Alterações" value={stats.alteracoes} />
+        <StatCard title="Exclusões" value={stats.exclusoes} />
+      </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: 12,
-              marginBottom: 18,
-            }}
-          >
-            <StatCard title="Total de registros" value={stats.total} />
-            <StatCard title="Acessos" value={stats.acessos} />
-            <StatCard title="Alterações" value={stats.alteracoes} />
-            <StatCard title="Exclusões" value={stats.exclusoes} />
-          </div>
-
-          <div
-            style={{
-              overflowX: "auto",
-              borderRadius: 18,
-              border: "1px solid rgba(255,255,255,.07)",
-              background: "rgba(7,10,18,.45)",
-            }}
-          >
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "separate",
-                borderSpacing: 0,
-                minWidth: 1180,
-              }}
-            >
-              <thead>
-                <tr
+      <div
+        style={{
+          overflowX: "auto",
+          borderTop: "1px solid rgba(255,255,255,.06)",
+          background: "transparent",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "separate",
+            borderSpacing: 0,
+            minWidth: 1180,
+          }}
+        >
+          <thead>
+            <tr style={{ background: "rgba(255,255,255,.018)" }}>
+              {["Quando", "Usuário", "Ação", "Entidade", "ID", "IP", "Payload"].map((h) => (
+                <th
+                  key={h}
                   style={{
-                    background: "rgba(255,255,255,.035)",
+                    textAlign: "left",
+                    padding: "14px 14px",
+                    fontSize: 12,
+                    color: "rgba(255,255,255,.62)",
+                    fontWeight: 800,
+                    borderBottom: "1px solid rgba(255,255,255,.06)",
+                    position: "sticky",
+                    top: 0,
+                    backdropFilter: "blur(8px)",
+                    zIndex: 1,
                   }}
                 >
-                  {["Quando", "Usuário", "Ação", "Entidade", "ID", "IP", "Payload"].map((h) => (
-                    <th
-                      key={h}
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {rows.map((l, idx) => {
+              const tone = getActionTone(l.action);
+              return (
+                <tr
+                  key={l.id}
+                  style={{
+                    background: idx % 2 === 0 ? "rgba(255,255,255,.012)" : "transparent",
+                  }}
+                >
+                  <td
+                    style={{
+                      padding: 14,
+                      whiteSpace: "nowrap",
+                      color: "rgba(255,255,255,.82)",
+                      borderBottom: "1px solid rgba(255,255,255,.05)",
+                      verticalAlign: "top",
+                    }}
+                  >
+                    {fmtDate(l.created_at)}
+                  </td>
+
+                  <td
+                    style={{
+                      padding: 14,
+                      borderBottom: "1px solid rgba(255,255,255,.05)",
+                      verticalAlign: "top",
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, color: "#fff" }}>{l.user_name || l.user_id || "-"}</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,.48)", marginTop: 4 }}>
+                      {l.user_type || "Sem perfil"}
+                    </div>
+                  </td>
+
+                  <td
+                    style={{
+                      padding: 14,
+                      borderBottom: "1px solid rgba(255,255,255,.05)",
+                      verticalAlign: "top",
+                    }}
+                  >
+                    <span
                       style={{
-                        textAlign: "left",
-                        padding: "14px 14px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "7px 10px",
+                        borderRadius: 999,
+                        border: `1px solid ${tone.bd}`,
+                        background: tone.bg,
+                        color: tone.color,
                         fontSize: 12,
-                        color: "rgba(255,255,255,.62)",
                         fontWeight: 800,
-                        borderBottom: "1px solid rgba(255,255,255,.06)",
-                        position: "sticky",
-                        top: 0,
-                        backdropFilter: "blur(8px)",
-                        zIndex: 1,
+                        letterSpacing: 0.2,
                       }}
                     >
-                      {h}
-                    </th>
-                  ))}
+                      {tone.label}
+                    </span>
+                  </td>
+
+                  <td
+                    style={{
+                      padding: 14,
+                      borderBottom: "1px solid rgba(255,255,255,.05)",
+                      verticalAlign: "top",
+                      color: "rgba(255,255,255,.86)",
+                    }}
+                  >
+                    {l.entity || "-"}
+                  </td>
+
+                  <td
+                    style={{
+                      padding: 14,
+                      borderBottom: "1px solid rgba(255,255,255,.05)",
+                      verticalAlign: "top",
+                      color: "rgba(255,255,255,.70)",
+                      fontFamily: "monospace",
+                      fontSize: 12,
+                    }}
+                  >
+                    {l.entity_id || "-"}
+                  </td>
+
+                  <td
+                    style={{
+                      padding: 14,
+                      borderBottom: "1px solid rgba(255,255,255,.05)",
+                      verticalAlign: "top",
+                      color: "rgba(255,255,255,.70)",
+                      fontFamily: "monospace",
+                      fontSize: 12,
+                    }}
+                  >
+                    {l.ip || "-"}
+                  </td>
+
+                  <td
+                    style={{
+                      padding: 14,
+                      borderBottom: "1px solid rgba(255,255,255,.05)",
+                      verticalAlign: "top",
+                      maxWidth: 460,
+                    }}
+                  >
+                    <div
+                      style={{
+                        borderRadius: 14,
+                        border: "1px solid rgba(255,255,255,.06)",
+                        background: "rgba(0,0,0,.18)",
+                        padding: 10,
+                      }}
+                    >
+                      <pre
+                        style={{
+                          margin: 0,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          color: "rgba(255,255,255,.78)",
+                          fontSize: 12,
+                          lineHeight: 1.45,
+                          fontFamily:
+                            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
+                        }}
+                      >
+                        {l.payload ? JSON.stringify(l.payload, null, 2) : "-"}
+                      </pre>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
+              );
+            })}
 
-              <tbody>
-                {rows.map((l, idx) => {
-                  const tone = getActionTone(l.action);
-                  return (
-                    <tr
-                      key={l.id}
-                      style={{
-                        background: idx % 2 === 0 ? "rgba(255,255,255,.012)" : "transparent",
-                      }}
-                    >
-                      <td
-                        style={{
-                          padding: 14,
-                          whiteSpace: "nowrap",
-                          color: "rgba(255,255,255,.82)",
-                          borderBottom: "1px solid rgba(255,255,255,.05)",
-                          verticalAlign: "top",
-                        }}
-                      >
-                        {fmtDate(l.created_at)}
-                      </td>
+            {!rows.length && !loading && (
+              <tr>
+                <td
+                  colSpan={7}
+                  style={{
+                    padding: 32,
+                    textAlign: "center",
+                    color: "rgba(255,255,255,.56)",
+                  }}
+                >
+                  Nenhum log encontrado.
+                </td>
+              </tr>
+            )}
 
-                      <td
-                        style={{
-                          padding: 14,
-                          borderBottom: "1px solid rgba(255,255,255,.05)",
-                          verticalAlign: "top",
-                        }}
-                      >
-                        <div style={{ fontWeight: 800, color: "#fff" }}>{l.user_name || l.user_id || "-"}</div>
-                        <div style={{ fontSize: 12, color: "rgba(255,255,255,.48)", marginTop: 4 }}>
-                          {l.user_type || "Sem perfil"}
-                        </div>
-                      </td>
-
-                      <td
-                        style={{
-                          padding: 14,
-                          borderBottom: "1px solid rgba(255,255,255,.05)",
-                          verticalAlign: "top",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "7px 10px",
-                            borderRadius: 999,
-                            border: `1px solid ${tone.bd}`,
-                            background: tone.bg,
-                            color: tone.color,
-                            fontSize: 12,
-                            fontWeight: 800,
-                            letterSpacing: 0.2,
-                          }}
-                        >
-                          {tone.label}
-                        </span>
-                      </td>
-
-                      <td
-                        style={{
-                          padding: 14,
-                          borderBottom: "1px solid rgba(255,255,255,.05)",
-                          verticalAlign: "top",
-                          color: "rgba(255,255,255,.86)",
-                        }}
-                      >
-                        {l.entity || "-"}
-                      </td>
-
-                      <td
-                        style={{
-                          padding: 14,
-                          borderBottom: "1px solid rgba(255,255,255,.05)",
-                          verticalAlign: "top",
-                          color: "rgba(255,255,255,.70)",
-                          fontFamily: "monospace",
-                          fontSize: 12,
-                        }}
-                      >
-                        {l.entity_id || "-"}
-                      </td>
-
-                      <td
-                        style={{
-                          padding: 14,
-                          borderBottom: "1px solid rgba(255,255,255,.05)",
-                          verticalAlign: "top",
-                          color: "rgba(255,255,255,.70)",
-                          fontFamily: "monospace",
-                          fontSize: 12,
-                        }}
-                      >
-                        {l.ip || "-"}
-                      </td>
-
-                      <td
-                        style={{
-                          padding: 14,
-                          borderBottom: "1px solid rgba(255,255,255,.05)",
-                          verticalAlign: "top",
-                          maxWidth: 460,
-                        }}
-                      >
-                        <div
-                          style={{
-                            borderRadius: 14,
-                            border: "1px solid rgba(255,255,255,.07)",
-                            background: "rgba(0,0,0,.22)",
-                            padding: 10,
-                          }}
-                        >
-                          <pre
-                            style={{
-                              margin: 0,
-                              whiteSpace: "pre-wrap",
-                              wordBreak: "break-word",
-                              color: "rgba(255,255,255,.78)",
-                              fontSize: 12,
-                              lineHeight: 1.45,
-                              fontFamily:
-                                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
-                            }}
-                          >
-                            {l.payload ? JSON.stringify(l.payload, null, 2) : "-"}
-                          </pre>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {!rows.length && !loading && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      style={{
-                        padding: 32,
-                        textAlign: "center",
-                        color: "rgba(255,255,255,.56)",
-                      }}
-                    >
-                      Nenhum log encontrado.
-                    </td>
-                  </tr>
-                )}
-
-                {loading && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      style={{
-                        padding: 32,
-                        textAlign: "center",
-                        color: "rgba(255,255,255,.56)",
-                      }}
-                    >
-                      Carregando logs...
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+            {loading && (
+              <tr>
+                <td
+                  colSpan={7}
+                  style={{
+                    padding: 32,
+                    textAlign: "center",
+                    color: "rgba(255,255,255,.56)",
+                  }}
+                >
+                  Carregando logs...
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
