@@ -44,22 +44,22 @@ const nav: NavItem[] = [
   { to: "/avisos", label: "Avisos", icon: Bell, group: "Visão geral" },
 
   // ===== DEV =====
-  { to: "/dashboard/producao-dia", label: "Dev Dash", icon: Code2, group: "Desenvolvimento", devOnly: true },
+  { to: "/dashboard/producao-dia", label: "Contingência", icon: Code2, group: "Desenvolvimento", devOnly: true },
   { to: "/dev/users", label: "Usuários", icon: Users, group: "Desenvolvimento", devOnly: true },
   { to: "/dev/logs", label: "Logs", icon: Logs, group: "Desenvolvimento", devOnly: true },
 
   // ===== APP =====
   { to: "/producao-planta", label: "Produção da Planta", icon: Factory, group: "Produção" },
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
-  { to: "/paradas", label: "Paradas", icon: PauseCircle, group: "Operação" },
-  { to: "/lancamento-paradas", label: "Lançamento de Paradas", icon: FileSpreadsheet, group: "Operação" },
+  { to: "/paradas", label: "Paradas Horas", icon: PauseCircle, group: "Operação" },
+  { to: "/lancamento-paradas", label: "Paradas Minutos", icon: FileSpreadsheet, group: "Operação" },
   { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
   { to: "/abastecimento", label: "Abastecimento", icon: Fuel, group: "Operação" },
 
 
   { to: "/historico", label: "Histórico", icon: History, group: "Operação" },
   { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
-  { to: "/exportar", label: "Exportar Excel", icon: FileSpreadsheet, group: "Utilitários" },
+  { to: "/exportar", label: "Relatórios", icon: FileSpreadsheet, group: "Utilitários" },
 ];
 
 
