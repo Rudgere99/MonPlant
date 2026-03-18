@@ -55,7 +55,6 @@ const nav: NavItem[] = [
   { to: "/lancamento-paradas", label: "Lançamento de Paradas", icon: FileSpreadsheet, group: "Operação" },
   { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
   { to: "/abastecimento", label: "Abastecimento", icon: Fuel, group: "Operação" },
-  { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
 
 
   { to: "/historico", label: "Histórico", icon: History, group: "Operação" },
