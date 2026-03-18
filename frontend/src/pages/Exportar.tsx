@@ -9,13 +9,13 @@ function ymd(d: Date) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+
 function normEq(v: any) {
   const s = String(v || "")
     .toUpperCase()
     .trim()
-    .replace(/\s+/g, "") // remove spaces
+    .replace(/\s+/g, "")
     .replace(/_/g, "-");
-  // canonical forms: remove hyphens for matching
   return s.replace(/-/g, "");
 }
 
@@ -31,11 +31,13 @@ function parseISODate(s: string) {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1);
 }
+
 function addDays(d: Date, n: number) {
   const x = new Date(d);
   x.setDate(x.getDate() + n);
   return x;
 }
+
 function dateRange(fromYMD: string, toYMD: string) {
   const a = parseISODate(fromYMD);
   const b = parseISODate(toYMD);
@@ -48,7 +50,6 @@ function dateRange(fromYMD: string, toYMD: string) {
   return out;
 }
 
-/** ✅ SEMPRE retorna um objeto "string -> string" */
 function authHeaders(): Record<string, string> {
   const keys = ["mp_token", "token", "access_token", "auth_token"];
   for (const k of keys) {
@@ -72,12 +73,12 @@ async function apiGet<T>(path: string): Promise<T> {
   return (await r.json()) as T;
 }
 
-// -------- tipos tolerantes ----------
 type PlantRow = { period: string; ton: number | null; freq: number | null };
 type PlantDay = { day: string; obs?: string | null; rows: PlantRow[] };
 
 type StopItem = any;
 type HoriItem = any;
+type ExportMode = "base" | "paradas";
 
 function pick(obj: any, keys: string[]) {
   for (const k of keys) {
@@ -90,7 +91,6 @@ function combineDateAndHour(dateStr: any, hourStr: any) {
   const d = String(dateStr || "").slice(0, 10);
   const h = String(hourStr || "").trim();
   if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d) || !h) return null;
-  // aceita "HH:MM" ou "HH:MM:SS"
   const hhmm = h.length >= 5 ? h.slice(0, 5) : h;
   const dt = new Date(`${d}T${hhmm}:00`);
   if (Number.isNaN(dt.getTime())) return null;
@@ -115,7 +115,6 @@ function hoursDiff(start: any, end: any) {
   return Math.round((ms / 3600000) * 100) / 100;
 }
 
-
 function classifyMaintenanceType(stop: any): "Corretiva" | "Preventiva" | "" {
   const raw =
     String(pick(stop, ["tipo", "tipo_parada", "stop_type", "type"]) || "") +
@@ -127,7 +126,6 @@ function classifyMaintenanceType(stop: any): "Corretiva" | "Preventiva" | "" {
 
   if (s.includes("PREV")) return "Preventiva";
   if (s.includes("CORR") || s.includes("CORRET")) return "Corretiva";
-  // fallback: se vier algo como "PMP" ou "PM" pode ser preventiva
   if (s.includes("PMP") || s.includes("PM ")) return "Preventiva";
   return "";
 }
@@ -146,10 +144,7 @@ function stopDurationHours(stop: any): number {
     combineDateAndHour(dataFim, horaFim) ??
     pick(stop, ["end_at", "fim", "end", "dt_fim", "data_fim"]);
 
-  const tempo =
-    Number(
-      pick(stop, ["tempo_h", "tempo_parada_h", "duration_h", "duracao_h"]) ?? NaN
-    );
+  const tempo = Number(pick(stop, ["tempo_h", "tempo_parada_h", "duration_h", "duracao_h"]) ?? NaN);
 
   if (Number.isFinite(tempo)) return Math.round(tempo * 100) / 100;
 
@@ -157,24 +152,20 @@ function stopDurationHours(stop: any): number {
   return Number.isFinite(hd as any) ? (hd as number) : 0;
 }
 
-
 function periodStartHour(p: any): number | null {
   const s = String(p || "").trim();
-  // aceita "HH:MM-HH:MM" ou "HH:MM - HH:MM" ou "HH-HH"
   let m = s.match(/^(\d{2}):\d{2}\s*-\s*\d{2}:\d{2}$/);
   if (m) return Number(m[1]);
   m = s.replace(/\s+/g, "").match(/^(\d{2})-(\d{2})$/);
   if (m) return Number(m[1]);
   return null;
 }
+
 function turnoByHour(h: number): 1 | 2 {
-  // Regra confirmada no backend:
-  // Turno 1: 07:00-19:00 (07..18)
-  // Turno 2: 19:00-07:00 (19..23 e 00..06)
   return h >= 7 && h <= 18 ? 1 : 2;
 }
+
 function eqToPlanta(eqNormNoHyphen: string): string {
-  // Ajuste aqui se você tiver outros tags
   if (eqNormNoHyphen === "PN01" || eqNormNoHyphen === "PNR01" || eqNormNoHyphen === "PNR001") return "Peneira Pnr001";
   if (eqNormNoHyphen === "PN02" || eqNormNoHyphen === "PNR02" || eqNormNoHyphen === "PNR002") return "Peneira Pnr002";
   if (eqNormNoHyphen === "BT01" || eqNormNoHyphen === "BT001") return "Britador Primário";
@@ -247,35 +238,152 @@ function downloadArrayBuffer(buf: ArrayBuffer, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function fmtDate(v: string) {
+  const d = new Date(`${v}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return v;
+  return d.toLocaleDateString("pt-BR");
+}
+
+function StatCard({ title, value, sub }: { title: string; value: string | number; sub?: string }) {
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(255,255,255,.08)",
+        background: "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
+        borderRadius: 18,
+        padding: 16,
+        minHeight: 88,
+        boxShadow: "0 10px 30px rgba(0,0,0,.18)",
+      }}
+    >
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)", marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.1 }}>{value}</div>
+      {sub ? <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,.48)" }}>{sub}</div> : null}
+    </div>
+  );
+}
+
+function ToneBadge({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "info" | "ok" | "warn" }) {
+  const styles: Record<string, React.CSSProperties> = {
+    muted: {
+      background: "rgba(148,163,184,.12)",
+      border: "1px solid rgba(148,163,184,.20)",
+      color: "#cbd5e1",
+    },
+    info: {
+      background: "rgba(59,130,246,.14)",
+      border: "1px solid rgba(59,130,246,.28)",
+      color: "#93c5fd",
+    },
+    ok: {
+      background: "rgba(34,197,94,.14)",
+      border: "1px solid rgba(34,197,94,.28)",
+      color: "#86efac",
+    },
+    warn: {
+      background: "rgba(245,158,11,.14)",
+      border: "1px solid rgba(245,158,11,.28)",
+      color: "#fcd34d",
+    },
+  };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "7px 10px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 800,
+        letterSpacing: 0.2,
+        ...styles[tone],
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ActionCard({
+  title,
+  description,
+  buttonText,
+  buttonTone,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  buttonText: string;
+  buttonTone: "primary" | "secondary";
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      style={{
+        borderRadius: 18,
+        border: "1px solid rgba(255,255,255,.08)",
+        background: "rgba(255,255,255,.03)",
+        padding: 16,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontWeight: 900, fontSize: 16 }}>{title}</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.56)", marginTop: 6 }}>{description}</div>
+        </div>
+        <ToneBadge tone={buttonTone === "primary" ? "info" : "warn"}>{buttonTone === "primary" ? "Template Base" : "Template Paradas"}</ToneBadge>
+      </div>
+
+      <div style={{ height: 14 }} />
+
+      <button
+        className={buttonTone === "primary" ? "mp-btn mp-btn-primary" : "mp-btn"}
+        onClick={onClick}
+        disabled={disabled}
+        style={{ minWidth: 210, height: 42, borderRadius: 12, fontWeight: 900 }}
+      >
+        {buttonText}
+      </button>
+    </div>
+  );
+}
+
 export default function Exportar() {
   const today = useMemo(() => ymd(new Date()), []);
   const [fromDay, setFromDay] = useState(today);
   const [toDay, setToDay] = useState(today);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>("");
+  const [lastFile, setLastFile] = useState<string>("");
+  const [lastMode, setLastMode] = useState<ExportMode | null>(null);
+
+  const days = useMemo(() => dateRange(fromDay, toDay), [fromDay, toDay]);
+  const periodLabel = useMemo(() => {
+    if (fromDay === toDay) return fmtDate(fromDay);
+    return `${fmtDate(fromDay)} até ${fmtDate(toDay)}`;
+  }, [fromDay, toDay]);
 
   async function handleExport() {
     setMsg("");
     setBusy(true);
+    setLastMode("base");
 
     try {
-      // 1) carrega TEMPLATE do public
       const tplRes = await fetch("/BASE_PLANTA.xlsx");
       if (!tplRes.ok) throw new Error("Não achei /BASE_PLANTA.xlsx em public/");
       const tplBuf = await tplRes.arrayBuffer();
-
-      // 2) lê workbook
       const wb = XLSX.read(tplBuf, { type: "array", cellDates: true });
-
       const days = dateRange(fromDay, toDay);
 
-      // 3) puxa dados por dia
       const plantDays: PlantDay[] = [];
       const allStops: StopItem[] = [];
       const allHor: HoriItem[] = [];
 
       for (const d of days) {
-        // Produção do dia
         try {
           const pd = await apiGet<PlantDay>(`/api/plant-production/${d}`);
           plantDays.push(pd);
@@ -283,31 +391,21 @@ export default function Exportar() {
           plantDays.push({ day: d, obs: "", rows: [] });
         }
 
-        // Paradas do dia
         try {
           const st = await apiGet<any[]>(`/api/stops?day=${d}`);
           for (const s of st || []) allStops.push(s);
-        } catch {
-          // ok
-        }
+        } catch {}
 
-        // Horímetros do dia
         try {
           const hh = await apiGet<any[]>(`/api/horimetros?day=${d}&limit=2000`);
           for (const h of hh || []) allHor.push(h);
-        } catch {
-          // ok
-        }
+        } catch {}
       }
 
-      // ===================== ABA: Paradas =====================
-      // Mantém a aba simples "Paradas" (que você já usa)
       const wsParadas = getOrCreateSheet(wb, "Paradas");
       clearSheetValues(wsParadas, 2);
 
-      // E também preenche a aba do template "PARADAS TOTAIS" (mais completa)
       const wsParTot = getOrCreateSheet(wb, "PARADAS TOTAIS");
-      // header do template começa na linha 2 (linha 1 é título/blank)
       clearSheetValues(wsParTot, 3);
 
       allStops.sort((a, b) => {
@@ -318,29 +416,20 @@ export default function Exportar() {
         return da - db;
       });
 
-      let rPar = 2;      // aba "Paradas"
-      let rParTot = 3;   // aba "PARADAS TOTAIS"
+      let rPar = 2;
+      let rParTot = 3;
 
       for (const s of allStops) {
         const day = pick(s, ["day", "data_turno", "data", "shift_day"]) || null;
-        const turno =
-          pick(s, ["turno", "shift", "turn", "turno_nome"]) ||
-          pick(s, ["turno_num", "shift_num"]) ||
-          "";
+        const turno = pick(s, ["turno", "shift", "turn", "turno_nome"]) || pick(s, ["turno_num", "shift_num"]) || "";
 
         const dataIni = pick(s, ["data_inicio", "dt_inicio", "data_ini", "day_ini"]);
         const horaIni = pick(s, ["hora_inicio", "hr_inicio", "time_ini", "hora_ini"]);
         const dataFim = pick(s, ["data_fim", "dt_fim", "data_end", "day_fim"]);
         const horaFim = pick(s, ["hora_fim", "hr_fim", "time_end", "hora_end"]);
 
-        // Backend MonPlant salva data e hora separados (data_inicio + hora_inicio)
-        const startV =
-          combineDateAndHour(dataIni, horaIni) ??
-          pick(s, ["start_at", "inicio", "start", "dt_inicio", "data_inicio"]);
-
-        const endV =
-          combineDateAndHour(dataFim, horaFim) ??
-          pick(s, ["end_at", "fim", "end", "dt_fim", "data_fim"]);
+        const startV = combineDateAndHour(dataIni, horaIni) ?? pick(s, ["start_at", "inicio", "start", "dt_inicio", "data_inicio"]);
+        const endV = combineDateAndHour(dataFim, horaFim) ?? pick(s, ["end_at", "fim", "end", "dt_fim", "data_fim"]);
 
         const start = toDateTimeParts(startV);
         const end = toDateTimeParts(endV);
@@ -350,15 +439,12 @@ export default function Exportar() {
         const ativ = pick(s, ["atividade", "activity"]) || "";
         const desc = pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "";
 
-        const tempo =
-          pick(s, ["tempo_h", "tempo_parada_h", "duration_h", "duracao_h"]) ??
-          (startV && endV ? hoursDiff(startV, endV) : null);
+        const tempo = pick(s, ["tempo_h", "tempo_parada_h", "duration_h", "duracao_h"]) ?? (startV && endV ? hoursDiff(startV, endV) : null);
 
         let dTurno: Date | null = null;
         if (typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)) dTurno = parseISODate(day);
         else if (start.date) dTurno = new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate());
 
-        // ---- Aba "Paradas" (simples) ----
         setCell(wsParadas, rPar, 1, dTurno);
         setCell(wsParadas, rPar, 2, String(turno || ""));
         setCell(wsParadas, rPar, 3, start.date ? new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate()) : "");
@@ -372,32 +458,22 @@ export default function Exportar() {
         setCell(wsParadas, rPar, 11, tempo ?? "");
         rPar++;
 
-        // ---- Aba "PARADAS TOTAIS" (template) ----
-        // Colunas (pela planilha):
-        // B Data Início | C Hora Início | D Planta | E Turno | F Tipo de Parada | G Código da Parada | H Descrição
-        // I Data Fim    | J Hora Fim    | K Tempo Parada (fórmula no template)
-        const eqNormNoHyphen = normEq(equip); // já remove hífen no final
+        const eqNormNoHyphen = normEq(equip);
         const planta = eqToPlanta(eqNormNoHyphen) || "";
-
-        // Tenta manter Turno numérico quando possível
         const t = normTurno(turno) || "";
 
-        // Hora no formato "HH:MM" (o Excel converte)
         setCell(wsParTot, rParTot, 2, start.date ? new Date(start.date.getFullYear(), start.date.getMonth(), start.date.getDate()) : "");
         setCell(wsParTot, rParTot, 3, start.hhmm || "");
         setCell(wsParTot, rParTot, 4, planta);
         setCell(wsParTot, rParTot, 5, t ? Number(t) : "");
         setCell(wsParTot, rParTot, 6, String(tipo || ""));
-        // Código da Parada: não existe no cadastro do MonPlant hoje -> deixa vazio (não quebra fórmulas)
         setCell(wsParTot, rParTot, 7, "");
         setCell(wsParTot, rParTot, 8, String(desc || ""));
         setCell(wsParTot, rParTot, 9, end.date ? new Date(end.date.getFullYear(), end.date.getMonth(), end.date.getDate()) : "");
         setCell(wsParTot, rParTot, 10, end.hhmm || "");
-        // Coluna K (tempo) tem fórmula no template; não sobrescreve.
         rParTot++;
       }
 
-      // ===================== ABA: HORÍMETROS =====================
       const wsHor = getOrCreateSheet(wb, "HORÍMETROS");
       clearSheetValues(wsHor, 2);
 
@@ -415,10 +491,8 @@ export default function Exportar() {
 
       let rHor = 2;
 
-      // escreve horímetros em linhas por TURNO (quando existir). Se não existir no dia, escreve só a data (linha vazia).
       for (const d of days) {
         const dt = parseISODate(d);
-
         const buckets = (["1", "2", "?"] as const)
           .map((t) => ({ t, list: horByKey.get(`${d}|${t}`) || [] }))
           .filter((x) => x.list.length);
@@ -436,15 +510,11 @@ export default function Exportar() {
           for (const h of list) {
             const eqRaw = pick(h, ["equipamento", "equipment", "eq", "tag"]);
             const eq = normEq(eqRaw);
-
             const ini = Number(pick(h, ["horimetro_ini", "ini", "inicial", "start"]) ?? NaN);
             const fim = Number(pick(h, ["horimetro_fim", "fim", "final", "end"]) ?? NaN);
             const turno = pick(h, ["turno", "shift", "turn"]);
-
             if (!eq) continue;
 
-            // Se por acaso vier duplicado do mesmo equipamento no mesmo turno,
-            // guardamos o que tiver ini/fim válidos.
             const cur = byEq.get(eq);
             const next = {
               ini: Number.isFinite(ini) ? ini : null,
@@ -466,8 +536,7 @@ export default function Exportar() {
           const pn01 = byEq.get("PN01") || null;
           const pn02 = byEq.get("PN02") || null;
 
-          const hTr = (x: any) =>
-            x?.ini != null && x?.fim != null ? Math.round((x.fim - x.ini) * 100) / 100 : "";
+          const hTr = (x: any) => (x?.ini != null && x?.fim != null ? Math.round((x.fim - x.ini) * 100) / 100 : "");
 
           setCell(wsHor, rHor, 1, dt);
           setCell(wsHor, rHor, 2, bt01?.ini ?? "");
@@ -479,28 +548,20 @@ export default function Exportar() {
           setCell(wsHor, rHor, 8, pn02?.ini ?? "");
           setCell(wsHor, rHor, 9, pn02?.fim ?? "");
 
-          // turno: se vier no registro, usa, senão usa bucket ("1"/"2"/"?")
           const t = bt01?.turno ?? bt02?.turno ?? pn01?.turno ?? pn02?.turno ?? bucket.t;
           setCell(wsHor, rHor, 10, t ? String(t) : "");
-
           setCell(wsHor, rHor, 11, hTr(bt01));
           setCell(wsHor, rHor, 12, hTr(bt02));
           setCell(wsHor, rHor, 13, hTr(pn01));
           setCell(wsHor, rHor, 14, hTr(pn02));
-
           rHor++;
         }
       }
 
-      // ===================== ABA: PRODUÇÃO =====================
       const wsProd = getOrCreateSheet(wb, "PRODUÇÃO");
       clearSheetValues(wsProd, 3);
 
-      // Consolida produção por dia e por turno (regra 07-19 / 19-07)
-      const prodShiftMap = new Map<
-        string,
-        { t1: number; t2: number; total: number; obs: string }
-      >();
+      const prodShiftMap = new Map<string, { t1: number; t2: number; total: number; obs: string }>();
 
       for (const pd of plantDays) {
         let t1 = 0;
@@ -525,20 +586,17 @@ export default function Exportar() {
         });
       }
 
-      // (1) Preenche a aba "PRODUÇÃO" (total por dia)
       let rProd = 3;
       for (const d of days) {
         const dt = parseISODate(d);
         const v = prodShiftMap.get(d) || { t1: 0, t2: 0, total: 0, obs: "" };
-
-        setCell(wsProd, rProd, 2, dt);              // B = Data
-        setCell(wsProd, rProd, 3, "");              // C = Meta diaria (deixa template/fórmula)
-        setCell(wsProd, rProd, 4, v.total || "");   // D = Produção (Total)
-        setCell(wsProd, rProd, 5, v.obs || "");     // E = Observação
+        setCell(wsProd, rProd, 2, dt);
+        setCell(wsProd, rProd, 3, "");
+        setCell(wsProd, rProd, 4, v.total || "");
+        setCell(wsProd, rProd, 5, v.obs || "");
         rProd++;
       }
 
-      // (2) Preenche a aba "Planilha1" (Produção por Turno + Total)
       const wsProdTurno = getOrCreateSheet(wb, "Planilha1");
       clearSheetValues(wsProdTurno, 2);
 
@@ -546,26 +604,20 @@ export default function Exportar() {
       for (const d of days) {
         const dt = parseISODate(d);
         const v = prodShiftMap.get(d) || { t1: 0, t2: 0, total: 0, obs: "" };
-
-        // Colunas:
-        // A Data | B Meta diaria | C Produção 1° T | D Produção 2° T | E Total produzido
         setCell(wsProdTurno, rPT, 1, dt);
-        setCell(wsProdTurno, rPT, 2, ""); // meta diária fica no template / você pode plugar depois
+        setCell(wsProdTurno, rPT, 2, "");
         setCell(wsProdTurno, rPT, 3, v.t1 || "");
         setCell(wsProdTurno, rPT, 4, v.t2 || "");
         setCell(wsProdTurno, rPT, 5, v.total || "");
         rPT++;
       }
 
-      // 7) salva
       const outBuf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-      const fileName =
-        fromDay === toDay
-          ? `BASE_PLANTA_${fromDay}.xlsx`
-          : `BASE_PLANTA_${fromDay}_a_${toDay}.xlsx`;
+      const fileName = fromDay === toDay ? `BASE_PLANTA_${fromDay}.xlsx` : `BASE_PLANTA_${fromDay}_a_${toDay}.xlsx`;
 
       downloadArrayBuffer(outBuf, fileName);
-      setMsg(`✅ Exportado: ${fileName}`);
+      setLastFile(fileName);
+      setMsg(`✅ Exportado com sucesso: ${fileName}`);
     } catch (e: any) {
       setMsg(`❌ ${e?.message || String(e)}`);
     } finally {
@@ -576,70 +628,38 @@ export default function Exportar() {
   async function handleExportModeloParadas() {
     setMsg("");
     setBusy(true);
+    setLastMode("paradas");
 
     try {
-      // 1) carrega TEMPLATE do modelo (coloque em public/)
-      // Sugestão de nome: public/MODELO_PARADAS.xlsx
       const tplRes = await fetch("/MODELO_PARADAS.xlsx");
       if (!tplRes.ok) throw new Error("Não achei /MODELO_PARADAS.xlsx em public/");
       const tplBuf = await tplRes.arrayBuffer();
-
-      // 2) lê workbook
       const wb = XLSX.read(tplBuf, { type: "array", cellDates: true });
 
       const sheetName = wb.SheetNames[0] || "Modelo para exportação";
       const ws = getOrCreateSheet(wb, sheetName);
-
       const days = dateRange(fromDay, toDay);
 
-      // 3) puxa paradas (mesmo endpoint da página Paradas)
       const stops: any[] = [];
       for (const d of days) {
         try {
           const st = await apiGet<any[]>(`/api/stops?day=${d}`);
           for (const s of st || []) stops.push(s);
-        } catch {
-          // ok
-        }
+        } catch {}
       }
 
-      // 4) calcula horas por dia (Corretiva/Preventiva)
-      const byDay = new Map<
-        string,
-        { corr: number; prev: number; total: number }
-      >();
-
+      const byDay = new Map<string, { corr: number; prev: number; total: number }>();
       for (const d of days) byDay.set(d, { corr: 0, prev: 0, total: 0 });
 
-      // também prepara lista detalhada (1 linha por parada)
-      const detailRows: {
-        day: string;
-        desc: string;
-        tipo: string;
-        horas: number;
-      }[] = [];
+      const detailRows: { day: string; desc: string; tipo: string; horas: number }[] = [];
 
       for (const s of stops) {
-        const day =
-          String(
-            pick(s, ["day", "data_turno", "data", "shift_day"]) || ""
-          ).slice(0, 10) || "";
-
+        const day = String(pick(s, ["day", "data_turno", "data", "shift_day"]) || "").slice(0, 10) || "";
         if (!day) continue;
 
         const tipo = classifyMaintenanceType(s);
         const horas = stopDurationHours(s);
-
-        const desc =
-          String(
-            pick(s, [
-              "descricao",
-              "descricao_detalhada",
-              "detail",
-              "detalhe",
-              "obs",
-            ]) || ""
-          ).trim();
+        const desc = String(pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "").trim();
 
         const cur = byDay.get(day) || { corr: 0, prev: 0, total: 0 };
         if (tipo === "Corretiva") cur.corr += horas;
@@ -647,15 +667,9 @@ export default function Exportar() {
         cur.total += horas;
         byDay.set(day, cur);
 
-        detailRows.push({
-          day,
-          desc,
-          tipo: tipo || "",
-          horas,
-        });
+        detailRows.push({ day, desc, tipo: tipo || "", horas });
       }
 
-      // arredonda
       for (const [k, v] of byDay.entries()) {
         v.corr = Math.round(v.corr * 100) / 100;
         v.prev = Math.round(v.prev * 100) / 100;
@@ -663,28 +677,19 @@ export default function Exportar() {
         byDay.set(k, v);
       }
 
-      // 5) limpa área do modelo
-      // Modelo tem 2 tabelas:
-      // A:D (Data, Horas Corretiva, Horas Preventiva, Total Horas)
-      // F:I (Data, Descrição, Tipo, Total Horas)
-      // Cabeçalhos ficam na linha 3. Dados começam na linha 4.
       clearSheetValues(ws, 4);
 
-      // 6) escreve resumo por dia (A:D)
       let r = 4;
       for (const d of days) {
         const dt = parseISODate(d);
         const v = byDay.get(d) || { corr: 0, prev: 0, total: 0 };
-
-        setCell(ws, r, 1, dt);          // A Data
-        setCell(ws, r, 2, v.corr || ""); // B Horas Corretiva
-        setCell(ws, r, 3, v.prev || ""); // C Horas Preventiva
-        setCell(ws, r, 4, v.total || ""); // D Total Horas
+        setCell(ws, r, 1, dt);
+        setCell(ws, r, 2, v.corr || "");
+        setCell(ws, r, 3, v.prev || "");
+        setCell(ws, r, 4, v.total || "");
         r++;
       }
 
-      // 7) escreve detalhes (F:I) 1 linha por parada
-      // ordena por dia e horas desc
       detailRows.sort((a, b) => {
         if (a.day !== b.day) return a.day.localeCompare(b.day);
         return (b.horas || 0) - (a.horas || 0);
@@ -693,22 +698,19 @@ export default function Exportar() {
       let r2 = 4;
       for (const row of detailRows) {
         const dt = parseISODate(row.day);
-        setCell(ws, r2, 6, dt);                // F Data
-        setCell(ws, r2, 7, row.desc || "");     // G Descrição
-        setCell(ws, r2, 8, row.tipo || "");     // H Tipo de manutenção
-        setCell(ws, r2, 9, row.horas || "");    // I Total de Horas Paradas (da parada)
+        setCell(ws, r2, 6, dt);
+        setCell(ws, r2, 7, row.desc || "");
+        setCell(ws, r2, 8, row.tipo || "");
+        setCell(ws, r2, 9, row.horas || "");
         r2++;
       }
 
-      // 8) salva
       const outBuf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-      const fileName =
-        fromDay === toDay
-          ? `PARADAS_MODELO_${fromDay}.xlsx`
-          : `PARADAS_MODELO_${fromDay}_a_${toDay}.xlsx`;
+      const fileName = fromDay === toDay ? `PARADAS_MODELO_${fromDay}.xlsx` : `PARADAS_MODELO_${fromDay}_a_${toDay}.xlsx`;
 
       downloadArrayBuffer(outBuf, fileName);
-      setMsg(`✅ Exportado (modelo paradas): ${fileName}`);
+      setLastFile(fileName);
+      setMsg(`✅ Exportado com sucesso: ${fileName}`);
     } catch (e: any) {
       setMsg(`❌ ${e?.message || String(e)}`);
     } finally {
@@ -716,61 +718,185 @@ export default function Exportar() {
     }
   }
 
-
-
   return (
-    <div className="mp-container">
-      <div>
-        <div className="mp-chip">Utilitários</div>
-        <div className="mp-page-title">Exportar Excel</div>
-        <div className="mp-page-sub">Exportar no padrão do seu BASE_PLANTA.xlsx.</div>
-      </div>
+    <div style={{ padding: 18 }}>
+      <div
+        className="mp-card"
+        style={{
+          borderRadius: 24,
+          overflow: "hidden",
+          border: "1px solid rgba(255,255,255,.08)",
+          background:
+            "radial-gradient(circle at top right, rgba(59,130,246,.10), transparent 24%), linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
+          boxShadow: "0 20px 60px rgba(0,0,0,.22)",
+        }}
+      >
+        <div
+          className="mp-card-h"
+          style={{
+            padding: "18px 18px 8px 18px",
+            borderBottom: "1px solid rgba(255,255,255,.06)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: 0.2 }}>Exportar Excel</div>
+            <div style={{ marginTop: 4, color: "rgba(255,255,255,.58)", fontSize: 13 }}>
+              Gere planilhas no padrão operacional do MonPlant a partir dos templates cadastrados.
+            </div>
+          </div>
 
-      <div style={{ height: 16 }} />
-
-      <div className="mp-card">
-        <div className="mp-card-h">
-          <b>Exportação</b>
-          <span className="mp-help">Gera arquivo preenchendo as abas do template</span>
+          <ToneBadge tone="info">Utilitários / Exportação</ToneBadge>
         </div>
 
-        <div className="mp-card-b">
-          <div className="mp-grid-2" style={{ gap: 12 }}>
-            <div>
-              <div className="mp-help">Data inicial</div>
-              <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={busy} />
-            </div>
-
-            <div>
-              <div className="mp-help">Data final</div>
-              <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={busy} />
-            </div>
+        <div className="mp-card-b" style={{ padding: 18 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 12,
+              marginBottom: 18,
+            }}
+          >
+            <StatCard title="Período" value={days.length} sub={days.length === 1 ? "1 dia selecionado" : `${days.length} dias selecionados`} />
+            <StatCard title="Data inicial" value={fmtDate(fromDay)} />
+            <StatCard title="Data final" value={fmtDate(toDay)} />
+            <StatCard title="Último arquivo" value={lastFile || "—"} sub={lastMode ? (lastMode === "base" ? "Modelo BASE_PLANTA" : "Modelo PARADAS") : "Nenhuma exportação ainda"} />
           </div>
 
-          <div style={{ height: 12 }} />
+          <div
+            style={{
+              borderRadius: 20,
+              border: "1px solid rgba(255,255,255,.08)",
+              background: "rgba(7,10,18,.42)",
+              padding: 16,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,.02)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 14,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>Parâmetros da exportação</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
+                  Defina o intervalo e escolha o modelo que deseja gerar.
+                </div>
+              </div>
 
-          <button className="mp-btn mp-btn-primary" onClick={handleExport} disabled={busy}>
-            {busy ? "Gerando..." : "Gerar Excel"}
-          </button>
+              <ToneBadge tone="muted">{periodLabel}</ToneBadge>
+            </div>
 
-          <div style={{ height: 10 }} />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: 12,
+              }}
+            >
+              <div>
+                <div className="mp-label" style={{ marginBottom: 6 }}>Data inicial</div>
+                <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={busy} />
+              </div>
 
-          <button className="mp-btn" onClick={handleExportModeloParadas} disabled={busy}>
-            {busy ? "Gerando..." : "Gerar Excel (Modelo Paradas)"}
-          </button>
+              <div>
+                <div className="mp-label" style={{ marginBottom: 6 }}>Data final</div>
+                <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={busy} />
+              </div>
+            </div>
 
-          <div style={{ height: 8 }} />
-          <div className="mp-help">
-            Modelo de paradas em <b>public/MODELO_PARADAS.xlsx</b> (igual ao template enviado)
-          </div>
+            <div style={{ height: 14 }} />
 
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: 12,
+              }}
+            >
+              <ActionCard
+                title="Exportação base da planta"
+                description="Preenche o template principal com Produção, Horímetros, Paradas e PARADAS TOTAIS usando o arquivo public/BASE_PLANTA.xlsx."
+                buttonText={busy && lastMode === "base" ? "Gerando..." : "Gerar Excel Base"}
+                buttonTone="primary"
+                disabled={busy}
+                onClick={handleExport}
+              />
 
-          <div style={{ height: 10 }} />
-          {msg ? <div className="mp-help">{msg}</div> : null}
+              <ActionCard
+                title="Exportação modelo de paradas"
+                description="Gera o modelo resumido e detalhado de manutenção/paradas usando o arquivo public/MODELO_PARADAS.xlsx."
+                buttonText={busy && lastMode === "paradas" ? "Gerando..." : "Gerar Excel Modelo Paradas"}
+                buttonTone="secondary"
+                disabled={busy}
+                onClick={handleExportModeloParadas}
+              />
+            </div>
 
-          <div style={{ height: 8 }} />
-          <div className="mp-help">
-            Template em <b>public/BASE_PLANTA.xlsx</b>
+            <div style={{ height: 14 }} />
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  borderRadius: 16,
+                  border: "1px solid rgba(255,255,255,.06)",
+                  background: "rgba(255,255,255,.03)",
+                  padding: 14,
+                }}
+              >
+                <div style={{ fontWeight: 800, marginBottom: 6 }}>Template principal</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)" }}>
+                  Arquivo esperado em <b>public/BASE_PLANTA.xlsx</b>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  borderRadius: 16,
+                  border: "1px solid rgba(255,255,255,.06)",
+                  background: "rgba(255,255,255,.03)",
+                  padding: 14,
+                }}
+              >
+                <div style={{ fontWeight: 800, marginBottom: 6 }}>Template de paradas</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)" }}>
+                  Arquivo esperado em <b>public/MODELO_PARADAS.xlsx</b>
+                </div>
+              </div>
+            </div>
+
+            {msg ? (
+              <div
+                style={{
+                  marginTop: 14,
+                  borderRadius: 14,
+                  border: msg.startsWith("✅")
+                    ? "1px solid rgba(34,197,94,.25)"
+                    : "1px solid rgba(239,68,68,.25)",
+                  background: msg.startsWith("✅") ? "rgba(34,197,94,.10)" : "rgba(239,68,68,.10)",
+                  padding: 12,
+                  color: "rgba(255,255,255,.92)",
+                }}
+              >
+                {msg}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
