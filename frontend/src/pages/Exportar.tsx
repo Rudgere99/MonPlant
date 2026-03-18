@@ -754,19 +754,6 @@ export default function Exportar() {
         </div>
 
         <div className="mp-card-b" style={{ padding: 18 }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: 12,
-              marginBottom: 18,
-            }}
-          >
-            <StatCard title="Período" value={days.length} sub={days.length === 1 ? "1 dia selecionado" : `${days.length} dias selecionados`} />
-            <StatCard title="Data inicial" value={fmtDate(fromDay)} />
-            <StatCard title="Data final" value={fmtDate(toDay)} />
-            <StatCard title="Último arquivo" value={lastFile || "—"} sub={lastMode ? (lastMode === "base" ? "Modelo BASE_PLANTA" : "Modelo PARADAS") : "Nenhuma exportação ainda"} />
-          </div>
 
           <div
             style={{
