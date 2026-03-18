@@ -1136,6 +1136,22 @@ export default function Exportar() {
 
           <ToneBadge tone="info">MonPlant • Exportação Assistida</ToneBadge>
         </div>
+
+        <div className="mp-card-b" style={{ padding: 18 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 12,
+              marginBottom: 18,
+            }}
+          >
+            <StatCard title="Período selecionado" value={days.length} sub={days.length === 1 ? "1 dia" : `${days.length} dias`} />
+            <StatCard title="Data inicial" value={fmtDate(fromDay)} />
+            <StatCard title="Data final" value={fmtDate(toDay)} />
+            <StatCard title="Último arquivo" value={lastFile || "—"} sub={lastFile ? `Modo: ${lastMode === "base" ? "Base" : "Paradas"}` : "Nenhuma exportação ainda"} />
+          </div>
+
           <div
             style={{
               borderRadius: 20,
