@@ -1137,8 +1137,6 @@ export default function Exportar() {
           <ToneBadge tone="info">MonPlant • Exportação Assistida</ToneBadge>
         </div>
 
-        <div className="mp-card-b" style={{ padding: 18 }}>
-
           <div
             style={{
               borderRadius: 20,
@@ -1256,6 +1254,7 @@ export default function Exportar() {
                   padding: 14,
                 }}
               >
+              </div>
 
               <div
                 style={{
