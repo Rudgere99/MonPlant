@@ -49,7 +49,7 @@ const nav: NavItem[] = [
   { to: "/dev/logs", label: "Logs", icon: Logs, group: "Desenvolvimento", devOnly: true },
 
   // ===== APP =====
-  { to: "/producao-planta", label: "Produção da Planta", icon: Factory, group: "Produção" },
+  { to: "/producao-planta", label: "Produção Planta", icon: Factory, group: "Produção" },
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/paradas", label: "Paradas Horas", icon: PauseCircle, group: "Operação" },
   { to: "/lancamento-paradas", label: "Paradas Minutos", icon: PauseCircle, group: "Operação" },
