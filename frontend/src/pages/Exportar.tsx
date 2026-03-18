@@ -1136,7 +1136,6 @@ export default function Exportar() {
 
           <ToneBadge tone="info">MonPlant • Exportação Assistida</ToneBadge>
         </div>
-
           <div
             style={{
               borderRadius: 20,
@@ -1254,6 +1253,10 @@ export default function Exportar() {
                   padding: 14,
                 }}
               >
+                <div style={{ fontWeight: 800, marginBottom: 6 }}>Template principal</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)" }}>
+                  Arquivo esperado em <b>public/BASE_PLANTA.xlsx</b>
+                </div>
               </div>
 
               <div
@@ -1264,6 +1267,10 @@ export default function Exportar() {
                   padding: 14,
                 }}
               >
+                <div style={{ fontWeight: 800, marginBottom: 6 }}>Template de paradas</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)" }}>
+                  Arquivo esperado em <b>public/MODELO_PARADAS.xlsx</b>
+                </div>
               </div>
             </div>
 
