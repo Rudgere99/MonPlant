@@ -1138,19 +1138,6 @@ export default function Exportar() {
         </div>
 
         <div className="mp-card-b" style={{ padding: 18 }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 12,
-              marginBottom: 18,
-            }}
-          >
-            <StatCard title="Período selecionado" value={days.length} sub={days.length === 1 ? "1 dia" : `${days.length} dias`} />
-            <StatCard title="Data inicial" value={fmtDate(fromDay)} />
-            <StatCard title="Data final" value={fmtDate(toDay)} />
-            <StatCard title="Último arquivo" value={lastFile || "—"} sub={lastFile ? `Modo: ${lastMode === "base" ? "Base" : "Paradas"}` : "Nenhuma exportação ainda"} />
-          </div>
 
           <div
             style={{
@@ -1269,11 +1256,6 @@ export default function Exportar() {
                   padding: 14,
                 }}
               >
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>Template principal</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)" }}>
-                  Arquivo esperado em <b>public/BASE_PLANTA.xlsx</b>
-                </div>
-              </div>
 
               <div
                 style={{
@@ -1283,10 +1265,6 @@ export default function Exportar() {
                   padding: 14,
                 }}
               >
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>Template de paradas</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)" }}>
-                  Arquivo esperado em <b>public/MODELO_PARADAS.xlsx</b>
-                </div>
               </div>
             </div>
 
