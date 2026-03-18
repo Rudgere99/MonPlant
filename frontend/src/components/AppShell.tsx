@@ -511,59 +511,6 @@ function AppShell() {
               </button>
             </div>
 
-            {/* search da sidebar: remover quando colapsado */}
-            {!sideCollapsed ? (
-              <div
-                style={{
-                  marginTop: 14,
-                  height: 44,
-                  borderRadius: 14,
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  background: "rgba(0,0,0,0.22)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "0 12px",
-                  color: "rgba(255,255,255,0.70)",
-                  flex: "0 0 auto",
-                }}
-                title="placeholder visual"
-              >
-                <Search size={16} />
-                <input
-                  value=""
-                  onChange={() => {}}
-                  disabled
-                  placeholder="Search here."
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    color: "rgba(255,255,255,0.80)",
-                    fontWeight: 800,
-                  }}
-                />
-              </div>
-            ) : null}
-
-            {!sideCollapsed ? (
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: "0 10px",
-                  fontSize: 11,
-                  fontWeight: 950,
-                  letterSpacing: 1,
-                  color: "rgba(255,255,255,.40)",
-                  textTransform: "uppercase",
-                  flex: "0 0 auto",
-                }}
-              >
-                Menu
-              </div>
-            ) : null}
-
             {/* Área rolável do menu */}
             <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
               <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
