@@ -10,10 +10,12 @@ function ymd(d: Date) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+
 function parseISODate(s: string) {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1);
 }
+
 function rangeDays(fromYMD: string, toYMD: string) {
   const a = parseISODate(fromYMD);
   const b = parseISODate(toYMD);
@@ -34,6 +36,7 @@ function authHeaders(): Record<string, string> {
   }
   return {};
 }
+
 async function apiGet<T>(path: string): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -50,23 +53,92 @@ async function apiGet<T>(path: string): Promise<T> {
 function fmtNum(v: any, digits = 1) {
   const n = Number(v);
   if (!Number.isFinite(n)) return "";
-  return n.toLocaleString("pt-BR", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+  return n.toLocaleString("pt-BR", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: 0,
+  });
 }
-function badgeStyle(kind: "ok" | "warn" | "muted" = "muted") {
+
+function fmtDateTime(v?: string | null) {
+  if (!v) return "";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v).replace("T", " ").slice(0, 19);
+  return d.toLocaleString("pt-BR");
+}
+
+function badgeStyle(kind: "ok" | "warn" | "muted" | "info" = "muted"): React.CSSProperties {
   const base: React.CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    padding: "4px 10px",
+    padding: "6px 10px",
     borderRadius: 999,
-    fontWeight: 900,
+    fontWeight: 800,
     fontSize: 12,
     letterSpacing: 0.2,
     border: "1px solid rgba(255,255,255,0.10)",
+    whiteSpace: "nowrap",
   };
-  if (kind === "ok") return { ...base, background: "rgba(34,197,94,0.14)", color: "rgba(255,255,255,0.92)" };
-  if (kind === "warn") return { ...base, background: "rgba(255,159,26,0.16)", color: "rgba(255,255,255,0.92)" };
-  return { ...base, background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.78)" };
+
+  if (kind === "ok") {
+    return {
+      ...base,
+      background: "rgba(34,197,94,0.14)",
+      border: "1px solid rgba(34,197,94,0.28)",
+      color: "#86efac",
+    };
+  }
+
+  if (kind === "warn") {
+    return {
+      ...base,
+      background: "rgba(245,158,11,0.14)",
+      border: "1px solid rgba(245,158,11,0.28)",
+      color: "#fcd34d",
+    };
+  }
+
+  if (kind === "info") {
+    return {
+      ...base,
+      background: "rgba(59,130,246,0.14)",
+      border: "1px solid rgba(59,130,246,0.28)",
+      color: "#93c5fd",
+    };
+  }
+
+  return {
+    ...base,
+    background: "rgba(255,255,255,0.06)",
+    color: "rgba(255,255,255,0.78)",
+  };
+}
+
+function StatCard({
+  title,
+  value,
+  sub,
+}: {
+  title: string;
+  value: string | number;
+  sub?: string;
+}) {
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(255,255,255,.08)",
+        background: "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
+        borderRadius: 18,
+        padding: 16,
+        minHeight: 88,
+        boxShadow: "0 10px 30px rgba(0,0,0,.18)",
+      }}
+    >
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)", marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.1 }}>{value}</div>
+      {sub ? <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,.48)" }}>{sub}</div> : null}
+    </div>
+  );
 }
 
 type HorimetroItem = {
@@ -145,7 +217,9 @@ export default function Historico() {
       .filter((h) => (equip ? String(h.equipamento || "").toLowerCase() === equip.toLowerCase() : true))
       .filter((h) => {
         if (!qq) return true;
-        const blob = [h.day, h.equipamento, h.turno, h.horimetro_ini, h.horimetro_fim, h.created_at].join(" ").toLowerCase();
+        const blob = [h.day, h.equipamento, h.turno, h.horimetro_ini, h.horimetro_fim, h.created_at]
+          .join(" ")
+          .toLowerCase();
         return blob.includes(qq);
       })
       .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
@@ -158,9 +232,20 @@ export default function Historico() {
       .filter((s) => {
         if (!qq) return true;
         const blob = [
-          s.day, s.equipamento, s.tipo, s.atividade, s.descricao,
-          s.data_inicio, s.hora_inicio, s.data_fim, s.hora_fim, s.tempo_h, s.created_at,
-        ].join(" ").toLowerCase();
+          s.day,
+          s.equipamento,
+          s.tipo,
+          s.atividade,
+          s.descricao,
+          s.data_inicio,
+          s.hora_inicio,
+          s.data_fim,
+          s.hora_fim,
+          s.tempo_h,
+          s.created_at,
+        ]
+          .join(" ")
+          .toLowerCase();
         return blob.includes(qq);
       })
       .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
@@ -223,7 +308,7 @@ export default function Historico() {
       setHor(horAll);
       setStops(stopAll);
     } catch (e: any) {
-      setErr(e?.message || "Erro ao carregar");
+      setErr(e?.message || "Erro ao carregar histórico");
     } finally {
       setLoading(false);
     }
@@ -237,124 +322,320 @@ export default function Historico() {
   const totals = useMemo(() => {
     const hCount = filteredHor.length;
     const sCount = filteredStops.length;
-    const sHours = filteredStops.reduce(
-      (acc, s) => acc + (Number.isFinite(Number(s.tempo_h)) ? Number(s.tempo_h) : 0),
-      0
-    );
+    const sHours = filteredStops.reduce((acc, s) => acc + (Number.isFinite(Number(s.tempo_h)) ? Number(s.tempo_h) : 0), 0);
     return { hCount, sCount, sHours };
   }, [filteredHor, filteredStops]);
 
   return (
-    <div className="mp-container">
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <div className="mp-chip">Operação</div>
-          <div className="mp-page-title">Histórico</div>
-          <div className="mp-page-sub">Horímetros e Paradas lançados • filtro por data e por tipo</div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={badgeStyle("muted")}>Horímetros: {totals.hCount}</span>
-          <span style={badgeStyle("muted")}>Paradas: {totals.sCount}</span>
-          <span style={badgeStyle("muted")}>Horas Paradas: {fmtNum(totals.sHours, 2)}</span>
-        </div>
-      </div>
-
-      <div style={{ height: 14 }} />
-
-      <div className="mp-card">
-        <div className="mp-card-h" style={{ alignItems: "center" }}>
-          <b>Filtros</b>
-          <span className="mp-help">Escolha período e o que deseja visualizar</span>
-        </div>
-
-        <div className="mp-card-b">
-          <div className="mp-grid-4" style={{ gap: 12 }}>
-            <div>
-              <div className="mp-help">De</div>
-              <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={loading} />
-            </div>
-
-            <div>
-              <div className="mp-help">Até</div>
-              <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={loading} />
-            </div>
-
-            <div>
-              <div className="mp-help">Tipo</div>
-              <select className="mp-input" value={mode} onChange={(e) => setMode(e.target.value as Mode)} disabled={loading}>
-                <option value="ambos">Horímetros + Paradas</option>
-                <option value="horimetros">Somente Horímetros</option>
-                <option value="paradas">Somente Paradas</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="mp-help">Equipamento</div>
-              <select className="mp-input" value={equip} onChange={(e) => setEquip(e.target.value)} disabled={loading}>
-                {equipOptions.map((x) => (
-                  <option key={x} value={x}>{x ? x : "Todos"}</option>
-                ))}
-              </select>
+    <div style={{ padding: 18 }}>
+      <div
+        className="mp-card"
+        style={{
+          borderRadius: 24,
+          overflow: "hidden",
+          border: "1px solid rgba(255,255,255,.08)",
+          background:
+            "radial-gradient(circle at top right, rgba(59,130,246,.10), transparent 24%), linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
+          boxShadow: "0 20px 60px rgba(0,0,0,.22)",
+        }}
+      >
+        <div
+          className="mp-card-h"
+          style={{
+            padding: "18px 18px 8px 18px",
+            borderBottom: "1px solid rgba(255,255,255,.06)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: 0.2 }}>Histórico Operacional</div>
+            <div style={{ marginTop: 4, color: "rgba(255,255,255,.58)", fontSize: 13 }}>
+              Consulta de horímetros e paradas lançadas no sistema MonPlant.
             </div>
           </div>
 
-          <div style={{ height: 10 }} />
+          <button
+            className="mp-btn"
+            onClick={load}
+            disabled={loading}
+            style={{
+              minWidth: 120,
+              height: 40,
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,.10)",
+              background: loading ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.08)",
+              fontWeight: 800,
+            }}
+          >
+            {loading ? "Atualizando..." : "Atualizar"}
+          </button>
+        </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ flex: 1, minWidth: 260 }}>
-              <input className="mp-input" placeholder="Buscar (ex.: BT-01, troca correia, 12:30, etc.)" value={q} onChange={(e) => setQ(e.target.value)} disabled={loading} />
+        <div className="mp-card-b" style={{ padding: 18 }}>
+          {err && (
+            <div
+              className="mp-error"
+              style={{
+                marginBottom: 16,
+                borderRadius: 14,
+                border: "1px solid rgba(239,68,68,.25)",
+                background: "rgba(239,68,68,.10)",
+                padding: 12,
+              }}
+            >
+              {err}
             </div>
+          )}
 
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="mp-btn" onClick={load} disabled={loading}>{loading ? "Carregando..." : "Aplicar filtros"}</button>
-              <button className="mp-btn" onClick={() => { setEquip(""); setQ(""); }} disabled={loading}>Limpar</button>
-            </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 12,
+              marginBottom: 18,
+            }}
+          >
+            <StatCard title="Horímetros" value={totals.hCount} />
+            <StatCard title="Paradas" value={totals.sCount} />
+            <StatCard title="Horas paradas" value={fmtNum(totals.sHours, 2)} />
+            <StatCard title="Período" value={`${days.length}`} sub={days.length === 1 ? "1 dia selecionado" : `${days.length} dias selecionados`} />
           </div>
 
-          {err ? <div className="mp-error" style={{ marginTop: 10 }}>{err}</div> : null}
+          <div
+            style={{
+              borderRadius: 20,
+              border: "1px solid rgba(255,255,255,.08)",
+              background: "rgba(7,10,18,.42)",
+              padding: 16,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,.02)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 14,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>Filtros de consulta</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
+                  Selecione período, tipo de lançamento e equipamento.
+                </div>
+              </div>
+
+              <div style={badgeStyle("muted")}>
+                {mode === "ambos" ? "Horímetros + Paradas" : mode === "horimetros" ? "Somente Horímetros" : "Somente Paradas"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: 12,
+              }}
+            >
+              <div>
+                <div className="mp-label" style={{ marginBottom: 6 }}>De</div>
+                <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={loading} />
+              </div>
+
+              <div>
+                <div className="mp-label" style={{ marginBottom: 6 }}>Até</div>
+                <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={loading} />
+              </div>
+
+              <div>
+                <div className="mp-label" style={{ marginBottom: 6 }}>Tipo</div>
+                <select className="mp-input" value={mode} onChange={(e) => setMode(e.target.value as Mode)} disabled={loading}>
+                  <option value="ambos">Horímetros + Paradas</option>
+                  <option value="horimetros">Somente Horímetros</option>
+                  <option value="paradas">Somente Paradas</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="mp-label" style={{ marginBottom: 6 }}>Equipamento</div>
+                <select className="mp-input" value={equip} onChange={(e) => setEquip(e.target.value)} disabled={loading}>
+                  {equipOptions.map((x) => (
+                    <option key={x} value={x}>
+                      {x ? x : "Todos"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 14,
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 260 }}>
+                <input
+                  className="mp-input"
+                  placeholder="Buscar por equipamento, atividade, descrição, turno, horário..."
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  className="mp-btn mp-btn-primary"
+                  onClick={load}
+                  disabled={loading}
+                  style={{ minWidth: 150, height: 42, borderRadius: 12, fontWeight: 900 }}
+                >
+                  {loading ? "Carregando..." : "Aplicar filtros"}
+                </button>
+
+                <button
+                  className="mp-btn"
+                  onClick={() => {
+                    setEquip("");
+                    setQ("");
+                  }}
+                  disabled={loading}
+                  style={{ minWidth: 120, height: 42, borderRadius: 12, fontWeight: 800 }}
+                >
+                  Limpar
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      <div style={{ height: 14 }} />
 
       {(mode === "ambos" || mode === "horimetros") && (
-        <div className="mp-card">
-          <div className="mp-card-h" style={{ alignItems: "center" }}>
-            <b>Horímetros</b>
-            <span className="mp-help">Todos os lançamentos no período</span>
+        <div
+          className="mp-card"
+          style={{
+            marginTop: 14,
+            borderRadius: 24,
+            overflow: "hidden",
+            border: "1px solid rgba(255,255,255,.08)",
+            background: "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
+            boxShadow: "0 20px 60px rgba(0,0,0,.20)",
+          }}
+        >
+          <div
+            className="mp-card-h"
+            style={{
+              padding: 18,
+              borderBottom: "1px solid rgba(255,255,255,.06)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 18 }}>Horímetros</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
+                Todos os lançamentos encontrados no período selecionado.
+              </div>
+            </div>
+
+            <div style={badgeStyle("info")}>{filteredHor.length} registro(s)</div>
           </div>
 
-          <div className="mp-card-b" style={{ padding: 0 }}>
-            <div style={{ width: "100%", overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <div className="mp-card-b" style={{ padding: 18 }}>
+            <div
+              style={{
+                overflowX: "auto",
+                borderRadius: 18,
+                border: "1px solid rgba(255,255,255,.07)",
+                background: "rgba(7,10,18,.45)",
+              }}
+            >
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "separate",
+                  borderSpacing: 0,
+                  minWidth: 980,
+                }}
+              >
                 <thead>
-                  <tr style={{ background: "rgba(255,255,255,0.06)" }}>
+                  <tr style={{ background: "rgba(255,255,255,.035)" }}>
                     {["Dia", "Equipamento", "Turno", "Horímetro Inicial", "Horímetro Final", "Criado em"].map((h) => (
-                      <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, color: "rgba(255,255,255,0.70)", borderBottom: "1px solid rgba(255,255,255,0.10)", whiteSpace: "nowrap" }}>
+                      <th
+                        key={h}
+                        style={{
+                          textAlign: "left",
+                          padding: "14px 14px",
+                          fontSize: 12,
+                          color: "rgba(255,255,255,.62)",
+                          fontWeight: 800,
+                          borderBottom: "1px solid rgba(255,255,255,.06)",
+                        }}
+                      >
                         {h}
                       </th>
                     ))}
                   </tr>
                 </thead>
+
                 <tbody>
                   {filteredHor.map((x, idx) => (
-                    <tr key={`${x.id || idx}`} style={{ background: idx % 2 ? "rgba(255,255,255,0.02)" : "transparent" }}>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{x.day || ""}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{x.equipamento || ""}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>
+                    <tr
+                      key={`${x.id || idx}`}
+                      style={{
+                        background: idx % 2 === 0 ? "rgba(255,255,255,.012)" : "transparent",
+                      }}
+                    >
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap" }}>
+                        {x.day || "-"}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap", color: "rgba(255,255,255,.86)" }}>
+                        {x.equipamento || "-"}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap" }}>
                         <span style={badgeStyle(x.turno ? "ok" : "muted")}>{x.turno || "—"}</span>
                       </td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{fmtNum(x.horimetro_ini, 0)}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{fmtNum(x.horimetro_fim, 0)}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap", color: "rgba(255,255,255,0.65)" }}>
-                        {x.created_at ? String(x.created_at).replace("T", " ").slice(0, 19) : ""}
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap" }}>
+                        {fmtNum(x.horimetro_ini, 0)}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap" }}>
+                        {fmtNum(x.horimetro_fim, 0)}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap", color: "rgba(255,255,255,.65)" }}>
+                        {fmtDateTime(x.created_at)}
                       </td>
                     </tr>
                   ))}
-                  {!filteredHor.length ? (
-                    <tr><td colSpan={6} style={{ padding: 14, color: "rgba(255,255,255,0.60)" }}>Nenhum horímetro no período.</td></tr>
-                  ) : null}
+
+                  {!filteredHor.length && !loading && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: 32, textAlign: "center", color: "rgba(255,255,255,.56)" }}>
+                        Nenhum horímetro encontrado no período.
+                      </td>
+                    </tr>
+                  )}
+
+                  {loading && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: 32, textAlign: "center", color: "rgba(255,255,255,.56)" }}>
+                        Carregando horímetros...
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -363,45 +644,129 @@ export default function Historico() {
       )}
 
       {(mode === "ambos" || mode === "paradas") && (
-        <div className="mp-card" style={{ marginTop: 14 }}>
-          <div className="mp-card-h" style={{ alignItems: "center" }}>
-            <b>Paradas</b>
-            <span className="mp-help">Todos os lançamentos no período</span>
+        <div
+          className="mp-card"
+          style={{
+            marginTop: 14,
+            borderRadius: 24,
+            overflow: "hidden",
+            border: "1px solid rgba(255,255,255,.08)",
+            background: "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
+            boxShadow: "0 20px 60px rgba(0,0,0,.20)",
+          }}
+        >
+          <div
+            className="mp-card-h"
+            style={{
+              padding: 18,
+              borderBottom: "1px solid rgba(255,255,255,.06)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 18 }}>Paradas</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
+                Todos os lançamentos encontrados no período selecionado.
+              </div>
+            </div>
+
+            <div style={badgeStyle("warn")}>{filteredStops.length} registro(s)</div>
           </div>
 
-          <div className="mp-card-b" style={{ padding: 0 }}>
-            <div style={{ width: "100%", overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <div className="mp-card-b" style={{ padding: 18 }}>
+            <div
+              style={{
+                overflowX: "auto",
+                borderRadius: 18,
+                border: "1px solid rgba(255,255,255,.07)",
+                background: "rgba(7,10,18,.45)",
+              }}
+            >
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "separate",
+                  borderSpacing: 0,
+                  minWidth: 1320,
+                }}
+              >
                 <thead>
-                  <tr style={{ background: "rgba(255,255,255,0.06)" }}>
+                  <tr style={{ background: "rgba(255,255,255,.035)" }}>
                     {["Dia", "Equipamento", "Início", "Fim", "Tipo", "Atividade", "Descrição", "Tempo (h)", "Criado em"].map((h) => (
-                      <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, color: "rgba(255,255,255,0.70)", borderBottom: "1px solid rgba(255,255,255,0.10)", whiteSpace: "nowrap" }}>
+                      <th
+                        key={h}
+                        style={{
+                          textAlign: "left",
+                          padding: "14px 14px",
+                          fontSize: 12,
+                          color: "rgba(255,255,255,.62)",
+                          fontWeight: 800,
+                          borderBottom: "1px solid rgba(255,255,255,.06)",
+                        }}
+                      >
                         {h}
                       </th>
                     ))}
                   </tr>
                 </thead>
+
                 <tbody>
                   {filteredStops.map((x, idx) => (
-                    <tr key={`${x.id || idx}`} style={{ background: idx % 2 ? "rgba(255,255,255,0.02)" : "transparent" }}>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{x.day || ""}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{x.equipamento || ""}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{joinDateTime(x.data_inicio, x.hora_inicio)}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{joinDateTime(x.data_fim, x.hora_fim)}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>
+                    <tr
+                      key={`${x.id || idx}`}
+                      style={{
+                        background: idx % 2 === 0 ? "rgba(255,255,255,.012)" : "transparent",
+                      }}
+                    >
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap" }}>
+                        {x.day || "-"}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap", color: "rgba(255,255,255,.86)" }}>
+                        {x.equipamento || "-"}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap" }}>
+                        {joinDateTime(x.data_inicio, x.hora_inicio) || "-"}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap" }}>
+                        {joinDateTime(x.data_fim, x.hora_fim) || "-"}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap" }}>
                         <span style={badgeStyle("warn")}>{x.tipo || "—"}</span>
                       </td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{x.atividade || ""}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", minWidth: 220 }}>{x.descricao || ""}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{fmtNum(x.tempo_h, 2)}</td>
-                      <td style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap", color: "rgba(255,255,255,0.65)" }}>
-                        {x.created_at ? String(x.created_at).replace("T", " ").slice(0, 19) : ""}
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap", color: "rgba(255,255,255,.82)" }}>
+                        {x.atividade || "-"}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", minWidth: 260, color: "rgba(255,255,255,.74)" }}>
+                        {x.descricao || "-"}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap" }}>
+                        {fmtNum(x.tempo_h, 2)}
+                      </td>
+                      <td style={{ padding: 14, borderBottom: "1px solid rgba(255,255,255,.05)", whiteSpace: "nowrap", color: "rgba(255,255,255,.65)" }}>
+                        {fmtDateTime(x.created_at)}
                       </td>
                     </tr>
                   ))}
-                  {!filteredStops.length ? (
-                    <tr><td colSpan={9} style={{ padding: 14, color: "rgba(255,255,255,0.60)" }}>Nenhuma parada no período.</td></tr>
-                  ) : null}
+
+                  {!filteredStops.length && !loading && (
+                    <tr>
+                      <td colSpan={9} style={{ padding: 32, textAlign: "center", color: "rgba(255,255,255,.56)" }}>
+                        Nenhuma parada encontrada no período.
+                      </td>
+                    </tr>
+                  )}
+
+                  {loading && (
+                    <tr>
+                      <td colSpan={9} style={{ padding: 32, textAlign: "center", color: "rgba(255,255,255,.56)" }}>
+                        Carregando paradas...
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
