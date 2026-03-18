@@ -346,84 +346,19 @@ function AppShell() {
   };
 
   return (
-    <div style={{ position: "relative", minHeight: "100vh", background: "#07090d" }}>
-      {/* ===== Fundo animado ===== */}
+    <div style={{ position: "relative", minHeight: "100vh", background: "#0B0F14" }}>
+      {/* ===== Fundo base liso ===== */}
       <div
         style={{
           position: "fixed",
           inset: 0,
           pointerEvents: "none",
           zIndex: 0,
-background:
-  "radial-gradient(1200px 700px at 20% 20%, rgba(0,0,0,0.35), transparent 60%)," +
-  "radial-gradient(900px 600px at 80% 30%, rgba(20,20,20,0.25), transparent 55%)," +
-  "radial-gradient(900px 700px at 50% 90%, rgba(40,40,40,0.18), transparent 55%)",
-        }}
-      />
-      <div
-        className="mp-bg-belt-1"
-        style={{
-          position: "fixed",
-          inset: "-20%",
-          pointerEvents: "none",
-          zIndex: 0,
-          transform: "rotate(-10deg)",
-          background: "linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent)",
-          opacity: 0.35,
-          filter: "blur(0.2px)",
-        }}
-      />
-      <div
-        className="mp-bg-belt-2"
-        style={{
-          position: "fixed",
-          inset: "-25%",
-          pointerEvents: "none",
-          zIndex: 0,
-          transform: "rotate(-10deg)",
-          background: "linear-gradient(90deg, transparent, rgba(255,159,26,.05), transparent)",
-          opacity: 0.35,
-          filter: "blur(0.2px)",
-        }}
-      />
-      <div
-        className="mp-bg-dust"
-        style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          zIndex: 0,
-          opacity: 1,
+          background: "#0B0F14",
         }}
       />
 
       <style>{`
-        @keyframes mpBeltMoveShell {
-          0%   { transform: translateX(-5%) rotate(-10deg); opacity: .68; }
-          50%  { transform: translateX(5%)  rotate(-10deg); opacity: .92; }
-          100% { transform: translateX(-5%) rotate(-10deg); opacity: .68; }
-        }
-        .mp-bg-belt-1 { animation: mpBeltMoveShell 10s ease-in-out infinite; }
-        .mp-bg-belt-2 { animation: mpBeltMoveShell 13s ease-in-out infinite; }
-
-        @keyframes mpDustFloatShell {
-          0%   { transform: translateY(0px); opacity: .55; }
-          50%  { transform: translateY(-8px); opacity: .78; }
-          100% { transform: translateY(0px); opacity: .55; }
-        }
-        .mp-bg-dust {
-          background-image:
-            radial-gradient(2px 2px at 12% 18%, rgba(255,159,26,0.26) 0, transparent 60%),
-            radial-gradient(2px 2px at 28% 62%, rgba(255,255,255,0.16) 0, transparent 60%),
-            radial-gradient(1.5px 1.5px at 48% 28%, rgba(255,159,26,0.20) 0, transparent 60%),
-            radial-gradient(2px 2px at 66% 74%, rgba(255,255,255,0.12) 0, transparent 60%),
-            radial-gradient(1.5px 1.5px at 82% 38%, rgba(255,159,26,0.18) 0, transparent 60%),
-            radial-gradient(2px 2px at 92% 66%, rgba(255,255,255,0.10) 0, transparent 60%);
-          background-size: 100% 100%;
-          animation: mpDustFloatShell 7s ease-in-out infinite;
-          filter: blur(.1px);
-        }
-
         .mp-navlink-active {
           border-color: rgba(255,159,26,.22) !important;
           background: rgba(255,159,26,.08) !important;
@@ -699,7 +634,7 @@ background:
                 width: "min(320px, 88vw)",
                 background: "rgba(5,8,12,0.98)",
                 borderRight: "1px solid rgba(255,255,255,0.06)",
-                boxShadow: "20px 0 60px rgba(0,0,0,0.45)",
+                boxShadow: "none",
                 padding: 14,
               }}
               onClick={(e) => e.stopPropagation()}
@@ -862,8 +797,8 @@ background:
               top: 0,
               zIndex: 40,
               padding: 0,
-              background: "rgba(7,9,13,0.72)",
-              backdropFilter: "blur(10px)",
+              background: "#0B0F14",
+              backdropFilter: "none",
             }}
           >
             <div
@@ -876,9 +811,8 @@ background:
                 padding: "10px 18px",
                 borderBottom: "1px solid rgba(255,255,255,0.06)",
                 borderRight: "1px solid rgba(255,255,255,0.03)",
-                background:
-                  "linear-gradient(180deg, rgba(8,12,18,0.96), rgba(6,10,16,0.92))",
-                boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.02)",
+                background: "#0B0F14",
+                boxShadow: "none",
               }}
             >
               <div
