@@ -78,6 +78,33 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
+function addDaysISO(iso: string, delta: number) {
+  const base = new Date(`${iso}T00:00:00`);
+  base.setDate(base.getDate() + delta);
+  const yyyy = base.getFullYear();
+  const mm = String(base.getMonth() + 1).padStart(2, "0");
+  const dd = String(base.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function enumerateDaysInclusive(startIso: string, endIso: string) {
+  if (!startIso || !endIso) return [] as string[];
+  let start = startIso;
+  let end = endIso;
+  if (start > end) {
+    start = endIso;
+    end = startIso;
+  }
+  const out: string[] = [];
+  let cur = start;
+  for (let guard = 0; guard < 370; guard++) {
+    out.push(cur);
+    if (cur === end) break;
+    cur = addDaysISO(cur, 1);
+  }
+  return out;
+}
+
 /**
  * Normaliza period do backend para "HH-HH"
  * Aceita: "00-01", "0-1", "00:00-01:00", "00:00–01:00", "00:00 — 01:00"
@@ -346,6 +373,7 @@ type PlantDayPayload = { day: string; obs?: string | null; rows: PlantHourRow[];
 type Last7Item = { day: string; total_ton: number };
 
 type GoalDay = { day: string; meta_ton: number | null; discount_hours: number | null; updated_at?: string | null };
+type RangePlantDay = { day: string; rows: PlantHourRow[]; obs?: string | null; updated_at?: string | null; total_ton?: number };
 
 type StopRow = {
   id: number;
@@ -389,6 +417,11 @@ export default function Dashboard() {
   const nav = useNavigate();
   const { token, loading: authLoading } = useAuth();
   const [day, setDay] = useState<string>(isoTodayLocal());
+  const [rangeMode, setRangeMode] = useState(false);
+  const [startDay, setStartDay] = useState<string>(addDaysISO(isoTodayLocal(), -10));
+  const [endDay, setEndDay] = useState<string>(isoTodayLocal());
+  const [rangeProdDays, setRangeProdDays] = useState<RangePlantDay[]>([]);
+  const [rangeGoalDays, setRangeGoalDays] = useState<GoalDay[]>([]);
   const mobile = useIsMobile();
 
   const [loading, setLoading] = useState(false);
@@ -477,11 +510,45 @@ export default function Dashboard() {
     setErr(null);
 
     try {
+      if (rangeMode) {
+        const days = enumerateDaysInclusive(startDay, endDay);
+        const prodResults = await Promise.all(
+          days.map(async (d) => {
+            const payload = await apiGet<PlantDayPayload>(`/api/plant-production/${encodeURIComponent(d)}`, token).catch(() => {
+              return { day: d, rows: [], obs: "" } as PlantDayPayload;
+            });
+            const total_ton = (payload?.rows || []).reduce((acc, r) => acc + parseBRNumber(r?.ton), 0);
+            return { ...payload, day: d, total_ton } as RangePlantDay;
+          })
+        );
+
+        const goalResults = await Promise.all(
+          days.map(async (d) => {
+            const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(d)}`, token).catch(() => null as any);
+            return g ? ({ ...g, day: d } as GoalDay) : ({ day: d, meta_ton: null, discount_hours: null } as GoalDay);
+          })
+        );
+
+        const metas = goalResults.map((g) => Number(g?.meta_ton ?? 0)).filter((n) => Number.isFinite(n) && n > 0);
+        const discounts = goalResults.map((g) => Number(g?.discount_hours ?? 0)).filter((n) => Number.isFinite(n));
+
+        if (metas.length) setMetaDia(metas.reduce((a, b) => a + b, 0) / metas.length);
+        if (discounts.length) setDiscountHours(discounts.reduce((a, b) => a + b, 0) / discounts.length);
+
+        setRangeProdDays(prodResults);
+        setRangeGoalDays(goalResults);
+        setProdDay(null);
+        setLast7(prodResults.map((x) => ({ day: x.day, total_ton: Number(x.total_ton) || 0 })));
+        setStops([]);
+        setStopsDayCount(0);
+        setLastByEq({});
+        return;
+      }
+
       const p = await apiGet<PlantDayPayload>(`/api/plant-production/${encodeURIComponent(day)}`, token).catch(() => {
         return { day, rows: [], obs: "" } as PlantDayPayload;
       });
 
-      // metas do dia (se não existir, mantém defaults)
       const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`, token).catch(() => null as any);
       if (g && typeof g === "object") {
         const mdRaw = (g as any).meta_ton;
@@ -498,7 +565,6 @@ export default function Dashboard() {
 
       const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`, token).catch(() => []);
       const ps = await apiGet<any>(`/api/stops-launch?day=${encodeURIComponent(day)}`, token).catch(() => null);
-      // ✅ Somente o card "Total de Paradas" usa o mesmo endpoint da página Paradas
       const psDay = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`, token).catch(() => []);
       const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`, token).catch(() => []);
 
@@ -509,6 +575,8 @@ export default function Dashboard() {
       }
 
       setProdDay(p);
+      setRangeProdDays([]);
+      setRangeGoalDays([]);
       setLast7(Array.isArray(l7) ? l7 : []);
       setStops(Array.isArray((ps as any)?.rows) ? (ps as any).rows : []);
       setStopsDayCount(Array.isArray(psDay) ? psDay.length : 0);
@@ -526,7 +594,7 @@ export default function Dashboard() {
 
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, token, day]);
+  }, [authLoading, token, day, rangeMode, startDay, endDay]);
 useEffect(() => {
     if (authLoading) return;
     if (!token) return;
@@ -534,15 +602,20 @@ useEffect(() => {
     const id = window.setInterval(() => loadAll(), POLL_MS);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, token, day]);
+  }, [authLoading, token, day, rangeMode, startDay, endDay]);
 
   /* ===================== computed ===================== */
+  const rangeDays = useMemo(() => enumerateDaysInclusive(startDay, endDay), [startDay, endDay]);
+
   const totalTonDay = useMemo(() => {
+    if (rangeMode) {
+      return (rangeProdDays || []).reduce((acc, d) => acc + (Number(d.total_ton) || 0), 0);
+    }
     const rows = prodDay?.rows || [];
     let sum = 0;
     for (const r of rows) sum += parseBRNumber(r.ton);
     return sum;
-  }, [prodDay]);
+  }, [prodDay, rangeMode, rangeProdDays]);
 
   const pctMetaRaw = useMemo(() => {
     if (metaDia <= 0) return 0;
@@ -560,6 +633,34 @@ useEffect(() => {
 
   // ✅ normaliza + garante 24 horas + inclui 23-00
   const hourlySeries = useMemo(() => {
+    if (rangeMode) {
+      const days = rangeDays.length || 1;
+      const bucket = new Map<string, { ton: number; freq: number }>();
+      for (const d of rangeProdDays || []) {
+        const grid = buildHourlyGrid(
+          (d.rows || []).map((r) => ({
+            period: normalizePeriod(r.period),
+            ton: parseBRNumber(r.ton),
+            freq: parseBRNumber(r.freq),
+          }))
+        );
+        for (const row of grid) {
+          const prev = bucket.get(row.period) || { ton: 0, freq: 0 };
+          bucket.set(row.period, {
+            ton: prev.ton + (Number(row.ton) || 0),
+            freq: prev.freq + (Number(row.freq) || 0),
+          });
+        }
+      }
+      return buildHourlyGrid(
+        Array.from(bucket.entries()).map(([period, vals]) => ({
+          period,
+          ton: vals.ton / days,
+          freq: vals.freq / days,
+        }))
+      );
+    }
+
     const rows = prodDay?.rows || [];
     const data = rows.map((r) => ({
       period: normalizePeriod(r.period),
@@ -567,7 +668,7 @@ useEffect(() => {
       freq: parseBRNumber(r.freq),
     }));
     return buildHourlyGrid(data);
-  }, [prodDay]);
+  }, [prodDay, rangeMode, rangeProdDays, rangeDays]);
 
     // ✅ Mapa: período ("HH-HH") -> lista de observações de parada (para tooltip do gráfico)
   // Regras:
@@ -718,11 +819,29 @@ const EXPECTED_TON_H = metaHoraEsperada;
   }, [hourlySeries]);
 
   const last7Series = useMemo(() => {
+    if (rangeMode) {
+      return (rangeProdDays || []).map((x) => ({
+        day: dayLabel(x.day),
+        total: Number(x.total_ton) || 0,
+      }));
+    }
     return (last7 || []).map((x) => ({
       day: dayLabel(x.day),
       total: Number(x.total_ton) || 0,
     }));
-  }, [last7]);
+  }, [last7, rangeMode, rangeProdDays]);
+
+  const rangeAvgDayTon = useMemo(() => {
+    if (!rangeMode) return 0;
+    const days = rangeDays.length || 1;
+    return totalTonDay / days;
+  }, [rangeMode, totalTonDay, rangeDays]);
+
+  const periodSummaryText = useMemo(() => {
+    if (!rangeMode) return "";
+    const days = rangeDays.length;
+    return `${brDate(startDay)} a ${brDate(endDay)} • ${days} dia${days === 1 ? "" : "s"}`;
+  }, [rangeMode, startDay, endDay, rangeDays]);
 
   const totalStops = useMemo(() => Number(stopsDayCount) || 0, [stopsDayCount]);
 
@@ -865,15 +984,86 @@ const EXPECTED_TON_H = metaHoraEsperada;
     <div className="mp-container">
       {/* TOP BAR */}
       <div style={topBar}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ ...subStyle, marginRight: 6 }}>Data</span>
-          <input
-            className="mp-input"
-            style={{ width: mobile ? "100%" : 160, height: 42, borderRadius: 14 }}
-            type="date"
-            value={day}
-            onChange={(e) => setDay(e.target.value)}
-          />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ ...subStyle, marginRight: 2 }}>Modo</span>
+          <button
+            type="button"
+            onClick={() => setRangeMode((v) => !v)}
+            style={{
+              height: 38,
+              minWidth: 148,
+              borderRadius: 999,
+              border: "1px solid " + (rangeMode ? "rgba(255,159,26,0.35)" : "rgba(255,255,255,0.12)"),
+              background: rangeMode ? "rgba(255,159,26,0.12)" : "rgba(255,255,255,0.06)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              padding: "0 8px 0 12px",
+              color: "rgba(255,255,255,0.88)",
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            <span>{rangeMode ? "Período" : "Principal"}</span>
+            <span
+              style={{
+                width: 42,
+                height: 24,
+                borderRadius: 999,
+                background: rangeMode ? "rgba(255,159,26,0.22)" : "rgba(255,255,255,0.12)",
+                position: "relative",
+                display: "inline-block",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: rangeMode ? 21 : 3,
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  background: rangeMode ? "#ff9f1a" : "rgba(255,255,255,0.82)",
+                  transition: "left .18s ease",
+                }}
+              />
+            </span>
+          </button>
+
+          {!rangeMode ? (
+            <>
+              <span style={{ ...subStyle, marginLeft: 6 }}>Data</span>
+              <input
+                className="mp-input"
+                style={{ width: mobile ? "100%" : 160, height: 42, borderRadius: 14 }}
+                type="date"
+                value={day}
+                onChange={(e) => setDay(e.target.value)}
+              />
+            </>
+          ) : (
+            <>
+              <span style={{ ...subStyle, marginLeft: 6 }}>De</span>
+              <input
+                className="mp-input"
+                style={{ width: mobile ? "100%" : 160, height: 42, borderRadius: 14 }}
+                type="date"
+                value={startDay}
+                max={endDay}
+                onChange={(e) => setStartDay(e.target.value)}
+              />
+              <span style={subStyle}>Até</span>
+              <input
+                className="mp-input"
+                style={{ width: mobile ? "100%" : 160, height: 42, borderRadius: 14 }}
+                type="date"
+                value={endDay}
+                min={startDay}
+                onChange={(e) => setEndDay(e.target.value)}
+              />
+            </>
+          )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: mobile ? "wrap" : "nowrap", justifyContent: mobile ? "flex-start" : "flex-end" }}>
@@ -890,7 +1080,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
       </div>
 
       <div style={{ marginTop: 8, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 800 }}>
-        Dashboard • {brDate(day)} {err ? `• ${err}` : "• tempo real"}
+        Dashboard • {rangeMode ? `${brDate(startDay)} a ${brDate(endDay)}` : brDate(day)} {err ? `• ${err}` : rangeMode ? "• média por período" : "• tempo real"}
       </div>
 
       {/* MODAL EXPORT */}
@@ -1041,7 +1231,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           <div>
                             <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
                             <div style={subStyle}>
-                              Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t
+                               {rangeMode ? <>Média diária do filtro: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(rangeAvgDayTon)}</b> t</> : <>Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t</>}
                             </div>
                           </div>
                           <span
@@ -1381,40 +1571,51 @@ const EXPECTED_TON_H = metaHoraEsperada;
                       <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6", minHeight: 270 }}>
                         <div style={headerStyle}>
                           <div>
-                            <div style={titleStyle}>Hoje</div>
-                            <div style={subStyle}>Resumo • Paradas + Horímetro</div>
+                            <div style={titleStyle}>{rangeMode ? "Período" : "Hoje"}</div>
+                            <div style={subStyle}>{rangeMode ? "Resumo do filtro" : "Resumo • Paradas + Horímetro"}</div>
                           </div>
                         </div>
 
                         <div style={{ display: "grid", gridTemplateColumns: mobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 12 }}>
-                          <MiniStat
-                            icon="⏸"
-                            title="Última Parada"
-                            value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
-                            sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
-                          />
-                          <MiniStat icon="📌" title="Total de Paradas" value={String(totalStops)} sub={`Dia ${brDate(day)}`} />
-                          <MiniStat
-                            icon="⏱"
-                            title="Último Horímetro (BT-01)"
-                            value={
-                              lastHorimetroBT01
-                                ? `${fmtBR1(lastHorimetroBT01.horimetro_ini)} → ${fmtBR1(lastHorimetroBT01.horimetro_fim)}`
-                                : "—"
-                            }
-                            sub={
-                              lastHorimetroBT01
-                                ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
-                                : "Sem registros"
-                            }
-                          />
+                          {rangeMode ? (
+                            <>
+                              <MiniStat icon="📅" title="Período" value={periodSummaryText} sub="Filtro aplicado no dashboard" />
+                              <MiniStat icon="∑" title="Total no filtro" value={`${fmtBR0(totalTonDay)} t`} sub="Soma de todos os dias" />
+                              <MiniStat icon="⌀" title="Média diária" value={`${fmtBR0(rangeAvgDayTon)} t`} sub="Média do período" />
+                            </>
+                          ) : (
+                            <>
+                              <MiniStat
+                                icon="⏸"
+                                title="Última Parada"
+                                value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
+                                sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
+                              />
+                              <MiniStat icon="📌" title="Total de Paradas" value={String(totalStops)} sub={`Dia ${brDate(day)}`} />
+                              <MiniStat
+                                icon="⏱"
+                                title="Último Horímetro (BT-01)"
+                                value={
+                                  lastHorimetroBT01
+                                    ? `${fmtBR1(lastHorimetroBT01.horimetro_ini)} → ${fmtBR1(lastHorimetroBT01.horimetro_fim)}`
+                                    : "—"
+                                }
+                                sub={
+                                  lastHorimetroBT01
+                                    ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
+                                    : "Sem registros"
+                                }
+                              />
+                            </>
+                          )}
                         </div>
                       </div>
                     ) : null}
 
                     {/* HORÍMETROS */}
                     {exportSel.horimetros_top ? (
-                      <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
+                      {!rangeMode ? (
+        <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Horímetros</div>
@@ -1500,7 +1701,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             <div>
               <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
               <div style={subStyle}>
-                Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t
+                 {rangeMode ? <>Média diária do filtro: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(rangeAvgDayTon)}</b> t</> : <>Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t</>}
               </div>
             </div>
             <span
@@ -1572,7 +1773,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
           <div style={headerStyle}>
             <div>
               <div style={titleStyle}>Taxa Média</div>
-              <div style={subStyle}>Freq% últimas horas</div>
+              <div style={subStyle}>{rangeMode ? "Freq% média por faixa horária" : "Freq% últimas horas"}</div>
             </div>
             <span
               style={{
@@ -1629,8 +1830,8 @@ const EXPECTED_TON_H = metaHoraEsperada;
         <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 4", cursor: "pointer" }} onClick={() => nav("/plant-production")}>
           <div style={headerStyle}>
             <div>
-              <div style={titleStyle}>Produção do dia</div>
-              <div style={subStyle}>Meta: {fmtBR0(metaDia)} t</div>
+              <div style={titleStyle}>{rangeMode ? "Média da meta do período" : "Produção do dia"}</div>
+              <div style={subStyle}>{rangeMode ? periodSummaryText : `Meta: ${fmtBR0(metaDia)} t`}</div>
             
             {/* Projeção (diferença vs meta) */}
             {metaDia > 0 ? (
@@ -1681,7 +1882,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
           <div style={headerStyle}>
             <div>
               <div style={titleStyle}>Média/Hora</div>
-              <div style={subStyle}>Média de produção por hora</div>
+              <div style={subStyle}>{rangeMode ? "Média da soma por faixa do filtro" : "Média de produção por hora"}</div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span
@@ -1808,8 +2009,8 @@ const EXPECTED_TON_H = metaHoraEsperada;
         <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6", cursor: "pointer" }} onClick={() => nav("/last7days")}>
           <div style={headerStyle}>
             <div>
-              <div style={titleStyle}>Últimos 7 dias</div>
-              <div style={subStyle}>Total por dia</div>
+              <div style={titleStyle}>{rangeMode ? "Totais do período" : "Últimos 7 dias"}</div>
+              <div style={subStyle}>{rangeMode ? "Totais diários dentro do filtro" : "Total por dia"}</div>
             </div>
           </div>
 
@@ -1854,54 +2055,67 @@ const EXPECTED_TON_H = metaHoraEsperada;
         <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6" }}>
           <div style={headerStyle}>
             <div>
-              <div style={titleStyle}>Hoje</div>
-              <div style={subStyle}>Resumo • Paradas + Horímetro</div>
+              <div style={titleStyle}>{rangeMode ? "Período" : "Hoje"}</div>
+              <div style={subStyle}>{rangeMode ? "Resumo do filtro" : "Resumo • Paradas + Horímetro"}</div>
             </div>
 
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/paradas")}>
-                Abrir Paradas
-              </button>
-              <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
-                Abrir Horímetros
-              </button>
-            </div>
+            {!rangeMode ? (
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/paradas")}>
+                  Abrir Paradas
+                </button>
+                <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
+                  Abrir Horímetros
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: mobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 12 }}>
-            <MiniStat
-              icon="⏸"
-              title="Última Parada"
-              value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
-              sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
-              onClick={() => nav("/paradas")}
-            />
-            <MiniStat
-              icon="📌"
-              title="Total de Paradas"
-              value={String(totalStops)}
-              sub={`Dia ${brDate(day)}`}
-              onClick={() => nav("/paradas")}
-            />
-            <MiniStat
-              icon="⏱"
-              title="Último Horímetro (BT-01)"
-              value={
-                lastHorimetroBT01
-                  ? `${fmtBR1(lastHorimetroBT01.horimetro_ini)} → ${fmtBR1(lastHorimetroBT01.horimetro_fim)}`
-                  : "—"
-              }
-              sub={
-                lastHorimetroBT01
-                  ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
-                  : "Sem registros"
-              }
-              onClick={() => nav("/horimetros")}
-            />
+            {rangeMode ? (
+              <>
+                <MiniStat icon="📅" title="Período" value={periodSummaryText} sub="Filtro aplicado no dashboard" />
+                <MiniStat icon="∑" title="Total no filtro" value={`${fmtBR0(totalTonDay)} t`} sub="Soma de todos os dias" />
+                <MiniStat icon="⌀" title="Média diária" value={`${fmtBR0(rangeAvgDayTon)} t`} sub="Média do período" />
+              </>
+            ) : (
+              <>
+                <MiniStat
+                  icon="⏸"
+                  title="Última Parada"
+                  value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
+                  sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
+                  onClick={() => nav("/paradas")}
+                />
+                <MiniStat
+                  icon="📌"
+                  title="Total de Paradas"
+                  value={String(totalStops)}
+                  sub={`Dia ${brDate(day)}`}
+                  onClick={() => nav("/paradas")}
+                />
+                <MiniStat
+                  icon="⏱"
+                  title="Último Horímetro (BT-01)"
+                  value={
+                    lastHorimetroBT01
+                      ? `${fmtBR1(lastHorimetroBT01.horimetro_ini)} → ${fmtBR1(lastHorimetroBT01.horimetro_fim)}`
+                      : "—"
+                  }
+                  sub={
+                    lastHorimetroBT01
+                      ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
+                      : "Sem registros"
+                  }
+                  onClick={() => nav("/horimetros")}
+                />
+              </>
+            )}
           </div>
         </div>
 
         {/* HORÍMETROS (12 col) */}
+        {!rangeMode ? (
         <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
           <div style={headerStyle}>
             <div>
@@ -1963,6 +2177,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             ))}
           </div>
         </div>
+        ) : null}
       </div>
     </div>
   );
