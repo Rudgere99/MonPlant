@@ -1616,62 +1616,63 @@ const EXPECTED_TON_H = metaHoraEsperada;
                     {exportSel.horimetros_top ? (
                       !rangeMode ? (
                         <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
-                        <div style={headerStyle}>
-                          <div>
-                            <div style={titleStyle}>Horímetros</div>
-                            <div style={subStyle}>BT-02 • PN-02 • PN-01 • EH-08</div>
+                          <div style={headerStyle}>
+                            <div>
+                              <div style={titleStyle}>Horímetros</div>
+                              <div style={subStyle}>BT-02 • PN-02 • PN-01 • EH-08</div>
+                            </div>
+                          </div>
+
+                          <div style={{ display: "grid", gap: 10 }}>
+                            {topProductsHorimetros.map(({ eq, row }) => (
+                              <div
+                                key={eq}
+                                style={{
+                                  borderRadius: 16,
+                                  border: "1px solid rgba(255,255,255,0.10)",
+                                  background: "rgba(0,0,0,0.18)",
+                                  padding: 12,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  gap: 10,
+                                }}
+                              >
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  <div
+                                    style={{
+                                      width: 52,
+                                      height: 34,
+                                      borderRadius: 12,
+                                      border: "1px solid rgba(255,159,26,0.20)",
+                                      background: "rgba(255,159,26,0.10)",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontSize: 12,
+                                      fontWeight: 950,
+                                      color: "rgba(255,255,255,0.85)",
+                                    }}
+                                  >
+                                    {eq}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
+                                      {row ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}` : "—"}
+                                    </div>
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                                      {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,0.55)" }}>
+                                  {row?.equipamento ?? ""}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-
-                        <div style={{ display: "grid", gap: 10 }}>
-                          {topProductsHorimetros.map(({ eq, row }) => (
-                            <div
-                              key={eq}
-                              style={{
-                                borderRadius: 16,
-                                border: "1px solid rgba(255,255,255,0.10)",
-                                background: "rgba(0,0,0,0.18)",
-                                padding: 12,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                gap: 10,
-                              }}
-                            >
-                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                <div
-                                  style={{
-                                    width: 52,
-                                    height: 34,
-                                    borderRadius: 12,
-                                    border: "1px solid rgba(255,159,26,0.20)",
-                                    background: "rgba(255,159,26,0.10)",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 12,
-                                    fontWeight: 950,
-                                    color: "rgba(255,255,255,0.85)",
-                                  }}
-                                >
-                                  {eq}
-                                </div>
-                                <div>
-                                  <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
-                                    {row ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}` : "—"}
-                                  </div>
-                                  <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
-                                    {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
-                                  </div>
-                                </div>
-                              </div>
-                              <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,0.55)" }}>
-                                {row?.equipamento ?? ""}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                      ) : null
                     ) : null}
                   </div>
                 </div>
