@@ -1614,8 +1614,8 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
                     {/* HORÍMETROS */}
                     {exportSel.horimetros_top ? (
-                      {!rangeMode ? (
-        <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
+                      !rangeMode ? (
+                        <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Horímetros</div>
