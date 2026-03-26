@@ -1829,84 +1829,77 @@ const EXPECTED_TON_H = metaHoraEsperada;
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
-
-        {/* META (4 col) */}
+        </div>        {/* META (4 col) */}
         <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 4", cursor: "pointer" }} onClick={() => nav("/plant-production")}>
           <div style={headerStyle}>
             <div>
               <div style={titleStyle}>{rangeMode ? "Média da meta do período" : "Produção do dia"}</div>
               <div style={subStyle}>{rangeMode ? periodSummaryText : `Meta: ${fmtBR0(metaDia)} t`}</div>
-            
-            {/* Projeção (diferença vs meta) */}
-            {metaDia > 0 ? (
-              <div style={{ position: "absolute", left: 14, bottom: 12, textAlign: "left" }}>
-                <div style={{ ...subStyle, marginTop: 0 }}>Projeção</div>
-                <div
-                  style={{
-                    fontWeight: 950,
-                    marginTop: 2,
-                    color: projectionIsPositive
-                      ? "rgba(34,197,94,0.95)"
-                      : "rgba(239,68,68,0.95)",
-                  }}
-                >
-                  {projectionDiffTon >= 0 ? "+" : ""}
-                  {fmtBR0(projectionDiffTon)} t
-                </div>
-              </div>
-            ) : null}
-</div>
-          </div>
-
-          <div style={{ height: mobile ? 160 : 190, position: "relative" }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
-                <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
-              </RadialBarChart>
-            </ResponsiveContainer>
-
-            <div style={{ position: "absolute", left: 0, right: 0, top: 78, textAlign: "center", pointerEvents: "none" }}>
-              {rangeMode ? (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                    gap: 18,
-                    alignItems: "start",
-                    maxWidth: mobile ? 260 : 300,
-                    margin: "0 auto",
-                  }}
-                >
-                  <div>
-                    <div style={{ ...subStyle, marginTop: 0 }}>Produção realizada</div>
-                    <div style={{ marginTop: 6, fontSize: mobile ? 22 : 26, fontWeight: 950, color: "rgba(255,255,255,0.96)" }}>
-                      {fmtBR0(totalTonDay)} t
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ ...subStyle, marginTop: 0 }}>C/ desvio de 20%</div>
-                    <div style={{ marginTop: 6, fontSize: mobile ? 22 : 26, fontWeight: 950, color: "rgba(34,197,94,0.95)" }}>
-                      {fmtBR0(totalTonWith20Desvio)} t
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMetaRaw)}%</div>
-                  <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
-                  {pctMetaOver > 0 ? (
-                    <div style={{ marginTop: 4, fontWeight: 900, color: "rgba(34,197,94,0.95)" }}>
-                      +{fmtBR0(pctMetaOver)}% acima
-                    </div>
-                  ) : null}
-                  <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
-                    {fmtBR0(totalTonDay)} t
-                  </div>
-                </>
-              )}
             </div>
           </div>
+
+          {rangeMode ? (
+            <div
+              style={{
+                minHeight: mobile ? 160 : 190,
+                display: "grid",
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: 18,
+                  alignItems: "start",
+                  maxWidth: mobile ? 300 : 360,
+                  margin: "0 auto",
+                  width: "100%",
+                }}
+              >
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ ...subStyle, marginTop: 0 }}>Produção realizada</div>
+                  <div style={{ marginTop: 8, fontSize: mobile ? 24 : 30, fontWeight: 950, color: "rgba(255,255,255,0.96)" }}>
+                    {fmtBR0(totalTonDay)} t
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    textAlign: "center",
+                    borderLeft: "1px solid rgba(255,255,255,0.10)",
+                    paddingLeft: 18,
+                  }}
+                >
+                  <div style={{ ...subStyle, marginTop: 0 }}>C/ desvio de 20%</div>
+                  <div style={{ marginTop: 8, fontSize: mobile ? 24 : 30, fontWeight: 950, color: "rgba(34,197,94,0.95)" }}>
+                    {fmtBR0(totalTonWith20Desvio)} t
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ height: mobile ? 160 : 190, position: "relative" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
+                  <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
+                </RadialBarChart>
+              </ResponsiveContainer>
+
+              <div style={{ position: "absolute", left: 0, right: 0, top: 78, textAlign: "center", pointerEvents: "none" }}>
+                <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMetaRaw)}%</div>
+                <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
+                {pctMetaOver > 0 ? (
+                  <div style={{ marginTop: 4, fontWeight: 900, color: "rgba(34,197,94,0.95)" }}>
+                    +{fmtBR0(pctMetaOver)}% acima
+                  </div>
+                ) : null}
+                <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                  {fmtBR0(totalTonDay)} t
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* MÉDIA (4 col) */}
