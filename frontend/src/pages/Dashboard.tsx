@@ -617,6 +617,10 @@ useEffect(() => {
     return sum;
   }, [prodDay, rangeMode, rangeProdDays]);
 
+  const totalTonWith20Desvio = useMemo(() => {
+    return totalTonDay * 0.8;
+  }, [totalTonDay]);
+
   const pctMetaRaw = useMemo(() => {
     if (metaDia <= 0) return 0;
     return (totalTonDay / metaDia) * 100;
@@ -1863,17 +1867,44 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </ResponsiveContainer>
 
             <div style={{ position: "absolute", left: 0, right: 0, top: 78, textAlign: "center", pointerEvents: "none" }}>
-              <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMetaRaw)}%</div>
-              <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
-                            {pctMetaOver > 0 ? (
-                              <div style={{ marginTop: 4, fontWeight: 900, color: "rgba(34,197,94,0.95)" }}>
-                                +{fmtBR0(pctMetaOver)}% acima
-                              </div>
-                            ) : null}
-              <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
-                {fmtBR0(totalTonDay)} t
-              </div>
-            
+              {rangeMode ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: 18,
+                    alignItems: "start",
+                    maxWidth: mobile ? 260 : 300,
+                    margin: "0 auto",
+                  }}
+                >
+                  <div>
+                    <div style={{ ...subStyle, marginTop: 0 }}>Produção realizada</div>
+                    <div style={{ marginTop: 6, fontSize: mobile ? 22 : 26, fontWeight: 950, color: "rgba(255,255,255,0.96)" }}>
+                      {fmtBR0(totalTonDay)} t
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ ...subStyle, marginTop: 0 }}>C/ desvio de 20%</div>
+                    <div style={{ marginTop: 6, fontSize: mobile ? 22 : 26, fontWeight: 950, color: "rgba(34,197,94,0.95)" }}>
+                      {fmtBR0(totalTonWith20Desvio)} t
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMetaRaw)}%</div>
+                  <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
+                  {pctMetaOver > 0 ? (
+                    <div style={{ marginTop: 4, fontWeight: 900, color: "rgba(34,197,94,0.95)" }}>
+                      +{fmtBR0(pctMetaOver)}% acima
+                    </div>
+                  ) : null}
+                  <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                    {fmtBR0(totalTonDay)} t
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
