@@ -96,6 +96,59 @@ const COLORS = {
   red: "#fb7185",
 };
 
+
+type ShiftRuleResolved = {
+  turno1: "A" | "B" | "C" | "D";
+  turno2: "A" | "B" | "C" | "D";
+  folga: string;
+};
+
+const SHIFT_BASE_DATE = "2026-03-19";
+const SHIFT_CYCLE: ShiftRuleResolved[] = [
+  { turno1: "C", turno2: "D", folga: "A e B" },
+  { turno1: "C", turno2: "D", folga: "A e B" },
+  { turno1: "A", turno2: "B", folga: "C e D" },
+  { turno1: "A", turno2: "B", folga: "C e D" },
+  { turno1: "D", turno2: "C", folga: "A e B" },
+  { turno1: "D", turno2: "C", folga: "A e B" },
+  { turno1: "B", turno2: "A", folga: "C e D" },
+  { turno1: "B", turno2: "A", folga: "C e D" },
+];
+
+function parseYmdLocal(ymd: string) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+function diffDays(a: Date, b: Date) {
+  const MS = 24 * 60 * 60 * 1000;
+  const utcA = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const utcB = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((utcA - utcB) / MS);
+}
+
+function mod(n: number, m: number) {
+  return ((n % m) + m) % m;
+}
+
+function getShiftRuleForDate(dateYmd: string): ShiftRuleResolved {
+  const base = parseYmdLocal(SHIFT_BASE_DATE);
+  const target = parseYmdLocal(dateYmd);
+  const days = diffDays(target, base);
+  return SHIFT_CYCLE[mod(days, 8)];
+}
+
+function getLetterColor(letterOrLabel: string) {
+  const t = String(letterOrLabel || "").toUpperCase();
+  if (t.includes("A")) return "#22c55e";
+  if (t.includes("B")) return "#eab308";
+  if (t.includes("C")) return "#06b6d4";
+  if (t.includes("D")) return "#f97316";
+  if (t.includes("TURNO 1")) return COLORS.cyan;
+  if (t.includes("TURNO 2")) return COLORS.orange;
+  return COLORS.slate;
+}
+
 function fmtBR0(n: number) {
   return (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
@@ -456,6 +509,7 @@ export default function Statistics() {
   // Modal: detalhe do gráfico de Produção diária (mesmo conceito do modal de exportação do Dashboard)
   const [dailyModalOpen, setDailyModalOpen] = useState(false);
   const [dailyModalMode, setDailyModalMode] = useState<"bar" | "line">("bar");
+  const [shiftMode, setShiftMode] = useState<"turno" | "turno_letra">("turno");
 
   // % de desvio vinda da página Desvio de Produção (LocalStorage)
   const desvioPctSaved = useMemo(() => {
@@ -601,26 +655,72 @@ export default function Statistics() {
 
   const t1Month = Number(data?.shift?.t1_ton || 0);
   const t2Month = Number(data?.shift?.t2_ton || 0);
+
   const shiftPie = useMemo(() => {
     const s = t1Month + t2Month;
-    if (s <= 0) return [];
+    if (s <= 0) return [] as { name: string; value: number }[];
     return [
       { name: "Turno 1 (07–19)", value: t1Month },
       { name: "Turno 2 (19–07)", value: t2Month },
     ];
   }, [t1Month, t2Month]);
 
+  const shiftLetterPie = useMemo(() => {
+    const base: Record<string, number> = {};
+    for (const row of daily || []) {
+      const rule = getShiftRuleForDate(row.day);
+      const t1 = Number(row.t1_ton || 0);
+      const t2 = Number(row.t2_ton || 0);
+      const label1 = `Turno 1 • ${rule.turno1}`;
+      const label2 = `Turno 2 • ${rule.turno2}`;
+      base[label1] = (base[label1] || 0) + t1;
+      base[label2] = (base[label2] || 0) + t2;
+    }
+    return Object.entries(base)
+      .map(([name, value]) => ({ name, value }))
+      .filter((x) => Number(x.value || 0) > 0);
+  }, [daily]);
 
-  const shiftTotal = useMemo(() => t1Month + t2Month, [t1Month, t2Month]);
+  const activeShiftPie = useMemo(
+    () => (shiftMode === "turno" ? shiftPie : shiftLetterPie),
+    [shiftMode, shiftPie, shiftLetterPie]
+  );
 
-  const shiftLegend = useMemo(() => {
-    if (shiftTotal <= 0) return [] as { key: string; name: string; value: number; pct: number; color: string }[];
-    return [
-      { key: "T1", name: "Turno 1 (07–19)", value: t1Month, pct: (t1Month / shiftTotal) * 100, color: COLORS.cyan },
-      { key: "T2", name: "Turno 2 (19–07)", value: t2Month, pct: (t2Month / shiftTotal) * 100, color: COLORS.orange },
-    ];
-  }, [shiftTotal, t1Month, t2Month]);
+  const activeShiftTotal = useMemo(
+    () => activeShiftPie.reduce((acc, item) => acc + Number(item.value || 0), 0),
+    [activeShiftPie]
+  );
 
+  const activeShiftLegend = useMemo(() => {
+    if (activeShiftTotal <= 0) return [] as { key: string; name: string; value: number; pct: number; color: string }[];
+    return activeShiftPie.map((it, idx) => ({
+      key: `${it.name}-${idx}`,
+      name: it.name,
+      value: Number(it.value || 0),
+      pct: activeShiftTotal > 0 ? (Number(it.value || 0) / activeShiftTotal) * 100 : 0,
+      color: getLetterColor(it.name),
+    }));
+  }, [activeShiftPie, activeShiftTotal]);
+
+  const letterSplit = useMemo(() => {
+    const base: Record<"A" | "B" | "C" | "D", number> = { A: 0, B: 0, C: 0, D: 0 };
+    for (const row of daily || []) {
+      const rule = getShiftRuleForDate(row.day);
+      base[rule.turno1] += Number(row.t1_ton || 0);
+      base[rule.turno2] += Number(row.t2_ton || 0);
+    }
+    return (["A", "B", "C", "D"] as const).map((letter) => ({
+      key: letter,
+      name: `Letra ${letter}`,
+      value: Number(base[letter] || 0),
+      color: getLetterColor(letter),
+    }));
+  }, [daily]);
+
+  const letterSplitTotal = useMemo(
+    () => letterSplit.reduce((acc, item) => acc + Number(item.value || 0), 0),
+    [letterSplit]
+  );
   const stopsByType = useMemo(
     () => (data?.stops?.by_type || []).map((x) => ({ name: x.type || "—", hours: Number(x.hours || 0) })),
     [data]
@@ -993,13 +1093,35 @@ export default function Statistics() {
         </Card>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <Card title="Turnos" sub="Produção do mês por turno">
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 12, alignItems: "center" }}>
+          <Card
+            title="Turnos"
+            sub={shiftMode === "turno" ? "Produção do mês por turno" : "Produção do mês por turno + letra da escala"}
+            right={
+              <button
+                className="mp-btn"
+                style={{
+                  height: 34,
+                  padding: "0 14px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(255,255,255,0.06)",
+                  color: "white",
+                  fontWeight: 900,
+                  cursor: "pointer",
+                }}
+                onClick={() => setShiftMode((v) => (v === "turno" ? "turno_letra" : "turno"))}
+                title="Alternar visualização"
+              >
+                {shiftMode === "turno" ? "Mostrar letras" : "Mostrar só turnos"}
+              </button>
+            }
+          >
+            <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1.2fr 0.8fr", gap: 12, alignItems: "center" }}>
               <div style={{ height: 420, minHeight: 420 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={shiftPie}
+                      data={activeShiftPie}
                       dataKey="value"
                       nameKey="name"
                       innerRadius={62}
@@ -1008,13 +1130,13 @@ export default function Statistics() {
                       labelLine={false}
                       label={({ value }: any) => {
                         const v = Number(value || 0);
-                        const pct = shiftTotal > 0 ? (v / shiftTotal) * 100 : 0;
+                        const pct = activeShiftTotal > 0 ? (v / activeShiftTotal) * 100 : 0;
                         if (!v) return "";
                         return `${fmtBR0(v)}t • ${fmtPct(pct, 0)}`;
                       }}
                     >
-                      {(shiftPie || []).map((_, idx) => (
-                        <Cell key={idx} fill={idx === 0 ? COLORS.cyan : COLORS.orange} />
+                      {(activeShiftPie || []).map((entry, idx) => (
+                        <Cell key={idx} fill={getLetterColor(String(entry?.name || ""))} />
                       ))}
                     </Pie>
 
@@ -1022,8 +1144,8 @@ export default function Statistics() {
                       contentStyle={tooltipStyle}
                       formatter={(v: any) => {
                         const n = Number(v || 0);
-                        const pct = shiftTotal > 0 ? (n / shiftTotal) * 100 : 0;
-                        return [`${fmtBR0(n)} t • ${fmtPct(pct, 1)}`, "Turno"];
+                        const pct = activeShiftTotal > 0 ? (n / activeShiftTotal) * 100 : 0;
+                        return [`${fmtBR0(n)} t • ${fmtPct(pct, 1)}`, shiftMode === "turno" ? "Turno" : "Turno / Letra"];
                       }}
                     />
                   </PieChart>
@@ -1031,7 +1153,7 @@ export default function Statistics() {
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {shiftLegend.map((it) => (
+                {activeShiftLegend.map((it) => (
                   <div
                     key={it.key}
                     style={{
@@ -1080,8 +1202,86 @@ export default function Statistics() {
                 ))}
               </div>
             </div>
+
+            <div style={{ marginTop: 10, color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
+              Regra automática baseada na escala 2x2 iniciada em 19/03/2026. Funciona para qualquer dia, mês e ano.
+            </div>
           </Card>
-</div>
+
+          <Card title="Split de produção por letras" sub="Consolidação mensal por equipe da escala">
+            <div style={{ height: 300, minHeight: 300 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={letterSplit} margin={{ top: 20, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={xTick as any} />
+                  <YAxis tick={yTick as any} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v: any) => {
+                      const n = Number(v || 0);
+                      const pct = letterSplitTotal > 0 ? (n / letterSplitTotal) * 100 : 0;
+                      return [`${fmtBR0(n)} t • ${fmtPct(pct, 1)}`, "Produção"];
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[12, 12, 0, 0]}>
+                    {letterSplit.map((it) => (
+                      <Cell key={it.key} fill={it.color} />
+                    ))}
+                    <LabelList
+                      dataKey="value"
+                      position="top"
+                      formatter={(v: any) => `${fmtBR0(Number(v || 0))}t`}
+                      style={{ fill: "rgba(255,255,255,0.80)", fontWeight: 900, fontSize: 11 }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div
+              style={{
+                marginTop: 10,
+                display: "grid",
+                gridTemplateColumns: mobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))",
+                gap: 10,
+              }}
+            >
+              {letterSplit.map((it) => {
+                const pct = letterSplitTotal > 0 ? (Number(it.value || 0) / letterSplitTotal) * 100 : 0;
+                return (
+                  <div
+                    key={it.key}
+                    style={{
+                      borderRadius: 16,
+                      border: `1px solid ${COLORS.stroke}`,
+                      background: "rgba(0,0,0,0.18)",
+                      padding: 12,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 999,
+                          background: it.color,
+                          display: "inline-block",
+                          flex: "0 0 auto",
+                        }}
+                      />
+                      <div style={{ color: "rgba(255,255,255,0.85)", fontWeight: 950, fontSize: 12 }}>{it.name}</div>
+                    </div>
+                    <div style={{ marginTop: 8, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 22 }}>
+                      {fmtBR0(it.value)}t
+                    </div>
+                    <div style={{ marginTop: 4, color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>
+                      {fmtPct(pct, 0)} do total por letras
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card></div>
       </div>
 
             {/* Modal: detalhe Produção diária do mês */}
