@@ -51,6 +51,7 @@ type Turno = 1 | 2;
 type StopRow = {
   id: number;
   owner_id?: string;
+  plant_id?: number;
   day: string; // yyyy-mm-dd
   turno: Turno;
 
@@ -66,6 +67,14 @@ type StopRow = {
 
   tempo_parada_h: number;
   created_at?: string;
+};
+
+type PlantInfo = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
 };
 
 /* ===================== constants ===================== */
@@ -136,15 +145,33 @@ export default function Paradas() {
   const [atividade, setAtividade] = useState<string>(ATIVIDADES[0]);
   const [descricao, setDescricao] = useState<string>("");
 
+  const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [plantId, setPlantId] = useState<number | null>(null);
   const [rows, setRows] = useState<StopRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  async function loadDay(day: string) {
+  async function loadPlants() {
+    try {
+      const data = await apiGet<PlantInfo[]>(`/api/plants`);
+      const list = Array.isArray(data) ? data : [];
+      setPlants(list);
+      setPlantId((current) => {
+        if (current && list.some((x) => Number(x.id) === Number(current))) return current;
+        return list.length ? Number(list[0].id) : null;
+      });
+    } catch (e: any) {
+      setPlants([]);
+      setPlantId(null);
+      setErr(e?.message || "Falha ao carregar plantas");
+    }
+  }
+
+  async function loadDay(day: string, selectedPlantId: number) {
     setLoading(true);
     setErr(null);
     try {
-      const data = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`);
+      const data = await apiGet<StopRow[]>(`/api/plants/${selectedPlantId}/stops?day=${encodeURIComponent(day)}`);
       setRows(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setRows([]);
@@ -155,16 +182,20 @@ export default function Paradas() {
   }
 
   useEffect(() => {
-    loadDay(diaRef);
+    loadPlants();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     setDataInicio(diaRef);
     setDataFim(diaRef);
-    loadDay(diaRef);
+    if (plantId) {
+      loadDay(diaRef, plantId);
+    } else {
+      setRows([]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diaRef]);
+  }, [diaRef, plantId]);
 
   const tempoPreview = useMemo(() => calcTempoParadaH(dataInicio, horaInicio, dataFim, horaFim), [
     dataInicio,
@@ -172,6 +203,9 @@ export default function Paradas() {
     dataFim,
     horaFim,
   ]);
+
+  const selectedPlantName =
+    plants.find((x) => Number(x.id) === Number(plantId))?.name || "Planta";
 
   const rowsDoDia = useMemo(() => {
     return [...rows].sort((a, b) => {
@@ -224,7 +258,12 @@ export default function Paradas() {
     try {
       setLoading(true);
 
-      await apiPost(`/api/stops`, {
+      if (!plantId) {
+        setErr("Selecione uma planta.");
+        return;
+      }
+
+      await apiPost(`/api/plants/${plantId}/stops`, {
         day: diaRef,
         turno,
         data_inicio: dataInicio,
@@ -238,7 +277,7 @@ export default function Paradas() {
         tempo_parada_h: tempo,
       });
 
-      await loadDay(diaRef);
+      await loadDay(diaRef, plantId);
       resetForm();
     } catch (e: any) {
       setErr(e?.message || "Falha ao salvar parada");
@@ -250,8 +289,12 @@ export default function Paradas() {
   async function removeRow(id: number) {
     try {
       setLoading(true);
-      await apiDelete(`/api/stops/${id}`);
-      await loadDay(diaRef);
+      if (!plantId) {
+        setErr("Selecione uma planta.");
+        return;
+      }
+      await apiDelete(`/api/plants/${plantId}/stops/${id}`);
+      await loadDay(diaRef, plantId);
     } catch (e: any) {
       setErr(e?.message || "Falha ao excluir");
     } finally {
@@ -442,11 +485,28 @@ export default function Paradas() {
             <div>
               <div className="mp-chip">Operação</div>
               <div className="mp-page-title">Paradas</div>
-              <div className="mp-page-sub">Lançamento + histórico do dia • Tempo Parada (h) é calculado automaticamente</div>
+              <div className="mp-page-sub">Lançamento + histórico do dia • {selectedPlantName} • Tempo Parada (h) é calculado automaticamente</div>
             </div>
 
             <div className="mp-row">
-              <button className="mp-btn" onClick={() => loadDay(diaRef)} disabled={loading}>
+              <div style={{ minWidth: 200 }}>
+                <div className="mp-label">Planta</div>
+                <select
+                  className="mp-select"
+                  value={plantId ?? ""}
+                  onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+                  disabled={plants.length === 0}
+                >
+                  {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+                  {plants.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button className="mp-btn" onClick={() => plantId && loadDay(diaRef, plantId)} disabled={loading || !plantId}>
                 {loading ? "Atualizando..." : "Atualizar"}
               </button>
               <button className="mp-btn" onClick={exportCSV} disabled={!rowsDoDia.length}>

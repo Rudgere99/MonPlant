@@ -4,6 +4,7 @@ type Turno = 1 | 2;
 
 type HorimetroRow = {
   id: number;
+  plant_id?: number;
   day: string; // yyyy-mm-dd
   turno: Turno;
   equipamento: string;
@@ -11,6 +12,14 @@ type HorimetroRow = {
   horimetro_fim: number;
   obs?: string | null;
   created_at?: string | null;
+};
+
+type PlantInfo = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
 };
 
 const EQUIPAMENTOS = ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08"] as const;
@@ -107,14 +116,31 @@ export default function Horimetros() {
   const [horimetroFim, setHorimetroFim] = useState<string>("");
   const [obs, setObs] = useState<string>("");
 
+  const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [plantId, setPlantId] = useState<number | null>(null);
   const [rows, setRows] = useState<HorimetroRow[]>([]);
   const [lastByEq, setLastByEq] = useState<Record<string, HorimetroRow | null>>({});
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  async function loadLastByEq() {
+  async function loadPlants() {
     try {
-      const data = await apiGet<any[]>(`/api/horimetros/last-by-eq`);
+      const data = await apiGet<PlantInfo[]>(`/api/plants`);
+      const list = Array.isArray(data) ? data : [];
+      setPlants(list);
+      setPlantId((current) => {
+        if (current && list.some((x) => Number(x.id) === Number(current))) return current;
+        return list.length ? Number(list[0].id) : null;
+      });
+    } catch {
+      setPlants([]);
+      setPlantId(null);
+    }
+  }
+
+  async function loadLastByEq(selectedPlantId: number) {
+    try {
+      const data = await apiGet<any[]>(`/api/plants/${selectedPlantId}/horimetros/last-by-eq`);
       const map: Record<string, HorimetroRow | null> = {};
       for (const eq of EQUIPAMENTOS) map[eq] = null;
       for (const r of data || []) {
@@ -129,7 +155,7 @@ export default function Horimetros() {
     }
   }
 
-  async function loadFiltered() {
+  async function loadFiltered(selectedPlantId: number) {
     setLoading(true);
     setErr(null);
     try {
@@ -138,7 +164,7 @@ export default function Horimetros() {
       if (fTurno !== "ALL") qs.set("turno", String(fTurno));
       if (fEq !== "ALL") qs.set("equipamento", String(fEq));
 
-      const data = await apiGet<HorimetroRow[]>(`/api/horimetros?${qs.toString()}`);
+      const data = await apiGet<HorimetroRow[]>(`/api/plants/${selectedPlantId}/horimetros?${qs.toString()}`);
       setRows(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setErr(e?.message || "Erro ao carregar horímetros");
@@ -149,15 +175,31 @@ export default function Horimetros() {
   }
 
   useEffect(() => {
-    loadLastByEq();
-    loadFiltered();
+    loadPlants();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    loadFiltered();
+    if (!plantId) {
+      setRows([]);
+      return;
+    }
+    loadLastByEq(plantId);
+    loadFiltered(plantId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fDay, fTurno, fEq]);
+  }, [plantId]);
+
+  useEffect(() => {
+    if (!plantId) {
+      setRows([]);
+      return;
+    }
+    loadFiltered(plantId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fDay, fTurno, fEq, plantId]);
+
+  const selectedPlantName =
+    plants.find((x) => Number(x.id) === Number(plantId))?.name || "Planta";
 
   const filtered = useMemo(() => {
     return [...rows].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
@@ -198,7 +240,12 @@ export default function Horimetros() {
     try {
       setLoading(true);
 
-      await apiPost(`/api/horimetros`, {
+      if (!plantId) {
+        setErr("Selecione uma planta.");
+        return;
+      }
+
+      await apiPost(`/api/plants/${plantId}/horimetros`, {
         day,
         turno,
         equipamento,
@@ -207,8 +254,8 @@ export default function Horimetros() {
         obs: obs || "",
       });
 
-      await loadLastByEq();
-      await loadFiltered();
+      await loadLastByEq(plantId);
+      await loadFiltered(plantId);
 
       // mostra o que lançou (mantém isso porque ajuda, mas não trava nada)
       setFDay(day);
@@ -228,9 +275,13 @@ export default function Horimetros() {
   async function removeRow(id: number) {
     try {
       setLoading(true);
-      await apiDelete(`/api/horimetros/${id}`);
-      await loadLastByEq();
-      await loadFiltered();
+      if (!plantId) {
+        setErr("Selecione uma planta.");
+        return;
+      }
+      await apiDelete(`/api/plants/${plantId}/horimetros/${id}`);
+      await loadLastByEq(plantId);
+      await loadFiltered(plantId);
     } catch (e: any) {
       setErr(e?.message || "Falha ao excluir");
     } finally {
@@ -257,14 +308,16 @@ export default function Horimetros() {
             <div>
               <div className="mp-chip">Operação</div>
               <div className="mp-page-title">Horímetros</div>
-              <div className="mp-page-sub">Histórico + filtros + lançamento (Inicial / Final) — permitido lançar qualquer data</div>
+              <div className="mp-page-sub">Histórico + filtros + lançamento (Inicial / Final) • {selectedPlantName} • permitido lançar qualquer data</div>
             </div>
 
             <button
               className="mp-btn"
               onClick={() => {
-                loadLastByEq();
-                loadFiltered();
+                if (plantId) {
+                  loadLastByEq(plantId);
+                  loadFiltered(plantId);
+                }
               }}
               disabled={loading}
             >
