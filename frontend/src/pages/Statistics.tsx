@@ -53,6 +53,8 @@ type PlantInfo = {
   is_active?: boolean;
 };
 
+type PlantScope = number | "all";
+
 type StatsMonth = {
   month: string; // YYYY-MM
   meta_month_ton?: number;
@@ -512,7 +514,7 @@ export default function Statistics() {
   });
   const [data, setData] = useState<StatsMonth | null>(null);
   const [plants, setPlants] = useState<PlantInfo[]>([]);
-  const [plantId, setPlantId] = useState<number | null>(null);
+  const [plantId, setPlantId] = useState<PlantScope | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -547,6 +549,7 @@ export default function Statistics() {
       const arr = Array.isArray(list) ? list : [];
       setPlants(arr);
       setPlantId((current) => {
+        if (current === "all") return "all";
         if (current && arr.some((x) => Number(x.id) == Number(current))) return current;
         return arr.length ? Number(arr[0].id) : null;
       });
@@ -567,7 +570,12 @@ export default function Statistics() {
       setLoading(true);
       setErr(null);
       try {
-        const r = await fetch(`${api}/api/plants/${plantId}/stats/month/${month}`, {
+        const statsPath =
+          plantId === "all"
+            ? `${api}/api/aggregate/stats/month/${month}`
+            : `${api}/api/plants/${plantId}/stats/month/${month}`;
+
+        const r = await fetch(statsPath, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
         if (!r.ok) {
@@ -826,7 +834,19 @@ export default function Statistics() {
         const days = Array.from({ length: horizonDays }, (_, i) => `${yy}-${pad(mm)}-${pad(i + 1)}`);
         // busca em paralelo (máx 31 dias)
         if (!plantId) return;
-        const payloads = await Promise.all(days.map((d) => fetchStopsLaunchDay(api, plantId, d, token || undefined)));
+        const payloads = await Promise.all(
+          days.map(async (d) => {
+            if (plantId === "all") {
+              const qs = `day=${encodeURIComponent(d)}`;
+              const headers = token ? { Authorization: `Bearer ${token}` } : authHeaders();
+              const r = await fetch(`${api}/api/aggregate/stops-launch?${qs}`, { headers });
+              if (!r.ok) throw new Error(`Stops ${d}: ${r.status}`);
+              const json = (await r.json()) as StopDayPayload;
+              return { day: (json as any)?.day || d, rows: Array.isArray((json as any)?.rows) ? (json as any).rows : [] };
+            }
+            return fetchStopsLaunchDay(api, plantId, d, token || undefined);
+          })
+        );
         if (!alive) return;
 
         let totalMin = 0;
@@ -882,10 +902,10 @@ export default function Statistics() {
 
   const okAvail = availabilityPct >= 85;
 
-  const selectedPlantName = useMemo(
-    () => plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta",
-    [plants, plantId]
-  );
+  const selectedPlantName = useMemo(() => {
+    if (plantId === "all") return "Todas as plantas";
+    return plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
+  }, [plants, plantId]);
 
   const microInsight = useMemo(() => {
     if (totalStopHours <= 0.01) return "";
@@ -925,7 +945,9 @@ export default function Statistics() {
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Relatórios • Estatísticas • {selectedPlantName}</div>
+          <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
+            Relatórios • Estatísticas • {selectedPlantName}{plantId === "all" ? " • Consolidado" : ""}
+          </div>
           <div style={{ marginTop: 4, fontSize: 26, fontWeight: 980, color: COLORS.text, letterSpacing: -0.4 }}>
             Estatísticas do mês
           </div>
@@ -934,7 +956,10 @@ export default function Statistics() {
             <div style={{ color: COLORS.sub, fontWeight: 900 }}>Planta</div>
             <select
               value={plantId ?? ""}
-              onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPlantId(v === "all" ? "all" : v ? Number(v) : null);
+              }}
               style={{
                 height: 36,
                 borderRadius: 12,
@@ -944,11 +969,12 @@ export default function Statistics() {
                 padding: "0 12px",
                 fontWeight: 900,
                 outline: "none",
-                minWidth: 180,
+                minWidth: 210,
               }}
               disabled={!plants.length}
             >
               {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+              {plants.length > 0 ? <option value="all">Todas as plantas</option> : null}
               {plants.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
