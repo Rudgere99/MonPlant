@@ -23,6 +23,7 @@ import {
   ChevronsRight,
   User as UserIcon,
   Fuel,
+  Settings,
 } from "lucide-react";
 
 type NavItem = {
@@ -838,24 +839,46 @@ function AppShell() {
                 <span>{pageTitle}</span>
               </div>
 
-              <div
-                style={{
-                  flex: "0 0 auto",
-                  maxWidth: "32%",
-                  padding: "7px 12px",
-                  borderRadius: 999,
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  background: "rgba(255,255,255,0.05)",
-                  color: "rgba(255,255,255,0.88)",
-                  fontSize: 12,
-                  fontWeight: 900,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-                title={userLabel}
-              >
-                {userLabel}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto", maxWidth: "40%" }}>
+                <button
+                  onClick={() => navigate("/configuracoes")}
+                  title="Configurações"
+                  aria-label="Configurações"
+                  style={{
+                    height: 36,
+                    width: 36,
+                    borderRadius: 12,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "rgba(255,255,255,0.05)",
+                    color: "white",
+                    display: "grid",
+                    placeItems: "center",
+                    cursor: "pointer",
+                    flex: "0 0 auto",
+                  }}
+                >
+                  <Settings size={18} />
+                </button>
+
+                <div
+                  style={{
+                    minWidth: 0,
+                    padding: "7px 12px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "rgba(255,255,255,0.05)",
+                    color: "rgba(255,255,255,0.88)",
+                    fontSize: 12,
+                    fontWeight: 900,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    flex: 1,
+                  }}
+                  title={userLabel}
+                >
+                  {userLabel}
+                </div>
               </div>
             </div>
           </div>
