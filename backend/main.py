@@ -1215,6 +1215,122 @@ def put_plant_day(
 
 
 # =========================
+# Stops (Multi-planta)
+# =========================
+@app.get("/api/plants/{plant_id}/stops")
+def list_stops_by_plant(
+    plant_id: int,
+    day: date = Query(...),
+    owner_id: str = Depends(require_owner_id),
+):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select *
+            from public.bv_stops
+            where owner_id=%s and day=%s and plant_id=%s
+            order by created_at desc
+            """,
+            (owner_id, day, plant_id),
+        )
+        rows = cur.fetchall() or []
+    return rows
+
+
+@app.post("/api/plants/{plant_id}/stops")
+def create_stop_by_plant(
+    plant_id: int,
+    body: StopIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    block_retro(body.day, x_dev_key)
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into public.bv_stops(
+              owner_id, plant_id, day, turno,
+              data_inicio, hora_inicio, data_fim, hora_fim,
+              equipamento, tipo_parada, atividade, descricao, tempo_parada_h
+            )
+            values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            returning id
+            """,
+            (
+                owner_id,
+                plant_id,
+                body.day,
+                int(body.turno),
+                body.data_inicio,
+                body.hora_inicio,
+                body.data_fim,
+                body.hora_fim,
+                body.equipamento,
+                body.tipo_parada,
+                body.atividade,
+                body.descricao,
+                body.tempo_parada_h,
+            ),
+        )
+        new_id = cur.fetchone()["id"]
+        conn.commit()
+
+    log_action(
+        action="CREATE_STOP",
+        request=request,
+        user_id=user_id,
+        entity="bv_stops",
+        entity_id=str(new_id),
+        payload={"owner_id": owner_id, "plant_id": plant_id, "day": str(body.day), "equipamento": body.equipamento},
+    )
+
+    return {"ok": True, "id": new_id, "plant_id": plant_id}
+
+
+@app.delete("/api/plants/{plant_id}/stops/{stop_id}")
+def delete_stop_by_plant(
+    plant_id: int,
+    stop_id: int,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            delete from public.bv_stops
+            where id=%s and owner_id=%s and plant_id=%s
+            """,
+            (stop_id, owner_id, plant_id),
+        )
+        deleted = cur.rowcount
+        conn.commit()
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    log_action(
+        action="DELETE_STOP",
+        request=request,
+        user_id=user_id,
+        entity="bv_stops",
+        entity_id=str(stop_id),
+        payload={"owner_id": owner_id, "plant_id": plant_id},
+    )
+
+    return {"ok": True}
+
+
+# =========================
 # Stops
 # =========================
 @app.get("/api/stops")
@@ -1318,6 +1434,186 @@ def delete_stop(
         entity="bv_stops",
         entity_id=str(stop_id),
         payload={"owner_id": owner_id},
+    )
+
+    return {"ok": True}
+
+
+# =========================
+# Horimetros (Multi-planta)
+# =========================
+@app.post("/api/plants/{plant_id}/horimetros")
+def create_horimetro_by_plant(
+    plant_id: int,
+    body: HorimetroIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    # ✅ Horímetros: NÃO trava retroativo (dia anterior, etc.)
+    # block_retro(body.day, x_dev_key)
+
+    if body.horimetro_fim < body.horimetro_ini:
+        raise HTTPException(status_code=400, detail="horimetro_fim deve ser >= horimetro_ini")
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into public.bv_horimetros(
+              owner_id, plant_id, day, turno, equipamento, horimetro_ini, horimetro_fim, obs
+            )
+            values (%s,%s,%s,%s,%s,%s,%s,%s)
+            returning id
+            """,
+            (
+                owner_id,
+                plant_id,
+                body.day,
+                int(body.turno),
+                body.equipamento,
+                body.horimetro_ini,
+                body.horimetro_fim,
+                body.obs,
+            ),
+        )
+        new_id = cur.fetchone()["id"]
+        conn.commit()
+
+    log_action(
+        action="CREATE_HORIMETRO",
+        request=request,
+        user_id=user_id,
+        entity="bv_horimetros",
+        entity_id=str(new_id),
+        payload={"owner_id": owner_id, "plant_id": plant_id, "day": str(body.day), "equipamento": body.equipamento},
+    )
+
+    return {"ok": True, "id": new_id, "plant_id": plant_id}
+
+
+@app.get("/api/plants/{plant_id}/horimetros")
+def list_horimetros_by_plant(
+    plant_id: int,
+    day: Optional[date] = Query(None),
+    equipamento: Optional[str] = None,
+    limit: int = Query(200, ge=1, le=2000),
+    owner_id: str = Depends(require_owner_id),
+):
+    with get_conn() as conn, conn.cursor() as cur:
+        if day and equipamento:
+            cur.execute(
+                """
+                select *
+                from public.bv_horimetros
+                where owner_id=%s and plant_id=%s and day=%s and equipamento=%s
+                order by created_at desc
+                limit %s
+                """,
+                (owner_id, plant_id, day, equipamento, limit),
+            )
+        elif day:
+            cur.execute(
+                """
+                select *
+                from public.bv_horimetros
+                where owner_id=%s and plant_id=%s and day=%s
+                order by created_at desc
+                limit %s
+                """,
+                (owner_id, plant_id, day, limit),
+            )
+        elif equipamento:
+            cur.execute(
+                """
+                select *
+                from public.bv_horimetros
+                where owner_id=%s and plant_id=%s and equipamento=%s
+                order by created_at desc
+                limit %s
+                """,
+                (owner_id, plant_id, equipamento, limit),
+            )
+        else:
+            cur.execute(
+                """
+                select *
+                from public.bv_horimetros
+                where owner_id=%s and plant_id=%s
+                order by created_at desc
+                limit %s
+                """,
+                (owner_id, plant_id, limit),
+            )
+        rows = cur.fetchall() or []
+    return rows
+
+
+@app.get("/api/plants/{plant_id}/horimetros/last-by-eq")
+def last_by_eq_by_plant(plant_id: int, owner_id: str = Depends(require_owner_id)):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select distinct on (equipamento)
+              equipamento, horimetro_ini, horimetro_fim, day, turno, created_at
+            from public.bv_horimetros
+            where owner_id=%s and plant_id=%s
+            order by equipamento, created_at desc
+            """,
+            (owner_id, plant_id),
+        )
+        rows = cur.fetchall() or []
+
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "equipamento": r["equipamento"],
+                "horimetro_ini": parse_float(r["horimetro_ini"]),
+                "horimetro_fim": parse_float(r["horimetro_fim"]),
+                "day": str(r["day"]),
+                "turno": int(r["turno"]),
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+        )
+    return out
+
+
+@app.delete("/api/plants/{plant_id}/horimetros/{horimetro_id}")
+def delete_horimetro_by_plant(
+    plant_id: int,
+    horimetro_id: int,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            delete from public.bv_horimetros
+            where id=%s and owner_id=%s and plant_id=%s
+            """,
+            (horimetro_id, owner_id, plant_id),
+        )
+        deleted = cur.rowcount
+        conn.commit()
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    log_action(
+        action="DELETE_HORIMETRO",
+        request=request,
+        user_id=user_id,
+        entity="bv_horimetros",
+        entity_id=str(horimetro_id),
+        payload={"owner_id": owner_id, "plant_id": plant_id},
     )
 
     return {"ok": True}
