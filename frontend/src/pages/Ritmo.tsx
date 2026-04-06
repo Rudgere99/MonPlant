@@ -35,6 +35,8 @@ type PlantInfo = {
   is_active?: boolean;
 };
 
+type PlantScope = number | "all";
+
 type ApiPayload = {
   day: string;
   meta_ton?: number | null;
@@ -316,7 +318,7 @@ export default function Ritmo() {
   const [day, setDay] = useState<string>(isoTodayLocal());
 
   const [plants, setPlants] = useState<PlantInfo[]>([]);
-  const [plantId, setPlantId] = useState<number | null>(null);
+  const [plantId, setPlantId] = useState<PlantScope | null>(null);
 
   const mobile = useIsMobile();
 
@@ -346,6 +348,7 @@ export default function Ritmo() {
       const arr = Array.isArray(list) ? list : [];
       setPlants(arr);
       setPlantId((current) => {
+        if (current === "all") return "all";
         if (current && arr.some((x) => Number(x.id) === Number(current))) return current;
         return arr.length ? Number(arr[0].id) : null;
       });
@@ -357,6 +360,9 @@ export default function Ritmo() {
 
   const FETCH_URL = useMemo(() => {
     if (!plantId) return "";
+    if (plantId === "all") {
+      return `${API_BASE}/api/aggregate/plant-production/${encodeURIComponent(day)}`;
+    }
     return `${API_BASE}/api/plants/${plantId}/plant-production/${encodeURIComponent(day)}`;
   }, [day, plantId]);
 
@@ -520,10 +526,10 @@ export default function Ritmo() {
   const dTPH = 1;
   const dPct = 1;
 
-  const selectedPlantName = useMemo(
-    () => plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta",
-    [plants, plantId]
-  );
+  const selectedPlantName = useMemo(() => {
+    if (plantId === "all") return "Todas as plantas";
+    return plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
+  }, [plants, plantId]);
 
   const [yy, mm, dd] = day.split("-");
   const dayBR = `${dd}/${mm}/${yy}`;
@@ -613,7 +619,9 @@ return (
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 990, fontSize: 20 }}>Ritmo do Dia • {selectedPlantName}</div>
+            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 990, fontSize: 20 }}>
+              Ritmo do Dia • {selectedPlantName}{plantId === "all" ? " • Consolidado" : ""}
+            </div>
             <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>
               Dia: <span style={{ color: "rgba(255,255,255,0.92)" }}>{dayBR}</span>{" "}
               <span style={{ opacity: 0.55 }}>•</span>{" "}
@@ -624,11 +632,15 @@ return (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <select
               value={plantId ?? ""}
-              onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPlantId(v === "all" ? "all" : v ? Number(v) : null);
+              }}
               disabled={!plants.length}
-              style={{ ...input, minWidth: 180 }}
+              style={{ ...input, minWidth: 210 }}
             >
               {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+              {plants.length > 0 ? <option value="all">Todas as plantas</option> : null}
               {plants.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
