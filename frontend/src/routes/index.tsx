@@ -17,7 +17,7 @@ import Statistics from "../pages/Statistics";
 import UfDF from "../pages/UfDF";
 import DesvioProducao from "../pages/DesvioProducao";
 import Abastecimento from "../pages/Abastecimento";
-import Abastecimento from "../pages/Configuracoes";
+import Configuracoes from "../pages/Configuracoes";
 
 import Horimetros from "../pages/Horimetros";
 import Paradas from "../pages/Paradas";
