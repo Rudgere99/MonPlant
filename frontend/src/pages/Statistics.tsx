@@ -45,6 +45,14 @@ type DailyRow = {
   maintenance_hours?: number;
 };
 
+type PlantInfo = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+};
+
 type StatsMonth = {
   month: string; // YYYY-MM
   meta_month_ton?: number;
@@ -209,10 +217,10 @@ function authHeaders(): HeadersInit {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-async function fetchStopsLaunchDay(api: string, day: string, token?: string): Promise<StopDayPayload> {
+async function fetchStopsLaunchDay(api: string, plantId: number, day: string, token?: string): Promise<StopDayPayload> {
   const qs = `day=${encodeURIComponent(day)}`;
   const headers = token ? { Authorization: `Bearer ${token}` } : authHeaders();
-  const r = await fetch(`${api}/api/stops-launch?${qs}`, { headers });
+  const r = await fetch(`${api}/api/plants/${plantId}/stops-launch?${qs}`, { headers });
   if (!r.ok) throw new Error(`Stops ${day}: ${r.status}`);
   const json = (await r.json()) as StopDayPayload;
   return { day: (json as any)?.day || day, rows: Array.isArray((json as any)?.rows) ? (json as any).rows : [] };
@@ -503,6 +511,8 @@ export default function Statistics() {
     return `${d.getFullYear()}-${mm}`;
   });
   const [data, setData] = useState<StatsMonth | null>(null);
+  const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [plantId, setPlantId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -527,13 +537,37 @@ export default function Statistics() {
 
   const api = apiBase();
 
+  async function loadPlants() {
+    try {
+      const r = await fetch(`${api}/api/plants`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!r.ok) throw new Error("Erro ao carregar plantas");
+      const list = (await r.json()) as PlantInfo[];
+      const arr = Array.isArray(list) ? list : [];
+      setPlants(arr);
+      setPlantId((current) => {
+        if (current && arr.some((x) => Number(x.id) == Number(current))) return current;
+        return arr.length ? Number(arr[0].id) : null;
+      });
+    } catch {
+      setPlants([]);
+      setPlantId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (api) loadPlants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, token]);
+
   useEffect(() => {
     let alive = true;
     async function run() {
       setLoading(true);
       setErr(null);
       try {
-        const r = await fetch(`${api}/api/stats/month/${month}`, {
+        const r = await fetch(`${api}/api/plants/${plantId}/stats/month/${month}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
         if (!r.ok) {
@@ -551,11 +585,11 @@ export default function Statistics() {
         if (alive) setLoading(false);
       }
     }
-    if (api) run();
+    if (api && plantId) run();
     return () => {
       alive = false;
     };
-  }, [api, month, token]);
+  }, [api, month, token, plantId]);
 
   const daily = useMemo(() => data?.series?.daily || [], [data]);
 
@@ -791,7 +825,8 @@ export default function Statistics() {
         const pad = (n: number) => String(n).padStart(2, "0");
         const days = Array.from({ length: horizonDays }, (_, i) => `${yy}-${pad(mm)}-${pad(i + 1)}`);
         // busca em paralelo (máx 31 dias)
-        const payloads = await Promise.all(days.map((d) => fetchStopsLaunchDay(api, d, token || undefined)));
+        if (!plantId) return;
+        const payloads = await Promise.all(days.map((d) => fetchStopsLaunchDay(api, plantId, d, token || undefined)));
         if (!alive) return;
 
         let totalMin = 0;
@@ -816,7 +851,7 @@ export default function Statistics() {
     return () => {
       alive = false;
     };
-  }, [api, token, yy, mm, horizonDays]);
+  }, [api, token, yy, mm, horizonDays, plantId]);
 
   const totalStopHours = useMemo(() => stopsLaunchMinTotal / 60, [stopsLaunchMinTotal]);
   const totalWorkedHours = useMemo(() => Math.max(0, Math.min(horizonHours, horizonHours - totalStopHours)), [horizonHours, totalStopHours]);
@@ -846,6 +881,11 @@ export default function Statistics() {
   }, [totalWorkedHours, totalStopHours]);
 
   const okAvail = availabilityPct >= 85;
+
+  const selectedPlantName = useMemo(
+    () => plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta",
+    [plants, plantId]
+  );
 
   const microInsight = useMemo(() => {
     if (totalStopHours <= 0.01) return "";
@@ -885,12 +925,38 @@ export default function Statistics() {
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Relatórios • Estatísticas</div>
+          <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Relatórios • Estatísticas • {selectedPlantName}</div>
           <div style={{ marginTop: 4, fontSize: 26, fontWeight: 980, color: COLORS.text, letterSpacing: -0.4 }}>
             Estatísticas do mês
           </div>
 
           <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+            <div style={{ color: COLORS.sub, fontWeight: 900 }}>Planta</div>
+            <select
+              value={plantId ?? ""}
+              onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+              style={{
+                height: 36,
+                borderRadius: 12,
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(0,0,0,0.25)",
+                color: "white",
+                padding: "0 12px",
+                fontWeight: 900,
+                outline: "none",
+                minWidth: 180,
+              }}
+              disabled={!plants.length}
+            >
+              {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+              {plants.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+
+            <div style={{ color: COLORS.sub, fontWeight: 850 }}>•</div>
             <div style={{ color: COLORS.sub, fontWeight: 900 }}>Mês</div>
             <input
               type="month"
