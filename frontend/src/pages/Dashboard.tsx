@@ -407,6 +407,8 @@ type PlantInfo = {
   is_active?: boolean;
 };
 
+type PlantScope = number | "all";
+
 
 const EQ_BT01 = "BT-01";
 const EQS_TOP_PRODUCTS = ["BT-02", "PN-02", "PN-01", "EH-08"] as const;
@@ -442,7 +444,7 @@ export default function Dashboard() {
   const [stopsDayCount, setStopsDayCount] = useState<number>(0);
   const [lastByEq, setLastByEq] = useState<Record<string, HorimetroRow | null>>({});
   const [plants, setPlants] = useState<PlantInfo[]>([]);
-  const [plantId, setPlantId] = useState<number | null>(null);
+  const [plantId, setPlantId] = useState<PlantScope | null>(null);
 
   const POLL_MS = 10_000;
 
@@ -523,6 +525,7 @@ export default function Dashboard() {
       const list = Array.isArray(data) ? data : [];
       setPlants(list);
       setPlantId((current) => {
+        if (current === "all") return "all";
         if (current && list.some((p) => Number(p.id) === Number(current))) return current;
         return list.length ? Number(list[0].id) : null;
       });
@@ -552,7 +555,12 @@ export default function Dashboard() {
         const days = enumerateDaysInclusive(startDay, endDay);
         const prodResults = await Promise.all(
           days.map(async (d) => {
-            const payload = await apiGet<PlantDayPayload>(`/api/plants/${plantId}/plant-production/${encodeURIComponent(d)}`, token).catch(() => {
+            const rangePath =
+              plantId === "all"
+                ? `/api/aggregate/plant-production/${encodeURIComponent(d)}`
+                : `/api/plants/${plantId}/plant-production/${encodeURIComponent(d)}`;
+
+            const payload = await apiGet<PlantDayPayload>(rangePath, token).catch(() => {
               return { day: d, rows: [], obs: "" } as PlantDayPayload;
             });
             const total_ton = (payload?.rows || []).reduce((acc, r) => acc + parseBRNumber(r?.ton), 0);
@@ -583,7 +591,12 @@ export default function Dashboard() {
         return;
       }
 
-      const p = await apiGet<PlantDayPayload>(`/api/plants/${plantId}/plant-production/${encodeURIComponent(day)}`, token).catch(() => {
+      const dayPath =
+        plantId === "all"
+          ? `/api/aggregate/plant-production/${encodeURIComponent(day)}`
+          : `/api/plants/${plantId}/plant-production/${encodeURIComponent(day)}`;
+
+      const p = await apiGet<PlantDayPayload>(dayPath, token).catch(() => {
         return { day, rows: [], obs: "" } as PlantDayPayload;
       });
 
@@ -601,10 +614,28 @@ export default function Dashboard() {
         }
       }
 
-      const l7 = await apiGet<Last7Item[]>(`/api/plants/${plantId}/plant-production/last7days`, token).catch(() => []);
-      const ps = await apiGet<any>(`/api/stops-launch?day=${encodeURIComponent(day)}`, token).catch(() => null);
-      const psDay = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`, token).catch(() => []);
-      const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`, token).catch(() => []);
+      const last7Path =
+        plantId === "all"
+          ? `/api/aggregate/plant-production/last7days`
+          : `/api/plants/${plantId}/plant-production/last7days`;
+
+      const stopsLaunchPath =
+        plantId === "all"
+          ? `/api/aggregate/stops-launch?day=${encodeURIComponent(day)}`
+          : `/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(day)}`;
+
+      const ps = await apiGet<any>(stopsLaunchPath, token).catch(() => null);
+      const l7 = await apiGet<Last7Item[]>(last7Path, token).catch(() => []);
+
+      const psDay =
+        plantId === "all"
+          ? []
+          : await apiGet<StopRow[]>(`/api/plants/${plantId}/stops?day=${encodeURIComponent(day)}`, token).catch(() => []);
+
+      const hb =
+        plantId === "all"
+          ? []
+          : await apiGet<HorimetroRow[]>(`/api/plants/${plantId}/horimetros/last-by-eq`, token).catch(() => []);
 
       const map: Record<string, HorimetroRow | null> = {};
       for (const r of hb || []) {
@@ -930,7 +961,9 @@ const EXPECTED_TON_H = metaHoraEsperada;
   }, [levelBars]);
 
   const selectedPlantName =
-    plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
+    plantId === "all"
+      ? "Todas as plantas"
+      : plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
 
   const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff9f1a" }], [pctMetaGauge]);
 
@@ -1088,12 +1121,16 @@ const EXPECTED_TON_H = metaHoraEsperada;
           <span style={{ ...subStyle, marginLeft: 6 }}>Planta</span>
           <select
             className="mp-input"
-            style={{ width: mobile ? "100%" : 180, height: 42, borderRadius: 14 }}
+            style={{ width: mobile ? "100%" : 210, height: 42, borderRadius: 14 }}
             value={plantId ?? ""}
-            onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setPlantId(v === "all" ? "all" : v ? Number(v) : null);
+            }}
             disabled={plants.length === 0}
           >
             {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+            {plants.length > 0 ? <option value="all">Todas as plantas</option> : null}
             {plants.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -1152,7 +1189,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
       </div>
 
       <div style={{ marginTop: 8, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 800 }}>
-        Dashboard • {selectedPlantName} • {rangeMode ? `${brDate(startDay)} a ${brDate(endDay)}` : brDate(day)} {err ? `• ${err}` : rangeMode ? "• média por período" : "• tempo real"}
+        Dashboard • {selectedPlantName} • {rangeMode ? `${brDate(startDay)} a ${brDate(endDay)}` : brDate(day)} {err ? `• ${err}` : plantId === "all" ? "• consolidado" : rangeMode ? "• média por período" : "• tempo real"}
       </div>
 
       {/* MODAL EXPORT */}
