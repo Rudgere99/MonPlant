@@ -460,7 +460,7 @@ export default function PlantProduction() {
       }
 
       setInfo("Salvo com sucesso.");
-      await loadDay(day);
+      await loadDay(day, plantId);
     } catch (e: any) {
       setErr(e?.message || "Erro ao salvar");
     } finally {
