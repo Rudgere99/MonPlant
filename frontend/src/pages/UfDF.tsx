@@ -104,6 +104,7 @@ async function fetchStopsDay(plantId: PlantScope, day: string): Promise<StopDayP
   if (!r.ok) throw new Error(`Stops ${day}: ${r.status}`);
   const json = await r.json();
   return { day: json?.day || day, rows: Array.isArray(json?.rows) ? json.rows : [] };
+}
 
 type MonthAgg = {
   month: string;
@@ -222,7 +223,7 @@ export default function UfDF() {
     }
   }
 
-  async function loadMonth(m: string, selectedPlantId: number) {
+  async function loadMonth(m: string, selectedPlantId: PlantScope) {
     setBusy(true);
     setErr(null);
     try {
