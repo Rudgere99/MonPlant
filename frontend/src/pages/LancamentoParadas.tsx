@@ -33,12 +33,29 @@ type StopDayPayload = {
   rows: StopRow[];
 };
 
+type PlantInfo = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+};
+
 /* helpers */
 const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
 
 function authHeaders(): HeadersInit {
   const t = (localStorage.getItem("mp_token") || localStorage.getItem("token") || "").trim();
   return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+async function apiGet<T>(path: string): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, { headers: { ...authHeaders() } });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(t || `HTTP ${r.status}`);
+  }
+  return (await r.json()) as T;
 }
 
 function isoTodayLocal(): string {
@@ -184,6 +201,8 @@ export default function LancamentoParadas() {
   const mobile = useIsMobile();
   const periods = useMemo(() => makePeriods24(), []);
   const [day, setDay] = useState<string>(isoTodayLocal());
+  const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [plantId, setPlantId] = useState<number | null>(null);
 
   const [rows, setRows] = useState<StopRow[]>(
     periods.map((p) => ({
@@ -205,6 +224,26 @@ export default function LancamentoParadas() {
   );
   const stopTypes = useMemo(() => ["Operacional", "Preventiva", "Corretiva"], []);
 
+  async function loadPlants() {
+    if (!API_BASE) {
+      setMsg("VITE_API_BASE não configurado.");
+      return;
+    }
+    try {
+      const data = await apiGet<PlantInfo[]>(`/api/plants`);
+      const list = Array.isArray(data) ? data : [];
+      setPlants(list);
+      setPlantId((current) => {
+        if (current && list.some((x) => Number(x.id) === Number(current))) return current;
+        return list.length ? Number(list[0].id) : null;
+      });
+    } catch (e: any) {
+      setPlants([]);
+      setPlantId(null);
+      setMsg(e?.message || "Erro ao carregar plantas");
+    }
+  }
+
   async function load() {
     if (!API_BASE) {
       setMsg("VITE_API_BASE não configurado.");
@@ -214,7 +253,21 @@ export default function LancamentoParadas() {
     setMsg("");
 
     try {
-      const r = await fetch(`${API_BASE}/api/stops-launch?day=${encodeURIComponent(day)}`, {
+      if (!plantId) {
+        setRows(
+          periods.map((p) => ({
+            period: p,
+            equipamento: "",
+            tipo_parada: "",
+            descricao: "",
+            minutos: 0,
+          }))
+        );
+        setLoading(false);
+        return;
+      }
+
+      const r = await fetch(`${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(day)}`, {
         headers: { ...authHeaders() },
       });
 
@@ -267,6 +320,11 @@ export default function LancamentoParadas() {
     setMsg("");
 
     try {
+      if (!plantId) {
+        setMsg("Selecione uma planta.");
+        return;
+      }
+
       const normalized = rows.map((r) => ({
         ...r,
         minutos: clamp60(Number(r.minutos || 0)),
@@ -274,7 +332,7 @@ export default function LancamentoParadas() {
 
       const body: StopDayPayload = { day, rows: normalized };
 
-      const r = await fetch(`${API_BASE}/api/stops-launch?day=${encodeURIComponent(day)}`, {
+      const r = await fetch(`${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(day)}`, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -295,9 +353,18 @@ export default function LancamentoParadas() {
   }
 
   useEffect(() => {
+    loadPlants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!plantId) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day]);
+  }, [day, plantId]);
+
+  const selectedPlantName =
+    plants.find((x) => Number(x.id) === Number(plantId))?.name || "Planta";
 
   const totalMinutes = useMemo(() => rows.reduce((s, r) => s + clamp60(Number(r.minutos || 0)), 0), [rows]);
   const totalHours = totalMinutes / 60;
@@ -341,25 +408,42 @@ export default function LancamentoParadas() {
             Lançamento de Paradas
           </div>
           <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
-            {loading ? "Carregando..." : msg ? msg : "Lance paradas por hora (máx. 60 min por faixa)."}
+            {loading ? "Carregando..." : msg ? msg : `Lance paradas por hora (máx. 60 min por faixa). • ${selectedPlantName}`}
           </div>
         </div>
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: mobile ? "1fr" : "auto auto auto",
+            gridTemplateColumns: mobile ? "1fr" : "auto auto auto auto",
             gap: 10,
             alignItems: "end",
             width: mobile ? "100%" : undefined,
           }}
         >
           <div>
+            <div style={labelStyle}>Planta</div>
+            <select
+              value={plantId ?? ""}
+              onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+              style={inputStyle as any}
+              disabled={plants.length === 0}
+            >
+              {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+              {plants.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <div style={labelStyle}>Data</div>
             <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={inputStyle as any} />
           </div>
 
-          <button onClick={load} style={{ ...btnStyle, width: mobile ? "100%" : undefined }} disabled={loading}>
+          <button onClick={load} style={{ ...btnStyle, width: mobile ? "100%" : undefined }} disabled={loading || !plantId}>
             Atualizar
           </button>
 
@@ -371,7 +455,7 @@ export default function LancamentoParadas() {
               background: "rgba(16,185,129,0.16)",
               borderColor: "rgba(16,185,129,0.35)",
             }}
-            disabled={saving || loading}
+            disabled={saving || loading || !plantId}
           >
             {saving ? "Salvando..." : "Salvar"}
           </button>
