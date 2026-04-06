@@ -27,6 +27,14 @@ type GoalDay = {
   updated_at?: string | null;
 };
 
+type PlantInfo = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+};
+
 type ApiPayload = {
   day: string;
   meta_ton?: number | null;
@@ -307,6 +315,9 @@ const exportSep: React.CSSProperties = {
 export default function Ritmo() {
   const [day, setDay] = useState<string>(isoTodayLocal());
 
+  const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [plantId, setPlantId] = useState<number | null>(null);
+
   const mobile = useIsMobile();
 
   const grid12: React.CSSProperties = {
@@ -327,9 +338,35 @@ export default function Ritmo() {
 
   const [bucketTon, setBucketTon] = useState<string>(() => localStorage.getItem(LS_BUCKET) || "4,2");
 
-  const FETCH_URL = useMemo(() => `${API_BASE}/api/plant-production/${encodeURIComponent(day)}`, [day]);
+  async function loadPlants() {
+    try {
+      const r = await fetch(`${API_BASE}/api/plants`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const list = (await r.json()) as PlantInfo[];
+      const arr = Array.isArray(list) ? list : [];
+      setPlants(arr);
+      setPlantId((current) => {
+        if (current && arr.some((x) => Number(x.id) === Number(current))) return current;
+        return arr.length ? Number(arr[0].id) : null;
+      });
+    } catch {
+      setPlants([]);
+      setPlantId(null);
+    }
+  }
+
+  const FETCH_URL = useMemo(() => {
+    if (!plantId) return "";
+    return `${API_BASE}/api/plants/${plantId}/plant-production/${encodeURIComponent(day)}`;
+  }, [day, plantId]);
 
   useEffect(() => {
+    loadPlants();
+  }, []);
+
+  useEffect(() => {
+    if (!FETCH_URL) return;
+
     (async () => {
       setLoading(true);
       setErr(null);
@@ -359,7 +396,7 @@ export default function Ritmo() {
         setLoading(false);
       }
     })();
-  }, [FETCH_URL, day]);
+  }, [FETCH_URL, day, plantId]);
 
   const bucket = useMemo(() => {
     const n = parseNum(bucketTon);
@@ -483,6 +520,11 @@ export default function Ritmo() {
   const dTPH = 1;
   const dPct = 1;
 
+  const selectedPlantName = useMemo(
+    () => plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta",
+    [plants, plantId]
+  );
+
   const [yy, mm, dd] = day.split("-");
   const dayBR = `${dd}/${mm}/${yy}`;
 
@@ -571,7 +613,7 @@ return (
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 990, fontSize: 20 }}>Ritmo do Dia</div>
+            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 990, fontSize: 20 }}>Ritmo do Dia • {selectedPlantName}</div>
             <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>
               Dia: <span style={{ color: "rgba(255,255,255,0.92)" }}>{dayBR}</span>{" "}
               <span style={{ opacity: 0.55 }}>•</span>{" "}
@@ -580,6 +622,20 @@ return (
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <select
+              value={plantId ?? ""}
+              onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+              disabled={!plants.length}
+              style={{ ...input, minWidth: 180 }}
+            >
+              {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+              {plants.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={label}>Data</span>
               <input style={{ ...input, minWidth: 170 }} type="date" value={day} onChange={(e) => setDay(e.target.value)} />
