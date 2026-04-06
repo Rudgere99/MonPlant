@@ -219,6 +219,38 @@ function authHeaders(): HeadersInit {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+function emptyStatsMonth(month: string): StatsMonth {
+  return {
+    month,
+    meta_month_ton: 0,
+    produced_month_ton: 0,
+    attainment_pct: 0,
+    delta_ton: 0,
+    delta_pct: 0,
+    days: {
+      produced_days: 0,
+      programmed_stop_days: 0,
+      maintenance_stop_days: 0,
+    },
+    kpis: {
+      freq_avg_pct: 0,
+      avg_ton_per_hour: 0,
+    },
+    shift: { t1_ton: 0, t2_ton: 0 },
+    stops: {
+      by_type: [],
+      by_equipment: [],
+      by_description: [],
+      count_by_period: [],
+    },
+    hours_worked: {
+      total_hours: 0,
+      by_equipment: [],
+    },
+    series: { daily: [] },
+  };
+}
+
 async function fetchStopsLaunchDay(api: string, plantId: number, day: string, token?: string): Promise<StopDayPayload> {
   const qs = `day=${encodeURIComponent(day)}`;
   const headers = token ? { Authorization: `Bearer ${token}` } : authHeaders();
@@ -578,6 +610,13 @@ export default function Statistics() {
         const r = await fetch(statsPath, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
+
+        if (r.status === 404) {
+          if (!alive) return;
+          setData(emptyStatsMonth(month));
+          return;
+        }
+
         if (!r.ok) {
           const txt = await r.text();
           throw new Error(txt || `HTTP ${r.status}`);
