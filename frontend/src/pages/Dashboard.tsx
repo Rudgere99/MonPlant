@@ -399,6 +399,15 @@ type HorimetroRow = {
   created_at?: string | null;
 };
 
+type PlantInfo = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+};
+
+
 const EQ_BT01 = "BT-01";
 const EQS_TOP_PRODUCTS = ["BT-02", "PN-02", "PN-01", "EH-08"] as const;
 
@@ -432,6 +441,8 @@ export default function Dashboard() {
   const [stops, setStops] = useState<StopRow[]>([]);
   const [stopsDayCount, setStopsDayCount] = useState<number>(0);
   const [lastByEq, setLastByEq] = useState<Record<string, HorimetroRow | null>>({});
+  const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [plantId, setPlantId] = useState<number | null>(null);
 
   const POLL_MS = 10_000;
 
@@ -505,16 +516,43 @@ export default function Dashboard() {
     a.remove();
   }
 
+
+  async function loadPlants() {
+    try {
+      const data = await apiGet<PlantInfo[]>(`/api/plants`, token).catch(() => []);
+      const list = Array.isArray(data) ? data : [];
+      setPlants(list);
+      setPlantId((current) => {
+        if (current && list.some((p) => Number(p.id) === Number(current))) return current;
+        return list.length ? Number(list[0].id) : null;
+      });
+    } catch {
+      setPlants([]);
+      setPlantId(null);
+    }
+  }
+
   async function loadAll() {
     setLoading(true);
     setErr(null);
 
     try {
+      if (!plantId) {
+        setProdDay(null);
+        setRangeProdDays([]);
+        setRangeGoalDays([]);
+        setLast7([]);
+        setStops([]);
+        setStopsDayCount(0);
+        setLastByEq({});
+        return;
+      }
+
       if (rangeMode) {
         const days = enumerateDaysInclusive(startDay, endDay);
         const prodResults = await Promise.all(
           days.map(async (d) => {
-            const payload = await apiGet<PlantDayPayload>(`/api/plant-production/${encodeURIComponent(d)}`, token).catch(() => {
+            const payload = await apiGet<PlantDayPayload>(`/api/plants/${plantId}/plant-production/${encodeURIComponent(d)}`, token).catch(() => {
               return { day: d, rows: [], obs: "" } as PlantDayPayload;
             });
             const total_ton = (payload?.rows || []).reduce((acc, r) => acc + parseBRNumber(r?.ton), 0);
@@ -545,7 +583,7 @@ export default function Dashboard() {
         return;
       }
 
-      const p = await apiGet<PlantDayPayload>(`/api/plant-production/${encodeURIComponent(day)}`, token).catch(() => {
+      const p = await apiGet<PlantDayPayload>(`/api/plants/${plantId}/plant-production/${encodeURIComponent(day)}`, token).catch(() => {
         return { day, rows: [], obs: "" } as PlantDayPayload;
       });
 
@@ -563,7 +601,7 @@ export default function Dashboard() {
         }
       }
 
-      const l7 = await apiGet<Last7Item[]>(`/api/plant-production/last7days`, token).catch(() => []);
+      const l7 = await apiGet<Last7Item[]>(`/api/plants/${plantId}/plant-production/last7days`, token).catch(() => []);
       const ps = await apiGet<any>(`/api/stops-launch?day=${encodeURIComponent(day)}`, token).catch(() => null);
       const psDay = await apiGet<StopRow[]>(`/api/stops?day=${encodeURIComponent(day)}`, token).catch(() => []);
       const hb = await apiGet<HorimetroRow[]>(`/api/horimetros/last-by-eq`, token).catch(() => []);
@@ -589,20 +627,30 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!token) return;
+    loadPlants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, token]);
+
+  useEffect(() => {
     if (authLoading) return; // espera hidratar auth
     if (!token) return; // só chama API se tiver token
+    if (!plantId) return;
 
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, token, day, rangeMode, startDay, endDay]);
-useEffect(() => {
+  }, [authLoading, token, plantId, day, rangeMode, startDay, endDay]);
+
+  useEffect(() => {
     if (authLoading) return;
     if (!token) return;
+    if (!plantId) return;
 
     const id = window.setInterval(() => loadAll(), POLL_MS);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, token, day, rangeMode, startDay, endDay]);
+  }, [authLoading, token, plantId, day, rangeMode, startDay, endDay]);
 
   /* ===================== computed ===================== */
   const rangeDays = useMemo(() => enumerateDaysInclusive(startDay, endDay), [startDay, endDay]);
@@ -728,7 +776,6 @@ useEffect(() => {
       const desc = (tipo && descRaw) ? `${tipo} — ${descRaw}` : (tipo || descRaw || "Parada");
 
       // Novo formato (bv_launch.stops_rows): period "HH-HH"
- "HH-HH"
       const p = parsePeriod(String(s?.period || ""));
       if (p) {
         const hours = expandHoursInclusive(p.a, p.b);
@@ -881,6 +928,9 @@ const EXPECTED_TON_H = metaHoraEsperada;
     const s = levelBars.reduce((acc, r) => acc + (Number(r.freq) || 0), 0);
     return s / levelBars.length;
   }, [levelBars]);
+
+  const selectedPlantName =
+    plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
 
   const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff9f1a" }], [pctMetaGauge]);
 
@@ -1035,6 +1085,22 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </span>
           </button>
 
+          <span style={{ ...subStyle, marginLeft: 6 }}>Planta</span>
+          <select
+            className="mp-input"
+            style={{ width: mobile ? "100%" : 180, height: 42, borderRadius: 14 }}
+            value={plantId ?? ""}
+            onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+            disabled={plants.length === 0}
+          >
+            {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+            {plants.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+
           {!rangeMode ? (
             <>
               <span style={{ ...subStyle, marginLeft: 6 }}>Data</span>
@@ -1071,7 +1137,9 @@ const EXPECTED_TON_H = metaHoraEsperada;
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: mobile ? "wrap" : "nowrap", justifyContent: mobile ? "flex-start" : "flex-end" }}>
-          <span style={{ ...smallPill, flex: mobile ? "1 1 100%" : undefined }}>{loading ? "Atualizando..." : err ? "Erro" : "Online"}</span>
+          <span style={{ ...smallPill, flex: mobile ? "1 1 100%" : undefined }}>
+            {!plantId ? "Selecione a planta" : loading ? "Atualizando..." : err ? "Erro" : "Online"}
+          </span>
 
           <button className="mp-btn" onClick={() => setExportOpen(true)} style={{ height: 42, flex: mobile ? "1 1 120px" : undefined }}>
             Exportar
@@ -1084,7 +1152,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
       </div>
 
       <div style={{ marginTop: 8, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 800 }}>
-        Dashboard • {rangeMode ? `${brDate(startDay)} a ${brDate(endDay)}` : brDate(day)} {err ? `• ${err}` : rangeMode ? "• média por período" : "• tempo real"}
+        Dashboard • {selectedPlantName} • {rangeMode ? `${brDate(startDay)} a ${brDate(endDay)}` : brDate(day)} {err ? `• ${err}` : rangeMode ? "• média por período" : "• tempo real"}
       </div>
 
       {/* MODAL EXPORT */}
@@ -1204,7 +1272,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 950, fontSize: 16, color: "rgba(255,255,255,0.92)" }}>
-                        MonPlant • Dashboard
+                        MonPlant • Dashboard • {selectedPlantName}
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
                         {brDate(day)} • Exportação
