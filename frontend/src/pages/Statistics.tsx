@@ -208,6 +208,15 @@ function monthToLabel(ym: string) {
   ];
   return `${meses[mi] || m} de ${y}`;
 }
+
+function shiftMonth(ym: string, delta: number) {
+  const [y, m] = ym.split("-").map(Number);
+  if (!y || !m) return ym;
+  const d = new Date(y, m - 1 + delta, 1);
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${yy}-${mm}`;
+}
 function apiBase() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const v = (import.meta as any)?.env?.VITE_API_BASE;
@@ -545,6 +554,7 @@ export default function Statistics() {
     return `${d.getFullYear()}-${mm}`;
   });
   const [data, setData] = useState<StatsMonth | null>(null);
+  const [nextMonthData, setNextMonthData] = useState<StatsMonth | null>(null);
   const [plants, setPlants] = useState<PlantInfo[]>([]);
   const [plantId, setPlantId] = useState<PlantScope | null>(null);
   const [loading, setLoading] = useState(false);
@@ -638,7 +648,65 @@ export default function Statistics() {
     };
   }, [api, month, token, plantId]);
 
+  useEffect(() => {
+    let alive = true;
+    async function runNextMonth() {
+      try {
+        if (!api || !plantId) {
+          if (alive) setNextMonthData(null);
+          return;
+        }
+
+        const nextMonth = shiftMonth(month, 1);
+        const statsPath =
+          plantId === "all"
+            ? `${api}/api/aggregate/stats/month/${nextMonth}`
+            : `${api}/api/plants/${plantId}/stats/month/${nextMonth}`;
+
+        const r = await fetch(statsPath, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (!alive) return;
+        if (r.status === 404) {
+          setNextMonthData(null);
+          return;
+        }
+        if (!r.ok) {
+          setNextMonthData(null);
+          return;
+        }
+
+        const js = (await r.json()) as StatsMonth;
+        if (!alive) return;
+        setNextMonthData(js);
+      } catch {
+        if (!alive) return;
+        setNextMonthData(null);
+      }
+    }
+    runNextMonth();
+    return () => {
+      alive = false;
+    };
+  }, [api, month, token, plantId]);
+
   const daily = useMemo(() => data?.series?.daily || [], [data]);
+  const operationalDaily = useMemo(() => {
+    const sortedCurrent = [...(daily || [])].sort((a, b) => String(a.day || "").localeCompare(String(b.day || "")));
+    const nextFirstDay = [...(nextMonthData?.series?.daily || [])]
+      .sort((a, b) => String(a.day || "").localeCompare(String(b.day || "")))[0];
+
+    return sortedCurrent.map((row, idx) => {
+      const nextRow = idx < sortedCurrent.length - 1 ? sortedCurrent[idx + 1] : nextFirstDay;
+      return {
+        ...row,
+        operational_day: row.day,
+        operational_t1_ton: Number(row.t1_ton || 0),
+        operational_t2_ton: Number(nextRow?.t2_ton || 0),
+      };
+    });
+  }, [daily, nextMonthData]);
 
   const metaMonth = Number(data?.meta_month_ton || 0);
   const prodMonth = Number(data?.produced_month_ton || 0);
@@ -748,10 +816,10 @@ export default function Statistics() {
 
   const shiftLetterPie = useMemo(() => {
     const base: Record<string, number> = {};
-    for (const row of daily || []) {
-      const rule = getShiftRuleForDate(row.day);
-      const t1 = Number(row.t1_ton || 0);
-      const t2 = Number(row.t2_ton || 0);
+    for (const row of operationalDaily || []) {
+      const rule = getShiftRuleForDate(row.operational_day);
+      const t1 = Number(row.operational_t1_ton || 0);
+      const t2 = Number(row.operational_t2_ton || 0);
       const label1 = `Turno 1 • ${rule.turno1}`;
       const label2 = `Turno 2 • ${rule.turno2}`;
       base[label1] = (base[label1] || 0) + t1;
@@ -760,7 +828,7 @@ export default function Statistics() {
     return Object.entries(base)
       .map(([name, value]) => ({ name, value }))
       .filter((x) => Number(x.value || 0) > 0);
-  }, [daily]);
+  }, [operationalDaily]);
 
   const activeShiftPie = useMemo(
     () => (shiftMode === "turno" ? shiftPie : shiftLetterPie),
@@ -785,10 +853,10 @@ export default function Statistics() {
 
   const letterSplit = useMemo(() => {
     const base: Record<"A" | "B" | "C" | "D", number> = { A: 0, B: 0, C: 0, D: 0 };
-    for (const row of daily || []) {
-      const rule = getShiftRuleForDate(row.day);
-      base[rule.turno1] += Number(row.t1_ton || 0);
-      base[rule.turno2] += Number(row.t2_ton || 0);
+    for (const row of operationalDaily || []) {
+      const rule = getShiftRuleForDate(row.operational_day);
+      base[rule.turno1] += Number(row.operational_t1_ton || 0);
+      base[rule.turno2] += Number(row.operational_t2_ton || 0);
     }
     return (["A", "B", "C", "D"] as const).map((letter) => ({
       key: letter,
@@ -796,7 +864,7 @@ export default function Statistics() {
       value: Number(base[letter] || 0),
       color: getLetterColor(letter),
     }));
-  }, [daily]);
+  }, [operationalDaily]);
 
   const letterSplitTotal = useMemo(
     () => letterSplit.reduce((acc, item) => acc + Number(item.value || 0), 0),
@@ -1335,7 +1403,7 @@ export default function Statistics() {
             </div>
 
             <div style={{ marginTop: 10, color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
-              Regra automática baseada na escala 2x2 iniciada em 19/03/2026. Funciona para qualquer dia, mês e ano.
+              Regra automática baseada na escala 2x2 iniciada em 19/03/2026. No cálculo por letras, o Turno 2 (19:00–07:00) é lançado no dia operacional anterior, inclusive na virada do mês.
             </div>
           </Card>
 
