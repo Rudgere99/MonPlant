@@ -13,6 +13,7 @@ import {
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 const LS_KEY = "mp_desvio_producao_v2";
+const LS_KEY_PLANT = "mp_desvio_producao_plant_scope_v1";
 
 type PlantHourRow = { period: string; ton?: any; freq?: any };
 type PlantDayPayload = {
@@ -198,7 +199,15 @@ export default function DesvioProducao() {
   const [split, setSplit] = useState<SplitState>(saved?.split || defaultSplit);
 
   const [plants, setPlants] = useState<PlantInfo[]>([]);
-  const [plantId, setPlantId] = useState<PlantScope | null>(null);
+  const [plantId, setPlantId] = useState<PlantScope | null>(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY_PLANT);
+      if (!raw) return null;
+      return raw === "all" ? "all" : Number(raw);
+    } catch {
+      return null;
+    }
+  });
 
   const [loadingProd, setLoadingProd] = useState(false);
   const [prodErr, setProdErr] = useState<string | null>(null);
@@ -240,6 +249,18 @@ export default function DesvioProducao() {
   }, [day, desvioPct, producaoSistemica, splitOpen, split]);
 
   useEffect(() => {
+    try {
+      if (plantId === null) {
+        localStorage.removeItem(LS_KEY_PLANT);
+      } else {
+        localStorage.setItem(LS_KEY_PLANT, String(plantId));
+      }
+    } catch {
+      // ignore
+    }
+  }, [plantId]);
+
+  useEffect(() => {
     let alive = true;
 
     async function loadDayProduction() {
@@ -250,7 +271,6 @@ export default function DesvioProducao() {
         if (!plantId) {
           if (!alive) return;
           setProducaoInformadaAuto(null);
-          setLoadingProd(false);
           return;
         }
 
@@ -278,7 +298,8 @@ export default function DesvioProducao() {
         const payload = (await r.json()) as PlantDayPayload;
 
         if (!alive) return;
-        setProducaoInformadaAuto(sumPlantRows(payload?.rows || []));
+        const total = sumPlantRows(Array.isArray(payload?.rows) ? payload.rows : []);
+        setProducaoInformadaAuto(total);
       } catch (e: any) {
         if (!alive) return;
         setProducaoInformadaAuto(null);
