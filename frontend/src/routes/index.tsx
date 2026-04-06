@@ -199,7 +199,7 @@ export function AppRoutes() {
           path="configuracoes"
           element={
             <RequireRole>
-              <configuracoes />
+              <Configuracoes />
             </RequireRole>
           }
         />
