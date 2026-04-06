@@ -104,12 +104,6 @@ async function fetchStopsDay(plantId: PlantScope, day: string): Promise<StopDayP
   if (!r.ok) throw new Error(`Stops ${day}: ${r.status}`);
   const json = await r.json();
   return { day: json?.day || day, rows: Array.isArray(json?.rows) ? json.rows : [] };
-}`;
-  const r = await fetch(`${API_BASE}/api/plants/${plantId}/stops-launch?${qs}`, { headers: { ...authHeaders() } });
-  if (!r.ok) throw new Error(`Stops ${day}: ${r.status}`);
-  const json = (await r.json()) as StopDayPayload;
-  return { day: json?.day || day, rows: Array.isArray(json?.rows) ? json.rows : [] };
-}
 
 type MonthAgg = {
   month: string;
