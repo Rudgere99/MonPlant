@@ -11,6 +11,14 @@ type StopRow = {
 
 type StopDayPayload = { day: string; rows: StopRow[] };
 
+type PlantInfo = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+};
+
 const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
 
 function authHeaders(): HeadersInit {
@@ -79,9 +87,9 @@ function isoDate(yyyy: number, mm1: number, dd: number) {
   return `${yyyy}-${mm}-${d}`;
 }
 
-async function fetchStopsDay(day: string): Promise<StopDayPayload> {
+async function fetchStopsDay(plantId: number, day: string): Promise<StopDayPayload> {
   const qs = `day=${encodeURIComponent(day)}`;
-  const r = await fetch(`${API_BASE}/api/stops-launch?${qs}`, { headers: { ...authHeaders() } });
+  const r = await fetch(`${API_BASE}/api/plants/${plantId}/stops-launch?${qs}`, { headers: { ...authHeaders() } });
   if (!r.ok) throw new Error(`Stops ${day}: ${r.status}`);
   const json = (await r.json()) as StopDayPayload;
   return { day: json?.day || day, rows: Array.isArray(json?.rows) ? json.rows : [] };
@@ -179,11 +187,31 @@ export default function UfDF() {
   const mobile = useIsMobile();
 
   const [month, setMonth] = useState<string>(monthStr());
+  const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [plantId, setPlantId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [agg, setAgg] = useState<MonthAgg | null>(null);
 
-  async function loadMonth(m: string) {
+  async function loadPlants() {
+    try {
+      const r = await fetch(`${API_BASE}/api/plants`, { headers: { ...authHeaders() } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const list = (await r.json()) as PlantInfo[];
+      const arr = Array.isArray(list) ? list : [];
+      setPlants(arr);
+      setPlantId((current) => {
+        if (current && arr.some((x) => Number(x.id) === Number(current))) return current;
+        return arr.length ? Number(arr[0].id) : null;
+      });
+    } catch (e: any) {
+      setPlants([]);
+      setPlantId(null);
+      setErr(e?.message || "Falha ao carregar plantas.");
+    }
+  }
+
+  async function loadMonth(m: string, selectedPlantId: number) {
     setBusy(true);
     setErr(null);
     try {
@@ -197,7 +225,7 @@ export default function UfDF() {
       const daysList = Array.from({ length: days }, (_, i) => isoDate(yyyy, mm1, i + 1));
 
       const payloads = await Promise.all(
-        daysList.map((d) => fetchStopsDay(d).catch(() => ({ day: d, rows: [] as StopRow[] })))
+        daysList.map((d) => fetchStopsDay(selectedPlantId, d).catch(() => ({ day: d, rows: [] as StopRow[] })))
       );
 
       const allRows = payloads.flatMap((p) => p.rows || []);
@@ -212,9 +240,20 @@ export default function UfDF() {
   }
 
   useEffect(() => {
-    loadMonth(month);
+    loadPlants();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month]);
+  }, []);
+
+  useEffect(() => {
+    if (!plantId) return;
+    loadMonth(month, plantId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, plantId]);
+
+  const selectedPlantName = useMemo(
+    () => plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta",
+    [plants, plantId]
+  );
 
   const monthLabel = useMemo(() => {
     const [y, m] = month.split("-");
@@ -225,13 +264,35 @@ export default function UfDF() {
     <div style={{ padding: 18 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: -0.3 }}>UF / DF • Planta (Geral)</div>
+          <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: -0.3 }}>UF / DF • {selectedPlantName}</div>
           <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 800, marginTop: 4 }}>
             Base: paradas hora a hora • soma total do mês (independente do equipamento)
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <select
+            value={plantId ?? ""}
+            onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+            disabled={!plants.length}
+            style={{
+              borderRadius: 14,
+              border: "1px solid rgba(255,255,255,0.10)",
+              background: "rgba(255,255,255,0.04)",
+              color: "rgba(255,255,255,0.92)",
+              padding: "10px 12px",
+              fontWeight: 900,
+              minWidth: 180,
+            }}
+          >
+            {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+            {plants.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+
           <input
             type="month"
             value={month}
@@ -246,8 +307,8 @@ export default function UfDF() {
             }}
           />
           <button
-            onClick={() => loadMonth(month)}
-            disabled={busy}
+            onClick={() => plantId && loadMonth(month, plantId)}
+            disabled={busy || !plantId}
             style={{
               borderRadius: 14,
               border: "1px solid rgba(255,255,255,0.10)",
@@ -255,7 +316,7 @@ export default function UfDF() {
               color: "rgba(255,255,255,0.92)",
               padding: "10px 12px",
               fontWeight: 950,
-              cursor: busy ? "not-allowed" : "pointer",
+              cursor: busy || !plantId ? "not-allowed" : "pointer",
             }}
           >
             {busy ? "Carregando…" : "Atualizar"}
