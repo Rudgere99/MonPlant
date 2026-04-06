@@ -439,6 +439,21 @@ class PlantDayUpsert(BaseModel):
     rows: List[PlantRow] = Field(default_factory=list)
 
 
+class PlantOut(BaseModel):
+    id: int
+    code: str
+    name: str
+    description: Optional[str] = None
+    is_active: bool
+
+
+class PlantCreateIn(BaseModel):
+    code: str
+    name: str
+    description: Optional[str] = None
+    is_active: bool = True
+
+
 class StopIn(BaseModel):
     day: date
     turno: int  # 1|2
@@ -876,7 +891,201 @@ def api_dev_list_logs(
 
 
 # =========================
-# Plant Production
+# Plants
+# =========================
+@app.get("/api/plants", response_model=List[PlantOut])
+def list_plants(owner_id: str = Depends(require_owner_id)):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select id, code, name, description, is_active
+            from public.bv_plants
+            where is_active = true
+            order by id asc
+            """
+        )
+        rows = cur.fetchall() or []
+
+    return [
+        {
+            "id": int(r["id"]),
+            "code": r["code"],
+            "name": r["name"],
+            "description": r["description"],
+            "is_active": bool(r["is_active"]),
+        }
+        for r in rows
+    ]
+
+
+@app.post("/api/plants", response_model=PlantOut)
+def create_plant(
+    body: PlantCreateIn,
+    owner_id: str = Depends(require_owner_id),
+):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into public.bv_plants(code, name, description, is_active)
+            values (%s, %s, %s, %s)
+            returning id, code, name, description, is_active
+            """,
+            (body.code.strip(), body.name.strip(), body.description, bool(body.is_active)),
+        )
+        row = cur.fetchone()
+        conn.commit()
+
+    return {
+        "id": int(row["id"]),
+        "code": row["code"],
+        "name": row["name"],
+        "description": row["description"],
+        "is_active": bool(row["is_active"]),
+    }
+
+
+# =========================
+# Plant Production (Multi-planta)
+# =========================
+@app.get("/api/plants/{plant_id}/plant-production/last7days")
+def plant_last7_by_plant(plant_id: int, owner_id: str = Depends(require_owner_id)):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select day, coalesce(sum(coalesce(ton,0)),0) as total_ton
+            from public.bv_plant_production_rows
+            where owner_id=%s
+              and plant_id=%s
+            group by day
+            order by day desc
+            limit 7
+            """,
+            (owner_id, plant_id),
+        )
+        rows = cur.fetchall() or []
+
+    rows = list(reversed(rows))
+    return [{"day": str(r["day"]), "total_ton": float(r["total_ton"] or 0)} for r in rows]
+
+
+@app.get("/api/plants/{plant_id}/plant-production/{day}")
+def get_plant_day_by_plant(
+    plant_id: int,
+    day: date,
+    owner_id: str = Depends(require_owner_id),
+):
+    periods = [_period_std_from_h(h) for h in range(24)]
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select obs, updated_at
+            from public.bv_plant_production_daily
+            where owner_id=%s and day=%s and plant_id=%s
+            """,
+            (owner_id, day, plant_id),
+        )
+        daily = cur.fetchone()
+
+        cur.execute(
+            """
+            select period, ton, freq
+            from public.bv_plant_production_rows
+            where owner_id=%s and day=%s and plant_id=%s
+            """,
+            (owner_id, day, plant_id),
+        )
+        db_rows = cur.fetchall() or []
+
+    by_period: Dict[str, Any] = {}
+    for r in db_rows:
+        key = normalize_period(r["period"])
+        if key:
+            by_period[key] = r
+
+    full_rows = []
+    for p in periods:
+        r = by_period.get(p)
+        full_rows.append(
+            {
+                "period": p,
+                "ton": r["ton"] if r else None,
+                "freq": r["freq"] if r else None,
+            }
+        )
+
+    obs = (daily["obs"] if daily else "") or ""
+    updated_at = daily["updated_at"].isoformat() if (daily and daily.get("updated_at")) else None
+
+    return {
+        "day": str(day),
+        "plant_id": plant_id,
+        "obs": obs,
+        "rows": full_rows,
+        "updated_at": updated_at,
+    }
+
+
+@app.put("/api/plants/{plant_id}/plant-production/{day}")
+def put_plant_day_by_plant(
+    plant_id: int,
+    day: date,
+    body: PlantDayUpsert,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    block_retro(day, x_dev_key)
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into public.bv_plant_production_daily(owner_id, day, plant_id, obs, updated_at)
+            values (%s,%s,%s,%s, now())
+            on conflict (owner_id, day, plant_id)
+            do update set obs = excluded.obs, updated_at = now()
+            """,
+            (owner_id, day, plant_id, body.obs or ""),
+        )
+
+        cur.execute(
+            """
+            delete from public.bv_plant_production_rows
+            where owner_id=%s and day=%s and plant_id=%s
+            """,
+            (owner_id, day, plant_id),
+        )
+
+        for r in body.rows or []:
+            p = normalize_period(r.period) or r.period
+            cur.execute(
+                """
+                insert into public.bv_plant_production_rows(owner_id, day, plant_id, period, ton, freq)
+                values (%s,%s,%s,%s,%s,%s)
+                """,
+                (owner_id, day, plant_id, p, r.ton, r.freq),
+            )
+
+        conn.commit()
+
+    log_action(
+        action="UPDATE_PLANT_PRODUCTION",
+        request=request,
+        user_id=user_id,
+        entity="bv_plant_production_daily",
+        entity_id=f"{day}::plant::{plant_id}",
+        payload={"owner_id": owner_id, "day": str(day), "plant_id": plant_id},
+    )
+
+    return {"ok": True, "day": str(day), "plant_id": plant_id}
+
+
+# =========================
+# Plant Production (Legacy)
 # =========================
 @app.get("/api/plant-production/last7days")
 def plant_last7(owner_id: str = Depends(require_owner_id)):
