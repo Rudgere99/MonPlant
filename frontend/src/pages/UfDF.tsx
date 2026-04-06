@@ -11,6 +11,8 @@ type StopRow = {
 
 type StopDayPayload = { day: string; rows: StopRow[] };
 
+type PlantScope = number | "all";
+
 type PlantInfo = {
   id: number;
   code: string;
@@ -87,8 +89,22 @@ function isoDate(yyyy: number, mm1: number, dd: number) {
   return `${yyyy}-${mm}-${d}`;
 }
 
-async function fetchStopsDay(plantId: number, day: string): Promise<StopDayPayload> {
+async function fetchStopsDay(plantId: PlantScope, day: string): Promise<StopDayPayload> {
   const qs = `day=${encodeURIComponent(day)}`;
+  const headers = { ...authHeaders() };
+
+  if (plantId === "all") {
+    const r = await fetch(`${API_BASE}/api/aggregate/stops-launch?${qs}`, { headers });
+    if (!r.ok) throw new Error(`Stops ${day}: ${r.status}`);
+    const json = await r.json();
+    return { day: json?.day || day, rows: Array.isArray(json?.rows) ? json.rows : [] };
+  }
+
+  const r = await fetch(`${API_BASE}/api/plants/${plantId}/stops-launch?${qs}`, { headers });
+  if (!r.ok) throw new Error(`Stops ${day}: ${r.status}`);
+  const json = await r.json();
+  return { day: json?.day || day, rows: Array.isArray(json?.rows) ? json.rows : [] };
+}`;
   const r = await fetch(`${API_BASE}/api/plants/${plantId}/stops-launch?${qs}`, { headers: { ...authHeaders() } });
   if (!r.ok) throw new Error(`Stops ${day}: ${r.status}`);
   const json = (await r.json()) as StopDayPayload;
@@ -188,7 +204,7 @@ export default function UfDF() {
 
   const [month, setMonth] = useState<string>(monthStr());
   const [plants, setPlants] = useState<PlantInfo[]>([]);
-  const [plantId, setPlantId] = useState<number | null>(null);
+  const [plantId, setPlantId] = useState<PlantScope | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [agg, setAgg] = useState<MonthAgg | null>(null);
@@ -201,6 +217,7 @@ export default function UfDF() {
       const arr = Array.isArray(list) ? list : [];
       setPlants(arr);
       setPlantId((current) => {
+        if (current === "all") return "all";
         if (current && arr.some((x) => Number(x.id) === Number(current))) return current;
         return arr.length ? Number(arr[0].id) : null;
       });
@@ -250,10 +267,10 @@ export default function UfDF() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, plantId]);
 
-  const selectedPlantName = useMemo(
-    () => plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta",
-    [plants, plantId]
-  );
+  const selectedPlantName = useMemo(() => {
+    if (plantId === "all") return "Todas as plantas";
+    return plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
+  }, [plants, plantId]);
 
   const monthLabel = useMemo(() => {
     const [y, m] = month.split("-");
@@ -273,7 +290,10 @@ export default function UfDF() {
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <select
             value={plantId ?? ""}
-            onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setPlantId(v === "all" ? "all" : v ? Number(v) : null);
+            }}
             disabled={!plants.length}
             style={{
               borderRadius: 14,
@@ -286,6 +306,7 @@ export default function UfDF() {
             }}
           >
             {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+            {plants.length > 0 ? <option value="all">Todas as plantas</option> : null}
             {plants.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
