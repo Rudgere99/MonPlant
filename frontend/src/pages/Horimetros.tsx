@@ -132,9 +132,10 @@ export default function Horimetros() {
         if (current && list.some((x) => Number(x.id) === Number(current))) return current;
         return list.length ? Number(list[0].id) : null;
       });
-    } catch {
+    } catch (e: any) {
       setPlants([]);
       setPlantId(null);
+      setErr(e?.message || "Erro ao carregar plantas");
     }
   }
 
@@ -274,11 +275,11 @@ export default function Horimetros() {
 
   async function removeRow(id: number) {
     try {
-      setLoading(true);
       if (!plantId) {
         setErr("Selecione uma planta.");
         return;
       }
+      setLoading(true);
       await apiDelete(`/api/plants/${plantId}/horimetros/${id}`);
       await loadLastByEq(plantId);
       await loadFiltered(plantId);
@@ -311,18 +312,37 @@ export default function Horimetros() {
               <div className="mp-page-sub">Histórico + filtros + lançamento (Inicial / Final) • {selectedPlantName} • permitido lançar qualquer data</div>
             </div>
 
-            <button
-              className="mp-btn"
-              onClick={() => {
-                if (plantId) {
-                  loadLastByEq(plantId);
-                  loadFiltered(plantId);
-                }
-              }}
-              disabled={loading}
-            >
-              {loading ? "Atualizando..." : "Atualizar"}
-            </button>
+            <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+              <div style={{ minWidth: 220 }}>
+                <div className="mp-label">Planta</div>
+                <select
+                  className="mp-input"
+                  value={plantId ?? ""}
+                  onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+                  disabled={plants.length === 0}
+                >
+                  {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+                  {plants.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                className="mp-btn"
+                onClick={() => {
+                  if (plantId) {
+                    loadLastByEq(plantId);
+                    loadFiltered(plantId);
+                  }
+                }}
+                disabled={loading || !plantId}
+              >
+                {loading ? "Atualizando..." : "Atualizar"}
+              </button>
+            </div>
           </div>
         </div>
 

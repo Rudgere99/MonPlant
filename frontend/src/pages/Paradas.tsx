@@ -288,11 +288,11 @@ export default function Paradas() {
 
   async function removeRow(id: number) {
     try {
-      setLoading(true);
       if (!plantId) {
         setErr("Selecione uma planta.");
         return;
       }
+      setLoading(true);
       await apiDelete(`/api/plants/${plantId}/stops/${id}`);
       await loadDay(diaRef, plantId);
     } catch (e: any) {
@@ -489,7 +489,7 @@ export default function Paradas() {
             </div>
 
             <div className="mp-row">
-              <div style={{ minWidth: 200 }}>
+              <div style={{ minWidth: 220 }}>
                 <div className="mp-label">Planta</div>
                 <select
                   className="mp-select"
@@ -505,7 +505,6 @@ export default function Paradas() {
                   ))}
                 </select>
               </div>
-
               <button className="mp-btn" onClick={() => plantId && loadDay(diaRef, plantId)} disabled={loading || !plantId}>
                 {loading ? "Atualizando..." : "Atualizar"}
               </button>
