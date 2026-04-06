@@ -2284,8 +2284,10 @@ def stats_month(month: str, owner_id: str = Depends(require_owner_id)):
 # =========================
 # Lançamento de Paradas (SEPARADO) - schema bv_launch
 # Endpoints:
-#   GET /api/stops-launch?day=YYYY-MM-DD
-#   PUT /api/stops-launch?day=YYYY-MM-DD
+#   GET /api/stops-launch?day=YYYY-MM-DD                (legado)
+#   PUT /api/stops-launch?day=YYYY-MM-DD                (legado)
+#   GET /api/plants/{plant_id}/stops-launch?day=...     (multi-planta)
+#   PUT /api/plants/{plant_id}/stops-launch?day=...     (multi-planta)
 # =========================
 
 class StopLaunchRow(BaseModel):
@@ -2329,6 +2331,129 @@ def _row_is_empty(r: StopLaunchRow) -> bool:
     if (r.equipment or "").strip():
         return False
     return True
+
+
+@app.get("/api/plants/{plant_id}/stops-launch")
+def get_stops_launch_by_plant(
+    plant_id: int,
+    day: date = Query(...),
+    owner_id: str = Depends(require_owner_id),
+):
+    """
+    Lê lançamentos de paradas (manual) no schema bv_launch por planta.
+    Requer plant_id em bv_launch.stops_day.
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, obs
+                FROM bv_launch.stops_day
+                WHERE owner_id = %s AND day = %s AND plant_id = %s
+                """,
+                (owner_id, day, plant_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return {"day": day.isoformat(), "plant_id": plant_id, "obs": "", "rows": []}
+
+            day_id = row["id"] if isinstance(row, dict) else row[0]
+            obs = (row.get("obs") if isinstance(row, dict) else row[1]) or ""
+
+            cur.execute(
+                """
+                SELECT period, equipment, stop_type, description, minutes
+                FROM bv_launch.stops_rows
+                WHERE day_id = %s
+                ORDER BY period
+                """,
+                (day_id,),
+            )
+            fetched = cur.fetchall() or []
+
+    rows = []
+    for r in fetched:
+        period = r.get("period") if isinstance(r, dict) else r[0]
+        equipment = r.get("equipment") if isinstance(r, dict) else r[1]
+        stop_type = r.get("stop_type") if isinstance(r, dict) else r[2]
+        description = r.get("description") if isinstance(r, dict) else r[3]
+        minutes = r.get("minutes") if isinstance(r, dict) else r[4]
+        rows.append(
+            {
+                "period": period,
+                "equipamento": equipment or "",
+                "tipo_parada": stop_type or "",
+                "descricao": description or "",
+                "minutos": int(minutes or 0),
+            }
+        )
+
+    return {"day": day.isoformat(), "plant_id": plant_id, "obs": obs, "rows": rows}
+
+
+@app.put("/api/plants/{plant_id}/stops-launch")
+def put_stops_launch_by_plant(
+    plant_id: int,
+    payload: StopLaunchDayUpsert,
+    day: date = Query(...),
+    owner_id: str = Depends(require_owner_id),
+):
+    """
+    Salva lançamentos de paradas (manual) no schema bv_launch por planta.
+    Requer unique(owner_id, day, plant_id) em bv_launch.stops_day.
+    """
+    if payload.day != day:
+        payload = StopLaunchDayUpsert(day=day, rows=payload.rows)
+
+    normalized_rows = []
+    for r in payload.rows or []:
+        p = normalize_period_launch(str(r.period).strip())
+        if not p:
+            continue
+        normalized_rows.append(
+            (
+                p,
+                (r.equipamento or "").strip() or None,
+                (r.tipo_parada or "").strip() or None,
+                (r.descricao or "").strip() or None,
+                _clamp_0_60(int(r.minutos or 0)),
+            )
+        )
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO bv_launch.stops_day (owner_id, day, plant_id, obs)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (owner_id, day, plant_id)
+                DO UPDATE SET obs = EXCLUDED.obs, updated_at = now()
+                RETURNING id
+                """,
+                (owner_id, day, plant_id, None),
+            )
+            row = cur.fetchone()
+            day_id = row["id"] if isinstance(row, dict) else row[0]
+
+            cur.execute("DELETE FROM bv_launch.stops_rows WHERE day_id = %s", (day_id,))
+
+            if normalized_rows:
+                cur.executemany(
+                    """
+                    INSERT INTO bv_launch.stops_rows
+                    (day_id, period, equipment, stop_type, description, minutes)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    [
+                        (day_id, period, equipment, stop_type, description, minutes)
+                        for (period, equipment, stop_type, description, minutes) in normalized_rows
+                    ],
+                )
+
+        conn.commit()
+
+    return {"ok": True, "day": day.isoformat(), "plant_id": plant_id, "rows_saved": len(normalized_rows)}
+
 
 @app.get("/api/stops-launch")
 def get_stops_launch(
