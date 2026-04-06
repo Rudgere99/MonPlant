@@ -247,14 +247,35 @@ export default function DesvioProducao() {
       setProdErr(null);
 
       try {
-        if (!plantId) return;
+        if (!plantId) {
+          if (!alive) return;
+          setProducaoInformadaAuto(null);
+          setLoadingProd(false);
+          return;
+        }
 
         const path =
           plantId === "all"
             ? `/api/aggregate/plant-production/${encodeURIComponent(day)}`
             : `/api/plants/${plantId}/plant-production/${encodeURIComponent(day)}`;
 
-        const payload = await apiGet<PlantDayPayload>(path);
+        const r = await fetch(`${API_BASE}${path}`, {
+          headers: authHeaders(),
+        });
+
+        if (r.status === 404) {
+          if (!alive) return;
+          setProducaoInformadaAuto(0);
+          setProdErr(null);
+          return;
+        }
+
+        if (!r.ok) {
+          const t = await r.text().catch(() => "");
+          throw new Error(t || `HTTP ${r.status}`);
+        }
+
+        const payload = (await r.json()) as PlantDayPayload;
 
         if (!alive) return;
         setProducaoInformadaAuto(sumPlantRows(payload?.rows || []));
