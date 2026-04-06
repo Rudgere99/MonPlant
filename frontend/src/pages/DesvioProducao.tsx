@@ -22,6 +22,16 @@ type PlantDayPayload = {
   updated_at?: string | null;
 };
 
+type PlantInfo = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+};
+
+type PlantScope = number | "all";
+
 type SplitState = {
   sinter1: string;
   sinter2: string;
@@ -187,11 +197,34 @@ export default function DesvioProducao() {
   );
   const [split, setSplit] = useState<SplitState>(saved?.split || defaultSplit);
 
+  const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [plantId, setPlantId] = useState<PlantScope | null>(null);
+
   const [loadingProd, setLoadingProd] = useState(false);
   const [prodErr, setProdErr] = useState<string | null>(null);
   const [producaoInformadaAuto, setProducaoInformadaAuto] = useState<
     number | null
   >(null);
+
+  async function loadPlants() {
+    try {
+      const data = await apiGet<PlantInfo[]>(`/api/plants`);
+      const list = Array.isArray(data) ? data : [];
+      setPlants(list);
+      setPlantId((current) => {
+        if (current === "all") return "all";
+        if (current && list.some((x) => Number(x.id) === Number(current))) return current;
+        return list.length ? Number(list[0].id) : null;
+      });
+    } catch {
+      setPlants([]);
+      setPlantId(null);
+    }
+  }
+
+  useEffect(() => {
+    loadPlants();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(
@@ -214,9 +247,14 @@ export default function DesvioProducao() {
       setProdErr(null);
 
       try {
-        const payload = await apiGet<PlantDayPayload>(
-          `/api/plant-production/${encodeURIComponent(day)}`
-        );
+        if (!plantId) return;
+
+        const path =
+          plantId === "all"
+            ? `/api/aggregate/plant-production/${encodeURIComponent(day)}`
+            : `/api/plants/${plantId}/plant-production/${encodeURIComponent(day)}`;
+
+        const payload = await apiGet<PlantDayPayload>(path);
 
         if (!alive) return;
         setProducaoInformadaAuto(sumPlantRows(payload?.rows || []));
@@ -234,7 +272,12 @@ export default function DesvioProducao() {
     return () => {
       alive = false;
     };
-  }, [day]);
+  }, [day, plantId]);
+
+  const selectedPlantName = useMemo(() => {
+    if (plantId === "all") return "Todas as plantas";
+    return plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
+  }, [plants, plantId]);
 
   const producao = producaoInformadaAuto;
   const desvio = useMemo(() => parseBRNumber(desvioPct), [desvioPct]);
@@ -326,6 +369,10 @@ export default function DesvioProducao() {
         <Header
           splitOpen={splitOpen}
           onToggleSplit={() => setSplitOpen((v) => !v)}
+          selectedPlantName={selectedPlantName}
+          plants={plants}
+          plantId={plantId}
+          onChangePlant={(v) => setPlantId(v)}
         />
 
         <SectionCard style={{ marginTop: 16, padding: 16 }}>
@@ -336,6 +383,26 @@ export default function DesvioProducao() {
               gap: 14,
             }}
           >
+            <Field label="Planta">
+              <select
+                style={inputStyle}
+                value={plantId ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPlantId(v === "all" ? "all" : v ? Number(v) : null);
+                }}
+                disabled={!plants.length}
+              >
+                {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+                {plants.length > 0 ? <option value="all">Todas as plantas</option> : null}
+                {plants.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.code ? `${p.code} • ${p.name}` : p.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
             <Field label="Dia">
               <input
                 style={inputStyle}
@@ -354,7 +421,7 @@ export default function DesvioProducao() {
                     ? "—"
                     : fmtBR(producao)
                 }
-                hint="dia selecionado"
+                hint={plantId === "all" ? "todas as plantas" : "planta selecionada"}
               />
               {prodErr ? (
                 <div
@@ -619,9 +686,17 @@ export default function DesvioProducao() {
 function Header({
   splitOpen,
   onToggleSplit,
+  selectedPlantName,
+  plants,
+  plantId,
+  onChangePlant,
 }: {
   splitOpen: boolean;
   onToggleSplit: () => void;
+  selectedPlantName: string;
+  plants: PlantInfo[];
+  plantId: PlantScope | null;
+  onChangePlant: (v: PlantScope | null) => void;
 }) {
   return (
     <div
@@ -636,6 +711,16 @@ function Header({
       <div>
         <div style={{ fontSize: 30, fontWeight: 980, letterSpacing: -0.4 }}>
           Desvio de Produção
+        </div>
+        <div
+          style={{
+            marginTop: 4,
+            color: "rgba(255,255,255,0.82)",
+            fontWeight: 900,
+            fontSize: 14,
+          }}
+        >
+          {selectedPlantName}
         </div>
         <div
           style={{
@@ -656,6 +741,31 @@ function Header({
           flexWrap: "wrap",
         }}
       >
+        <select
+          value={plantId ?? ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChangePlant(v === "all" ? "all" : v ? Number(v) : null);
+          }}
+          style={{
+            borderRadius: 14,
+            border: "1px solid rgba(255,255,255,0.10)",
+            background: "rgba(255,255,255,0.05)",
+            color: "rgba(255,255,255,0.92)",
+            padding: "10px 14px",
+            fontWeight: 900,
+            minWidth: 220,
+          }}
+          disabled={!plants.length}
+        >
+          {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+          {plants.length > 0 ? <option value="all">Todas as plantas</option> : null}
+          {plants.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.code ? `${p.code} • ${p.name}` : p.name}
+            </option>
+          ))}
+        </select>
         <button
           onClick={onToggleSplit}
           style={{
