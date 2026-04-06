@@ -439,7 +439,7 @@ export default function DesvioProducao() {
                 {plants.length > 0 ? <option value="all">Todas as plantas</option> : null}
                 {plants.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.code ? `${p.code} • ${p.name}` : p.name}
+                   {p.name}` : p.name}
                   </option>
                 ))}
               </select>
