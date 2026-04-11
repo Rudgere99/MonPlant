@@ -1,350 +1,247 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
+const BG_IMAGE = "/assets/home-mina-bg.jpg";
+const LOGO_TRINDADE = "/assets/logo-trindade.png";
+
 export default function Home() {
   const nav = useNavigate();
   const year = useMemo(() => new Date().getFullYear(), []);
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Glows de fundo (estética MonPlant) */}
-      <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <div
-          className="absolute -top-48 -left-48 h-[620px] w-[620px] rounded-full"
-          style={{ background: "rgba(52,211,153,.10)", filter: "blur(150px)" }}
-        />
-        <div
-          className="absolute top-[-140px] right-[-140px] h-[660px] w-[660px] rounded-full"
-          style={{ background: "rgba(56,189,248,.08)", filter: "blur(160px)" }}
-        />
-        <div
-          className="absolute -bottom-56 left-1/3 h-[760px] w-[760px] rounded-full"
-          style={{ background: "rgba(251,146,60,.08)", filter: "blur(170px)" }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            opacity: 0.05,
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,.16) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.16) 1px, transparent 1px)",
-            backgroundSize: "44px 44px",
-          }}
-        />
-      </div>
+    <div className="relative min-h-screen overflow-hidden bg-[#05070a] text-white">
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: `url('${BG_IMAGE}')`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+        }}
+      />
 
-      <div className="mp-container relative px-4 sm:px-6 lg:px-8 py-10">
-        {/* HERO */}
-        <section className="mp-card" style={{ borderRadius: 28, overflow: "hidden" }}>
-          {/* Banner (public/assets/monplant-banner.png) */}
-          <div style={{ position: "relative", height: 280 }}>
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background:
-                  "radial-gradient(900px 360px at 50% 20%, rgba(255,255,255,.10), transparent 55%), linear-gradient(to bottom, rgba(255,255,255,.06), transparent, #0b0f14)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                opacity: 0.92,
-                backgroundImage: "url('/assets/monplant-banner.png')",
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }}
-            />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(3,6,10,.72) 0%, rgba(5,7,10,.58) 22%, rgba(5,7,10,.72) 55%, rgba(5,7,10,.90) 100%)",
+        }}
+      />
 
-            {/* Overlay escuro + gloss */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background:
-                  "linear-gradient(to bottom, rgba(0,0,0,.15), rgba(0,0,0,.55)), radial-gradient(700px 240px at 20% 10%, rgba(52,211,153,.22), transparent 60%)",
-              }}
-            />
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden
+        style={{
+          background:
+            "radial-gradient(900px 360px at 20% 0%, rgba(245,158,11,.16), transparent 60%), radial-gradient(800px 300px at 100% 0%, rgba(255,255,255,.10), transparent 55%)",
+        }}
+      />
 
-            {/* Título em cima do banner */}
-            <div
-              style={{
-                position: "absolute",
-                left: 18,
-                right: 18,
-                bottom: 16,
-                display: "flex",
-                alignItems: "flex-end",
-                justifyContent: "space-between",
-                gap: 14,
-                flexWrap: "wrap",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.7, color: "rgba(255,255,255,.70)" }}>
-                  MonPlant • Operação em tempo real
-                </div>
-                <div style={{ fontSize: 26, fontWeight: 900, marginTop: 6, lineHeight: 1.15 }}>
-                  Visão executiva da planta
-                </div>
+      <div className="relative z-10 flex min-h-screen flex-col">
+        <header className="border-b border-white/10 bg-black/35 backdrop-blur-md">
+          <div className="mp-container flex items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-white/8 p-2">
+                <img
+                  src={LOGO_TRINDADE}
+                  alt="Logo Trindade"
+                  className="max-h-full max-w-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                    const next = e.currentTarget.nextElementSibling as HTMLSpanElement | null;
+                    if (next) next.style.display = "flex";
+                  }}
+                />
+                <span
+                  style={{ display: "none" }}
+                  className="h-full w-full items-center justify-center text-xs font-black tracking-[0.18em] text-white/92"
+                >
+                  TRD
+                </span>
               </div>
 
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <span className="mp-chip">Produção</span>
-                <span className="mp-chip">Paradas</span>
-                <span className="mp-chip">Ritmo</span>
-                <span className="mp-chip">UF/DF</span>
+              <div className="min-w-0">
+                <div className="text-[11px] font-black uppercase tracking-[0.24em] text-white/60">
+                  Trindade • Plataforma Operacional
+                </div>
+                <div className="mt-1 text-2xl font-black leading-none tracking-[0.02em]">
+                  MonPlant
+                </div>
               </div>
             </div>
-          </div>
 
-          <div style={{ padding: 18 }}>
-            <div className="mp-card" style={{ borderRadius: 22, background: "rgba(0,0,0,.18)" }}>
-              <div className="mp-card-b" style={{ padding: 18 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 14,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div
-                        style={{
-                          height: 44,
-                          width: 44,
-                          borderRadius: 16,
-                          border: "1px solid rgba(52,211,153,.25)",
-                          background: "rgba(52,211,153,.10)",
-                          display: "grid",
-                          placeItems: "center",
-                          fontWeight: 900,
-                          color: "rgba(167,243,208,.95)",
-                        }}
-                      >
-                        MP
-                      </div>
-                      <div>
+            <div className="hidden md:flex items-center gap-2 text-xs font-bold text-white/72">
+              <span className="mp-chip">Produção</span>
+              <span className="mp-chip">Paradas</span>
+              <span className="mp-chip">Ritmo</span>
+              <span className="mp-chip">UF/DF</span>
+            </div>
+          </div>
+        </header>
+
+        <main className="mp-container relative flex-1 px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+          <section className="grid gap-6 lg:grid-cols-[1.15fr_440px] xl:grid-cols-[1.2fr_460px] items-stretch">
+            <div className="flex flex-col justify-between rounded-[30px] border border-white/10 bg-black/24 p-6 backdrop-blur-md shadow-[0_24px_80px_rgba(0,0,0,.35)] sm:p-8">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-white/78">
+                  Home MonPlant
+                </div>
+
+                <h1 className="mt-5 max-w-3xl text-4xl font-black leading-[1.02] text-white sm:text-5xl xl:text-6xl">
+                  Controle operacional da planta com uma entrada mais forte, visual e profissional.
+                </h1>
+
+                <p className="mt-5 max-w-2xl text-sm leading-7 text-white/74 sm:text-[15px]">
+                  A página inicial agora pode trabalhar com a identidade do campo logo na abertura do sistema,
+                  mantendo a leitura executiva do MonPlant e preservando os acessos principais da operação.
+                </p>
+              </div>
+
+              <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <QuickInfo value="Tempo real" label="Leitura operacional" />
+                <QuickInfo value="Dashboard" label="Visão executiva" />
+                <QuickInfo value="Ritmo" label="Acompanhamento do dia" />
+                <QuickInfo value="UF/DF" label="Governança do turno" />
+              </div>
+            </div>
+
+            <div className="rounded-[30px] border border-white/12 bg-black/42 p-5 backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,.40)] sm:p-6">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.22em] text-white/55">
+                    Acesso ao sistema
+                  </div>
+                  <div className="mt-1 text-2xl font-black text-white">Login MonPlant</div>
+                </div>
+                <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs font-black text-amber-200">
+                  Trindade
+                </div>
+              </div>
+
+              <div className="mp-card" style={{ borderRadius: 24, background: "rgba(255,255,255,.04)" }}>
+                <div className="mp-card-b" style={{ padding: 18 }}>
+                  <div style={{ display: "grid", gap: 16 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <div
                           style={{
-                            fontSize: 12,
+                            height: 46,
+                            width: 46,
+                            borderRadius: 16,
+                            border: "1px solid rgba(245,158,11,.25)",
+                            background: "rgba(245,158,11,.12)",
+                            display: "grid",
+                            placeItems: "center",
                             fontWeight: 900,
-                            letterSpacing: 0.6,
-                            color: "rgba(255,255,255,.55)",
+                            color: "rgba(253,224,71,.95)",
                           }}
                         >
-                          MonPlant • Gestão Operacional
+                          MP
                         </div>
-                        <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: 0.2, marginTop: 6 }}>
-                          Produção, paradas e ritmo{" "}
-                          <span style={{ color: "rgba(167,243,208,.95)" }}>em tempo real</span>.
+                        <div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 900,
+                              letterSpacing: 0.6,
+                              color: "rgba(255,255,255,.55)",
+                            }}
+                          >
+                            MonPlant • Gestão Operacional
+                          </div>
+                          <div style={{ fontSize: 26, fontWeight: 900, marginTop: 4, lineHeight: 1.15 }}>
+                            Mantenha o card de login e os acessos principais.
+                          </div>
                         </div>
                       </div>
+                    </div>
+
+                    <div style={{ color: "rgba(255,255,255,.72)", fontSize: 13, lineHeight: 1.7 }}>
+                      A estrutura abaixo preserva o bloco principal da Home, mas agora com a imagem da operação ocupando o
+                      fundo da página e com uma barra superior dedicada para a identidade da Trindade.
                     </div>
 
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      <button className="mp-btn mp-btn-primary" onClick={() => nav("/dashboard")}
-                        >
+                      <button className="mp-btn mp-btn-primary" onClick={() => nav("/dashboard")}>
                         Abrir Dashboard
                       </button>
+                      <button className="mp-btn" onClick={() => nav("/bucketvision")}>
+                        Abrir BucketVision
+                      </button>
+                      <button className="mp-btn" onClick={() => nav("/update-notes")}>
+                        Gerar Nota de Atualização
+                      </button>
+                    </div>
+
+                    <div className="mp-help">
+                      Para ficar 100% pronto no projeto, coloque a foto enviada em <b>public/assets/home-mina-bg.jpg</b>
+                      e o logo em <b>public/assets/logo-trindade.png</b>.
                     </div>
                   </div>
-
-                  <div style={{ color: "rgba(255,255,255,.70)", fontSize: 13, lineHeight: 1.6 }}>
-                    O <b style={{ color: "rgba(255,255,255,.90)" }}>MonPlant</b> centraliza a operação da planta:
-                    produção por hora, ritmo necessário, paradas por período/causa, horímetros e visão executiva.
-                    <br />
-                    Com o <b style={{ color: "rgba(253,186,116,.95)" }}>BucketVision</b>, a IA conta conchadas em RTSP e
-                    pode <b>gerar a produção automaticamente</b> no MonPlant <b>em tempo real</b>.
-                  </div>
-
-                  <div className="mp-help">
-                    Dica: coloque prints das telas abaixo (Dashboard, Ritmo, UF/DF) para deixar essa página ainda mais
-                    profissional.
-                  </div>
                 </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <MiniCard title="Produção" desc="Acompanhe indicadores do dia e acumulados por planta." />
+                <MiniCard title="Paradas" desc="Registre causas, períodos e impactos operacionais." />
+                <MiniCard title="Ritmo" desc="Compare realizado, necessário e projeções do turno." />
+                <MiniCard title="UF/DF" desc="Visualize horas por estado e cadeia de equipamentos." />
               </div>
             </div>
+          </section>
+
+          <section className="mt-6 grid gap-4 lg:grid-cols-3">
+            <Feature title="Visual institucional" badge="Home" desc="Imagem operacional em tela cheia, reforçando a identidade da operação desde o primeiro acesso." />
+            <Feature title="Barra superior" badge="Branding" desc="Topo dedicado ao logo da Trindade, mantendo a aplicação mais limpa e mais próxima de um sistema corporativo." />
+            <Feature title="Card preservado" badge="Acesso" desc="O bloco principal continua disponível para login, navegação inicial e demais funções já existentes." />
+          </section>
+        </main>
+
+        <footer className="relative z-10 border-t border-white/10 bg-black/30 backdrop-blur-md">
+          <div className="mp-container px-4 py-4 text-center text-xs text-white/50 sm:px-6 lg:px-8">
+            © {year} MonPlant • Trindade • Operação em tempo real
           </div>
-        </section>
-
-        {/* Plataforma */}
-        <section style={{ marginTop: 22 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              gap: 16,
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.6, color: "rgba(255,255,255,.55)" }}>
-                PLATAFORMA
-              </div>
-              <div className="mp-page-title" style={{ marginTop: 6 }}>
-                O que o MonPlant entrega
-              </div>
-              <div className="mp-page-sub" style={{ maxWidth: 860 }}>
-                Tudo que a operação precisa para controle do turno e acompanhamento gerencial — com leitura rápida e registro
-                padronizado.
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              marginTop: 14,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 12,
-            }}
-          >
-            <Feature title="Dashboard executivo" badge="KPI" desc="Meta, produzido, projeção, ritmo acumulado e status do dia para decisão rápida." />
-            <Feature title="Ritmo do Dia" badge="Ritmo" desc="Necessário vs média real, projeção e alertas visuais no padrão MonPlant." />
-            <Feature title="Paradas e causas" badge="Paradas" desc="Registro por período, tipificação e descrições para atacar gargalos e perdas." />
-            <Feature title="Produção por hora" badge="Ton/H" desc="Tabela por período com observações e exportação para governança do turno." />
-            <Feature title="UF e DF" badge="UF/DF" desc="Horas horizonte, operando e parada, com visão por cadeia de equipamentos." />
-            <Feature title="Permissões por perfil" badge="Acesso" desc="Apontador, supervisor, controlador e gerência com menus/páginas corretas." />
-          </div>
-
-          <div
-            style={{
-              marginTop: 12,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 12,
-            }}
-          >
-            <ImageSlot label="Imagem 01 • Dashboard" hint="Print do Dashboard (KPI + gráfico)." />
-            <ImageSlot label="Imagem 02 • Ritmo do Dia" hint="Print do Ritmo (meta, necessário, projeção)." />
-            <ImageSlot label="Imagem 03 • UF/DF ou Paradas" hint="Print UF/DF ou Paradas." />
-          </div>
-        </section>
-
-        {/* BucketVision */}
-        <section className="mp-card" style={{ marginTop: 18, borderRadius: 28 }}>
-          <div className="mp-card-b" style={{ padding: 18 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.6, color: "rgba(255,255,255,.55)" }}>
-                  IA NA PRODUÇÃO
-                </div>
-                <div style={{ marginTop: 6, fontSize: 26, fontWeight: 900 }}>
-                  BucketVision <span style={{ color: "rgba(253,186,116,.95)" }}>integrado</span> ao MonPlant
-                </div>
-                <div style={{ marginTop: 8, fontSize: 13, color: "rgba(255,255,255,.70)", lineHeight: 1.6 }}>
-                  O BucketVision conta conchadas via IA em vídeo/RTSP com ROI precisa e estabilidade operacional. A produção
-                  estimada é gerada automaticamente em tempo real: <b>conchadas × média (t) → Ton/H</b>. Isso reduz atraso,
-                  retrabalho e melhora a consistência do dado.
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                  gap: 12,
-                }}
-              >
-                <Step n="01" title="Captura RTSP" desc="Conexão estável com reconexão e buffer otimizado." />
-                <Step n="02" title="Detecção + ROI" desc="IA detecta conchadas só na área útil, reduzindo falsos positivos." />
-                <Step n="03" title="Produção em tempo real" desc="Atualiza Ton/H e acumulados automaticamente, sem digitação." />
-                <Step n="04" title="Pronto para gestão" desc="Relatórios e telas do MonPlant sempre consistentes com o que está no campo." />
-              </div>
-
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button className="mp-btn" onClick={() => nav("/bucketvision")}>
-                  Abrir BucketVision
-                </button>
-                <button className="mp-btn" onClick={() => nav("/update-notes")}>
-                  Gerar Nota de Atualização
-                </button>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                  gap: 12,
-                }}
-              >
-                <ImageSlot label="Imagem • Câmera/RTSP" hint="Frame do vídeo ou foto da câmera." tall />
-                <ImageSlot label="Imagem • ROI / HUD" hint="Print do ROI + contagem + HUD." tall />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <footer style={{ marginTop: 18, paddingBottom: 18, textAlign: "center", fontSize: 12, color: "rgba(255,255,255,.45)" }}>
-          © {year} MonPlant • Operação em tempo real • BucketVision integrado
         </footer>
       </div>
     </div>
   );
 }
 
+function QuickInfo({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="rounded-[22px] border border-white/10 bg-white/6 px-4 py-4 backdrop-blur-sm">
+      <div className="text-xl font-black text-white">{value}</div>
+      <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/55">{label}</div>
+    </div>
+  );
+}
+
+function MiniCard({ title, desc }: { title: string; desc: string }) {
+  return (
+    <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+      <div className="text-sm font-black text-white">{title}</div>
+      <div className="mt-1 text-xs leading-6 text-white/62">{desc}</div>
+    </div>
+  );
+}
+
 function Feature({ title, desc, badge }: { title: string; desc: string; badge: string }) {
   return (
-    <div className="mp-card">
+    <div className="mp-card" style={{ background: "rgba(0,0,0,.32)", backdropFilter: "blur(10px)" }}>
       <div className="mp-card-h">
         <div style={{ fontSize: 16, fontWeight: 900 }}>{title}</div>
         <span className="mp-chip">{badge}</span>
       </div>
       <div className="mp-card-b" style={{ paddingTop: 12 }}>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,.70)", lineHeight: 1.6 }}>{desc}</div>
-      </div>
-    </div>
-  );
-}
-
-function ImageSlot({ label, hint, tall }: { label: string; hint: string; tall?: boolean }) {
-  return (
-    <div className="mp-card" style={{ overflow: "hidden", minHeight: tall ? 220 : 160 }}>
-      <div
-        style={{
-          height: "100%",
-          position: "relative",
-          background:
-            "radial-gradient(520px 220px at 15% 20%, rgba(255,255,255,.08), transparent 55%), linear-gradient(to bottom right, rgba(52,211,153,.10), transparent, rgba(251,146,60,.10))",
-        }}
-      >
-        <div style={{ position: "absolute", inset: 0, padding: 14, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,.70)" }}>{label}</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,.55)" }}>{hint}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Step({ n, title, desc }: { n: string; title: string; desc: string }) {
-  return (
-    <div className="mp-card" style={{ background: "rgba(0,0,0,.20)" }}>
-      <div className="mp-card-b" style={{ padding: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              height: 38,
-              width: 38,
-              borderRadius: 16,
-              border: "1px solid rgba(251,146,60,.25)",
-              background: "rgba(251,146,60,.10)",
-              display: "grid",
-              placeItems: "center",
-              fontWeight: 900,
-              color: "rgba(253,186,116,.95)",
-            }}
-          >
-            {n}
-          </div>
-          <div style={{ fontWeight: 900 }}>{title}</div>
-        </div>
-        <div style={{ marginTop: 8, fontSize: 13, color: "rgba(255,255,255,.70)", lineHeight: 1.6 }}>{desc}</div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,.72)", lineHeight: 1.65 }}>{desc}</div>
       </div>
     </div>
   );
