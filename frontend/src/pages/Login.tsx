@@ -96,6 +96,18 @@ export default function Login() {
         <span className="ring r4" />
       </div>
       <div className="mp-login-glow" aria-hidden />
+      <div className="mp-login-photo" aria-hidden />
+      <div className="mp-login-overlay" aria-hidden />
+
+      <header className="mp-login-topbar">
+        <div className="mp-login-topbar-inner">
+          <img
+            src="/assets/logo-trindade.png"
+            alt="Trindade"
+            className="mp-login-topbar-logo"
+          />
+        </div>
+      </header>
 
       <div className="mp-login-wrap">
         {/* Coluna esquerda */}
@@ -105,12 +117,12 @@ export default function Login() {
           </div>
 
           <h1 className="mp-login-title">
-            Torne cada Turno
+            MonPlant
             <br />
-            MAIS FÁCIL!
+            operação em tempo real
           </h1>
           <p className="mp-login-sub">
-            MonPlant centraliza a informação oficial do turno para reduzir retrabalho e erro de comunicação.
+            Produção, paradas, horímetros e informações do turno em uma única plataforma, mantendo o padrão visual do MonPlant com identidade Trindade.
           </p>
 
           <div className="mp-login-pill">
@@ -263,11 +275,46 @@ export default function Login() {
       <footer className="text-center text-xs text-neutral-500 py-4">© {new Date().getFullYear()} MonPlant • Trindade Mineração • Rudgere Germano.</footer>
 
       <style>{`
-        .mp-login { padding: 18px; }
+        .mp-login { padding: 18px; background: #0b0f14; }
+        .mp-login-photo {
+          position: absolute;
+          inset: 0;
+          background-image: url("/assets/login-bg.jpg");
+          background-size: cover;
+          background-position: center;
+          opacity: 0.96;
+          transform: scale(1.02);
+        }
+        .mp-login-overlay {
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(to bottom, rgba(7,10,14,0.62), rgba(7,10,14,0.72)),
+            linear-gradient(to right, rgba(7,10,14,0.68), rgba(7,10,14,0.28) 38%, rgba(7,10,14,0.78) 100%);
+        }
+        .mp-login-topbar {
+          position: relative;
+          z-index: 3;
+          width: 100%;
+        }
+        .mp-login-topbar-inner {
+          max-width: 1320px;
+          margin: 0 auto;
+          padding: 10px 12px 0;
+          display: flex;
+          align-items: center;
+          min-height: 72px;
+        }
+        .mp-login-topbar-logo {
+          height: 46px;
+          width: auto;
+          object-fit: contain;
+          filter: drop-shadow(0 8px 24px rgba(0,0,0,0.45));
+        }
         .mp-login-wrap {
           position: relative;
-          z-index: 2;
-          min-height: calc(100vh - 36px);
+          z-index: 3;
+          min-height: calc(100vh - 108px);
           display: grid;
           grid-template-columns: 1.08fr 0.92fr;
           gap: 22px;
@@ -276,10 +323,10 @@ export default function Login() {
           margin: 0 auto;
         }
         @media (max-width: 980px) {
-          .mp-login-wrap { grid-template-columns: 1fr; gap: 14px; align-content: start; padding-top: 18px; }
+          .mp-login-wrap { grid-template-columns: 1fr; gap: 14px; align-content: start; padding-top: 8px; min-height: auto; }
         }
 
-        .mp-login-hero { padding: 12px 6px; }
+        .mp-login-hero { padding: 12px 6px; text-shadow: 0 10px 40px rgba(0,0,0,0.45); }
         .mp-login-badge {
           width: 46px; height: 46px; border-radius: 16px;
           background: rgba(59,130,246,0.16);
@@ -291,16 +338,18 @@ export default function Login() {
         .mp-login-mark { font-weight: 950; color: rgba(59,130,246,0.95); font-size: 18px; }
         .mp-login-title {
           margin: 0 0 12px 0;
-          font-size: clamp(44px, 5vw, 72px);
+          font-size: clamp(42px, 5vw, 70px);
           line-height: 1.02;
           letter-spacing: -0.02em;
           font-weight: 950;
+          text-transform: none;
         }
         .mp-login-sub {
           margin: 0;
-          opacity: .82;
+          opacity: .92;
           font-size: 14px;
           max-width: 56ch;
+          color: rgba(255,255,255,0.92);
         }
         .mp-login-pill {
           margin-top: 18px;
@@ -309,10 +358,10 @@ export default function Login() {
           align-items: center;
           padding: 12px 14px;
           border-radius: 16px;
-          background: rgba(0,0,0,0.25);
-          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(8,12,18,0.56);
+          border: 1px solid rgba(255,255,255,0.10);
           box-shadow: 0 20px 50px rgba(0,0,0,0.38);
-          backdrop-filter: blur(8px);
+          backdrop-filter: blur(10px);
         }
         .mp-login-pill .k { font-weight: 900; color: rgba(52,211,153,0.95); }
         .mp-login-pill .v { opacity: .85; }
@@ -321,12 +370,16 @@ export default function Login() {
           width: min(520px, 100%);
           justify-self: end;
           padding: 18px;
+          background: rgba(8,12,18,0.72);
+          border: 1px solid rgba(255,255,255,0.12);
+          backdrop-filter: blur(14px);
+          box-shadow: 0 30px 80px rgba(0,0,0,0.45);
         }
         @media (max-width: 980px) { .mp-login-panel { justify-self: stretch; } }
 
         .mp-login-panel-head { margin-bottom: 12px; }
         .mp-login-panel-title { font-size: 30px; font-weight: 950; margin-bottom: 6px; }
-        .mp-login-panel-sub { opacity: .72; font-size: 13px; }
+        .mp-login-panel-sub { opacity: .28; font-size: 13px; }
         .mp-login-error {
           padding: 10px 12px;
           border-radius: 14px;
@@ -466,13 +519,27 @@ export default function Login() {
           position: absolute;
           inset: -200px;
           background:
-            radial-gradient(circle at 20% 50%, rgba(59,130,246,0.22), transparent 55%),
-            radial-gradient(circle at 68% 20%, rgba(52,211,153,0.18), transparent 60%),
-            radial-gradient(circle at 72% 74%, rgba(251,191,36,0.10), transparent 60%);
+            radial-gradient(circle at 20% 50%, rgba(59,130,246,0.16), transparent 55%),
+            radial-gradient(circle at 68% 20%, rgba(52,211,153,0.12), transparent 60%),
+            radial-gradient(circle at 72% 74%, rgba(251,191,36,0.08), transparent 60%);
           filter: blur(34px);
-          opacity: .85;
+          opacity: .5;
           pointer-events: none;
         }
+
+        .mp-login-home {
+          position: relative;
+          z-index: 3;
+          background: rgba(8,12,18,0.62);
+          border: 1px solid rgba(255,255,255,0.10);
+          backdrop-filter: blur(10px);
+        }
+        .mp-login-home:hover { background: rgba(8,12,18,0.78); }
+        @media (max-width: 980px) {
+          .mp-login-topbar-inner { padding-top: 6px; }
+          .mp-login-topbar-logo { height: 38px; }
+        }
+
       `}</style>
     </div>
   );
