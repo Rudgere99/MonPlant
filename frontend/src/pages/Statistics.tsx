@@ -269,6 +269,13 @@ async function fetchStopsLaunchDay(api: string, plantId: number, day: string, to
   return { day: (json as any)?.day || day, rows: Array.isArray((json as any)?.rows) ? (json as any).rows : [] };
 }
 
+const SUPERVISOR_MAP: Record<string, string> = {
+  A: "Wellington",
+  B: "Wagner",
+  C: "Marcio",
+  D: "Jocelio",
+};
+
 function Card({
   title,
   sub,
@@ -280,14 +287,6 @@ function Card({
   right?: React.ReactNode;
   children: React.ReactNode;
 }) {
-
-  const supervisorMap: Record<string, string> = {
-    A: "Wellington",
-    B: "Wagner",
-    C: "Marcio",
-    D: "Jocelio",
-  };
-
   return (
     <div
       style={{
@@ -1439,7 +1438,7 @@ export default function Statistics() {
                         const { x, y, width, height, index } = props;
                         const item = letterSplit[index];
                         const letter = item?.key;
-                        const nome = supervisorMap[letter] || letter;
+                        const nome = SUPERVISOR_MAP[letter] || letter;
 
                         return (
                           <text
