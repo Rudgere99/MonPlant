@@ -159,15 +159,6 @@ function getLetterColor(letterOrLabel: string) {
   return COLORS.slate;
 }
 
-function getSupervisorNameByLetter(letter: string) {
-  const t = String(letter || "").toUpperCase();
-  if (t === "A") return "Wellington";
-  if (t === "B") return "Wagner";
-  if (t === "C") return "Marcio";
-  if (t === "D") return "Jocelio";
-  return "";
-}
-
 function fmtBR0(n: number) {
   return (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
@@ -289,6 +280,14 @@ function Card({
   right?: React.ReactNode;
   children: React.ReactNode;
 }) {
+
+  const supervisorMap: Record<string, string> = {
+    A: "Wellington",
+    B: "Wagner",
+    C: "Marcio",
+    D: "Jocelio",
+  };
+
   return (
     <div
       style={{
@@ -870,7 +869,6 @@ export default function Statistics() {
     return (["A", "B", "C", "D"] as const).map((letter) => ({
       key: letter,
       name: `Letra ${letter}`,
-      supervisor: getSupervisorNameByLetter(letter),
       value: Number(base[letter] || 0),
       color: getLetterColor(letter),
     }));
@@ -1437,16 +1435,29 @@ export default function Statistics() {
                       <Cell key={it.key} fill={it.color} />
                     ))}
                     <LabelList
-                      dataKey="value"
-                      position="top"
-                      formatter={(v: any) => `${fmtBR0(Number(v || 0))}t`}
-                      style={{ fill: "rgba(255,255,255,0.80)", fontWeight: 900, fontSize: 11 }}
-                    />
-                    <LabelList
-                      dataKey="supervisor"
-                      position="inside"
-                      offset={0}
-                      style={{ fill: "rgba(0,0,0,0.58)", fontWeight: 500, fontSize: 16 }}
+                      content={(props: any) => {
+                        const { x, y, width, height, index } = props;
+                        const item = letterSplit[index];
+                        const letter = item?.key;
+                        const nome = supervisorMap[letter] || letter;
+
+                        return (
+                          <text
+                            x={x + width / 2}
+                            y={y + Math.max(28, height * 0.35)}
+                            fill="#FFFFFF"
+                            textAnchor="middle"
+                            style={{
+                              fontSize: 16,
+                              fontWeight: 800,
+                              fontFamily: "Poppins, Inter, Montserrat, sans-serif",
+                              letterSpacing: 0.4,
+                            }}
+                          >
+                            {nome}
+                          </text>
+                        );
+                      }}
                     />
                   </Bar>
                 </BarChart>
