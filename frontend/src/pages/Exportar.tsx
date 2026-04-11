@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "";
@@ -7,8 +7,9 @@ type PlantRow = { period: string; ton: number | null; freq: number | null };
 type PlantDay = { day: string; obs?: string | null; rows: PlantRow[] };
 type StopItem = any;
 type HoriItem = any;
+type PlantInfo = { id: number; code: string; name: string };
 type ExportMode = "base" | "paradas";
-type PreviewMode = "base" | "paradas";
+type PreviewMode = "base" | "paradas" | "producao";
 
 type PreviewColumn = {
   key: string;
@@ -22,6 +23,17 @@ type PreviewData = {
   columns: PreviewColumn[];
   rows: Record<string, any>[];
   total: number;
+};
+
+type ExportFilters = {
+  turno: string;
+  letra: string;
+  planta: string;
+  equipamento: string;
+  material: string;
+  origem: string;
+  destino: string;
+  pesquisa: string;
 };
 
 function ymd(d: Date) {
@@ -282,6 +294,19 @@ function joinDateTime(dateStr: any, hourStr: any) {
   return `${d} ${h}`;
 }
 
+function normalizeText(v: any) {
+  return String(v || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function containsText(source: any, target: string) {
+  if (!target) return true;
+  return normalizeText(source).includes(normalizeText(target));
+}
+
 function ToneBadge({ children, tone = "muted" }: { children: any; tone?: "muted" | "info" | "ok" | "warn" }) {
   const styles: Record<string, React.CSSProperties> = {
     muted: {
@@ -499,6 +524,15 @@ const PARADAS_PREVIEW_COLUMNS: PreviewColumn[] = [
   { key: "planta", label: "Área/Planta", width: 180 },
 ];
 
+const PRODUCAO_PREVIEW_COLUMNS: PreviewColumn[] = [
+  { key: "planta", label: "Planta", width: 170 },
+  { key: "dia", label: "Dia", width: 120 },
+  { key: "turno", label: "Turno", width: 90 },
+  { key: "producao", label: "Produção (t)", width: 140 },
+  { key: "periodos", label: "Períodos com lançamento", width: 180 },
+  { key: "observacao", label: "Observação", width: 260 },
+];
+
 export default function Exportar() {
   const today = useMemo(() => ymd(new Date()), []);
   const [fromDay, setFromDay] = useState(today);
@@ -510,12 +544,30 @@ export default function Exportar() {
   const [lastMode, setLastMode] = useState<ExportMode | null>(null);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("base");
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [selectedPlantId, setSelectedPlantId] = useState<string>("");
+  const [filters, setFilters] = useState<ExportFilters>({
+    turno: "",
+    letra: "",
+    planta: "",
+    equipamento: "",
+    material: "",
+    origem: "",
+    destino: "",
+    pesquisa: "",
+  });
 
   const days = useMemo(() => dateRange(fromDay, toDay), [fromDay, toDay]);
   const periodLabel = useMemo(() => {
     if (fromDay === toDay) return fmtDate(fromDay);
     return `${fmtDate(fromDay)} até ${fmtDate(toDay)}`;
   }, [fromDay, toDay]);
+
+  useEffect(() => {
+    apiGet<PlantInfo[]>("/api/plants")
+      .then((rows) => setPlants(Array.isArray(rows) ? rows : []))
+      .catch(() => setPlants([]));
+  }, []);
 
   async function buildBasePreview(daysInput: string[]): Promise<PreviewData> {
     const plantDays: PlantDay[] = [];
@@ -642,12 +694,20 @@ export default function Exportar() {
       }
     }
 
+    const filteredRows = rows.filter((row) => {
+      const merged = `${row.dia} ${row.turno} ${row.observacao}`;
+      return (
+        (!filters.turno || String(row.turno) === String(filters.turno)) &&
+        containsText(merged, filters.pesquisa)
+      );
+    });
+
     return {
       title: "Pré-visualização • Relatório Base",
       subtitle: "Horímetros consolidados por dia/turno com produção total do período selecionado.",
       columns: BASE_PREVIEW_COLUMNS,
-      rows: rows.slice(0, 30),
-      total: rows.length,
+      rows: filteredRows.slice(0, 30),
+      total: filteredRows.length,
     };
   }
 
@@ -686,6 +746,17 @@ export default function Exportar() {
           __sort: String(pick(s, ["created_at"]) || ""),
         };
       })
+      .filter((row) => {
+        const merged = `${row.equipamento} ${row.tipo} ${row.atividade} ${row.descricao} ${row.planta}`;
+        return (
+          (!filters.turno || containsText(row.inicio, ` ${filters.turno}:`) || containsText(row.fim, ` ${filters.turno}:`)) &&
+          containsText(row.equipamento, filters.equipamento) &&
+          containsText(row.planta, filters.planta) &&
+          containsText(row.descricao, filters.material) &&
+          containsText(row.descricao, filters.letra) &&
+          containsText(merged, filters.pesquisa)
+        );
+      })
       .sort((a, b) => String(b.__sort || "").localeCompare(String(a.__sort || "")));
 
     return {
@@ -697,6 +768,63 @@ export default function Exportar() {
     };
   }
 
+  async function buildProducaoPreview(daysInput: string[]): Promise<PreviewData> {
+    const targetPlants = selectedPlantId
+      ? plants.filter((p) => String(p.id) === selectedPlantId)
+      : plants;
+    const rows: Record<string, any>[] = [];
+
+    for (const p of targetPlants) {
+      for (const d of daysInput) {
+        try {
+          const pd = await apiGet<PlantDay>(`/api/plants/${p.id}/plant-production/${d}`);
+          let t1 = 0;
+          let t2 = 0;
+          let usedPeriods = 0;
+          for (const r of pd.rows || []) {
+            const ton = Number((r as any)?.ton) || 0;
+            if (!ton) continue;
+            usedPeriods++;
+            const h = periodStartHour((r as any)?.period);
+            if (h === null) continue;
+            if (turnoByHour(h) === 1) t1 += ton;
+            else t2 += ton;
+          }
+          const pushTurno = (turno: "1" | "2", value: number) => {
+            if (!value) return;
+            rows.push({
+              planta: p.name || p.code,
+              dia: fmtDate(d),
+              turno,
+              producao: fmtNum(value, 2),
+              periodos: usedPeriods,
+              observacao: pd.obs || "-",
+            });
+          };
+          pushTurno("1", t1);
+          pushTurno("2", t2);
+        } catch {}
+      }
+    }
+
+    const filtered = rows.filter((row) => {
+      const merged = `${row.planta} ${row.dia} ${row.turno} ${row.observacao}`;
+      return (
+        (!filters.turno || String(row.turno) === String(filters.turno)) &&
+        containsText(row.planta, filters.planta) &&
+        containsText(merged, filters.pesquisa)
+      );
+    });
+
+    return {
+      title: "Pré-visualização • Produção por Planta",
+      subtitle: "Totais por turno/planta, respeitando os filtros aplicados.",
+      columns: PRODUCAO_PREVIEW_COLUMNS,
+      rows: filtered.slice(0, 30),
+      total: filtered.length,
+    };
+  }
+
   async function handlePreview(mode: PreviewMode) {
     setPreviewMode(mode);
     setPreviewBusy(true);
@@ -704,7 +832,12 @@ export default function Exportar() {
 
     try {
       const d = dateRange(fromDay, toDay);
-      const data = mode === "base" ? await buildBasePreview(d) : await buildParadasPreview(d);
+      const data =
+        mode === "base"
+          ? await buildBasePreview(d)
+          : mode === "paradas"
+            ? await buildParadasPreview(d)
+            : await buildProducaoPreview(d);
       setPreviewData(data);
     } catch (e: any) {
       setPreviewData(null);
@@ -1065,6 +1198,71 @@ export default function Exportar() {
     }
   }
 
+  function handleExportFilteredExcel() {
+    if (!previewData) {
+      setMsg("❌ Gere uma pré-visualização antes de exportar.");
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const titleRows = [
+      [previewData.title],
+      [previewData.subtitle],
+      [`Período: ${periodLabel}`],
+      [],
+    ];
+    const header = previewData.columns.map((c) => c.label);
+    const body = previewData.rows.map((row) => previewData.columns.map((c) => row[c.key] ?? ""));
+    const ws = XLSX.utils.aoa_to_sheet([...titleRows, header, ...body]);
+    ws["!cols"] = previewData.columns.map((c) => ({ wch: Math.max(14, Math.round((c.width || 120) / 8)) }));
+    ws["!autofilter"] = {
+      ref: XLSX.utils.encode_range({
+        s: { r: titleRows.length, c: 0 },
+        e: { r: titleRows.length + Math.max(body.length, 1), c: header.length - 1 },
+      }),
+    };
+    XLSX.utils.book_append_sheet(wb, ws, "Relatorio");
+    const outBuf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    const mode = previewMode.toUpperCase();
+    const fileName = `EXPORT_${mode}_${fromDay}_a_${toDay}.xlsx`;
+    downloadArrayBuffer(outBuf, fileName);
+    setLastFile(fileName);
+    setMsg(`✅ Excel filtrado exportado: ${fileName}`);
+  }
+
+  function handleTechAnalysisPdf() {
+    if (!previewData) {
+      setMsg("❌ Gere uma pré-visualização antes de gerar a análise técnica.");
+      return;
+    }
+    const textLines = [
+      "ANÁLISE TÉCNICA - MONPLANT",
+      "",
+      `Relatório: ${previewData.title}`,
+      `Período: ${periodLabel}`,
+      `Registros filtrados: ${previewData.total}`,
+      "",
+      "Resumo técnico:",
+      `- Modo selecionado: ${previewMode}.`,
+      `- Filtros: turno=${filters.turno || "todos"}, letra=${filters.letra || "todas"}, planta=${filters.planta || "todas"}.`,
+      `- Pesquisa livre: ${filters.pesquisa || "(vazia)"}.`,
+      "",
+      "Top 10 linhas da prévia:",
+      ...previewData.rows.slice(0, 10).map((r, i) => `${i + 1}. ${previewData.columns.map((c) => `${c.label}: ${r[c.key] ?? "-"}`).join(" | ")}`),
+      "",
+      "Observação: para salvar em PDF, use Imprimir > Salvar como PDF.",
+    ];
+    const w = window.open("", "_blank", "width=980,height=760");
+    if (!w) {
+      setMsg("❌ Não foi possível abrir a janela para gerar o PDF.");
+      return;
+    }
+    w.document.write(`<html><head><title>Analise Tecnica</title></head><body style="font-family:Arial;padding:24px;white-space:pre-wrap">${textLines.join("\n")}</body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+    setMsg("✅ Análise técnica aberta. No diálogo de impressão, escolha 'Salvar como PDF'.");
+  }
+
   return (
     <div style={{ padding: 18 }}>
       <div
@@ -1159,7 +1357,50 @@ export default function Exportar() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <div>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>2. Escolha o tipo de relatório</div>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>2. Filtros e pesquisa (padrão MonPlant)</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
+                  Os filtros abaixo impactam a prévia, a exportação do Excel filtrado e a análise técnica.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 10 }}>
+              <input className="mp-input" placeholder="Pesquisa geral..." value={filters.pesquisa} onChange={(e) => setFilters((f) => ({ ...f, pesquisa: e.target.value }))} />
+              <input className="mp-input" placeholder="Equipamento" value={filters.equipamento} onChange={(e) => setFilters((f) => ({ ...f, equipamento: e.target.value }))} />
+              <input className="mp-input" placeholder="Planta / área" value={filters.planta} onChange={(e) => setFilters((f) => ({ ...f, planta: e.target.value }))} />
+              <input className="mp-input" placeholder="Material" value={filters.material} onChange={(e) => setFilters((f) => ({ ...f, material: e.target.value }))} />
+              <input className="mp-input" placeholder="Origem" value={filters.origem} onChange={(e) => setFilters((f) => ({ ...f, origem: e.target.value }))} />
+              <input className="mp-input" placeholder="Destino" value={filters.destino} onChange={(e) => setFilters((f) => ({ ...f, destino: e.target.value }))} />
+              <input className="mp-input" placeholder="Letra" value={filters.letra} onChange={(e) => setFilters((f) => ({ ...f, letra: e.target.value }))} />
+              <select className="mp-select" value={filters.turno} onChange={(e) => setFilters((f) => ({ ...f, turno: e.target.value }))}>
+                <option value="">Turno: todos</option>
+                <option value="1">Turno 1</option>
+                <option value="2">Turno 2</option>
+              </select>
+              <select className="mp-select" value={selectedPlantId} onChange={(e) => setSelectedPlantId(e.target.value)}>
+                <option value="">Produção: todas as plantas</option>
+                {plants.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ height: 14 }} />
+
+          <div
+            style={{
+              borderRadius: 20,
+              border: "1px solid rgba(255,255,255,.08)",
+              background: "rgba(7,10,18,.42)",
+              padding: 16,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,.02)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>3. Escolha o tipo de relatório</div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
                   Cada modo tem sua própria prévia e sua própria exportação.
                 </div>
@@ -1195,6 +1436,17 @@ export default function Exportar() {
                 onPreview={() => handlePreview("paradas")}
                 onExport={handleExportModeloParadas}
               />
+
+              <ActionCard
+                title="Produção por planta"
+                description="Consolida produção por turno/planta para análise gerencial e exportação por filtro."
+                buttonText="Prévia Produção"
+                secondaryText="Pré-visualizar Produção"
+                buttonTone="primary"
+                disabled={busy || previewBusy}
+                onPreview={() => handlePreview("producao")}
+                onExport={() => handlePreview("producao")}
+              />
             </div>
 
             {msg ? (
@@ -1211,6 +1463,17 @@ export default function Exportar() {
                 {msg}
               </div>
             ) : null}
+          </div>
+
+          <div style={{ height: 14 }} />
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="mp-btn mp-btn-primary" onClick={handleExportFilteredExcel} disabled={busy || previewBusy}>
+              Exportar Excel (somente o filtrado)
+            </button>
+            <button className="mp-btn" onClick={handleTechAnalysisPdf} disabled={busy || previewBusy}>
+              Gerar análise técnica (PDF)
+            </button>
           </div>
 
           <div style={{ height: 14 }} />
@@ -1238,12 +1501,14 @@ export default function Exportar() {
               }}
             >
               <div>
-                <div style={{ fontWeight: 900, fontSize: 18 }}>3. Pré-visualização do relatório</div>
+                <div style={{ fontWeight: 900, fontSize: 18 }}>4. Pré-visualização do relatório</div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
                   O usuário vê no site o que será exportado. A tabela abaixo mostra os primeiros registros reais do relatório.
                 </div>
               </div>
-              <ToneBadge tone={previewMode === "base" ? "info" : "warn"}>{previewMode === "base" ? "Prévia Base" : "Prévia Paradas"}</ToneBadge>
+              <ToneBadge tone={previewMode === "base" ? "info" : previewMode === "paradas" ? "warn" : "ok"}>
+                {previewMode === "base" ? "Prévia Base" : previewMode === "paradas" ? "Prévia Paradas" : "Prévia Produção"}
+              </ToneBadge>
             </div>
 
             <div className="mp-card-b" style={{ padding: 18 }}>
