@@ -20,13 +20,11 @@ function normRole(v?: string | null) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-// ✅ Mantém o Login independente do roleGuard (sem mexer nele)
 function defaultRouteForRole(userType?: string | null) {
   const r = normRole(userType);
   if (r === "dev") return "/dev-dash";
   if (r === "gerencia") return "/dashboard";
   if (r === "supervisor") return "/dashboard";
-  // apontador / controlador
   return "/producao-planta";
 }
 
@@ -45,7 +43,6 @@ export default function Login() {
     []
   );
 
-  // Se já está logado, manda para a rota correta pelo papel
   useEffect(() => {
     if (!token) return;
     try {
@@ -85,61 +82,77 @@ export default function Login() {
 
   return (
     <div className="mp-login" style={{ minHeight: "100vh", position: "relative", overflow: "hidden" }}>
-      {/* Fundo base */}
-      <div className="mp-bg" style={{ position: "absolute", inset: 0 }} />
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: "url('/assets/login-bg.jpeg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          transform: "scale(1.02)",
+        }}
+      />
 
-      {/* Anéis estilo referência */}
-      <div className="mp-login-rings" aria-hidden>
-        <span className="ring r1" />
-        <span className="ring r2" />
-        <span className="ring r3" />
-        <span className="ring r4" />
-      </div>
-      <div className="mp-login-glow" aria-hidden />
-      <div className="mp-login-photo" aria-hidden />
       <div className="mp-login-overlay" aria-hidden />
+      <div className="mp-login-glow" aria-hidden />
+      <div className="mp-login-grid" aria-hidden />
 
       <header className="mp-login-topbar">
         <div className="mp-login-topbar-inner">
-          <img
-            src="/assets/logo-trindade.png"
-            alt="Trindade"
-            className="mp-login-topbar-logo"
-          />
+          <button type="button" className="mp-login-brand" onClick={() => nav("/home")}>
+            <img
+              src="/assets/logo-trindade.png"
+              alt="Trindade"
+              className="mp-login-brand-logo"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+            <div className="mp-login-brand-text">
+              <span className="t1">Trindade</span>
+              <span className="t2">MonPlant • Plataforma Operacional</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className="mp-btn mp-login-topbtn"
+            onClick={() => nav("/home")}
+            title="Ir para a página inicial"
+          >
+            Sobre o MonPlant
+          </button>
         </div>
       </header>
 
       <div className="mp-login-wrap">
-        {/* Coluna esquerda */}
         <div className="mp-login-hero">
-          <div className="mp-login-badge">
-            <span className="mp-login-mark">M</span>
-          </div>
+          <div className="mp-login-kicker">MONITORAMENTO OPERACIONAL</div>
 
           <h1 className="mp-login-title">
-            MonPlant
+            A operação da planta,
             <br />
-            operação em tempo real
+            em um só lugar.
           </h1>
+
           <p className="mp-login-sub">
-            Produção, paradas, horímetros e informações do turno em uma única plataforma, mantendo o padrão visual do MonPlant com identidade Trindade.
+            Produção, paradas, horímetros, ritmo e acompanhamento gerencial em um ambiente único,
+            com leitura rápida e padrão visual MonPlant.
           </p>
 
-          <div className="mp-login-pill">
-            <span className="k">Acesso</span>
-            <span className="v">produção • paradas • horímetros • avisos</span>
+          <div className="mp-login-badges">
+            <span className="mp-login-pill"><b>Acesso rápido</b> produção • paradas • horímetros</span>
+            <span className="mp-login-pill"><b>Visual executivo</b> foco no que importa no turno</span>
           </div>
         </div>
 
-        {/* Card direita */}
         <div className="mp-login-panel mp-card">
           <div className="mp-login-panel-head">
-            <div className="mp-login-panel-headrow">
-              <div>
-                <div className="mp-login-panel-title">Bem vindo de volta!</div>
-                <div className="mp-login-panel-sub">Entre com seu e-mail e senha.</div>
-              </div>
-            </div>
+            <div className="mp-login-panel-tag">ACESSO AO SISTEMA</div>
+            <div className="mp-login-panel-title">Bem-vindo de volta</div>
+            <div className="mp-login-panel-sub">Entre com seu e-mail e senha para acessar o MonPlant.</div>
           </div>
 
           {error && <div className="mp-login-error">{error}</div>}
@@ -147,7 +160,6 @@ export default function Login() {
           <form onSubmit={onSubmit} className="mp-login-form">
             <label className="mp-login-field">
               <span className="mp-login-icon" aria-hidden>
-                {/* envelope */}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path
                     d="M4 6.5C4 5.67157 4.67157 5 5.5 5H18.5C19.3284 5 20 5.67157 20 6.5V17.5C20 18.3284 19.3284 19 18.5 19H5.5C4.67157 19 4 18.3284 4 17.5V6.5Z"
@@ -162,14 +174,13 @@ export default function Login() {
                 className="mp-input mp-login-input"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
+                placeholder="E-mail"
                 autoComplete="email"
               />
             </label>
 
             <label className="mp-login-field">
               <span className="mp-login-icon" aria-hidden>
-                {/* lock */}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path
                     d="M7 11V8.5C7 5.46243 9.46243 3 12.5 3C15.5376 3 18 5.46243 18 8.5V11"
@@ -190,7 +201,7 @@ export default function Login() {
                 type={showPw ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
+                placeholder="Senha"
                 autoComplete="current-password"
               />
 
@@ -218,12 +229,12 @@ export default function Login() {
 
             <div className="mp-login-row">
               <a className="mp-login-link" href="#" onClick={(e) => e.preventDefault()}>
-                Forget your password?
+                Esqueceu sua senha?
               </a>
             </div>
 
             <button className="mp-btn mp-btn-primary mp-login-submit" type="submit" disabled={loading}>
-              {loading ? "Logging in..." : "Log In"}
+              {loading ? "Entrando..." : "Entrar no sistema"}
             </button>
 
             <button
@@ -232,154 +243,218 @@ export default function Login() {
               onClick={(e) => e.preventDefault()}
               title="Cadastro é gerenciado internamente"
             >
-              No account? Request access
+              Solicitar acesso
             </button>
-
-            <div className="mp-login-divider">
-              <span>or continue with</span>
-            </div>
-
-            <div className="mp-login-social">
-              <button type="button" className="mp-login-socialbtn" onClick={(e) => e.preventDefault()}>
-                <span className="s">I</span> Google
-              </button>
-              <button type="button" className="mp-login-socialbtn" onClick={(e) => e.preventDefault()}>
-                <span className="s">M</span> MonPlant
-              </button>
-              <button type="button" className="mp-login-socialbtn" onClick={(e) => e.preventDefault()}>
-                <span className="s">O</span> Outlook
-              </button>
-            </div>
 
             <label className="mp-login-check">
               <input type="checkbox" defaultChecked />
-              <span>Atualizações e dicas operacionais da MonPlant.</span>
+              <span>Receber comunicados e atualizações operacionais da plataforma.</span>
             </label>
 
-            <div className="mp-login-terms">By logging in you agree with internal policies (Terms & Privacy).</div>
+            <div className="mp-login-terms">Ao entrar, você concorda com as políticas internas de uso e privacidade.</div>
           </form>
-        </div>
-
-        <div>
-         <button
-          type="button"
-          className="mp-btn mp-login-home"
-          onClick={() => nav("/home")}
-          title="Ir para a página inicial"
-         >
-           Sobre o Monplant
-         </button>
         </div>
       </div>
 
-      <footer className="text-center text-xs text-neutral-500 py-4">© {new Date().getFullYear()} MonPlant • Trindade Mineração • Rudgere Germano.</footer>
+      <footer className="mp-login-footer">© {new Date().getFullYear()} MonPlant • Trindade Mineração • Rudgere Germano.</footer>
 
       <style>{`
-        .mp-login { padding: 18px; background: #0b0f14; }
-        .mp-login-photo {
-          position: absolute;
-          inset: 0;
-          background-image: url("/assets/login-bg.jpg");
-          background-size: cover;
-          background-position: center;
-          opacity: 0.96;
-          transform: scale(1.02);
-        }
+        .mp-login { padding: 0; color: rgba(255,255,255,.96); }
+
         .mp-login-overlay {
           position: absolute;
           inset: 0;
           background:
-            linear-gradient(to bottom, rgba(7,10,14,0.62), rgba(7,10,14,0.72)),
-            linear-gradient(to right, rgba(7,10,14,0.68), rgba(7,10,14,0.28) 38%, rgba(7,10,14,0.78) 100%);
+            linear-gradient(90deg, rgba(4,7,10,.82) 0%, rgba(4,7,10,.66) 35%, rgba(4,7,10,.52) 60%, rgba(4,7,10,.74) 100%),
+            linear-gradient(180deg, rgba(0,0,0,.24) 0%, rgba(0,0,0,.54) 100%);
         }
+
+        .mp-login-glow {
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(circle at 18% 28%, rgba(16,185,129,.18), transparent 30%),
+            radial-gradient(circle at 78% 18%, rgba(255,255,255,.08), transparent 26%),
+            radial-gradient(circle at 72% 78%, rgba(245,158,11,.12), transparent 26%);
+          filter: blur(30px);
+          pointer-events: none;
+        }
+
+        .mp-login-grid {
+          position: absolute;
+          inset: 0;
+          opacity: .08;
+          background-image:
+            linear-gradient(rgba(255,255,255,.16) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.16) 1px, transparent 1px);
+          background-size: 42px 42px;
+          mask-image: linear-gradient(to bottom, rgba(0,0,0,.45), transparent 85%);
+          pointer-events: none;
+        }
+
         .mp-login-topbar {
           position: relative;
           z-index: 3;
-          width: 100%;
+          padding: 22px 28px 0;
         }
+
         .mp-login-topbar-inner {
-          max-width: 1320px;
+          max-width: 1280px;
           margin: 0 auto;
-          padding: 10px 12px 0;
+          min-height: 78px;
+          border-radius: 24px;
+          padding: 14px 18px;
           display: flex;
           align-items: center;
-          min-height: 72px;
+          justify-content: space-between;
+          gap: 18px;
+          background: rgba(8,12,16,.48);
+          border: 1px solid rgba(255,255,255,.10);
+          backdrop-filter: blur(12px);
+          box-shadow: 0 20px 50px rgba(0,0,0,.28);
         }
-        .mp-login-topbar-logo {
-          height: 46px;
+
+        .mp-login-brand {
+          background: transparent;
+          border: 0;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          cursor: pointer;
+          color: inherit;
+          text-align: left;
+        }
+
+        .mp-login-brand-logo {
+          height: 44px;
           width: auto;
           object-fit: contain;
-          filter: drop-shadow(0 8px 24px rgba(0,0,0,0.45));
+          filter: drop-shadow(0 6px 14px rgba(0,0,0,.24));
         }
+
+        .mp-login-brand-text { display: flex; flex-direction: column; line-height: 1.05; }
+        .mp-login-brand-text .t1 { font-size: 20px; font-weight: 900; letter-spacing: .02em; }
+        .mp-login-brand-text .t2 { font-size: 12px; opacity: .72; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+
+        .mp-login-topbtn {
+          min-height: 42px;
+          padding: 0 16px;
+          background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.10);
+        }
+
         .mp-login-wrap {
           position: relative;
-          z-index: 3;
-          min-height: calc(100vh - 108px);
+          z-index: 2;
+          min-height: calc(100vh - 140px);
           display: grid;
-          grid-template-columns: 1.08fr 0.92fr;
-          gap: 22px;
+          grid-template-columns: minmax(0, 1.08fr) minmax(420px, 480px);
+          gap: 36px;
           align-items: center;
-          max-width: 1200px;
+          max-width: 1280px;
           margin: 0 auto;
-        }
-        @media (max-width: 980px) {
-          .mp-login-wrap { grid-template-columns: 1fr; gap: 14px; align-content: start; padding-top: 8px; min-height: auto; }
+          padding: 28px;
         }
 
-        .mp-login-hero { padding: 12px 6px; text-shadow: 0 10px 40px rgba(0,0,0,0.45); }
-        .mp-login-badge {
-          width: 46px; height: 46px; border-radius: 16px;
-          background: rgba(59,130,246,0.16);
-          border: 1px solid rgba(255,255,255,0.10);
-          display: grid; place-items: center;
-          margin-bottom: 14px;
-          box-shadow: 0 12px 35px rgba(0,0,0,0.35);
+        @media (max-width: 980px) {
+          .mp-login-topbar { padding: 16px 16px 0; }
+          .mp-login-topbar-inner { min-height: unset; padding: 14px; border-radius: 18px; }
+          .mp-login-brand-text .t1 { font-size: 17px; }
+          .mp-login-brand-text .t2 { font-size: 11px; }
+          .mp-login-wrap {
+            min-height: auto;
+            grid-template-columns: 1fr;
+            gap: 18px;
+            padding: 20px 16px 28px;
+            align-content: start;
+          }
         }
-        .mp-login-mark { font-weight: 950; color: rgba(59,130,246,0.95); font-size: 18px; }
-        .mp-login-title {
-          margin: 0 0 12px 0;
-          font-size: clamp(42px, 5vw, 70px);
-          line-height: 1.02;
-          letter-spacing: -0.02em;
-          font-weight: 950;
-          text-transform: none;
-        }
-        .mp-login-sub {
-          margin: 0;
-          opacity: .92;
-          font-size: 14px;
-          max-width: 56ch;
-          color: rgba(255,255,255,0.92);
-        }
-        .mp-login-pill {
-          margin-top: 18px;
+
+        .mp-login-hero { max-width: 760px; padding: 18px 8px 18px 4px; }
+        .mp-login-kicker {
           display: inline-flex;
-          gap: 10px;
           align-items: center;
-          padding: 12px 14px;
-          border-radius: 16px;
-          background: rgba(8,12,18,0.56);
-          border: 1px solid rgba(255,255,255,0.10);
-          box-shadow: 0 20px 50px rgba(0,0,0,0.38);
-          backdrop-filter: blur(10px);
+          min-height: 32px;
+          padding: 0 12px;
+          border-radius: 999px;
+          background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.10);
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: .16em;
+          color: rgba(255,255,255,.78);
+          margin-bottom: 18px;
+          backdrop-filter: blur(8px);
         }
-        .mp-login-pill .k { font-weight: 900; color: rgba(52,211,153,0.95); }
-        .mp-login-pill .v { opacity: .85; }
+
+        .mp-login-title {
+          margin: 0;
+          font-size: clamp(40px, 5vw, 74px);
+          line-height: .98;
+          letter-spacing: -0.04em;
+          font-weight: 950;
+          text-shadow: 0 12px 30px rgba(0,0,0,.22);
+        }
+
+        .mp-login-sub {
+          margin: 18px 0 0;
+          font-size: 16px;
+          line-height: 1.7;
+          color: rgba(255,255,255,.82);
+          max-width: 58ch;
+        }
+
+        .mp-login-badges {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 24px;
+        }
+
+        .mp-login-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 42px;
+          padding: 0 16px;
+          border-radius: 16px;
+          background: rgba(8,12,16,.42);
+          border: 1px solid rgba(255,255,255,.10);
+          backdrop-filter: blur(10px);
+          box-shadow: 0 14px 36px rgba(0,0,0,.22);
+          font-size: 13px;
+          color: rgba(255,255,255,.88);
+        }
+
+        .mp-login-pill b { color: rgba(167,243,208,.98); }
 
         .mp-login-panel {
-          width: min(520px, 100%);
+          width: 100%;
           justify-self: end;
-          padding: 18px;
-          background: rgba(8,12,18,0.72);
-          border: 1px solid rgba(255,255,255,0.12);
-          backdrop-filter: blur(14px);
-          box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+          padding: 24px;
+          border-radius: 28px;
+          background: linear-gradient(180deg, rgba(10,14,18,.82) 0%, rgba(7,10,14,.76) 100%);
+          border: 1px solid rgba(255,255,255,.12);
+          box-shadow: 0 28px 70px rgba(0,0,0,.38);
+          backdrop-filter: blur(16px);
         }
-        @media (max-width: 980px) { .mp-login-panel { justify-self: stretch; } }
 
-        .mp-login-panel-head { margin-bottom: 12px; }
-        .mp-login-panel-title { font-size: 30px; font-weight: 950; margin-bottom: 6px; }
-        .mp-login-panel-sub { opacity: .28; font-size: 13px; }
+        @media (max-width: 980px) {
+          .mp-login-panel { justify-self: stretch; padding: 20px; border-radius: 22px; }
+        }
+
+        .mp-login-panel-head { margin-bottom: 14px; }
+        .mp-login-panel-tag {
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: .16em;
+          color: rgba(167,243,208,.92);
+          margin-bottom: 10px;
+        }
+        .mp-login-panel-title { font-size: 32px; font-weight: 950; margin-bottom: 6px; }
+        .mp-login-panel-sub { color: rgba(255,255,255,.68); font-size: 13px; line-height: 1.6; }
+
         .mp-login-error {
           padding: 10px 12px;
           border-radius: 14px;
@@ -389,17 +464,31 @@ export default function Login() {
           margin: 10px 0 12px;
           font-size: 13px;
         }
-        .mp-login-form { display: grid; gap: 10px; }
 
+        .mp-login-form { display: grid; gap: 12px; }
         .mp-login-field { position: relative; display: flex; align-items: center; }
+
         .mp-login-icon {
           position: absolute;
-          left: 12px;
+          left: 14px;
           opacity: .72;
           color: rgba(255,255,255,0.78);
           pointer-events: none;
         }
-        .mp-login-input { padding-left: 40px !important; }
+
+        .mp-login-input {
+          width: 100%;
+          min-height: 52px;
+          padding-left: 44px !important;
+          padding-right: 44px !important;
+          border-radius: 16px;
+          background: rgba(255,255,255,.06);
+          border: 1px solid rgba(255,255,255,.10);
+          color: rgba(255,255,255,.96);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+        }
+
+        .mp-login-input::placeholder { color: rgba(255,255,255,.46); }
 
         .mp-login-eye {
           position: absolute;
@@ -420,126 +509,48 @@ export default function Login() {
         .mp-login-link { font-size: 12px; opacity: .8; text-decoration: underline; }
         .mp-login-link:hover { opacity: 1; }
 
-        .mp-login-submit { height: 44px; }
+        .mp-login-submit {
+          height: 48px;
+          margin-top: 4px;
+          font-weight: 900;
+          box-shadow: 0 16px 34px rgba(16,185,129,.18);
+        }
+
         .mp-login-secondary {
-          height: 42px;
+          height: 44px;
           background: rgba(255,255,255,0.06);
           border: 1px solid rgba(255,255,255,0.10);
           color: rgba(255,255,255,0.92);
         }
         .mp-login-secondary:hover { background: rgba(255,255,255,0.08); }
 
-        .mp-login-divider {
-          margin: 8px 0 6px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          opacity: .65;
-          font-size: 12px;
-        }
-        .mp-login-divider:before,
-        .mp-login-divider:after {
-          content: "";
-          flex: 1;
-          height: 1px;
-          background: rgba(255,255,255,0.10);
-        }
-
-        .mp-login-social {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 10px;
-        }
-        .mp-login-socialbtn {
-          height: 40px;
-          border-radius: 12px;
-          border: 1px solid rgba(255,255,255,0.10);
-          background: rgba(255,255,255,0.06);
-          color: rgba(255,255,255,0.9);
-          font-weight: 800;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 10px;
-          cursor: pointer;
-        }
-        .mp-login-socialbtn:hover { background: rgba(255,255,255,0.08); }
-        .mp-login-socialbtn .s {
-          width: 22px; height: 22px;
-          border-radius: 7px;
-          display: grid; place-items: center;
-          background: rgba(0,0,0,0.35);
-          border: 1px solid rgba(255,255,255,0.12);
-          font-weight: 950;
-        }
-
         .mp-login-check {
           display: flex;
           gap: 10px;
           align-items: center;
-          margin-top: 6px;
-          opacity: .85;
+          margin-top: 4px;
+          color: rgba(255,255,255,.82);
           font-size: 12px;
+          line-height: 1.5;
         }
         .mp-login-check input { width: 16px; height: 16px; }
 
-        .mp-login-terms { opacity: .65; font-size: 12px; margin-top: 4px; text-align: center; }
-
-        .mp-login-rings {
-          position: absolute;
-          inset: 0;
-          display: grid;
-          place-items: center;
-          pointer-events: none;
-          opacity: .72;
-        }
-        .mp-login-rings .ring {
-          position: absolute;
-          border-radius: 999px;
-          border: 1px solid rgba(96,165,250,0.18);
-          background: radial-gradient(circle at 30% 30%, rgba(59,130,246,0.18), transparent 55%);
-          box-shadow: inset 0 0 40px rgba(0,0,0,0.35);
-        }
-        .mp-login-rings .r1 { width: 980px; height: 980px; animation: mpRing 10s ease-in-out infinite; }
-        .mp-login-rings .r2 { width: 780px; height: 780px; animation: mpRing 12s ease-in-out infinite reverse; border-color: rgba(52,211,153,0.16); }
-        .mp-login-rings .r3 { width: 560px; height: 560px; animation: mpRing 14s ease-in-out infinite; border-color: rgba(255,255,255,0.10); }
-        .mp-login-rings .r4 { width: 360px; height: 360px; animation: mpRing 16s ease-in-out infinite reverse; border-color: rgba(52,211,153,0.12); }
-        @media (max-width: 980px) {
-          .mp-login-rings .r1 { width: 720px; height: 720px; }
-          .mp-login-rings .r2 { width: 560px; height: 560px; }
-          .mp-login-rings .r3 { width: 420px; height: 420px; }
-          .mp-login-rings .r4 { width: 280px; height: 280px; }
-        }
-        @keyframes mpRing {
-          0% { transform: translateY(0px) scale(1); opacity: .55; }
-          50% { transform: translateY(-10px) scale(1.02); opacity: .82; }
-          100% { transform: translateY(0px) scale(1); opacity: .55; }
-        }
-        .mp-login-glow {
-          position: absolute;
-          inset: -200px;
-          background:
-            radial-gradient(circle at 20% 50%, rgba(59,130,246,0.16), transparent 55%),
-            radial-gradient(circle at 68% 20%, rgba(52,211,153,0.12), transparent 60%),
-            radial-gradient(circle at 72% 74%, rgba(251,191,36,0.08), transparent 60%);
-          filter: blur(34px);
-          opacity: .5;
-          pointer-events: none;
+        .mp-login-terms {
+          color: rgba(255,255,255,.54);
+          font-size: 12px;
+          margin-top: 2px;
+          text-align: center;
+          line-height: 1.5;
         }
 
-        .mp-login-home {
+        .mp-login-footer {
           position: relative;
-          z-index: 3;
-          background: rgba(8,12,18,0.62);
-          border: 1px solid rgba(255,255,255,0.10);
-          backdrop-filter: blur(10px);
+          z-index: 2;
+          padding: 0 16px 18px;
+          text-align: center;
+          font-size: 12px;
+          color: rgba(255,255,255,.50);
         }
-        .mp-login-home:hover { background: rgba(8,12,18,0.78); }
-        @media (max-width: 980px) {
-          .mp-login-topbar-inner { padding-top: 6px; }
-          .mp-login-topbar-logo { height: 38px; }
-        }
-
       `}</style>
     </div>
   );
