@@ -159,6 +159,15 @@ function getLetterColor(letterOrLabel: string) {
   return COLORS.slate;
 }
 
+function getSupervisorNameByLetter(letter: string) {
+  const t = String(letter || "").toUpperCase();
+  if (t === "A") return "Wellington";
+  if (t === "B") return "Wagner";
+  if (t === "C") return "Marcio";
+  if (t === "D") return "Jocelio";
+  return "";
+}
+
 function fmtBR0(n: number) {
   return (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
@@ -861,6 +870,7 @@ export default function Statistics() {
     return (["A", "B", "C", "D"] as const).map((letter) => ({
       key: letter,
       name: `Letra ${letter}`,
+      supervisor: getSupervisorNameByLetter(letter),
       value: Number(base[letter] || 0),
       color: getLetterColor(letter),
     }));
@@ -1431,6 +1441,12 @@ export default function Statistics() {
                       position="top"
                       formatter={(v: any) => `${fmtBR0(Number(v || 0))}t`}
                       style={{ fill: "rgba(255,255,255,0.80)", fontWeight: 900, fontSize: 11 }}
+                    />
+                    <LabelList
+                      dataKey="supervisor"
+                      position="inside"
+                      offset={0}
+                      style={{ fill: "rgba(0,0,0,0.58)", fontWeight: 500, fontSize: 16 }}
                     />
                   </Bar>
                 </BarChart>
