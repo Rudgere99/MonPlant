@@ -99,7 +99,7 @@ export default function Login() {
       <div className="mp-login-glow" aria-hidden />
       <div className="mp-login-grid" aria-hidden />
 
-      <header className="mp-login-topbar">
+      <div>
         <div className="mp-login-topbar-inner">
           <button type="button" className="mp-login-brand" onClick={() => nav("/home")} style={{ justifyContent: "flex-start" }}>
             <img
@@ -121,7 +121,7 @@ export default function Login() {
             Sobre o MonPlant
           </button>
         </div>
-      </header>
+      </div>
 
       <div className="mp-login-wrap">
         <div className="mp-login-hero">
