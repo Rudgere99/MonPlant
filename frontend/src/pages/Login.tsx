@@ -301,9 +301,9 @@ export default function Login() {
         .mp-login-topbar-inner {
           max-width: 1280px;
           margin: 0 auto;
-          min-height: 78px;
+          min-height: 90px;
           border-radius: 24px;
-          padding: 14px 18px;
+          padding: 16px 22px;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -327,15 +327,15 @@ export default function Login() {
         }
 
         .mp-login-brand-logo {
-          height: 44px;
+          height: 64px;
           width: auto;
           object-fit: contain;
           filter: drop-shadow(0 6px 14px rgba(0,0,0,.24));
         }
 
         .mp-login-brand-text { display: flex; flex-direction: column; line-height: 1.05; }
-        .mp-login-brand-text .t1 { font-size: 20px; font-weight: 900; letter-spacing: .02em; }
-        .mp-login-brand-text .t2 { font-size: 12px; opacity: .72; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+        .mp-login-brand-text .t1 { font-size: 24px; font-weight: 900; letter-spacing: .02em; }
+        .mp-login-brand-text .t2 { font-size: 13px; opacity: .72; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 
         .mp-login-topbtn {
           min-height: 42px;
@@ -358,6 +358,8 @@ export default function Login() {
         }
 
         @media (max-width: 980px) {
+          .mp-login-brand-logo { height: 48px; }
+          .mp-login-brand-text .t1 { font-size: 18px; }
           .mp-login-topbar { padding: 16px 16px 0; }
           .mp-login-topbar-inner { min-height: unset; padding: 14px; border-radius: 18px; }
           .mp-login-brand-text .t1 { font-size: 17px; }
@@ -441,6 +443,8 @@ export default function Login() {
         }
 
         @media (max-width: 980px) {
+          .mp-login-brand-logo { height: 48px; }
+          .mp-login-brand-text .t1 { font-size: 18px; }
           .mp-login-panel { justify-self: stretch; padding: 20px; border-radius: 22px; }
         }
 
@@ -506,7 +510,7 @@ export default function Login() {
         .mp-login-eye:hover { background: rgba(255,255,255,0.09); }
 
         .mp-login-row { display: flex; justify-content: flex-end; margin-top: 2px; }
-        .mp-login-link { font-size: 12px; opacity: .8; text-decoration: underline; }
+        .mp-login-link { font-size: 13px; opacity: .8; text-decoration: underline; }
         .mp-login-link:hover { opacity: 1; }
 
         .mp-login-submit {
@@ -517,7 +521,7 @@ export default function Login() {
         }
 
         .mp-login-secondary {
-          height: 44px;
+          height: 64px;
           background: rgba(255,255,255,0.06);
           border: 1px solid rgba(255,255,255,0.10);
           color: rgba(255,255,255,0.92);
@@ -530,14 +534,14 @@ export default function Login() {
           align-items: center;
           margin-top: 4px;
           color: rgba(255,255,255,.82);
-          font-size: 12px;
+          font-size: 13px;
           line-height: 1.5;
         }
         .mp-login-check input { width: 16px; height: 16px; }
 
         .mp-login-terms {
           color: rgba(255,255,255,.54);
-          font-size: 12px;
+          font-size: 13px;
           margin-top: 2px;
           text-align: center;
           line-height: 1.5;
@@ -548,7 +552,7 @@ export default function Login() {
           z-index: 2;
           padding: 0 16px 18px;
           text-align: center;
-          font-size: 12px;
+          font-size: 13px;
           color: rgba(255,255,255,.50);
         }
       `}</style>
