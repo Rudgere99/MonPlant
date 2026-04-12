@@ -99,9 +99,9 @@ export default function Login() {
       <div className="mp-login-glow" aria-hidden />
       <div className="mp-login-grid" aria-hidden />
 
-      <div>
+      <header className="mp-login-topbar">
         <div className="mp-login-topbar-inner">
-          <button type="button" className="mp-login-brand" onClick={() => nav("/home")} style={{ justifyContent: "flex-start" }}>
+          <button type="button" className="mp-login-brand" onClick={() => nav("/home")}>
             <img
               src="/assets/logo-trindade.png"
               alt="Trindade"
@@ -121,7 +121,7 @@ export default function Login() {
             Sobre o MonPlant
           </button>
         </div>
-      </div>
+      </header>
 
       <div className="mp-login-wrap">
         <div className="mp-login-hero">
@@ -299,7 +299,7 @@ export default function Login() {
           margin: 0 auto;
           min-height: 90px;
           border-radius: 24px;
-          padding: 16px 14px 16px 10px;
+          padding: 16px 22px;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -323,10 +323,10 @@ export default function Login() {
         }
 
         .mp-login-brand-logo {
-          height: 82px;
+          height: 64px;
           width: auto;
           object-fit: contain;
-          filter: drop-shadow(0 10px 22px rgba(0,0,0,.35));
+          filter: drop-shadow(0 6px 14px rgba(0,0,0,.24));
         }
 
         .mp-login-brand-text { display: flex; flex-direction: column; line-height: 1.05; }
@@ -334,19 +334,10 @@ export default function Login() {
         .mp-login-brand-text .t2 { font-size: 13px; opacity: .72; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 
         .mp-login-topbtn {
-          min-height: 38px;
-          padding: 0 14px;
-          background: transparent;
-          border: 1px solid rgba(255,255,255,.08);
-          color: rgba(255,255,255,.65);
-          font-size: 12px;
-          font-weight: 700;
-          backdrop-filter: blur(6px);
-        }
-
-        .mp-login-topbtn:hover {
-          background: rgba(255,255,255,.05);
-          color: rgba(255,255,255,.9);
+          min-height: 42px;
+          padding: 0 16px;
+          background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.10);
         }
 
         .mp-login-wrap {
