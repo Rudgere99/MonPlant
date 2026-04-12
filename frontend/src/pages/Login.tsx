@@ -100,27 +100,25 @@ export default function Login() {
       <div className="mp-login-grid" aria-hidden />
 
       <header className="mp-login-topbar">
-        <div className="mp-login-topbar-inner">
-          <button type="button" className="mp-login-brand" onClick={() => nav("/home")}>
-            <img
-              src="/assets/logo-trindade.png"
-              alt="Trindade"
-              className="mp-login-brand-logo"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
-            />
-          </button>
+        <button type="button" className="mp-login-brand" onClick={() => nav("/home")}>
+          <img
+            src="/assets/logo-trindade.png"
+            alt="Trindade"
+            className="mp-login-brand-logo"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        </button>
 
-          <button
-            type="button"
-            className="mp-btn mp-login-topbtn"
-            onClick={() => nav("/home")}
-            title="Ir para a página inicial"
-          >
-            Sobre o MonPlant
-          </button>
-        </div>
+        <button
+          type="button"
+          className="mp-btn mp-login-topbtn"
+          onClick={() => nav("/home")}
+          title="Ir para a página inicial"
+        >
+          Sobre o MonPlant
+        </button>
       </header>
 
       <div className="mp-login-wrap">
@@ -289,44 +287,35 @@ export default function Login() {
         }
 
         .mp-login-topbar {
-          position: relative;
+          position: absolute;
+          top: 22px;
+          left: 28px;
+          right: 28px;
           z-index: 3;
-          padding: 22px 28px 0;
-        }
-
-        .mp-login-topbar-inner {
-          max-width: 1280px;
-          margin: 0 auto;
-          min-height: 90px;
-          border-radius: 24px;
-          padding: 16px 22px;
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           justify-content: space-between;
-          gap: 18px;
-          background: rgba(8,12,16,.48);
-          border: 1px solid rgba(255,255,255,.10);
-          backdrop-filter: blur(12px);
-          box-shadow: 0 20px 50px rgba(0,0,0,.28);
+          pointer-events: none;
         }
 
         .mp-login-brand {
+          pointer-events: auto;
           background: transparent;
           border: 0;
           padding: 0;
-          display: flex;
+          display: inline-flex;
           align-items: center;
-          gap: 14px;
+          justify-content: flex-start;
           cursor: pointer;
           color: inherit;
           text-align: left;
         }
 
         .mp-login-brand-logo {
-          height: 64px;
+          height: 82px;
           width: auto;
           object-fit: contain;
-          filter: drop-shadow(0 6px 14px rgba(0,0,0,.24));
+          filter: drop-shadow(0 10px 22px rgba(0,0,0,.35));
         }
 
         .mp-login-brand-text { display: flex; flex-direction: column; line-height: 1.05; }
@@ -334,10 +323,22 @@ export default function Login() {
         .mp-login-brand-text .t2 { font-size: 13px; opacity: .72; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 
         .mp-login-topbtn {
-          min-height: 42px;
-          padding: 0 16px;
-          background: rgba(255,255,255,.08);
-          border: 1px solid rgba(255,255,255,.10);
+          pointer-events: auto;
+          min-height: 34px;
+          padding: 0 12px;
+          background: rgba(8,12,16,.38);
+          border: 1px solid rgba(255,255,255,.08);
+          color: rgba(255,255,255,.68);
+          font-size: 12px;
+          font-weight: 700;
+          border-radius: 12px;
+          backdrop-filter: blur(8px);
+          box-shadow: none;
+        }
+        .mp-login-topbtn:hover {
+          background: rgba(255,255,255,.05);
+          color: rgba(255,255,255,.88);
+          border-color: rgba(255,255,255,.12);
         }
 
         .mp-login-wrap {
@@ -350,21 +351,27 @@ export default function Login() {
           align-items: center;
           max-width: 1280px;
           margin: 0 auto;
-          padding: 28px;
+          padding: 118px 28px 28px;
         }
 
         @media (max-width: 980px) {
-          .mp-login-brand-logo { height: 48px; }
+          .mp-login-topbar {
+            top: 16px;
+            left: 16px;
+            right: 16px;
+          }
+          .mp-login-brand-logo { height: 56px; }
           .mp-login-brand-text .t1 { font-size: 18px; }
-          .mp-login-topbar { padding: 16px 16px 0; }
-          .mp-login-topbar-inner { min-height: unset; padding: 14px; border-radius: 18px; }
-          .mp-login-brand-text .t1 { font-size: 17px; }
-          .mp-login-brand-text .t2 { font-size: 11px; }
+          .mp-login-topbtn {
+            min-height: 32px;
+            padding: 0 10px;
+            font-size: 11px;
+          }
           .mp-login-wrap {
             min-height: auto;
             grid-template-columns: 1fr;
             gap: 18px;
-            padding: 20px 16px 28px;
+            padding: 96px 16px 28px;
             align-content: start;
           }
         }
