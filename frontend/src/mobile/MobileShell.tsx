@@ -23,8 +23,7 @@ type Tab =
   | "contingencia"
   | "ultimos-7"
   | "dev-logs"
-  | "dev-users"
-  | "menu";
+  | "dev-users";
 
 const MOBILE_NAV_ITEMS: Array<{ key: Tab; to: string; label: string }> = [
   { key: "dashboard", to: "/m/dashboard", label: "Dashboard" },
