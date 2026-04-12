@@ -420,29 +420,36 @@ function AppShell() {
                 justifyContent: "space-between",
                 gap: 10,
                 flex: "0 0 auto",
-                minHeight: 52,
+                minHeight: 76,
               }}
             >
-            <div
-  style={{
-    display: "flex",
-    alignItems: "center",
-    justifyContent: sideCollapsed ? "center" : "flex-start",
-    width: "100%",
-    paddingLeft: sideCollapsed ? 0 : 6,
-  }}
->
-  <img
-    src="/assets/logo-trindade.png"
-    alt="Trindade"
-    style={{
-      height: sideCollapsed ? 38 : 52,
-      width: "auto",
-      objectFit: "contain",
-      filter: "drop-shadow(0 10px 24px rgba(0,0,0,0.5))",
-    }}
-  />
-</div>
+              <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: sideCollapsed ? "center" : "flex-start",
+                minWidth: 0,
+                paddingLeft: sideCollapsed ? 0 : 8,
+                paddingRight: 8,
+              }}
+            >
+              <img
+                src="/assets/logo-trindade.png"
+                alt="Trindade"
+                style={{
+                  height: sideCollapsed ? 40 : 72,
+                  width: sideCollapsed ? 40 : 150,
+                  objectFit: "contain",
+                  objectPosition: "left center",
+                  display: "block",
+                  filter: "drop-shadow(0 10px 24px rgba(0,0,0,0.45))",
+                }}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+            </div>
 
               <button
                 onClick={() => setSideCollapsed((v) => !v)}
