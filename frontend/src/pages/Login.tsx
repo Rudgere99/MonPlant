@@ -82,18 +82,32 @@ export default function Login() {
 
   return (
     <div className="mp-login" style={{ minHeight: "100vh", position: "relative", overflow: "hidden" }}>
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          inset: 0,
-          backgroundImage: "url('/assets/login-bg.jpeg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          transform: "scale(1.02)",
-        }}
-      />
+   {/* HEADER LIMPO */}
+<div
+  style={{
+    position: "absolute",
+    top: 20,
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: 10,
+    padding: "12px 28px",
+    borderRadius: 20,
+    background: "rgba(0,0,0,0.45)",
+    backdropFilter: "blur(10px)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "0 10px 40px rgba(0,0,0,0.45)"
+  }}
+>
+  <img
+    src="/assets/logo-trindade.png"
+    alt="Trindade"
+    style={{
+      height: 42,        // 👈 AUMENTADO
+      objectFit: "contain",
+      display: "block"
+    }}
+  />
+</div>
 
       <div className="mp-login-overlay" aria-hidden />
       <div className="mp-login-glow" aria-hidden />
