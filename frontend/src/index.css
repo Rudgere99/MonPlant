@@ -372,6 +372,60 @@ a { color: inherit; text-decoration: none; }
   border-color: rgba(59, 130, 246, 0.25);
 }
 
+.mp-tab-btn {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mp-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  padding: 12px;
+}
+
+.mp-menu-panel {
+  width: 100%;
+  max-height: 78dvh;
+  overflow: auto;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 15, 18, 0.98);
+  backdrop-filter: blur(14px);
+  padding: 12px;
+}
+
+.mp-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.mp-menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mp-menu-link {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mp-menu-link.is-active {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
 /* Helpers de layout para reaproveitar as páginas */
 .m-grid-1 { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .m-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
