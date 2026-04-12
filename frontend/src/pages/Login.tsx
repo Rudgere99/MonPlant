@@ -110,10 +110,6 @@ export default function Login() {
                 (e.currentTarget as HTMLImageElement).style.display = "none";
               }}
             />
-            <div className="mp-login-brand-text">
-              <span className="t1">Trindade</span>
-              <span className="t2">MonPlant • Plataforma Operacional</span>
-            </div>
           </button>
 
           <button
