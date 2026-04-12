@@ -420,7 +420,7 @@ function AppShell() {
                 justifyContent: "space-between",
                 gap: 10,
                 flex: "0 0 auto",
-                minHeight: 76,
+                minHeight: 84,
               }}
             >
               <div
@@ -430,20 +430,20 @@ function AppShell() {
                 alignItems: "center",
                 justifyContent: sideCollapsed ? "center" : "flex-start",
                 minWidth: 0,
-                paddingLeft: sideCollapsed ? 0 : 8,
-                paddingRight: 8,
+                paddingLeft: sideCollapsed ? 0 : 10,
               }}
             >
               <img
                 src="/assets/logo-trindade.png"
                 alt="Trindade"
                 style={{
-                  height: sideCollapsed ? 40 : 72,
-                  width: sideCollapsed ? 40 : 150,
+                  height: sideCollapsed ? 42 : 80,
+                  width: sideCollapsed ? 42 : 170,
                   objectFit: "contain",
                   objectPosition: "left center",
                   display: "block",
-                  filter: "drop-shadow(0 10px 24px rgba(0,0,0,0.45))",
+                  margin: sideCollapsed ? "0 auto" : "0",
+                  filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.6))",
                 }}
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).style.display = "none";
