@@ -65,7 +65,26 @@ function MobileWrap({
   children,
 }: {
   title: string;
-  tab: "dashboard" | "production" | "ritmo" | "stats" | "ufdf" | "paradas";
+  tab:
+    | "dashboard"
+    | "production"
+    | "desvio"
+    | "ritmo"
+    | "stats"
+    | "ufdf"
+    | "paradas"
+    | "paradas-minutos"
+    | "horimetros"
+    | "abastecimento"
+    | "historico"
+    | "metas"
+    | "exportar"
+    | "configuracoes"
+    | "avisos"
+    | "contingencia"
+    | "ultimos-7"
+    | "dev-logs"
+    | "dev-users";
   children: ReactNode;
 }) {
   return (
@@ -146,7 +165,7 @@ export function AppRoutes() {
         }
       />
       <Route
-        path="/m/stats"
+        path="/m/statisticas"
         element={
           <RequireAuth>
             <MobileWrap title="Estatísticas" tab="stats">
@@ -165,16 +184,157 @@ export function AppRoutes() {
           </RequireAuth>
         }
       />
-    <Route
-  path="/m/paradas"
-  element={
-    <RequireAuth>
-      <MobileWrap title="Paradas" tab="paradas">
-        <LancamentoParadas />
-      </MobileWrap>
-    </RequireAuth>
-  }
-/>
+      <Route
+        path="/m/producao-planta"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Produção Planta" tab="production">
+              <PlantProduction />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/desvio-producao"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Desvio Produção" tab="desvio">
+              <DesvioProducao />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/paradas"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Paradas Horas" tab="paradas">
+              <Paradas />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/lancamento-paradas"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Paradas Minutos" tab="paradas-minutos">
+              <LancamentoParadas />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/horimetros"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Horímetros" tab="horimetros">
+              <Horimetros />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/abastecimento"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Abastecimento" tab="abastecimento">
+              <Abastecimento />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/historico"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Histórico" tab="historico">
+              <Historico />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/metas"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Metas do mês" tab="metas">
+              <MetasMes />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/exportar"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Relatórios" tab="exportar">
+              <Exportar />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/configuracoes"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Configurações" tab="configuracoes">
+              <Configuracoes />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/avisos"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Avisos" tab="avisos">
+              <AvisosSupervisor />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/dashboard/producao-dia"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Contingência" tab="contingencia">
+              <PlantProductionDayView />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/dashboard/ultimos-7"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Últimos 7 dias" tab="ultimos-7">
+              <Last7DaysView />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/dev/logs"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Dev Logs" tab="dev-logs">
+              <DevLogs />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/dev/users"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Dev Usuários" tab="dev-users">
+              <DevUsers />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route path="/m/stats" element={<Navigate to="/m/statisticas" replace />} />
 
       {/* Desktop */}
       <Route
