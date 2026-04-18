@@ -101,35 +101,6 @@ function pad2(n: number) {
 
 /* ===================== Calculadora Conchadas helpers ===================== */
 
-type EqAvgMap = Record<string, number>; // equipamento -> média (t)
-
-const LS_EQ_AVG_KEY = "mp_eq_avg_t_per_bucket_v1";
-
-function loadEqAvg(): EqAvgMap {
-  try {
-    const raw = localStorage.getItem(LS_EQ_AVG_KEY);
-    if (!raw) return {};
-    const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== "object") return {};
-    const out: EqAvgMap = {};
-    for (const [k, v] of Object.entries(obj)) {
-      const n = Number(v);
-      if (k && Number.isFinite(n) && n > 0) out[k] = n;
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
-function saveEqAvg(map: EqAvgMap) {
-  try {
-    localStorage.setItem(LS_EQ_AVG_KEY, JSON.stringify(map));
-  } catch {
-    // ignore
-  }
-}
-
 function nowBRTime(): string {
   const d = new Date();
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
@@ -256,28 +227,12 @@ export default function PlantProduction() {
   /* ===================== Calculadora state ===================== */
 
   const [calcOpen, setCalcOpen] = useState(false);
-  const [eqAvgMap, setEqAvgMap] = useState<EqAvgMap>(() => loadEqAvg());
 
-  // lista simples (você pode trocar/expandir depois)
-  const equipmentOptions = useMemo(
-    () => ["EH-08", "EH-05", "EH-04", "PN-01", "PN-02", "BT-01", "BT-02", "PC-201", "PC-203"],
-    []
-  );
-
-  const [calcEq, setCalcEq] = useState<string>(equipmentOptions[0] || "EH-08");
   const [calcConchadas, setCalcConchadas] = useState<string>("10");
   const [calcAvg, setCalcAvg] = useState<string>("");
+  const [calcRate, setCalcRate] = useState<string>("");
 
   const [calcObs, setCalcObs] = useState<string>("");
-
-  // quando troca equipamento, preenche média salva (se houver)
-  useEffect(() => {
-    const saved = eqAvgMap[calcEq];
-    if (saved && (!calcAvg || Number(calcAvg) === 0)) {
-      setCalcAvg(String(saved).replace(".", ",")); // deixa amigável pt-BR
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calcEq]);
 
   const calcTotal = useMemo(() => {
     const c = parseBRNumber(calcConchadas);
@@ -286,25 +241,14 @@ export default function PlantProduction() {
     return Math.max(0, c) * Math.max(0, a);
   }, [calcConchadas, calcAvg]);
 
-  function onSaveAvg() {
-    const a = parseBRNumber(calcAvg);
-    if (a === null || a <= 0) {
-      setInfo("Informe um Peso médio válido para salvar.");
-      return;
-    }
-    const next = { ...eqAvgMap, [calcEq]: a };
-    setEqAvgMap(next);
-    saveEqAvg(next);
-    setInfo(`Média do equipamento ${calcEq} salva: ${fmtBR2(a)} t/conchada`);
-  }
-
   function onRegisterCalc() {
     const c = parseBRNumber(calcConchadas);
     const a = parseBRNumber(calcAvg);
+    const rate = parseBRNumber(calcRate);
     const t = calcTotal;
 
-    if (c === null || a === null || t === null) {
-      setInfo("Preencha Conchadas e Peso médio para registrar.");
+    if (c === null || a === null || t === null || rate === null) {
+      setInfo("Preencha Conchadas, Peso médio e Taxa (%) para registrar.");
       return;
     }
 
@@ -323,7 +267,7 @@ export default function PlantProduction() {
         if (String(r.period) !== targetPeriod) return r;
         const prevTon = parseBRNumber(String(r.ton ?? "")) || 0;
         const nextTon = prevTon + (Number(t) || 0);
-        return { ...r, ton: fmtBR2(nextTon) };
+        return { ...r, ton: fmtBR2(nextTon), freq: fmtBR2(Math.max(0, Math.min(100, rate))) };
       });
 
       // 2) grava observação no campo de observação do dia
@@ -333,7 +277,7 @@ export default function PlantProduction() {
       return { ...p, rows: nextRows, obs: nextObs };
     });
 
-    setInfo(`Produção registrada em ${targetPeriod}. Clique em Salvar para gravar.`);
+    setInfo(`Produção registrada em ${targetPeriod} com frequência ${fmtBR2(Math.max(0, Math.min(100, rate)))}%. Clique em Salvar para gravar.`);
     setCalcOpen(false);
   }
 
@@ -643,9 +587,6 @@ export default function PlantProduction() {
             onClick={() => {
               setCalcOpen(true);
               setCalcObs("");
-              // tenta setar média do equipamento se existir
-              const saved = eqAvgMap[calcEq];
-              if (saved) setCalcAvg(String(saved).replace(".", ","));
             }}
             disabled={loading || !plantId}
             style={{ minWidth: 160 }}
@@ -885,16 +826,14 @@ export default function PlantProduction() {
             <div style={modalBody}>
               <div style={grid2}>
                 <div>
-                  <div className="mp-label">Equipamento de alimentação</div>
-                  <select
+                  <div className="mp-label">Taxa (%)</div>
+                  <input
                     className="mp-input"
-                    value={calcEq}
-                    onChange={(e) => setCalcEq(e.target.value)}
-                  >
-                    {equipmentOptions.map((x) => (
-                      <option key={x} value={x}>{x}</option>
-                    ))}
-                  </select>
+                    value={calcRate}
+                    onChange={(e) => setCalcRate(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="ex: 85"
+                  />
                 </div>
 
                 <div>
@@ -949,26 +888,16 @@ export default function PlantProduction() {
                 </div>
                 <div style={{ marginTop: 6, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 22 }}>
                   {parseBRNumber(calcAvg) ? `${fmtBR2(parseBRNumber(calcAvg) as number)} t` : "—"}
-                  <span style={{ color: "rgba(255,255,255,0.55)", fontWeight: 850, fontSize: 12, marginLeft: 8 }}>
-                    {calcEq}
-                  </span>
                 </div>
               </div>
 
               <div style={btnRow}>
                 <button
                   className="mp-btn"
-                  onClick={onSaveAvg}
-                  title="Salvar média para este equipamento"
-                >
-                  Salvar média do equipamento
-                </button>
-
-                <button
-                  className="mp-btn"
                   onClick={onRegisterCalc}
                   disabled={retro}
-                  title={retro ? "Retroativo bloqueado (não registra)" : "Adicionar registro na Observação do dia"}
+                  title={retro ? "Retroativo bloqueado (não registra)" : "Adicionar registro na produção da hora anterior"}
+                  style={{ gridColumn: "1 / -1" }}
                 >
                   Registrar produção
                 </button>
