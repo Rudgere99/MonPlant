@@ -32,6 +32,7 @@ import DevUsers from "../pages/DevUsers";
 
 import PlantProductionDayView from "../pages/PlantProductionDayView";
 import Last7DaysView from "../pages/Last7DaysView";
+import GestaoVistaPlanta from "../pages/GestaoVistaPlanta";
 
 import MobileShell from "../mobile/MobileShell";
 import { isMobileViewport } from "../mobile/isMobile";
@@ -376,6 +377,14 @@ export function AppRoutes() {
           element={
             <RequireRole>
               <Last7DaysView />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="dashboard/gestao-vista-planta"
+          element={
+            <RequireRole>
+              <GestaoVistaPlanta />
             </RequireRole>
           }
         />
