@@ -208,7 +208,7 @@ function LetterCard({ item }: { item: LetterData }) {
   );
 }
 
-function Gauge({ title, value, subtitle }: { title: string; value: number; subtitle: string }) {
+function GaugeCard({ title, value, subtitle }: { title: string; value: number; subtitle: string }) {
   const angle = Math.max(0, Math.min(180, (value / 100) * 180));
   return (
     <div style={{ ...panelStyle(), padding: 16, textAlign: "center" }}>
@@ -341,11 +341,11 @@ export default function GestaoVistaPlanta() {
         </section>
 
         <section style={{ display: "grid", gridTemplateColumns: "repeat(6,minmax(0,1fr))", gap: 12 }}>
-          <Gauge title="Eficiência operacional" value={82.4} subtitle="Bom" />
-          <Gauge title="Média Ton/H (dia)" value={89.6} subtitle="Meta: 110 Ton/h" />
-          <Gauge title="Disponibilidade geral" value={91.2} subtitle="Meta: 90%" />
-          <Gauge title="Utilização geral" value={86.3} subtitle="Meta: 85%" />
-          <Gauge title="Rendimento geral" value={95.4} subtitle="Meta: 95%" />
+          <GaugeCard title="Eficiência operacional" value={82.4} subtitle="Bom" />
+          <GaugeCard title="Média Ton/H (dia)" value={89.6} subtitle="Meta: 110 Ton/h" />
+          <GaugeCard title="Disponibilidade geral" value={91.2} subtitle="Meta: 90%" />
+          <GaugeCard title="Utilização geral" value={86.3} subtitle="Meta: 85%" />
+          <GaugeCard title="Rendimento geral" value={95.4} subtitle="Meta: 95%" />
 
           <div style={{ ...panelStyle(), padding: 16, textAlign: "center" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
