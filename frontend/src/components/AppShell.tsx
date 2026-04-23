@@ -42,6 +42,7 @@ const nav: NavItem[] = [
 
   // ✅ Avisos (somente supervisor / dev)
   { to: "/avisos", label: "Avisos", icon: Bell, group: "Visão geral" },
+  { to: "/dashboard/gestao-vista-planta", label: "Gestão à Vista", icon: LayoutDashboard, group: "Visão geral" },
 
   // ===== DEV =====
   { to: "/dashboard/producao-dia", label: "Contingência", icon: Code2, group: "Desenvolvimento", devOnly: true },
