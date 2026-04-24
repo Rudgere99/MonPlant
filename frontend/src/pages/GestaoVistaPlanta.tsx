@@ -112,8 +112,8 @@ const COLORS = {
   sub: "rgba(245,247,250,0.56)",
   muted: "rgba(245,247,250,0.36)",
   grid: "rgba(255,255,255,0.075)",
-  green: "#7ed321",
-  emerald: "#21c563",
+  green: "#ff9f1a",
+  emerald: "#13c7e8",
   red: "#ff4d4f",
   yellow: "#ff9f1a",
   cyan: "#18c7f3",
@@ -338,7 +338,7 @@ function MetricCard({ title, value, suffix, subtitle, trend, icon }: { title: st
           <div style={{ marginTop: 8, color: COLORS.text, fontSize: 14 }}>{subtitle}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-          <div style={{ padding: 10, borderRadius: 12, background: "rgba(126,211,33,0.12)", color: COLORS.green }}>{icon}</div>
+          <div style={{ padding: 10, borderRadius: 12, background: "rgba(255,159,26,0.12)", color: COLORS.green }}>{icon}</div>
           {hasTrend ? (
             <div style={{ display: "flex", alignItems: "center", gap: 4, color: isUp ? COLORS.green : COLORS.red, fontWeight: 950, fontSize: 16 }}>
               {isUp ? <ArrowUpRight size={17} /> : <ArrowDownRight size={17} />} {isUp ? "+" : "-"}{fmtBR1(Math.abs(trend || 0))}%
@@ -645,14 +645,14 @@ export default function GestaoVistaPlanta() {
       <div style={{ maxWidth: 1800, margin: "0 auto" }}>
         <header style={{ ...panelStyle(), padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 14, display: "grid", placeItems: "center", background: "rgba(126,211,33,0.12)", color: COLORS.green }}><Factory size={31} /></div>
+            <div style={{ width: 52, height: 52, borderRadius: 14, display: "grid", placeItems: "center", background: "rgba(255,159,26,0.12)", color: COLORS.green }}><Factory size={31} /></div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 950, letterSpacing: 4, color: COLORS.green }}>MONPLANT</div>
               <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.05, fontWeight: 950 }}>Gestão à Vista da Planta</h1>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid rgba(126,211,33,.28)", color: COLORS.green, background: "rgba(126,211,33,.10)", borderRadius: 12, padding: "9px 12px", fontWeight: 950 }}><CheckCircle2 size={18} /> Planta operando</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid rgba(255,159,26,.28)", color: COLORS.green, background: "rgba(255,159,26,.10)", borderRadius: 12, padding: "9px 12px", fontWeight: 950 }}><CheckCircle2 size={18} /> Planta operando</span>
             <Select value={String(plantId || "")} onChange={(v) => setPlantId(v === "all" ? "all" : Number(v))}>
               {plants.length > 1 ? <option value="all">Todas as plantas</option> : null}
               {plants.map((p) => <option key={p.id} value={p.id}>{p.name || p.code || `Planta ${p.id}`}</option>)}
@@ -662,7 +662,7 @@ export default function GestaoVistaPlanta() {
               <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={{ background: "transparent", color: COLORS.text, border: 0, outline: 0, fontWeight: 850 }} />
             </label>
             <span style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${COLORS.borderStrong}`, borderRadius: 12, padding: "9px 12px" }}><Clock3 size={18} /> {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-            <button onClick={loadAll} disabled={loading} style={{ height: 38, borderRadius: 12, border: "1px solid rgba(126,211,33,.30)", background: "rgba(126,211,33,.10)", color: COLORS.green, padding: "0 12px", fontWeight: 950, cursor: "pointer" }}><RefreshCw size={17} /></button>
+            <button onClick={loadAll} disabled={loading} style={{ height: 38, borderRadius: 12, border: "1px solid rgba(255,159,26,.30)", background: "rgba(255,159,26,.10)", color: COLORS.green, padding: "0 12px", fontWeight: 950, cursor: "pointer" }}><RefreshCw size={17} /></button>
           </div>
         </header>
 
@@ -680,12 +680,12 @@ export default function GestaoVistaPlanta() {
           <div style={{ ...panelStyle(), padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950, textTransform: "uppercase" }}>Produção por hora — gráfico de barras</h2>
-              <span style={{ color: COLORS.sub, fontWeight: 850 }}>{brDate(firstDayOfMonth(month))} até {brDate(day)} • Regra: {SHIFT_RULE_SOURCE}</span>
+              <span style={{ color: COLORS.sub, fontWeight: 850 }}>{brDate(firstDayOfMonth(month))} até {brDate(day)}</span>
             </div>
             <div style={{ height: 330 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyBars} margin={{ top: 26, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.10)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
                   <XAxis dataKey="period" stroke="rgba(255,255,255,.55)" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis stroke="rgba(255,255,255,.55)" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <Tooltip contentStyle={tooltipStyle} formatter={(value: any, name: any) => [name === "freq" ? `${fmtBR1(Number(value))}%` : `${fmtBR0(Number(value))} t`, name === "freq" ? "Frequência" : "Produção"]} />
@@ -751,7 +751,7 @@ export default function GestaoVistaPlanta() {
                   </div>
                   <div style={{ marginTop: 4, color: COLORS.text, fontSize: 13 }}>{a.subtitle}</div>
                 </div>
-              )) : <div style={{ border: "1px solid rgba(126,211,33,.25)", background: "rgba(126,211,33,.08)", borderRadius: 12, padding: 14, color: COLORS.green, fontWeight: 900 }}>Sem paradas lançadas para a planta neste dia.</div>}
+              )) : <div style={{ border: "1px solid rgba(255,159,26,.25)", background: "rgba(255,159,26,.08)", borderRadius: 12, padding: 14, color: COLORS.green, fontWeight: 900 }}>Sem paradas lançadas para a planta neste dia.</div>}
             </div>
           </div>
         </section>
