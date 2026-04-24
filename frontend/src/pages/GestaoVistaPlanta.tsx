@@ -100,18 +100,24 @@ type SupervisorRank = {
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
 const COLORS = {
-  bg: "#02080d",
-  panel: "#051523",
-  panel2: "#04111b",
-  border: "rgba(255,255,255,0.14)",
-  text: "rgba(255,255,255,0.94)",
-  sub: "rgba(255,255,255,0.58)",
-  green: "#84cc16",
-  emerald: "#22c55e",
-  red: "#ef4444",
-  yellow: "#fbbf24",
-  cyan: "#06b6d4",
-  orange: "#f97316",
+  // Paleta alinhada ao dashboard padrão MonPlant:
+  // fundo grafite, cards cinza-carbono e acentos verde/laranja.
+  bg: "#111418",
+  panel: "#171b20",
+  panel2: "#14181d",
+  panel3: "#101418",
+  border: "rgba(255,255,255,0.10)",
+  borderStrong: "rgba(255,255,255,0.16)",
+  text: "rgba(245,247,250,0.94)",
+  sub: "rgba(245,247,250,0.56)",
+  muted: "rgba(245,247,250,0.36)",
+  grid: "rgba(255,255,255,0.075)",
+  green: "#7ed321",
+  emerald: "#21c563",
+  red: "#ff4d4f",
+  yellow: "#f5a623",
+  cyan: "#13c7e8",
+  orange: "#ff9f1a",
 };
 
 const SHIFT_RULE_SOURCE = "Regras de Turno Terra Minas.xlsx";
@@ -285,10 +291,10 @@ async function apiGet<T>(path: string, token?: string | null): Promise<T> {
 }
 function panelStyle(extra?: React.CSSProperties): React.CSSProperties {
   return {
-    background: "linear-gradient(180deg, #051523, #04111b)",
+    background: `linear-gradient(180deg, ${COLORS.panel}, ${COLORS.panel2})`,
     border: `1px solid ${COLORS.border}`,
     borderRadius: 16,
-    boxShadow: "0 16px 28px rgba(0,0,0,.35)",
+    boxShadow: "0 10px 22px rgba(0,0,0,.22)",
     ...extra,
   };
 }
@@ -301,8 +307,8 @@ function Select({ value, onChange, children }: { value: string; onChange: (v: st
       style={{
         height: 38,
         borderRadius: 12,
-        border: "1px solid rgba(255,255,255,0.16)",
-        background: "#06111a",
+        border: `1px solid ${COLORS.borderStrong}`,
+        background: COLORS.panel3,
         color: COLORS.text,
         padding: "0 12px",
         outline: "none",
@@ -330,7 +336,7 @@ function MetricCard({ title, value, suffix, subtitle, trend, icon }: { title: st
           <div style={{ marginTop: 8, color: COLORS.text, fontSize: 14 }}>{subtitle}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-          <div style={{ padding: 10, borderRadius: 12, background: "rgba(132,204,22,0.15)", color: COLORS.green }}>{icon}</div>
+          <div style={{ padding: 10, borderRadius: 12, background: "rgba(126,211,33,0.12)", color: COLORS.green }}>{icon}</div>
           {hasTrend ? (
             <div style={{ display: "flex", alignItems: "center", gap: 4, color: isUp ? COLORS.green : COLORS.red, fontWeight: 950, fontSize: 16 }}>
               {isUp ? <ArrowUpRight size={17} /> : <ArrowDownRight size={17} />} {isUp ? "+" : "-"}{fmtBR1(Math.abs(trend || 0))}%
@@ -358,7 +364,7 @@ function LetterCard({ item }: { item: LetterKpi }) {
           <div style={{ fontSize: 46, fontWeight: 950, color }}>{item.letter}</div>
           <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.4, color: COLORS.sub }}>{item.supervisor}</div>
         </div>
-        <div style={{ alignSelf: "flex-start", padding: "4px 10px", borderRadius: 999, background: "rgba(255,255,255,.08)", fontSize: 11, fontWeight: 900 }}>
+        <div style={{ alignSelf: "flex-start", padding: "4px 10px", borderRadius: 999, background: "rgba(255,255,255,.06)", fontSize: 11, fontWeight: 900 }}>
           {item.workedDays} dias
         </div>
       </div>
@@ -626,7 +632,7 @@ export default function GestaoVistaPlanta() {
 
   const tooltipStyle = {
     background: "rgba(5,7,10,0.96)",
-    border: "1px solid rgba(255,255,255,0.16)",
+    border: `1px solid ${COLORS.borderStrong}`,
     borderRadius: 14,
     color: "white",
     boxShadow: "0 18px 40px rgba(0,0,0,0.6)",
@@ -637,24 +643,24 @@ export default function GestaoVistaPlanta() {
       <div style={{ maxWidth: 1800, margin: "0 auto" }}>
         <header style={{ ...panelStyle(), padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 14, display: "grid", placeItems: "center", background: "rgba(132,204,22,0.14)", color: COLORS.green }}><Factory size={31} /></div>
+            <div style={{ width: 52, height: 52, borderRadius: 14, display: "grid", placeItems: "center", background: "rgba(126,211,33,0.12)", color: COLORS.green }}><Factory size={31} /></div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 950, letterSpacing: 4, color: COLORS.green }}>MONPLANT</div>
               <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.05, fontWeight: 950 }}>Gestão à Vista da Planta</h1>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid rgba(132,204,22,.28)", color: COLORS.green, background: "rgba(132,204,22,.10)", borderRadius: 12, padding: "9px 12px", fontWeight: 950 }}><CheckCircle2 size={18} /> Planta operando</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid rgba(126,211,33,.28)", color: COLORS.green, background: "rgba(126,211,33,.10)", borderRadius: 12, padding: "9px 12px", fontWeight: 950 }}><CheckCircle2 size={18} /> Planta operando</span>
             <Select value={String(plantId || "")} onChange={(v) => setPlantId(v === "all" ? "all" : Number(v))}>
               {plants.length > 1 ? <option value="all">Todas as plantas</option> : null}
               {plants.map((p) => <option key={p.id} value={p.id}>{p.name || p.code || `Planta ${p.id}`}</option>)}
             </Select>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid rgba(255,255,255,0.16)", borderRadius: 12, padding: "0 10px", height: 38 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${COLORS.borderStrong}`, borderRadius: 12, padding: "0 10px", height: 38 }}>
               <CalendarDays size={18} />
               <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={{ background: "transparent", color: COLORS.text, border: 0, outline: 0, fontWeight: 850 }} />
             </label>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid rgba(255,255,255,0.16)", borderRadius: 12, padding: "9px 12px" }}><Clock3 size={18} /> {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-            <button onClick={loadAll} disabled={loading} style={{ height: 38, borderRadius: 12, border: "1px solid rgba(132,204,22,.30)", background: "rgba(132,204,22,.10)", color: COLORS.green, padding: "0 12px", fontWeight: 950, cursor: "pointer" }}><RefreshCw size={17} /></button>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${COLORS.borderStrong}`, borderRadius: 12, padding: "9px 12px" }}><Clock3 size={18} /> {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+            <button onClick={loadAll} disabled={loading} style={{ height: 38, borderRadius: 12, border: "1px solid rgba(126,211,33,.30)", background: "rgba(126,211,33,.10)", color: COLORS.green, padding: "0 12px", fontWeight: 950, cursor: "pointer" }}><RefreshCw size={17} /></button>
           </div>
         </header>
 
@@ -707,7 +713,7 @@ export default function GestaoVistaPlanta() {
               {equipmentRows.map((eq) => (
                 <div key={eq.name} style={{ display: "grid", gridTemplateColumns: "95px 1fr 70px 82px", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 12, border: "1px solid rgba(255,255,255,.07)", background: "rgba(255,255,255,.03)" }}>
                   <strong>{eq.name}</strong>
-                  <div style={{ height: 9, borderRadius: 99, background: "rgba(255,255,255,.10)", overflow: "hidden" }}><div style={{ width: `${eq.availability}%`, height: "100%", background: eq.status === "Operando" ? COLORS.green : COLORS.yellow }} /></div>
+                  <div style={{ height: 9, borderRadius: 99, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><div style={{ width: `${eq.availability}%`, height: "100%", background: eq.status === "Operando" ? COLORS.green : COLORS.yellow }} /></div>
                   <span style={{ fontWeight: 950 }}>{fmtBR1(eq.availability)}%</span>
                   <span style={{ color: eq.status === "Operando" ? COLORS.green : COLORS.yellow, fontWeight: 900 }}>{eq.status}</span>
                 </div>
@@ -743,7 +749,7 @@ export default function GestaoVistaPlanta() {
                   </div>
                   <div style={{ marginTop: 4, color: COLORS.text, fontSize: 13 }}>{a.subtitle}</div>
                 </div>
-              )) : <div style={{ border: "1px solid rgba(132,204,22,.25)", background: "rgba(132,204,22,.08)", borderRadius: 12, padding: 14, color: COLORS.green, fontWeight: 900 }}>Sem paradas lançadas para a planta neste dia.</div>}
+              )) : <div style={{ border: "1px solid rgba(126,211,33,.25)", background: "rgba(126,211,33,.08)", borderRadius: 12, padding: 14, color: COLORS.green, fontWeight: 900 }}>Sem paradas lançadas para a planta neste dia.</div>}
             </div>
           </div>
         </section>
