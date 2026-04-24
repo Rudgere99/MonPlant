@@ -54,6 +54,24 @@ type StopLaunchRow = {
 type StopDayPayload = { day: string; rows: StopLaunchRow[] };
 type HorimetroRow = { equipamento: string; horimetro_ini?: number; horimetro_fim?: number; day?: string; turno?: 1 | 2 };
 
+type DailyStatsRow = {
+  day: string;
+  produced_ton?: number;
+  meta_ton?: number;
+  t1_ton?: number;
+  t2_ton?: number;
+  avg_ton_per_hour?: number;
+  freq_avg?: number;
+};
+
+type StatsMonthPayload = {
+  month: string;
+  meta_month_ton?: number;
+  produced_month_ton?: number;
+  shift?: { t1_ton?: number; t2_ton?: number };
+  series?: { daily?: DailyStatsRow[] };
+};
+
 type ShiftRuleResolved = {
   turno1: ShiftLetter;
   turno2: ShiftLetter;
@@ -194,6 +212,11 @@ function enumerateDaysInclusive(startIso: string, endIso: string) {
 }
 function firstDayOfMonth(ym: string) {
   return `${ym}-01`;
+}
+function shiftMonth(ym: string, delta: number) {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y || 2026, (m || 1) - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 function periodStartHour(period: string) {
   const s = String(period || "").replace(/–|—/g, "-").trim();
@@ -368,6 +391,8 @@ export default function GestaoVistaPlanta() {
   const [goalDay, setGoalDay] = useState<GoalDay | null>(null);
   const [monthPayloads, setMonthPayloads] = useState<PlantDayPayload[]>([]);
   const [monthGoals, setMonthGoals] = useState<Record<string, GoalDay | null>>({});
+  const [statsMonth, setStatsMonth] = useState<StatsMonthPayload | null>(null);
+  const [nextStatsMonth, setNextStatsMonth] = useState<StatsMonthPayload | null>(null);
   const [stops, setStops] = useState<StopLaunchRow[]>([]);
   const [horimetros, setHorimetros] = useState<HorimetroRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -401,6 +426,14 @@ export default function GestaoVistaPlanta() {
       const s = await apiGet<StopDayPayload>(stopsPath, token).catch(() => ({ day, rows: [] }));
       const h = plantId === "all" ? [] : await apiGet<HorimetroRow[]>(`/api/plants/${plantId}/horimetros/last-by-eq`, token).catch(() => []);
 
+      const statsPath = plantId === "all" ? `/api/aggregate/stats/month/${encodeURIComponent(month)}` : `/api/plants/${plantId}/stats/month/${encodeURIComponent(month)}`;
+      const nextMonth = shiftMonth(month, 1);
+      const nextStatsPath = plantId === "all" ? `/api/aggregate/stats/month/${encodeURIComponent(nextMonth)}` : `/api/plants/${plantId}/stats/month/${encodeURIComponent(nextMonth)}`;
+      const [stats, nextStats] = await Promise.all([
+        apiGet<StatsMonthPayload>(statsPath, token).catch(() => null as any),
+        apiGet<StatsMonthPayload>(nextStatsPath, token).catch(() => null as any),
+      ]);
+
       const start = firstDayOfMonth(month);
       const end = day;
       const calendarDays = enumerateDaysInclusive(start, addDaysISO(end, 1));
@@ -427,6 +460,8 @@ export default function GestaoVistaPlanta() {
       setHorimetros(Array.isArray(h) ? h : []);
       setMonthPayloads(payloads);
       setMonthGoals(Object.fromEntries(goals));
+      setStatsMonth(stats || null);
+      setNextStatsMonth(nextStats || null);
     } catch (e: any) {
       setErr(e?.message || "Erro ao carregar dados da gestão à vista.");
     } finally {
@@ -460,6 +495,29 @@ export default function GestaoVistaPlanta() {
     return Array.from(map.values());
   }, [prodDay]);
 
+  const operationalDailyFromStats = useMemo(() => {
+    const currentDaily = [...(statsMonth?.series?.daily || [])]
+      .filter((row) => String(row.day || "") >= firstDayOfMonth(month) && String(row.day || "") <= day)
+      .sort((a, b) => String(a.day || "").localeCompare(String(b.day || "")));
+
+    const nextDailyCurrentMonth = [...(statsMonth?.series?.daily || [])].sort((a, b) =>
+      String(a.day || "").localeCompare(String(b.day || ""))
+    );
+    const nextDailyNextMonth = [...(nextStatsMonth?.series?.daily || [])].sort((a, b) =>
+      String(a.day || "").localeCompare(String(b.day || ""))
+    );
+
+    return currentDaily.map((row) => {
+      const nextRowCurrentMonth = nextDailyCurrentMonth.find((x) => String(x.day || "") === addDaysISO(row.day, 1));
+      const nextRow = nextRowCurrentMonth || nextDailyNextMonth[0];
+      return {
+        operational_day: row.day,
+        operational_t1_ton: Number(row.t1_ton || 0),
+        operational_t2_ton: Number(nextRow?.t2_ton || 0),
+      };
+    });
+  }, [statsMonth, nextStatsMonth, month, day]);
+
   const letterData = useMemo<LetterKpi[]>(() => {
     const start = firstDayOfMonth(month);
     const end = day;
@@ -472,24 +530,21 @@ export default function GestaoVistaPlanta() {
 
     for (const d of enumerateDaysInclusive(start, end)) {
       const rule = getShiftRuleForDate(d);
-      const goal = Number(monthGoals[d]?.meta_ton || 0);
+      const goalFromGoalsPage = Number(monthGoals[d]?.meta_ton || 0);
+      const goalFromStats = Number((statsMonth?.series?.daily || []).find((x) => x.day === d)?.meta_ton || 0);
+      const goal = goalFromGoalsPage || goalFromStats;
       base[rule.turno1].target += goal / 2;
       base[rule.turno2].target += goal / 2;
       base[rule.turno1].workedDays += 1;
       base[rule.turno2].workedDays += 1;
     }
 
-    for (const payload of monthPayloads || []) {
-      const calendarDay = payload.day;
-      for (const row of payload.rows || []) {
-        const ton = parseBRNumber(row.ton);
-        if (ton <= 0) continue;
-        const op = operationalKey(calendarDay, row.period);
-        if (op.operationalDay < start || op.operationalDay > end) continue;
-        const rule = getShiftRuleForDate(op.operationalDay);
-        const letter = op.shift === 1 ? rule.turno1 : rule.turno2;
-        base[letter].realized += ton;
-      }
+    // Produção real por letra usando exatamente a mesma lógica da página Statistics:
+    // Turno 1 do próprio dia operacional + Turno 2 vindo da próxima data calendário.
+    for (const row of operationalDailyFromStats || []) {
+      const rule = getShiftRuleForDate(row.operational_day);
+      base[rule.turno1].realized += Number(row.operational_t1_ton || 0);
+      base[rule.turno2].realized += Number(row.operational_t2_ton || 0);
     }
 
     return (["A", "B", "C", "D"] as ShiftLetter[]).map((letter) => {
@@ -505,7 +560,7 @@ export default function GestaoVistaPlanta() {
         trend: percent - 100,
       };
     });
-  }, [month, day, monthGoals, monthPayloads]);
+  }, [month, day, monthGoals, statsMonth, operationalDailyFromStats]);
 
   const supervisorRanking = useMemo<SupervisorRank[]>(() => {
     return letterData
@@ -626,7 +681,7 @@ export default function GestaoVistaPlanta() {
           <div style={{ ...panelStyle(), padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950, textTransform: "uppercase" }}>Produção por letra</h2>
-              <span style={{ color: COLORS.sub, fontSize: 12, fontWeight: 900 }}>Meta por letra = soma das metas dos dias trabalhados ÷ 2</span>
+              <span style={{ color: COLORS.sub, fontSize: 12, fontWeight: 900 }}>Produção real = mesma regra da página Statistics</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
               {letterData.map((item) => <LetterCard key={item.letter} item={item} />)}
