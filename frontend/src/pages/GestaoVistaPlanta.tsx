@@ -15,18 +15,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 
 type ShiftLetter = "A" | "B" | "C" | "D";
 type PlantInfo = { id: number; name: string; code: string };
@@ -273,10 +262,6 @@ export default function GestaoVistaPlanta() {
           </div>
         </section>
 
-        <section style={{ ...panelStyle(), padding: 16 }}>
-          <h2 style={{ margin: "0 0 10px", textTransform: "uppercase", fontSize: 24 }}>Pulmões e estoques da planta</h2>
-          <div style={{ height: 240 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={[{ name: "Hematitinha", value: Math.min(100, aderencia) }, { name: "Itabirito", value: Math.min(100, freqAvg) }, { name: "Canga", value: Math.max(0, 100 - aderencia) }, { name: "Produto", value: Math.min(100, (projDay / (totalTarget || 1)) * 100) }]}><CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.10)" /><XAxis dataKey="name" stroke="#9ca3af" tickLine={false} axisLine={false} /><YAxis stroke="#9ca3af" tickLine={false} axisLine={false} /><Tooltip contentStyle={{ background: "#050b0f", border: `1px solid ${palette.green}`, borderRadius: 10, color: "#fff" }} /><Bar dataKey="value" radius={[10, 10, 0, 0]}>{[0, 1, 2, 3].map((idx) => <Cell key={idx} fill={idx === 3 ? palette.green : idx === 2 ? "#fbbf24" : "#16a34a"} />)}</Bar></BarChart></ResponsiveContainer></div>
-        </section>
       </div>
     </main>
   );
