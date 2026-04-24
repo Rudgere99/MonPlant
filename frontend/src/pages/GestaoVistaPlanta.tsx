@@ -388,7 +388,7 @@ function LetterCard({ item }: { item: LetterKpi }) {
 
 function Ticker({ items }: { items: string[] }) {
   const text = items.length
-    ? items.join("   •   ")
+    ? items.join("        |        ")
     : "Aguardando dados reais para consolidar os destaques da planta";
 
   return (
@@ -406,9 +406,9 @@ function Ticker({ items }: { items: string[] }) {
           display: "flex",
           width: "max-content",
           animation: "mpTicker 32s linear infinite",
-          gap: 34,
+          gap: 80,
           whiteSpace: "nowrap",
-          color: COLORS.orange,
+          color: "#ffffff",
           fontWeight: 950,
           fontSize: 15,
           letterSpacing: 0.2,
@@ -626,6 +626,7 @@ export default function GestaoVistaPlanta() {
       .sort((a, b) => b.performance - a.performance);
   }, [letterData]);
 
+  
   const tickerItems = useMemo(() => {
     const daily = (statsMonth?.series?.daily || []).filter((row) => Number(row?.produced_ton || 0) > 0);
     const bestDay = daily.length
@@ -634,7 +635,7 @@ export default function GestaoVistaPlanta() {
 
     const bestHour = hourlyBars.reduce(
       (acc, cur) => (Number(cur.ton || 0) > Number(acc.ton || 0) ? cur : acc),
-      { period: "--", ton: 0, freq: 0 }
+      { period: "--", ton: 0 }
     );
 
     const bestSupervisor = supervisorRanking?.[0] || null;
@@ -642,12 +643,13 @@ export default function GestaoVistaPlanta() {
     const bestDaySupervisor = SUPERVISOR_MAP[bestDayRule.turno1];
 
     return [
-      `📅 Maior produção: ${fmtBR0(Number(bestDay?.produced_ton || 0))} t em ${brDate(bestDay?.day || day)}`,
-      `👷 Supervisor vigente: ${bestDaySupervisor}`,
-      `🏆 Melhor supervisor: ${bestSupervisor ? `${bestSupervisor.name} • Letra ${bestSupervisor.letter} (${fmtBR1(bestSupervisor.performance)}%)` : "--"}`,
-      `⏱️ Melhor hora: ${bestHour.period} com ${fmtBR0(Number(bestHour.ton || 0))} t`,
+      <>📅 Maior produção: <span style={{color:"#ff9f1a"}}>{fmtBR0(bestDay?.produced_ton || 0)} t</span> em {brDate(bestDay?.day || day)}</>,
+      <>👷 Supervisor vigente: {bestDaySupervisor}</>,
+      <>🏆 Melhor supervisor: {bestSupervisor?.name} • Letra {bestSupervisor?.letter} (<span style={{color:"#ff9f1a"}}>{fmtBR1(bestSupervisor?.performance || 0)}%</span>)</>,
+      <>⏱️ Melhor hora: <span style={{color:"#ff9f1a"}}>{bestHour.period}</span> com <span style={{color:"#ff9f1a"}}>{fmtBR0(bestHour.ton)} t</span></>,
     ];
   }, [statsMonth, hourlyBars, supervisorRanking, day]);
+
 
 
   const totalProducedDay = useMemo(() => hourlyBars.reduce((a, b) => a + b.ton, 0), [hourlyBars]);
