@@ -96,6 +96,7 @@ const COLORS = {
   orange: "#f97316",
 };
 
+const SHIFT_RULE_SOURCE = "Regras de Turno Terra Minas.xlsx";
 const SHIFT_BASE_DATE = "2026-03-19";
 const SHIFT_CYCLE: ShiftRuleResolved[] = [
   { turno1: "C", turno2: "D", folga: "A e B" },
@@ -193,11 +194,6 @@ function enumerateDaysInclusive(startIso: string, endIso: string) {
 }
 function firstDayOfMonth(ym: string) {
   return `${ym}-01`;
-}
-function lastDayOfMonth(ym: string) {
-  const [y, m] = ym.split("-").map(Number);
-  const d = new Date(y, m, 0);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function periodStartHour(period: string) {
   const s = String(period || "").replace(/–|—/g, "-").trim();
@@ -406,7 +402,7 @@ export default function GestaoVistaPlanta() {
       const h = plantId === "all" ? [] : await apiGet<HorimetroRow[]>(`/api/plants/${plantId}/horimetros/last-by-eq`, token).catch(() => []);
 
       const start = firstDayOfMonth(month);
-      const end = lastDayOfMonth(month);
+      const end = day;
       const calendarDays = enumerateDaysInclusive(start, addDaysISO(end, 1));
       const operationalDays = enumerateDaysInclusive(start, end);
 
@@ -466,7 +462,7 @@ export default function GestaoVistaPlanta() {
 
   const letterData = useMemo<LetterKpi[]>(() => {
     const start = firstDayOfMonth(month);
-    const end = lastDayOfMonth(month);
+    const end = day;
     const base: Record<ShiftLetter, { realized: number; target: number; workedDays: number }> = {
       A: { realized: 0, target: 0, workedDays: 0 },
       B: { realized: 0, target: 0, workedDays: 0 },
@@ -509,7 +505,7 @@ export default function GestaoVistaPlanta() {
         trend: percent - 100,
       };
     });
-  }, [month, monthGoals, monthPayloads]);
+  }, [month, day, monthGoals, monthPayloads]);
 
   const supervisorRanking = useMemo<SupervisorRank[]>(() => {
     return letterData
@@ -526,10 +522,7 @@ export default function GestaoVistaPlanta() {
     if (!filled.length) return 0;
     return filled.reduce((a, b) => a + b.ton, 0) / filled.length;
   }, [hourlyBars]);
-  const projection = useMemo(() => {
-    const passed = Math.max(1, hourlyBars.filter((x) => x.ton > 0).length);
-    return mediaTonH * 24;
-  }, [hourlyBars, mediaTonH]);
+  const projection = useMemo(() => mediaTonH * 24, [mediaTonH]);
   const score = useMemo(() => Math.max(0, Math.min(100, pctMeta * 0.7 + 30 - Math.min(30, stops.reduce((a, b) => a + Number(b.minutos || 0), 0) / 20))), [pctMeta, stops]);
 
   const equipmentRows = useMemo(() => {
@@ -613,7 +606,7 @@ export default function GestaoVistaPlanta() {
           <div style={{ ...panelStyle(), padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950, textTransform: "uppercase" }}>Produção por hora — gráfico de barras</h2>
-              <span style={{ color: COLORS.sub, fontWeight: 850 }}>{brDate(day)}</span>
+              <span style={{ color: COLORS.sub, fontWeight: 850 }}>{brDate(firstDayOfMonth(month))} até {brDate(day)} • Regra: {SHIFT_RULE_SOURCE}</span>
             </div>
             <div style={{ height: 330 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -633,7 +626,7 @@ export default function GestaoVistaPlanta() {
           <div style={{ ...panelStyle(), padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950, textTransform: "uppercase" }}>Produção por letra</h2>
-              <span style={{ color: COLORS.sub, fontSize: 12, fontWeight: 900 }}>Meta por letra = dias trabalhados × meta diária / 2</span>
+              <span style={{ color: COLORS.sub, fontSize: 12, fontWeight: 900 }}>Meta por letra = soma das metas dos dias trabalhados ÷ 2</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
               {letterData.map((item) => <LetterCard key={item.letter} item={item} />)}
