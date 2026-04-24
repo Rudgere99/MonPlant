@@ -386,10 +386,21 @@ function LetterCard({ item }: { item: LetterKpi }) {
 }
 
 
-function Ticker({ items }: { items: string[] }) {
-  const text = items.length
-    ? items.join("        |        ")
-    : "Aguardando dados reais para consolidar os destaques da planta";
+function Ticker({ items }: { items: React.ReactNode[] }) {
+  const renderItems = () => {
+    const content = items.length
+      ? items
+      : ["Aguardando dados reais para consolidar os destaques da planta"];
+
+    return content.map((item, index) => (
+      <React.Fragment key={index}>
+        <span>{item}</span>
+        {index < content.length - 1 ? (
+          <span style={{ color: COLORS.orange, margin: "0 44px" }}>|</span>
+        ) : null}
+      </React.Fragment>
+    ));
+  };
 
   return (
     <div
@@ -414,8 +425,8 @@ function Ticker({ items }: { items: string[] }) {
           letterSpacing: 0.2,
         }}
       >
-        <span>{text}</span>
-        <span>{text}</span>
+        <div style={{ display: "flex", alignItems: "center" }}>{renderItems()}</div>
+        <div style={{ display: "flex", alignItems: "center" }}>{renderItems()}</div>
       </div>
     </div>
   );
