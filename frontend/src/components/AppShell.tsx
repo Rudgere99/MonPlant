@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   Bell,
+  Eye,
   ChevronRight,
   History,
   ChevronsLeft,
@@ -42,7 +43,6 @@ const nav: NavItem[] = [
 
   // ✅ Avisos (somente supervisor / dev)
   { to: "/avisos", label: "Avisos", icon: Bell, group: "Visão geral" },
-  { to: "/dashboard/gestao-vista-planta", label: "Gestão à Vista", icon: LayoutDashboard, group: "Visão geral" },
 
   // ===== DEV =====
   { to: "/dashboard/producao-dia", label: "Contingência", icon: Code2, group: "Desenvolvimento", devOnly: true },
@@ -867,6 +867,26 @@ function AppShell() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto", maxWidth: "40%" }}>
+                <button
+                  onClick={() => navigate("/dashboard/gestao-vista-planta")}
+                  title="Gestão à Vista"
+                  aria-label="Gestão à Vista"
+                  style={{
+                    height: 36,
+                    width: 36,
+                    borderRadius: 12,
+                    border: "1px solid rgba(132,204,22,0.35)",
+                    background: "rgba(132,204,22,0.12)",
+                    color: "#bef264",
+                    display: "grid",
+                    placeItems: "center",
+                    cursor: "pointer",
+                    flex: "0 0 auto",
+                  }}
+                >
+                  <Eye size={18} />
+                </button>
+
                 <button
                   onClick={() => navigate("/configuracoes")}
                   title="Configurações"
