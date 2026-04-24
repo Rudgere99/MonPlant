@@ -115,9 +115,11 @@ const COLORS = {
   green: "#7ed321",
   emerald: "#21c563",
   red: "#ff4d4f",
-  yellow: "#f5a623",
-  cyan: "#13c7e8",
+  yellow: "#ff9f1a",
+  cyan: "#18c7f3",
   orange: "#ff9f1a",
+  chartBlue: "#18c7f3",
+  chartOrange: "#ff9f1a",
 };
 
 const SHIFT_RULE_SOURCE = "Regras de Turno Terra Minas.xlsx";
@@ -250,10 +252,10 @@ function operationalKey(calendarDay: string, period: string) {
   return { operationalDay: calendarDay, shift: 2 as const };
 }
 function letterColor(letter: ShiftLetter) {
-  if (letter === "A") return COLORS.emerald;
-  if (letter === "B") return COLORS.yellow;
-  if (letter === "C") return COLORS.cyan;
-  return COLORS.orange;
+  if (letter === "A") return COLORS.chartBlue;
+  if (letter === "B") return COLORS.chartOrange;
+  if (letter === "C") return COLORS.chartBlue;
+  return COLORS.chartOrange;
 }
 function authHeaders(token?: string | null): Record<string, string> {
   const t = (token || "").trim();
@@ -344,7 +346,7 @@ function MetricCard({ title, value, suffix, subtitle, trend, icon }: { title: st
           ) : null}
         </div>
       </div>
-      <div style={{ height: 32, marginTop: 8, color: COLORS.green }}>
+      <div style={{ height: 32, marginTop: 8, color: COLORS.chartBlue }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={mini}>
             <Area type="monotone" dataKey="value" stroke="currentColor" fill="currentColor" fillOpacity={0.22} />
@@ -687,7 +689,7 @@ export default function GestaoVistaPlanta() {
                   <XAxis dataKey="period" stroke="rgba(255,255,255,.55)" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis stroke="rgba(255,255,255,.55)" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <Tooltip contentStyle={tooltipStyle} formatter={(value: any, name: any) => [name === "freq" ? `${fmtBR1(Number(value))}%` : `${fmtBR0(Number(value))} t`, name === "freq" ? "Frequência" : "Produção"]} />
-                  <Bar dataKey="ton" name="Produção" radius={[9, 9, 0, 0]} fill={COLORS.green}>
+                  <Bar dataKey="ton" name="Produção" radius={[9, 9, 0, 0]} fill={COLORS.chartBlue}>
                     <LabelList dataKey="ton" position="top" formatter={(v: any) => (Number(v) > 0 ? fmtBR0(Number(v)) : "")} fill="rgba(255,255,255,.9)" fontSize={11} fontWeight={900} />
                   </Bar>
                 </BarChart>
@@ -713,9 +715,9 @@ export default function GestaoVistaPlanta() {
               {equipmentRows.map((eq) => (
                 <div key={eq.name} style={{ display: "grid", gridTemplateColumns: "95px 1fr 70px 82px", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 12, border: "1px solid rgba(255,255,255,.07)", background: "rgba(255,255,255,.03)" }}>
                   <strong>{eq.name}</strong>
-                  <div style={{ height: 9, borderRadius: 99, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><div style={{ width: `${eq.availability}%`, height: "100%", background: eq.status === "Operando" ? COLORS.green : COLORS.yellow }} /></div>
+                  <div style={{ height: 9, borderRadius: 99, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><div style={{ width: `${eq.availability}%`, height: "100%", background: eq.status === "Operando" ? COLORS.chartBlue : COLORS.chartOrange }} /></div>
                   <span style={{ fontWeight: 950 }}>{fmtBR1(eq.availability)}%</span>
-                  <span style={{ color: eq.status === "Operando" ? COLORS.green : COLORS.yellow, fontWeight: 900 }}>{eq.status}</span>
+                  <span style={{ color: eq.status === "Operando" ? COLORS.chartBlue : COLORS.chartOrange, fontWeight: 900 }}>{eq.status}</span>
                 </div>
               ))}
             </div>
