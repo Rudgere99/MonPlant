@@ -24,6 +24,7 @@ import {
   User as UserIcon,
   Fuel,
   Settings,
+  Eye,
 } from "lucide-react";
 
 type NavItem = {
@@ -331,6 +332,10 @@ function AppShell() {
     });
   }, [isDev, role]);
   const navItemsFiltered = navItems;
+  const gestaoVistaPath = "/dashboard/gestao-vista-planta";
+  const sidebarNavItems = navItemsFiltered.filter((item) => item.to !== gestaoVistaPath);
+  const canAccessGestaoVista = navItemsFiltered.some((item) => item.to === gestaoVistaPath);
+  const isGestaoVistaActive = location.pathname.startsWith(gestaoVistaPath);
 
   const handleLogout = () => {
     logout?.();
@@ -418,39 +423,41 @@ function AppShell() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
+                justifyContent: sideCollapsed ? "center" : "space-between",
                 gap: 10,
                 flex: "0 0 auto",
-                minHeight: 84,
+                minHeight: sideCollapsed ? 56 : 84,
               }}
             >
-              <div
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: sideCollapsed ? "center" : "flex-start",
-                minWidth: 0,
-                paddingLeft: sideCollapsed ? 0 : 10,
-              }}
-            >
-              <img
-                src="/assets/logo-trindade.png"
-                alt="Trindade"
-                style={{
-                  height: sideCollapsed ? 42 : 80,
-                  width: sideCollapsed ? 42 : 170,
-                  objectFit: "contain",
-                  objectPosition: "left center",
-                  display: "block",
-                  margin: sideCollapsed ? "0 auto" : "0",
-                  filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.6))",
-                }}
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = "none";
-                }}
-              />
-            </div>
+              {!sideCollapsed ? (
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                    minWidth: 0,
+                    paddingLeft: 10,
+                  }}
+                >
+                  <img
+                    src="/assets/logo-trindade.png"
+                    alt="Trindade"
+                    style={{
+                      height: 80,
+                      width: 170,
+                      objectFit: "contain",
+                      objectPosition: "left center",
+                      display: "block",
+                      margin: "0",
+                      filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.6))",
+                    }}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </div>
+              ) : null}
 
               <button
                 onClick={() => setSideCollapsed((v) => !v)}
@@ -491,7 +498,7 @@ function AppShell() {
             {/* Área rolável do menu */}
             <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
               <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {navItemsFiltered.map((i) => {
+                {sidebarNavItems.map((i) => {
                   const Icon = i.icon;
 
                   if (sideCollapsed) {
@@ -715,7 +722,7 @@ function AppShell() {
 
                 <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
                   <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {navItemsFiltered.map((i) => {
+                  {sidebarNavItems.map((i) => {
                     const Icon = i.icon;
                     return (
                       <NavLink
@@ -846,6 +853,7 @@ function AppShell() {
               <div
                 style={{
                   minWidth: 0,
+                  flex: 1,
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
@@ -866,7 +874,36 @@ function AppShell() {
                 <span>{pageTitle}</span>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto", maxWidth: "40%" }}>
+              <div style={{ flex: "0 0 auto", display: "flex", justifyContent: "center" }}>
+                {canAccessGestaoVista ? (
+                  <button
+                    onClick={() => navigate(gestaoVistaPath)}
+                    title="Gestão à Vista"
+                    aria-label="Gestão à Vista"
+                    style={{
+                      height: 40,
+                      minWidth: 40,
+                      padding: "0 12px",
+                      borderRadius: 999,
+                      border: "1px solid " + (isGestaoVistaActive ? "rgba(255,159,26,.24)" : "rgba(255,255,255,0.10)"),
+                      background: isGestaoVistaActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,0.05)",
+                      color: isGestaoVistaActive ? "rgb(255, 176, 58)" : "white",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      cursor: "pointer",
+                      fontWeight: 900,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <Eye size={18} />
+                    <span style={{ fontSize: 12 }}>Gestão à Vista</span>
+                  </button>
+                ) : null}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, flex: 1, minWidth: 0 }}>
                 <button
                   onClick={() => navigate("/configuracoes")}
                   title="Configurações"
@@ -900,7 +937,7 @@ function AppShell() {
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
-                    flex: 1,
+                    flex: "0 1 260px",
                   }}
                   title={userLabel}
                 >
