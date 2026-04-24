@@ -42,6 +42,7 @@ type PlantInfo = {
 type PlantHourRow = { period: string; ton?: any; freq?: any };
 type PlantDayPayload = { day: string; obs?: string | null; rows: PlantHourRow[]; updated_at?: string | null };
 type GoalDay = { day: string; meta_ton: number | null; discount_hours: number | null; updated_at?: string | null };
+type GoalMonthPayload = { month: string; days: GoalDay[] };
 
 type StopLaunchRow = {
   period: string;
@@ -212,6 +213,14 @@ function enumerateDaysInclusive(startIso: string, endIso: string) {
 }
 function firstDayOfMonth(ym: string) {
   return `${ym}-01`;
+}
+function lastDayOfMonth(ym: string) {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y || 2026, m || 1, 0);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function daysOfMonth(ym: string) {
+  return enumerateDaysInclusive(firstDayOfMonth(ym), lastDayOfMonth(ym));
 }
 function shiftMonth(ym: string, delta: number) {
   const [y, m] = ym.split("-").map(Number);
@@ -437,22 +446,38 @@ export default function GestaoVistaPlanta() {
       const start = firstDayOfMonth(month);
       const end = day;
       const calendarDays = enumerateDaysInclusive(start, addDaysISO(end, 1));
-      const operationalDays = enumerateDaysInclusive(start, end);
+      const monthDays = daysOfMonth(month);
 
-      const [payloads, goals] = await Promise.all([
+      const [payloads, goalsMonthPayload] = await Promise.all([
         Promise.all(
           calendarDays.map(async (d) => {
             const path = plantId === "all" ? `/api/aggregate/plant-production/${encodeURIComponent(d)}` : `/api/plants/${plantId}/plant-production/${encodeURIComponent(d)}`;
             return apiGet<PlantDayPayload>(path, token).catch(() => ({ day: d, rows: [], obs: "" }));
           })
         ),
-        Promise.all(
-          operationalDays.map(async (d) => {
-            const goal = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(d)}`, token).catch(() => null as any);
-            return [d, goal] as const;
-          })
-        ),
+        apiGet<GoalMonthPayload>(`/api/goals/month/${encodeURIComponent(month)}`, token).catch(() => ({ month, days: [] })),
       ]);
+
+      const goalMapFromMonth = new Map<string, GoalDay>();
+      for (const gDay of goalsMonthPayload?.days || []) {
+        if (gDay?.day) {
+          goalMapFromMonth.set(String(gDay.day), {
+            day: String(gDay.day),
+            meta_ton: Number(gDay.meta_ton) || 0,
+            discount_hours: Number(gDay.discount_hours) || 0,
+            updated_at: gDay.updated_at || null,
+          });
+        }
+      }
+
+      const goals = await Promise.all(
+        monthDays.map(async (d) => {
+          const fromMonth = goalMapFromMonth.get(d);
+          if (fromMonth) return [d, fromMonth] as const;
+          const goal = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(d)}`, token).catch(() => null as any);
+          return [d, goal] as const;
+        })
+      );
 
       setProdDay(p);
       setGoalDay(g);
@@ -520,7 +545,7 @@ export default function GestaoVistaPlanta() {
 
   const letterData = useMemo<LetterKpi[]>(() => {
     const start = firstDayOfMonth(month);
-    const end = day;
+    const end = lastDayOfMonth(month);
     const base: Record<ShiftLetter, { realized: number; target: number; workedDays: number }> = {
       A: { realized: 0, target: 0, workedDays: 0 },
       B: { realized: 0, target: 0, workedDays: 0 },
@@ -533,6 +558,8 @@ export default function GestaoVistaPlanta() {
       const goalFromGoalsPage = Number(monthGoals[d]?.meta_ton || 0);
       const goalFromStats = Number((statsMonth?.series?.daily || []).find((x) => x.day === d)?.meta_ton || 0);
       const goal = goalFromGoalsPage || goalFromStats;
+      // Meta mensal completa: a soma das metas das letras precisa fechar com a meta total do mês.
+      // Cada meta diária é dividida entre as duas letras escaladas no dia operacional.
       base[rule.turno1].target += goal / 2;
       base[rule.turno2].target += goal / 2;
       base[rule.turno1].workedDays += 1;
