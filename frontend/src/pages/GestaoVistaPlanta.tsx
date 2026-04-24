@@ -9,7 +9,6 @@ import {
   Clock3,
   Factory,
   Gauge,
-  RefreshCw,
   ShieldCheck,
   TrendingUp,
   UsersRound,
@@ -17,8 +16,6 @@ import {
   Zap,
 } from "lucide-react";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -123,21 +120,6 @@ function MetricCard({ title, value, suffix, subtitle, trend, icon }: { title: st
           <div style={{ marginTop: 8, color: up ? palette.green : "#ef4444", fontWeight: 900 }}>{up ? "▲" : "▼"} {Math.abs(trend).toFixed(1).replace(".", ",")}%</div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function GaugeCard({ title, value, subtitle }: { title: string; value: number; subtitle: string }) {
-  const angle = Math.max(0, Math.min(180, (value / 100) * 180));
-  return (
-    <div style={{ ...panelStyle(), padding: 16, textAlign: "center" }}>
-      <div style={{ fontWeight: 900, textTransform: "uppercase", fontSize: 14 }}>{title}</div>
-      <div style={{ position: "relative", height: 100, width: 190, margin: "16px auto 0", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: "auto 0 0", height: 190, borderRadius: 9999, border: "14px solid #1f2937" }} />
-        <div style={{ position: "absolute", inset: "auto 0 0", height: 190, borderRadius: 9999, border: `14px solid ${palette.green}`, clipPath: "polygon(0 50%,100% 50%,100% 100%,0 100%)", transform: `rotate(${angle - 180}deg)` }} />
-      </div>
-      <div style={{ fontSize: 42, fontWeight: 900, color: palette.green }}>{value.toFixed(1).replace(".", ",")}%</div>
-      <div>{subtitle}</div>
     </div>
   );
 }
@@ -289,15 +271,6 @@ export default function GestaoVistaPlanta() {
             <h2 style={{ margin: "0 0 10px", textTransform: "uppercase", fontSize: 24, display: "flex", alignItems: "center", gap: 8 }}><AlertTriangle size={18} /> Alertas operacionais</h2>
             <div style={{ display: "grid", gap: 8 }}>{alertsView.map((a) => { const color = a.level === "critical" ? "#ef4444" : a.level === "warning" ? "#fbbf24" : "#38bdf8"; return <div key={`${a.title}-${a.time}`} style={{ border: `1px solid ${color}`, borderRadius: 10, background: `${color}1A`, padding: 10 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><b style={{ color }}>{a.title}</b><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Clock3 size={14} />{a.time}</span></div><div style={{ marginTop: 4 }}>{a.subtitle}</div></div>; })}</div>
           </div>
-        </section>
-
-        <section style={{ display: "grid", gridTemplateColumns: "repeat(6,minmax(0,1fr))", gap: 12 }}>
-          <GaugeCard title="Eficiência operacional" value={Math.max(0, Math.min(100, aderencia))} subtitle="Aderência" />
-          <GaugeCard title="Média Ton/H (dia)" value={Math.max(0, Math.min(100, (avgTonH / 10) * 100))} subtitle={`${ton(avgTonH)} Ton/h`} />
-          <GaugeCard title="Disponibilidade geral" value={91.2} subtitle="Meta: 90%" />
-          <GaugeCard title="Utilização geral" value={86.3} subtitle="Meta: 85%" />
-          <GaugeCard title="Rendimento geral" value={95.4} subtitle="Meta: 95%" />
-          <div style={{ ...panelStyle(), padding: 16, textAlign: "center" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", color: palette.muted }}>Última atualização</span><RefreshCw size={16} color={palette.green} /></div><div style={{ marginTop: 14, fontSize: 48, fontWeight: 900 }}>{new Date().toLocaleTimeString("pt-BR")}</div><div style={{ color: palette.text }}>{day.split("-").reverse().join("/")}</div><div style={{ height: 1, background: "rgba(255,255,255,.13)", margin: "12px 0" }} /><div style={{ fontSize: 34, fontWeight: 900, color: palette.green }}>{ton(totalRealized)} Ton</div><div style={{ fontSize: 13, color: palette.muted }}>Meta consolidada: {ton(totalTarget)} Ton</div></div>
         </section>
 
         <section style={{ ...panelStyle(), padding: 16 }}>
