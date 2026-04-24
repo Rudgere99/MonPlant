@@ -10,7 +10,6 @@ import {
   Factory,
   Gauge,
   RefreshCw,
-  ShieldCheck,
   TrendingUp,
   UsersRound,
   Zap,
@@ -129,10 +128,10 @@ const SHIFT_CYCLE: ShiftRuleResolved[] = [
 ];
 
 const SUPERVISOR_MAP: Record<ShiftLetter, string> = {
-  A: "Supervisor Letra A",
-  B: "Supervisor Letra B",
-  C: "Supervisor Letra C",
-  D: "Supervisor Letra D",
+  A: "Wellington",
+  B: "Wagner",
+  C: "Marcio",
+  D: "Jocelio",
 };
 
 const PLANT_EQUIPMENT_FALLBACK = ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08", "EH-04", "Peneiras"];
@@ -315,8 +314,9 @@ function Select({ value, onChange, children }: { value: string; onChange: (v: st
   );
 }
 
-function MetricCard({ title, value, suffix, subtitle, trend, icon }: { title: string; value: string; suffix?: string; subtitle: string; trend: number; icon: React.ReactNode }) {
-  const isUp = trend >= 0;
+function MetricCard({ title, value, suffix, subtitle, trend, icon }: { title: string; value: string; suffix?: string; subtitle: string; trend?: number; icon: React.ReactNode }) {
+  const hasTrend = typeof trend === "number" && Number.isFinite(trend);
+  const isUp = (trend || 0) >= 0;
   const mini = [72, 80, 76, 88, 91, 86, 98, 104].map((value, i) => ({ i, value }));
   return (
     <div style={{ ...panelStyle(), padding: 16 }}>
@@ -331,9 +331,11 @@ function MetricCard({ title, value, suffix, subtitle, trend, icon }: { title: st
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
           <div style={{ padding: 10, borderRadius: 12, background: "rgba(132,204,22,0.15)", color: COLORS.green }}>{icon}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, color: isUp ? COLORS.green : COLORS.red, fontWeight: 950, fontSize: 16 }}>
-            {isUp ? <ArrowUpRight size={17} /> : <ArrowDownRight size={17} />} {isUp ? "+" : "-"}{fmtBR1(Math.abs(trend))}%
-          </div>
+          {hasTrend ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, color: isUp ? COLORS.green : COLORS.red, fontWeight: 950, fontSize: 16 }}>
+              {isUp ? <ArrowUpRight size={17} /> : <ArrowDownRight size={17} />} {isUp ? "+" : "-"}{fmtBR1(Math.abs(trend || 0))}%
+            </div>
+          ) : null}
         </div>
       </div>
       <div style={{ height: 32, marginTop: 8, color: COLORS.green }}>
@@ -371,21 +373,6 @@ function LetterCard({ item }: { item: LetterKpi }) {
           {item.trend >= 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />} {fmtBR1(Math.abs(item.trend))}%
         </div>
       </div>
-    </div>
-  );
-}
-
-function GaugeCard({ title, value, subtitle }: { title: string; value: number; subtitle: string }) {
-  const angle = Math.max(0, Math.min(180, (value / 100) * 180));
-  return (
-    <div style={{ ...panelStyle(), padding: 16, textAlign: "center" }}>
-      <div style={{ fontWeight: 950, textTransform: "uppercase", fontSize: 14 }}>{title}</div>
-      <div style={{ position: "relative", height: 96, width: 180, margin: "14px auto 0", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: "auto 0 0", height: 180, borderRadius: 9999, border: "14px solid #1f2937" }} />
-        <div style={{ position: "absolute", inset: "auto 0 0", height: 180, borderRadius: 9999, border: `14px solid ${COLORS.green}`, clipPath: "polygon(0 50%,100% 50%,100% 100%,0 100%)", transform: `rotate(${angle - 180}deg)` }} />
-      </div>
-      <div style={{ fontSize: 40, fontWeight: 950, color: COLORS.green }}>{fmtBR1(value)}%</div>
-      <div style={{ marginTop: 4, fontSize: 13, color: COLORS.text }}>{subtitle}</div>
     </div>
   );
 }
@@ -605,8 +592,6 @@ export default function GestaoVistaPlanta() {
     return filled.reduce((a, b) => a + b.ton, 0) / filled.length;
   }, [hourlyBars]);
   const projection = useMemo(() => mediaTonH * 24, [mediaTonH]);
-  const score = useMemo(() => Math.max(0, Math.min(100, pctMeta * 0.7 + 30 - Math.min(30, stops.reduce((a, b) => a + Number(b.minutos || 0), 0) / 20))), [pctMeta, stops]);
-
   const equipmentRows = useMemo(() => {
     const stopMin: Record<string, number> = {};
     for (const s of stops || []) {
@@ -675,13 +660,12 @@ export default function GestaoVistaPlanta() {
 
         {err ? <div style={{ marginTop: 12, ...panelStyle({ borderColor: "rgba(239,68,68,.5)" }), padding: 12, color: "#fecaca" }}>{err}</div> : null}
 
-        <section style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 12 }}>
-          <MetricCard title="Produção do dia" value={fmtBR0(totalProducedDay)} suffix="t" subtitle={`Meta: ${fmtBR0(metaDia)} t`} trend={pctMeta - 100} icon={<TrendingUp size={23} />} />
-          <MetricCard title="Desvio" value={`${desvioTon >= 0 ? "+" : ""}${fmtBR0(desvioTon)}`} suffix="t" subtitle={desvioTon >= 0 ? "Acima da meta" : "Abaixo da meta"} trend={metaDia > 0 ? (desvioTon / metaDia) * 100 : 0} icon={<Zap size={23} />} />
+        <section style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+          <MetricCard title="Meta do dia" value={fmtBR0(metaDia)} suffix="t" subtitle={`Produzido: ${fmtBR0(totalProducedDay)} t`} icon={<TrendingUp size={23} />} />
           <MetricCard title="Aderência à meta" value={`${fmtBR1(pctMeta)}%`} subtitle="Produção real vs meta do dia" trend={pctMeta - 100} icon={<Activity size={23} />} />
-          <MetricCard title="Toneladas por hora" value={fmtBR1(mediaTonH)} suffix="t/h" subtitle="Média das horas lançadas" trend={metaDia > 0 ? (mediaTonH / (metaDia / 24) - 1) * 100 : 0} icon={<Gauge size={23} />} />
+          <MetricCard title="Desvio" value={`${desvioTon >= 0 ? "+" : ""}${fmtBR0(desvioTon)}`} suffix="t" subtitle={desvioTon >= 0 ? "Acima da meta" : "Abaixo da meta"} trend={metaDia > 0 ? (desvioTon / metaDia) * 100 : 0} icon={<Zap size={23} />} />
           <MetricCard title="Projeção do dia" value={fmtBR0(projection)} suffix="t" subtitle="Com base no ritmo atual" trend={metaDia > 0 ? (projection / metaDia - 1) * 100 : 0} icon={<ArrowUpRight size={23} />} />
-          <MetricCard title="Score operacional" value={fmtBR0(score)} suffix="/100" subtitle="Produção + paradas" trend={score - 80} icon={<ShieldCheck size={23} />} />
+          <MetricCard title="Toneladas por hora" value={fmtBR1(mediaTonH)} suffix="t/h" subtitle="Média das horas lançadas" trend={metaDia > 0 ? (mediaTonH / (metaDia / 24) - 1) * 100 : 0} icon={<Gauge size={23} />} />
         </section>
 
         <section style={{ marginTop: 14, display: "grid", gridTemplateColumns: "minmax(0, 1.08fr) minmax(0, .92fr)", gap: 14 }} className="mp-gestao-main-grid">
@@ -764,19 +748,7 @@ export default function GestaoVistaPlanta() {
           </div>
         </section>
 
-        <section style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-          <GaugeCard title="Eficiência operacional" value={Math.max(0, Math.min(100, score))} subtitle="Score do dia" />
-          <GaugeCard title="Disponibilidade geral" value={equipmentRows.length ? equipmentRows.reduce((a, b) => a + b.availability, 0) / equipmentRows.length : 0} subtitle="Base: paradas lançadas" />
-          <GaugeCard title="Aderência mensal" value={letterData.reduce((a, b) => a + b.target, 0) > 0 ? (letterData.reduce((a, b) => a + b.realized, 0) / letterData.reduce((a, b) => a + b.target, 0)) * 100 : 0} subtitle="Produção por letra" />
-          <div style={{ ...panelStyle(), padding: 16, textAlign: "center" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><strong style={{ textTransform: "uppercase" }}>Última atualização</strong><RefreshCw size={18} color={COLORS.green} /></div>
-            <div style={{ marginTop: 22, fontSize: 38, fontWeight: 950 }}>{new Date().toLocaleTimeString("pt-BR")}</div>
-            <div style={{ color: COLORS.sub, marginTop: 4 }}>{brDate(day)}</div>
-            <div style={{ height: 1, background: "rgba(255,255,255,.10)", margin: "18px 0" }} />
-            <div style={{ fontSize: 26, fontWeight: 950, color: COLORS.green }}>{loading ? "Atualizando..." : "Dados reais"}</div>
-            <div style={{ color: COLORS.sub, fontSize: 13, marginTop: 4 }}>produção, metas, paradas e equipamentos via API</div>
-          </div>
-        </section>
+
       </div>
       <style>{`
         @media (max-width: 1200px) {
