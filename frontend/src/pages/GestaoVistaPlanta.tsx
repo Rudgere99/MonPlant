@@ -385,6 +385,42 @@ function LetterCard({ item }: { item: LetterKpi }) {
   );
 }
 
+
+function Ticker({ items }: { items: string[] }) {
+  const text = items.length
+    ? items.join("   •   ")
+    : "Aguardando dados reais para consolidar os destaques da planta";
+
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        borderTop: `1px solid ${COLORS.border}`,
+        paddingTop: 10,
+        overflow: "hidden",
+        width: "100%",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          width: "max-content",
+          animation: "mpTicker 32s linear infinite",
+          gap: 34,
+          whiteSpace: "nowrap",
+          color: COLORS.orange,
+          fontWeight: 950,
+          fontSize: 15,
+          letterSpacing: 0.2,
+        }}
+      >
+        <span>{text}</span>
+        <span>{text}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function GestaoVistaPlanta() {
   const { token, loading: authLoading } = useAuthLocal();
   const [day, setDay] = useState(isoTodayLocal());
@@ -590,6 +626,30 @@ export default function GestaoVistaPlanta() {
       .sort((a, b) => b.performance - a.performance);
   }, [letterData]);
 
+  const tickerItems = useMemo(() => {
+    const daily = (statsMonth?.series?.daily || []).filter((row) => Number(row?.produced_ton || 0) > 0);
+    const bestDay = daily.length
+      ? [...daily].sort((a, b) => Number(b.produced_ton || 0) - Number(a.produced_ton || 0))[0]
+      : null;
+
+    const bestHour = hourlyBars.reduce(
+      (acc, cur) => (Number(cur.ton || 0) > Number(acc.ton || 0) ? cur : acc),
+      { period: "--", ton: 0, freq: 0 }
+    );
+
+    const bestSupervisor = supervisorRanking?.[0] || null;
+    const bestDayRule = bestDay?.day ? getShiftRuleForDate(bestDay.day) : getShiftRuleForDate(day);
+    const bestDaySupervisor = SUPERVISOR_MAP[bestDayRule.turno1];
+
+    return [
+      `📅 Maior produção: ${fmtBR0(Number(bestDay?.produced_ton || 0))} t em ${brDate(bestDay?.day || day)}`,
+      `👷 Supervisor vigente: ${bestDaySupervisor}`,
+      `🏆 Melhor supervisor: ${bestSupervisor ? `${bestSupervisor.name} • Letra ${bestSupervisor.letter} (${fmtBR1(bestSupervisor.performance)}%)` : "--"}`,
+      `⏱️ Melhor hora: ${bestHour.period} com ${fmtBR0(Number(bestHour.ton || 0))} t`,
+    ];
+  }, [statsMonth, hourlyBars, supervisorRanking, day]);
+
+
   const totalProducedDay = useMemo(() => hourlyBars.reduce((a, b) => a + b.ton, 0), [hourlyBars]);
   const metaDia = Number(goalDay?.meta_ton || 0);
   const pctMeta = metaDia > 0 ? (totalProducedDay / metaDia) * 100 : 0;
@@ -705,6 +765,7 @@ export default function GestaoVistaPlanta() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
               {letterData.map((item) => <LetterCard key={item.letter} item={item} />)}
             </div>
+            <Ticker items={tickerItems} />
           </div>
         </section>
 
@@ -759,6 +820,11 @@ export default function GestaoVistaPlanta() {
 
       </div>
       <style>{`
+        @keyframes mpTicker {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+
         @media (max-width: 1200px) {
           .mp-gestao-main-grid, .mp-gestao-bottom-grid { grid-template-columns: 1fr !important; }
         }
