@@ -84,21 +84,6 @@ def ensure_user_flags_columns():
             )
             conn.commit()
     except Exception:
-        pass
-
-    try:
-        with get_conn() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                create table if not exists public.bv_user_flags (
-                  user_id uuid primary key,
-                  retro_token_enabled boolean not null default false,
-                  updated_at timestamptz not null default now()
-                );
-                """
-            )
-            conn.commit()
-    except Exception:
         # não pode derrubar a API em caso de tabela/permissão ausente
         return
 
@@ -221,50 +206,10 @@ def has_retro_token_column() -> bool:
     return _check()
 
 
-def has_user_flags_table() -> bool:
-    def _check() -> bool:
-        try:
-            with get_conn() as conn, conn.cursor() as cur:
-                cur.execute(
-                    """
-                    select 1
-                    from information_schema.tables
-                    where table_schema='public'
-                      and table_name='bv_user_flags'
-                    limit 1
-                    """
-                )
-                return cur.fetchone() is not None
-        except Exception:
-            return False
-
-    ok = _check()
-    if ok:
-        return True
-
-    # tenta garantir estrutura em runtime (caso startup não tenha rodado ainda)
-    ensure_user_flags_columns()
-    return _check()
-
-
-def get_retro_flag_from_table(user_id: Optional[str]) -> bool:
-    if not user_id or not has_user_flags_table():
-        return False
-    try:
-        with get_conn() as conn, conn.cursor() as cur:
-            cur.execute("select retro_token_enabled from public.bv_user_flags where user_id=%s", (user_id,))
-            row = cur.fetchone()
-            return bool(row and row.get("retro_token_enabled"))
-    except Exception:
-        return False
-
-
 def resolve_retro_enabled(email: Optional[str], retro_token_enabled: Optional[bool], user_id: Optional[str] = None) -> bool:
     if is_master_retro_user(email):
         return True
-    if bool(retro_token_enabled):
-        return True
-    return get_retro_flag_from_table(user_id)
+    return bool(retro_token_enabled)
 
 
 def user_has_retro_token(user_id: Optional[str]) -> bool:
@@ -765,25 +710,6 @@ def _dev_list_users():
         )
         rows = cur.fetchall() or []
 
-    fallback_flags: Dict[str, bool] = {}
-    if has_user_flags_table():
-        ids = [str(r["id"]) for r in rows if r.get("id")]
-        if ids:
-            try:
-                with get_conn() as conn, conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        select user_id, retro_token_enabled
-                        from public.bv_user_flags
-                        where user_id::text = any(%s)
-                        """,
-                        (ids,),
-                    )
-                    for it in cur.fetchall() or []:
-                        fallback_flags[str(it["user_id"])] = bool(it.get("retro_token_enabled"))
-            except Exception:
-                fallback_flags = {}
-
     return [
         {
             "id": str(r["id"]),
@@ -792,11 +718,7 @@ def _dev_list_users():
             "user_type": normalize_user_type(r["user_type"]),
             "email": r["email"],
             "is_active": bool(r["is_active"]),
-            "retro_token_enabled": (
-                True
-                if is_master_retro_user(r.get("email"))
-                else bool(r.get("retro_token_enabled")) or bool(fallback_flags.get(str(r["id"]), False))
-            ),
+            "retro_token_enabled": resolve_retro_enabled(r.get("email"), r.get("retro_token_enabled"), str(r["id"])),
             "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
         }
         for r in rows
@@ -859,16 +781,6 @@ def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[
             )
         new_id = cur.fetchone()["id"]
 
-        if has_user_flags_table() and is_master_retro_user(email):
-            cur.execute(
-                """
-                insert into public.bv_user_flags(user_id, retro_token_enabled, updated_at)
-                values (%s, true, now())
-                on conflict (user_id)
-                do update set retro_token_enabled=excluded.retro_token_enabled, updated_at=now()
-                """,
-                (new_id,),
-            )
         conn.commit()
 
     log_action(
@@ -913,7 +825,6 @@ def dev_update_user(
 
     fields = []
     values = []
-    changed_outside_user_table = False
 
     if body.full_name is not None:
         fields.append("full_name=%s")
@@ -948,21 +859,6 @@ def dev_update_user(
             values.append(retro_value)
             wrote_retro_flag = True
 
-        if has_user_flags_table():
-            with get_conn() as conn, conn.cursor() as cur:
-                cur.execute(
-                    """
-                    insert into public.bv_user_flags(user_id, retro_token_enabled, updated_at)
-                    values (%s,%s,now())
-                    on conflict (user_id)
-                    do update set retro_token_enabled=excluded.retro_token_enabled, updated_at=now()
-                    """,
-                    (user_id, retro_value),
-                )
-                conn.commit()
-            changed_outside_user_table = True
-            wrote_retro_flag = True
-
         if not wrote_retro_flag:
             raise HTTPException(status_code=500, detail="Storage de token retroativo indisponível")
 
@@ -970,7 +866,7 @@ def dev_update_user(
         fields.append("password_hash=%s")
         values.append(pwd.hash(body.reset_password))
 
-    if not fields and not changed_outside_user_table:
+    if not fields:
         return {"ok": True, "changed": False}
 
     if fields:
