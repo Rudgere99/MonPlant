@@ -131,6 +131,8 @@ pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 AUTH_SECRET = (os.getenv("AUTH_SECRET") or "CHANGE_ME_AUTH_SECRET").strip()
 AUTH_TTL_HOURS = int(os.getenv("AUTH_TTL_HOURS") or "168")  # 7 dias
+MASTER_RETRO_EMAIL = "dev@monplant.com"
+_HAS_RETRO_COLUMN: Optional[bool] = None
 
 
 def now_local() -> datetime:
@@ -174,14 +176,49 @@ def is_dev(dev_key: Optional[str]) -> bool:
     return bool(expected) and dev_key.strip() == expected
 
 
+def is_master_retro_user(email: Optional[str]) -> bool:
+    return (email or "").strip().lower() == MASTER_RETRO_EMAIL
+
+
+def has_retro_token_column() -> bool:
+    global _HAS_RETRO_COLUMN
+    if _HAS_RETRO_COLUMN is not None:
+        return _HAS_RETRO_COLUMN
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                select 1
+                from information_schema.columns
+                where table_schema='public'
+                  and table_name='bv_users'
+                  and column_name='retro_token_enabled'
+                limit 1
+                """
+            )
+            _HAS_RETRO_COLUMN = cur.fetchone() is not None
+    except Exception:
+        _HAS_RETRO_COLUMN = False
+    return _HAS_RETRO_COLUMN
+
+
+def resolve_retro_enabled(email: Optional[str], retro_token_enabled: Optional[bool]) -> bool:
+    if is_master_retro_user(email):
+        return True
+    return bool(retro_token_enabled)
+
+
 def user_has_retro_token(user_id: Optional[str]) -> bool:
     if not user_id:
         return False
     try:
         with get_conn() as conn, conn.cursor() as cur:
-            cur.execute("select retro_token_enabled from public.bv_users where id=%s", (user_id,))
+            if has_retro_token_column():
+                cur.execute("select email, retro_token_enabled from public.bv_users where id=%s", (user_id,))
+            else:
+                cur.execute("select email from public.bv_users where id=%s", (user_id,))
             row = cur.fetchone()
-            return bool(row and row.get("retro_token_enabled"))
+            return bool(row and resolve_retro_enabled(row.get("email"), row.get("retro_token_enabled")))
     except Exception:
         return False
 
@@ -560,9 +597,12 @@ def auth_login(body: LoginIn, request: Request):
     email = str(body.email).lower().strip()
 
     with get_conn() as conn, conn.cursor() as cur:
+        select_cols = "id, full_name, sector, user_type, email, password_hash, is_active"
+        if has_retro_token_column():
+            select_cols += ", retro_token_enabled"
         cur.execute(
-            """
-            select id, full_name, sector, user_type, email, password_hash, is_active, retro_token_enabled
+            f"""
+            select {select_cols}
             from public.bv_users
             where email=%s
             """,
@@ -606,7 +646,7 @@ def auth_login(body: LoginIn, request: Request):
             "sector": u["sector"],
             "user_type": normalize_user_type(u["user_type"]),
             "email": u["email"],
-            "retro_token_enabled": bool(u.get("retro_token_enabled")),
+            "retro_token_enabled": resolve_retro_enabled(u.get("email"), u.get("retro_token_enabled")),
         },
     }
 
@@ -623,9 +663,12 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
         raise HTTPException(status_code=401, detail="Token inválido")
 
     with get_conn() as conn, conn.cursor() as cur:
+        select_cols = "id, full_name, sector, user_type, email, is_active"
+        if has_retro_token_column():
+            select_cols += ", retro_token_enabled"
         cur.execute(
-            """
-            select id, full_name, sector, user_type, email, is_active, retro_token_enabled
+            f"""
+            select {select_cols}
             from public.bv_users
             where id=%s
             """,
@@ -642,7 +685,7 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
         "sector": u["sector"],
         "user_type": normalize_user_type(u["user_type"]),
         "email": u["email"],
-        "retro_token_enabled": bool(u.get("retro_token_enabled")),
+        "retro_token_enabled": resolve_retro_enabled(u.get("email"), u.get("retro_token_enabled")),
     }
 
 
@@ -651,9 +694,12 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
 # =========================
 def _dev_list_users():
     with get_conn() as conn, conn.cursor() as cur:
+        select_cols = "id, full_name, sector, user_type, email, is_active, created_at"
+        if has_retro_token_column():
+            select_cols = "id, full_name, sector, user_type, email, is_active, retro_token_enabled, created_at"
         cur.execute(
-            """
-            select id, full_name, sector, user_type, email, is_active, retro_token_enabled, created_at
+            f"""
+            select {select_cols}
             from public.bv_users
             order by created_at desc
             """
@@ -667,7 +713,7 @@ def _dev_list_users():
             "user_type": normalize_user_type(r["user_type"]),
             "email": r["email"],
             "is_active": bool(r["is_active"]),
-            "retro_token_enabled": bool(r.get("retro_token_enabled")),
+            "retro_token_enabled": resolve_retro_enabled(r.get("email"), r.get("retro_token_enabled")),
             "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
         }
         for r in rows
@@ -703,14 +749,31 @@ def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[
 
         pw_hash = pwd.hash(body.password)
 
-        cur.execute(
-            """
-            insert into public.bv_users(full_name, sector, user_type, email, password_hash, is_active)
-            values (%s,%s,%s,%s,%s,true)
-            returning id
-            """,
-            (body.full_name.strip(), body.sector.strip(), user_type, email, pw_hash),
-        )
+        if has_retro_token_column():
+            cur.execute(
+                """
+                insert into public.bv_users(full_name, sector, user_type, email, password_hash, is_active, retro_token_enabled)
+                values (%s,%s,%s,%s,%s,true,%s)
+                returning id
+                """,
+                (
+                    body.full_name.strip(),
+                    body.sector.strip(),
+                    user_type,
+                    email,
+                    pw_hash,
+                    is_master_retro_user(email),
+                ),
+            )
+        else:
+            cur.execute(
+                """
+                insert into public.bv_users(full_name, sector, user_type, email, password_hash, is_active)
+                values (%s,%s,%s,%s,%s,true)
+                returning id
+                """,
+                (body.full_name.strip(), body.sector.strip(), user_type, email, pw_hash),
+            )
         new_id = cur.fetchone()["id"]
         conn.commit()
 
@@ -775,9 +838,19 @@ def dev_update_user(
         fields.append("is_active=%s")
         values.append(bool(body.is_active))
 
-    if body.retro_token_enabled is not None:
-        fields.append("retro_token_enabled=%s")
-        values.append(bool(body.retro_token_enabled))
+    if body.retro_token_enabled is not None and has_retro_token_column():
+        target_email = None
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute("select email from public.bv_users where id=%s", (user_id,))
+            target = cur.fetchone()
+            target_email = (target or {}).get("email")
+
+        if is_master_retro_user(target_email):
+            fields.append("retro_token_enabled=%s")
+            values.append(True)
+        else:
+            fields.append("retro_token_enabled=%s")
+            values.append(bool(body.retro_token_enabled))
 
     if body.reset_password is not None:
         fields.append("password_hash=%s")
