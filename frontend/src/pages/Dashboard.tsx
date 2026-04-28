@@ -105,6 +105,28 @@ function enumerateDaysInclusive(startIso: string, endIso: string) {
   return out;
 }
 
+const WEEKDAY_OPTIONS = [
+  { value: 0, short: "Dom", label: "Domingo" },
+  { value: 1, short: "Seg", label: "Segunda-feira" },
+  { value: 2, short: "Ter", label: "Terça-feira" },
+  { value: 3, short: "Qua", label: "Quarta-feira" },
+  { value: 4, short: "Qui", label: "Quinta-feira" },
+  { value: 5, short: "Sex", label: "Sexta-feira" },
+  { value: 6, short: "Sáb", label: "Sábado" },
+];
+
+function getWeekdayFromISO(iso: string): number {
+  const [y, m, d] = String(iso || "").split("-").map(Number);
+  if (!y || !m || !d) return -1;
+  return new Date(y, m - 1, d).getDay();
+}
+
+function filterDaysByExcludedWeekdays(days: string[], excludedWeekdays: number[]) {
+  if (!excludedWeekdays?.length) return days;
+  const blocked = new Set(excludedWeekdays);
+  return days.filter((d) => !blocked.has(getWeekdayFromISO(d)));
+}
+
 /**
  * Normaliza period do backend para "HH-HH"
  * Aceita: "00-01", "0-1", "00:00-01:00", "00:00–01:00", "00:00 — 01:00"
@@ -431,6 +453,7 @@ export default function Dashboard() {
   const [rangeMode, setRangeMode] = useState(false);
   const [startDay, setStartDay] = useState<string>(addDaysISO(isoTodayLocal(), -10));
   const [endDay, setEndDay] = useState<string>(isoTodayLocal());
+  const [excludedWeekdays, setExcludedWeekdays] = useState<number[]>([]);
   const [rangeProdDays, setRangeProdDays] = useState<RangePlantDay[]>([]);
   const [rangeGoalDays, setRangeGoalDays] = useState<GoalDay[]>([]);
   const mobile = useIsMobile();
@@ -552,7 +575,10 @@ export default function Dashboard() {
       }
 
       if (rangeMode) {
-        const days = enumerateDaysInclusive(startDay, endDay);
+        const days = filterDaysByExcludedWeekdays(
+          enumerateDaysInclusive(startDay, endDay),
+          excludedWeekdays
+        );
         const prodResults = await Promise.all(
           days.map(async (d) => {
             const rangePath =
@@ -671,7 +697,7 @@ export default function Dashboard() {
 
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, token, plantId, day, rangeMode, startDay, endDay]);
+  }, [authLoading, token, plantId, day, rangeMode, startDay, endDay, excludedWeekdays]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -681,10 +707,15 @@ export default function Dashboard() {
     const id = window.setInterval(() => loadAll(), POLL_MS);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, token, plantId, day, rangeMode, startDay, endDay]);
+  }, [authLoading, token, plantId, day, rangeMode, startDay, endDay, excludedWeekdays]);
 
   /* ===================== computed ===================== */
-  const rangeDays = useMemo(() => enumerateDaysInclusive(startDay, endDay), [startDay, endDay]);
+  const rangeDays = useMemo(() => {
+    return filterDaysByExcludedWeekdays(
+      enumerateDaysInclusive(startDay, endDay),
+      excludedWeekdays
+    );
+  }, [startDay, endDay, excludedWeekdays]);
 
   const totalTonDay = useMemo(() => {
     if (rangeMode) {
@@ -922,8 +953,12 @@ const EXPECTED_TON_H = metaHoraEsperada;
   const periodSummaryText = useMemo(() => {
     if (!rangeMode) return "";
     const days = rangeDays.length;
-    return `${brDate(startDay)} a ${brDate(endDay)} • ${days} dia${days === 1 ? "" : "s"}`;
-  }, [rangeMode, startDay, endDay, rangeDays]);
+    const excluded = excludedWeekdays
+      .map((w) => WEEKDAY_OPTIONS.find((x) => x.value === w)?.short)
+      .filter(Boolean)
+      .join(", ");
+    return `${brDate(startDay)} a ${brDate(endDay)} • ${days} dia${days === 1 ? "" : "s"}${excluded ? ` • exceto ${excluded}` : ""}`;
+  }, [rangeMode, startDay, endDay, rangeDays, excludedWeekdays]);
 
   const totalStops = useMemo(() => Number(stopsDayCount) || 0, [stopsDayCount]);
 
@@ -1169,6 +1204,58 @@ const EXPECTED_TON_H = metaHoraEsperada;
                 min={startDay}
                 onChange={(e) => setEndDay(e.target.value)}
               />
+
+              <span style={{ ...subStyle, marginLeft: 6 }}>Excluir dias</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                {WEEKDAY_OPTIONS.map((w) => {
+                  const selected = excludedWeekdays.includes(w.value);
+                  return (
+                    <button
+                      key={w.value}
+                      type="button"
+                      title={`Não considerar ${w.label}`}
+                      onClick={() =>
+                        setExcludedWeekdays((prev) =>
+                          prev.includes(w.value)
+                            ? prev.filter((x) => x !== w.value)
+                            : [...prev, w.value].sort((a, b) => a - b)
+                        )
+                      }
+                      style={{
+                        height: 34,
+                        minWidth: 46,
+                        borderRadius: 999,
+                        border: "1px solid " + (selected ? "rgba(255,159,26,0.50)" : "rgba(255,255,255,0.12)"),
+                        background: selected ? "rgba(255,159,26,0.18)" : "rgba(255,255,255,0.05)",
+                        color: selected ? "#ffb24a" : "rgba(255,255,255,0.78)",
+                        fontWeight: 950,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {w.short}
+                    </button>
+                  );
+                })}
+
+                {excludedWeekdays.length ? (
+                  <button
+                    type="button"
+                    onClick={() => setExcludedWeekdays([])}
+                    style={{
+                      height: 34,
+                      borderRadius: 999,
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "rgba(255,255,255,0.04)",
+                      color: "rgba(255,255,255,0.70)",
+                      fontWeight: 900,
+                      cursor: "pointer",
+                      padding: "0 10px",
+                    }}
+                  >
+                    Limpar
+                  </button>
+                ) : null}
+              </div>
             </>
           )}
         </div>
@@ -1189,7 +1276,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
       </div>
 
       <div style={{ marginTop: 8, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 800 }}>
-        Dashboard • {selectedPlantName} • {rangeMode ? `${brDate(startDay)} a ${brDate(endDay)}` : brDate(day)} {err ? `• ${err}` : plantId === "all" ? "• consolidado" : rangeMode ? "• média por período" : "• tempo real"}
+        Dashboard • {selectedPlantName} • {rangeMode ? periodSummaryText : brDate(day)} {err ? `• ${err}` : plantId === "all" ? "• consolidado" : rangeMode ? "• média por período" : "• tempo real"}
       </div>
 
       {/* MODAL EXPORT */}
