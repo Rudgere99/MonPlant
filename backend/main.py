@@ -1171,6 +1171,9 @@ def plant_last7(owner_id: str = Depends(require_owner_id)):
 
 @app.get("/api/plant-production/{day}")
 def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
+    # Compatibilidade do endpoint legado: usa Planta 1 como padrão.
+    # Isso evita erro quando o banco já está no modelo multi-planta com unique(owner_id, day, plant_id).
+    plant_id = 1
     periods = [_period_std_from_h(h) for h in range(24)]
 
     with get_conn() as conn, conn.cursor() as cur:
@@ -1178,9 +1181,11 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
             """
             select obs, updated_at
             from public.bv_plant_production_daily
-            where owner_id=%s and day=%s
+            where owner_id=%s and day=%s and coalesce(plant_id, 1)=%s
+            order by plant_id nulls first
+            limit 1
             """,
-            (owner_id, day),
+            (owner_id, day, plant_id),
         )
         daily = cur.fetchone()
 
@@ -1188,9 +1193,9 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
             """
             select period, ton, freq
             from public.bv_plant_production_rows
-            where owner_id=%s and day=%s
+            where owner_id=%s and day=%s and coalesce(plant_id, 1)=%s
             """,
-            (owner_id, day),
+            (owner_id, day, plant_id),
         )
         db_rows = cur.fetchall() or []
 
@@ -1216,6 +1221,7 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
 
     return {
         "day": str(day),
+        "plant_id": plant_id,
         "obs": obs,
         "rows": full_rows,
         "updated_at": updated_at,
@@ -1235,31 +1241,35 @@ def put_plant_day(
 
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
+    plant_id = 1  # endpoint legado = Planta 1
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            insert into public.bv_plant_production_daily(owner_id, day, obs, updated_at)
-            values (%s,%s,%s, now())
-            on conflict (owner_id, day)
+            insert into public.bv_plant_production_daily(owner_id, day, plant_id, obs, updated_at)
+            values (%s,%s,%s,%s, now())
+            on conflict (owner_id, day, plant_id)
             do update set obs = excluded.obs, updated_at = now()
             """,
-            (owner_id, day, body.obs or ""),
+            (owner_id, day, plant_id, body.obs or ""),
         )
 
         cur.execute(
-            "delete from public.bv_plant_production_rows where owner_id=%s and day=%s",
-            (owner_id, day),
+            """
+            delete from public.bv_plant_production_rows
+            where owner_id=%s and day=%s and coalesce(plant_id, 1)=%s
+            """,
+            (owner_id, day, plant_id),
         )
 
         for r in body.rows or []:
             p = normalize_period(r.period) or r.period
             cur.execute(
                 """
-                insert into public.bv_plant_production_rows(owner_id, day, period, ton, freq)
-                values (%s,%s,%s,%s,%s)
+                insert into public.bv_plant_production_rows(owner_id, day, plant_id, period, ton, freq)
+                values (%s,%s,%s,%s,%s,%s)
                 """,
-                (owner_id, day, p, r.ton, r.freq),
+                (owner_id, day, plant_id, p, r.ton, r.freq),
             )
 
         conn.commit()
@@ -1269,14 +1279,13 @@ def put_plant_day(
         request=request,
         user_id=user_id,
         entity="bv_plant_production_daily",
-        entity_id=str(day),
-        payload={"owner_id": owner_id, "day": str(day)},
+        entity_id=f"{day}::plant::{plant_id}",
+        payload={"owner_id": owner_id, "day": str(day), "plant_id": plant_id},
     )
 
-    return {"ok": True, "day": str(day)}
+    return {"ok": True, "day": str(day), "plant_id": plant_id}
 
 
-# =========================
 # Stops (Multi-planta)
 # =========================
 @app.get("/api/plants/{plant_id}/stops")
