@@ -10,6 +10,7 @@ type DevUser = {
   user_type: UserType;
   email: string;
   is_active: boolean;
+  can_edit_retroactive?: boolean;
   created_at?: string | null;
 };
 
@@ -127,6 +128,24 @@ function getStatusTone(active: boolean) {
   };
 }
 
+function getRetroTone(enabled: boolean) {
+  if (enabled) {
+    return {
+      bg: "rgba(245,158,11,.16)",
+      bd: "rgba(245,158,11,.42)",
+      color: "#fed7aa",
+      label: "Ativado",
+    };
+  }
+
+  return {
+    bg: "rgba(15,23,42,.72)",
+    bd: "rgba(148,163,184,.24)",
+    color: "#cbd5e1",
+    label: "Desativado",
+  };
+}
+
 function StatCard({
   title,
   value,
@@ -231,6 +250,35 @@ export default function DevUsers() {
     }
   }
 
+
+  async function toggleRetroactivePermission(user: DevUser) {
+    setErr(null);
+
+    if (!token) {
+      setErr("Sem token. Faça login com um usuário DEV.");
+      return;
+    }
+
+    const nextValue = !Boolean(user.can_edit_retroactive);
+
+    // Atualização otimista para o botão virar na hora.
+    setRows((prev) => prev.map((u) => (u.id === user.id ? { ...u, can_edit_retroactive: nextValue } : u)));
+
+    try {
+      const res = await fetch(apiUrl(`/api/dev/users/${user.id}`), {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ can_edit_retroactive: nextValue }),
+      });
+
+      if (!res.ok) throw new Error(await readErr(res));
+      await load();
+    } catch (e: any) {
+      setRows((prev) => prev.map((u) => (u.id === user.id ? { ...u, can_edit_retroactive: !nextValue } : u)));
+      setErr(e?.message || "Erro ao alterar permissão retroativa");
+    }
+  }
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,8 +289,9 @@ export default function DevUsers() {
     const ativos = rows.filter((u) => u.is_active).length;
     const devs = rows.filter((u) => u.user_type === "dev").length;
     const supervisaoGerencia = rows.filter((u) => u.user_type === "supervisor" || u.user_type === "gerencia").length;
+    const retroativos = rows.filter((u) => Boolean(u.can_edit_retroactive)).length;
 
-    return { total, ativos, devs, supervisaoGerencia };
+    return { total, ativos, devs, supervisaoGerencia, retroativos };
   }, [rows]);
 
   return (
@@ -321,6 +370,7 @@ export default function DevUsers() {
             <StatCard title="Total de usuários" value={stats.total} />
             <StatCard title="Usuários ativos" value={stats.ativos} />
             <StatCard title="Perfis DEV" value={stats.devs} />
+            <StatCard title="Permissão retroativa" value={stats.retroativos} />
             <StatCard title="Supervisão / Gerência" value={stats.supervisaoGerencia} />
           </div>
 
@@ -512,12 +562,12 @@ export default function DevUsers() {
                 width: "100%",
                 borderCollapse: "separate",
                 borderSpacing: 0,
-                minWidth: 980,
+                minWidth: 1120,
               }}
             >
               <thead>
                 <tr style={{ background: "rgba(255,255,255,.035)" }}>
-                  {["Nome", "Setor", "Tipo", "E-mail", "Status", "Criado em"].map((h) => (
+                  {["Nome", "Setor", "Tipo", "E-mail", "Status", "Retroativo", "Criado em"].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -539,6 +589,8 @@ export default function DevUsers() {
                 {rows.map((u, idx) => {
                   const typeTone = getUserTypeTone(u.user_type);
                   const statusTone = getStatusTone(u.is_active);
+                  const retroEnabled = Boolean(u.can_edit_retroactive);
+                  const retroTone = getRetroTone(retroEnabled);
 
                   return (
                     <tr
@@ -639,6 +691,35 @@ export default function DevUsers() {
                           padding: 14,
                           borderBottom: "1px solid rgba(255,255,255,.05)",
                           verticalAlign: "top",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleRetroactivePermission(u)}
+                          disabled={loading}
+                          title="Permite lançar e editar dados retroativos"
+                          style={{
+                            minWidth: 124,
+                            height: 32,
+                            borderRadius: 10,
+                            border: `1px solid ${retroTone.bd}`,
+                            background: retroTone.bg,
+                            color: retroTone.color,
+                            fontSize: 12,
+                            fontWeight: 900,
+                            cursor: loading ? "not-allowed" : "pointer",
+                            opacity: loading ? 0.65 : 1,
+                          }}
+                        >
+                          {retroTone.label}
+                        </button>
+                      </td>
+
+                      <td
+                        style={{
+                          padding: 14,
+                          borderBottom: "1px solid rgba(255,255,255,.05)",
+                          verticalAlign: "top",
                           color: "rgba(255,255,255,.70)",
                           whiteSpace: "nowrap",
                         }}
@@ -652,7 +733,7 @@ export default function DevUsers() {
                 {!rows.length && !loading && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       style={{
                         padding: 32,
                         textAlign: "center",
@@ -667,7 +748,7 @@ export default function DevUsers() {
                 {loading && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       style={{
                         padding: 32,
                         textAlign: "center",
