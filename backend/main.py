@@ -147,8 +147,6 @@ pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 AUTH_SECRET = (os.getenv("AUTH_SECRET") or "CHANGE_ME_AUTH_SECRET").strip()
 AUTH_TTL_HOURS = int(os.getenv("AUTH_TTL_HOURS") or "168")  # 7 dias
 MASTER_RETRO_EMAIL = "dev@monplant.com"
-_HAS_RETRO_COLUMN: Optional[bool] = None
-_HAS_USER_FLAGS_TABLE: Optional[bool] = None
 
 
 def now_local() -> datetime:
@@ -197,9 +195,6 @@ def is_master_retro_user(email: Optional[str]) -> bool:
 
 
 def has_retro_token_column() -> bool:
-    global _HAS_RETRO_COLUMN
-    if _HAS_RETRO_COLUMN is not None:
-        return _HAS_RETRO_COLUMN
     try:
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute(
@@ -212,16 +207,12 @@ def has_retro_token_column() -> bool:
                 limit 1
                 """
             )
-            _HAS_RETRO_COLUMN = cur.fetchone() is not None
+            return cur.fetchone() is not None
     except Exception:
-        _HAS_RETRO_COLUMN = False
-    return _HAS_RETRO_COLUMN
+        return False
 
 
 def has_user_flags_table() -> bool:
-    global _HAS_USER_FLAGS_TABLE
-    if _HAS_USER_FLAGS_TABLE is not None:
-        return _HAS_USER_FLAGS_TABLE
     try:
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute(
@@ -233,10 +224,9 @@ def has_user_flags_table() -> bool:
                 limit 1
                 """
             )
-            _HAS_USER_FLAGS_TABLE = cur.fetchone() is not None
+            return cur.fetchone() is not None
     except Exception:
-        _HAS_USER_FLAGS_TABLE = False
-    return _HAS_USER_FLAGS_TABLE
+        return False
 
 
 def get_retro_flag_from_table(user_id: Optional[str]) -> bool:
