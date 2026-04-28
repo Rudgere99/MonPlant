@@ -10,6 +10,7 @@ type DevUser = {
   user_type: UserType;
   email: string;
   is_active: boolean;
+  retro_token_enabled?: boolean;
   created_at?: string | null;
 };
 
@@ -226,6 +227,31 @@ export default function DevUsers() {
       await load();
     } catch (e: any) {
       setErr(e?.message || "Erro ao criar usuário");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function toggleRetroToken(user: DevUser) {
+    setErr(null);
+    if (!token) {
+      setErr("Sem token. Faça login com um usuário DEV.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/api/dev/users/${user.id}`), {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          retro_token_enabled: !Boolean(user.retro_token_enabled),
+        }),
+      });
+      if (!res.ok) throw new Error(await readErr(res));
+      await load();
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao atualizar token retroativo");
     } finally {
       setLoading(false);
     }
@@ -517,7 +543,7 @@ export default function DevUsers() {
             >
               <thead>
                 <tr style={{ background: "rgba(255,255,255,.035)" }}>
-                  {["Nome", "Setor", "Tipo", "E-mail", "Status", "Criado em"].map((h) => (
+                  {["Nome", "Setor", "Tipo", "Token retroativo", "E-mail", "Status", "Criado em"].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -602,6 +628,34 @@ export default function DevUsers() {
                           padding: 14,
                           borderBottom: "1px solid rgba(255,255,255,.05)",
                           verticalAlign: "top",
+                        }}
+                      >
+                        <button
+                          className="mp-btn"
+                          onClick={() => toggleRetroToken(u)}
+                          disabled={loading}
+                          style={{
+                            height: 34,
+                            minWidth: 132,
+                            borderRadius: 10,
+                            border: `1px solid ${
+                              u.retro_token_enabled ? "rgba(34,197,94,.35)" : "rgba(148,163,184,.25)"
+                            }`,
+                            background: u.retro_token_enabled ? "rgba(34,197,94,.16)" : "rgba(148,163,184,.10)",
+                            color: u.retro_token_enabled ? "#86efac" : "#cbd5e1",
+                            fontSize: 12,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {u.retro_token_enabled ? "Ativado" : "Desativado"}
+                        </button>
+                      </td>
+
+                      <td
+                        style={{
+                          padding: 14,
+                          borderBottom: "1px solid rgba(255,255,255,.05)",
+                          verticalAlign: "top",
                           color: "rgba(255,255,255,.82)",
                         }}
                       >
@@ -652,7 +706,7 @@ export default function DevUsers() {
                 {!rows.length && !loading && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       style={{
                         padding: 32,
                         textAlign: "center",
@@ -667,7 +721,7 @@ export default function DevUsers() {
                 {loading && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       style={{
                         padding: 32,
                         textAlign: "center",
