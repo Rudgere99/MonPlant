@@ -80,7 +80,6 @@ type ShiftRuleResolved = {
 
 type LetterKpi = {
   letter: ShiftLetter;
-  supervisor: string;
   realized: number;
   target: number;
   workedDays: number;
@@ -88,9 +87,8 @@ type LetterKpi = {
   trend: number;
 };
 
-type SupervisorRank = {
+type LetterRank = {
   letter: ShiftLetter;
-  name: string;
   realized: number;
   target: number;
   performance: number;
@@ -135,12 +133,6 @@ const SHIFT_CYCLE: ShiftRuleResolved[] = [
   { turno1: "B", turno2: "A", folga: "C e D" },
 ];
 
-const SUPERVISOR_MAP: Record<ShiftLetter, string> = {
-  A: "Wellington",
-  B: "Wagner",
-  C: "Marcio",
-  D: "Jocelio",
-};
 
 const PLANT_EQUIPMENT_FALLBACK = ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08", "EH-04", "Peneiras"];
 
@@ -364,7 +356,6 @@ function LetterCard({ item }: { item: LetterKpi }) {
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <div>
           <div style={{ fontSize: 46, fontWeight: 950, color }}>{item.letter}</div>
-          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.4, color: COLORS.sub }}>{item.supervisor}</div>
         </div>
         <div style={{ alignSelf: "flex-start", padding: "4px 10px", borderRadius: 999, background: "rgba(255,255,255,.06)", fontSize: 11, fontWeight: 900 }}>
           {item.workedDays} dias
@@ -621,7 +612,6 @@ export default function GestaoVistaPlanta() {
       const percent = x.target > 0 ? (x.realized / x.target) * 100 : 0;
       return {
         letter,
-        supervisor: SUPERVISOR_MAP[letter],
         realized: x.realized,
         target: x.target,
         workedDays: x.workedDays,
@@ -631,9 +621,9 @@ export default function GestaoVistaPlanta() {
     });
   }, [month, day, monthGoals, statsMonth, operationalDailyFromStats]);
 
-  const supervisorRanking = useMemo<SupervisorRank[]>(() => {
+  const letterRanking = useMemo<LetterRank[]>(() => {
     return letterData
-      .map((l) => ({ letter: l.letter, name: l.supervisor, realized: l.realized, target: l.target, performance: l.percent, trend: l.trend }))
+      .map((l) => ({ letter: l.letter, realized: l.realized, target: l.target, performance: l.percent, trend: l.trend }))
       .sort((a, b) => b.performance - a.performance);
   }, [letterData]);
 
@@ -649,17 +639,17 @@ export default function GestaoVistaPlanta() {
       { period: "--", ton: 0 }
     );
 
-    const bestSupervisor = supervisorRanking?.[0] || null;
+    const bestLetter = letterRanking?.[0] || null;
     const bestDayRule = bestDay?.day ? getShiftRuleForDate(bestDay.day) : getShiftRuleForDate(day);
-    const bestDaySupervisor = SUPERVISOR_MAP[bestDayRule.turno1];
+    const currentLetter = bestDayRule.turno1;
 
     return [
       <>📅 Maior produção: <span style={{color:"#ff9f1a"}}>{fmtBR0(bestDay?.produced_ton || 0)} t</span> em {brDate(bestDay?.day || day)}</>,
-      <>👷 Supervisor vigente: {bestDaySupervisor}</>,
-      <>🏆 Melhor supervisor: {bestSupervisor?.name} • Letra {bestSupervisor?.letter} (<span style={{color:"#ff9f1a"}}>{fmtBR1(bestSupervisor?.performance || 0)}%</span>)</>,
+      <>👷 Letra vigente: <span style={{color:"#ff9f1a"}}>{currentLetter}</span></>,
+      <>🏆 Melhor letra: <span style={{color:"#ff9f1a"}}>{bestLetter?.letter}</span> ({fmtBR1(bestLetter?.performance || 0)}%)</>,
       <>⏱️ Melhor hora: <span style={{color:"#ff9f1a"}}>{bestHour.period}</span> com <span style={{color:"#ff9f1a"}}>{fmtBR0(bestHour.ton)} t</span></>,
     ];
-  }, [statsMonth, hourlyBars, supervisorRanking, day]);
+  }, [statsMonth, hourlyBars, letterRanking, day]);
 
 
 
@@ -798,14 +788,14 @@ export default function GestaoVistaPlanta() {
           </div>
 
           <div style={{ ...panelStyle(), padding: 16 }}>
-            <h2 style={{ margin: "0 0 12px", display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 950, textTransform: "uppercase" }}><UsersRound size={20} /> Ranking de supervisores</h2>
+            <h2 style={{ margin: "0 0 12px", display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 950, textTransform: "uppercase" }}><UsersRound size={20} /> Ranking de letras</h2>
             <div style={{ display: "grid", gap: 9 }}>
-              {supervisorRanking.map((item, index) => {
+              {letterRanking.map((item, index) => {
                 const positive = item.trend >= 0;
                 return (
                   <div key={item.letter} style={{ display: "grid", gridTemplateColumns: "34px 1fr auto auto", alignItems: "center", gap: 10, padding: "10px", borderRadius: 12, border: "1px solid rgba(255,255,255,.07)", background: "rgba(255,255,255,.03)" }}>
                     <span style={{ width: 30, height: 30, display: "grid", placeItems: "center", borderRadius: 99, background: index === 0 ? COLORS.yellow : "rgba(255,255,255,.10)", color: index === 0 ? "#111" : COLORS.text, fontWeight: 950 }}>{index + 1}</span>
-                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 850 }}>{item.name} • Letra {item.letter}</span>
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 850 }}>Letra {item.letter}</span>
                     <strong>{fmtBR1(item.performance)}%</strong>
                     <span style={{ display: "flex", alignItems: "center", gap: 3, color: positive ? COLORS.green : COLORS.red, fontWeight: 950 }}>{positive ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />}{fmtBR1(Math.abs(item.trend))}%</span>
                   </div>
