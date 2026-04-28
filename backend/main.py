@@ -195,38 +195,56 @@ def is_master_retro_user(email: Optional[str]) -> bool:
 
 
 def has_retro_token_column() -> bool:
-    try:
-        with get_conn() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                select 1
-                from information_schema.columns
-                where table_schema='public'
-                  and table_name='bv_users'
-                  and column_name='retro_token_enabled'
-                limit 1
-                """
-            )
-            return cur.fetchone() is not None
-    except Exception:
-        return False
+    def _check() -> bool:
+        try:
+            with get_conn() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select 1
+                    from information_schema.columns
+                    where table_schema='public'
+                      and table_name='bv_users'
+                      and column_name='retro_token_enabled'
+                    limit 1
+                    """
+                )
+                return cur.fetchone() is not None
+        except Exception:
+            return False
+
+    ok = _check()
+    if ok:
+        return True
+
+    # tenta garantir estrutura em runtime (caso startup não tenha rodado ainda)
+    ensure_user_flags_columns()
+    return _check()
 
 
 def has_user_flags_table() -> bool:
-    try:
-        with get_conn() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                select 1
-                from information_schema.tables
-                where table_schema='public'
-                  and table_name='bv_user_flags'
-                limit 1
-                """
-            )
-            return cur.fetchone() is not None
-    except Exception:
-        return False
+    def _check() -> bool:
+        try:
+            with get_conn() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select 1
+                    from information_schema.tables
+                    where table_schema='public'
+                      and table_name='bv_user_flags'
+                    limit 1
+                    """
+                )
+                return cur.fetchone() is not None
+        except Exception:
+            return False
+
+    ok = _check()
+    if ok:
+        return True
+
+    # tenta garantir estrutura em runtime (caso startup não tenha rodado ainda)
+    ensure_user_flags_columns()
+    return _check()
 
 
 def get_retro_flag_from_table(user_id: Optional[str]) -> bool:
