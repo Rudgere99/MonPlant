@@ -90,7 +90,7 @@ const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:80
 
 function authHeaders(): HeadersInit {
   // mantém compatível com seu projeto (mp_token e/ou token)
-  const keys = ["mp_token", "token", "access_token", "auth_token"];
+  const keys = ["mp_token", "token", "access_token", "auth_token", "monplant_token", "mp_auth_token", "bv_token"];
   for (const k of keys) {
     const v = (localStorage.getItem(k) || "").trim();
     if (v) return { Authorization: `Bearer ${v}` };
@@ -98,11 +98,6 @@ function authHeaders(): HeadersInit {
   return {};
 }
 
-function devHeaders(): HeadersInit {
-  // ✅ DEV KEY que libera retroativo no backend
-  const devKey = (localStorage.getItem("mp_dev_key") || "").trim();
-  return devKey ? { "X-Dev-Key": devKey } : {};
-}
 
 async function readErr(r: Response) {
   const t = await r.text().catch(() => "");
@@ -203,7 +198,6 @@ export default function PlantProductionDayView() {
   const [rows, setRows] = useState<PlantHourRow[]>(periods.map((p) => ({ period: p, ton: "", freq: "" })));
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
-  const hasDevKey = useMemo(() => (localStorage.getItem("mp_dev_key") || "").trim().length > 0, []);
 
   function normalizeRows(inRows: PlantHourRow[]): PlantHourRow[] {
     const map: Record<string, PlantHourRow> = {};
@@ -266,7 +260,6 @@ export default function PlantProductionDayView() {
         method: "PUT",
         headers: {
           ...authHeaders(),
-          ...devHeaders(), // ✅ aqui libera retroativo no backend
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -274,7 +267,7 @@ export default function PlantProductionDayView() {
 
       if (!r.ok) throw new Error(await readErr(r));
 
-      setInfo("Salvo (DEV) com sucesso.");
+      setInfo("Salvo com sucesso.");
       await loadDay();
     } catch (e: any) {
       setErr(e?.message || "Erro ao salvar");
@@ -315,31 +308,16 @@ export default function PlantProductionDayView() {
   return (
     <div className="mp-container">
       <div className="mp-page-title">
-        <span className="mp-badge mp-badge-dev">DEV</span> Dev Dash
+        Produção da Planta
       </div>
       <div className="mp-page-sub">
-        Editável qualquer dia • Dia {br(day)} • Total: <b>{fmtBR0(totalTon)}</b> t
+        Editável conforme permissão do usuário • Dia {br(day)} • Total: <b>{fmtBR0(totalTon)}</b> t
         {updatedAt ? ` • Atualizado: ${new Date(updatedAt).toLocaleString("pt-BR")}` : ""}
       </div>
-
-      {!hasDevKey && (
-        <div className="mp-card" style={{ marginTop: 12 }}>
-          <div className="mp-card-b" style={{ color: "#fbbf24", fontWeight: 900 }}>
-            DEV KEY não encontrada. Para liberar retroativo:
-            <div style={{ marginTop: 8, fontFamily: "monospace", opacity: 0.95 }}>
-              localStorage.setItem("mp_dev_key", "SUA_DEV_KEY")
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ===== Card: Data + Ações ===== */}
       <div className="mp-card" style={{ marginTop: 12 }}>
         <div className="mp-card-h">
           <b>Produção do dia</b>
-          <span className="mp-help" style={{ marginLeft: 10 }}>
-            (DEV)
-          </span>
         </div>
 
         <div className="mp-card-b">
@@ -354,7 +332,7 @@ export default function PlantProductionDayView() {
             </button>
 
             <button className="mp-btn mp-btn-primary" onClick={saveDay} disabled={saving}>
-              {saving ? "Salvando..." : "Salvar (DEV)"}
+              {saving ? "Salvando..." : "Salvar"}
             </button>
           </div>
 
@@ -367,9 +345,6 @@ export default function PlantProductionDayView() {
       <div className="mp-card" style={{ marginTop: 14 }}>
         <div className="mp-card-h">
           <b>Gráfico (Ton/H + %)</b>
-          <span className="mp-badge mp-badge-dev" style={{ marginLeft: 10 }}>
-            DEV
-          </span>
         </div>
 
         <div className="mp-card-b" style={{ height: 420 }}>
@@ -460,9 +435,6 @@ export default function PlantProductionDayView() {
       <div className="mp-card" style={{ marginTop: 14 }}>
         <div className="mp-card-h">
           <b>Observação do dia</b>
-          <span className="mp-badge mp-badge-dev" style={{ marginLeft: 10 }}>
-            DEV
-          </span>
         </div>
 
         <div className="mp-card-b">
@@ -478,7 +450,7 @@ export default function PlantProductionDayView() {
 
       {/* ===== Tabela em 3 colunas ===== */}
       <div className="mp-help" style={{ marginTop: 14 }}>
-        Preencha <b>Ton/H</b> e <b>Freq%</b> por hora. (DEV: sem bloqueio retroativo)
+        Preencha <b>Ton/H</b> e <b>Freq%</b> por hora. (edição retroativa depende da permissão do usuário)
       </div>
 
       <div
