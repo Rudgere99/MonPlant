@@ -69,6 +69,23 @@ def ensure_notice_tables():
 @app.on_event("startup")
 def _startup_bootstrap():
     ensure_notice_tables()
+    ensure_user_flags_columns()
+
+
+def ensure_user_flags_columns():
+    """Garante storage de permissões extras para usuários."""
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                alter table public.bv_users
+                add column if not exists retro_token_enabled boolean not null default false;
+                """
+            )
+            conn.commit()
+    except Exception:
+        # não pode derrubar a API em caso de tabela/permissão ausente
+        return
 
 # =========================
 # CORS
@@ -114,6 +131,7 @@ pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 AUTH_SECRET = (os.getenv("AUTH_SECRET") or "CHANGE_ME_AUTH_SECRET").strip()
 AUTH_TTL_HOURS = int(os.getenv("AUTH_TTL_HOURS") or "168")  # 7 dias
+MASTER_RETRO_EMAIL = "dev@monplant.com"
 
 
 def now_local() -> datetime:
@@ -157,7 +175,59 @@ def is_dev(dev_key: Optional[str]) -> bool:
     return bool(expected) and dev_key.strip() == expected
 
 
-def block_retro(d: date, dev_key: Optional[str] = None):
+def is_master_retro_user(email: Optional[str]) -> bool:
+    return (email or "").strip().lower() == MASTER_RETRO_EMAIL
+
+
+def has_retro_token_column() -> bool:
+    def _check() -> bool:
+        try:
+            with get_conn() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select 1
+                    from information_schema.columns
+                    where table_schema='public'
+                      and table_name='bv_users'
+                      and column_name='retro_token_enabled'
+                    limit 1
+                    """
+                )
+                return cur.fetchone() is not None
+        except Exception:
+            return False
+
+    ok = _check()
+    if ok:
+        return True
+
+    # tenta garantir estrutura em runtime (caso startup não tenha rodado ainda)
+    ensure_user_flags_columns()
+    return _check()
+
+
+def resolve_retro_enabled(email: Optional[str], retro_token_enabled: Optional[bool], user_id: Optional[str] = None) -> bool:
+    if is_master_retro_user(email):
+        return True
+    return bool(retro_token_enabled)
+
+
+def user_has_retro_token(user_id: Optional[str]) -> bool:
+    if not user_id:
+        return False
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            if has_retro_token_column():
+                cur.execute("select email, retro_token_enabled from public.bv_users where id=%s", (user_id,))
+            else:
+                cur.execute("select email from public.bv_users where id=%s", (user_id,))
+            row = cur.fetchone()
+            return bool(row and resolve_retro_enabled(row.get("email"), row.get("retro_token_enabled"), user_id))
+    except Exception:
+        return False
+
+
+def block_retro(d: date, dev_key: Optional[str] = None, user_id: Optional[str] = None):
     """
     Regra (Brasil):
       - Bloqueia somente se for dia ANTERIOR ao "hoje"
@@ -167,7 +237,7 @@ def block_retro(d: date, dev_key: Optional[str] = None):
     Configure no Railway (opcional):
       - RETRO_ALLOW_UNTIL_HOUR (default 7)  -> permite editar ontem até HH:59
     """
-    if is_dev(dev_key):
+    if is_dev(dev_key) or user_has_retro_token(user_id):
         return
 
     tdy = today_local()
@@ -495,6 +565,7 @@ class DevUpdateUserIn(BaseModel):
     sector: Optional[str] = None
     user_type: Optional[str] = None  # apontador | controlador | dev
     is_active: Optional[bool] = None
+    retro_token_enabled: Optional[bool] = None
     reset_password: Optional[str] = None  # se vier, troca senha
 
 
@@ -530,9 +601,12 @@ def auth_login(body: LoginIn, request: Request):
     email = str(body.email).lower().strip()
 
     with get_conn() as conn, conn.cursor() as cur:
+        select_cols = "id, full_name, sector, user_type, email, password_hash, is_active"
+        if has_retro_token_column():
+            select_cols += ", retro_token_enabled"
         cur.execute(
-            """
-            select id, full_name, sector, user_type, email, password_hash, is_active
+            f"""
+            select {select_cols}
             from public.bv_users
             where email=%s
             """,
@@ -576,6 +650,7 @@ def auth_login(body: LoginIn, request: Request):
             "sector": u["sector"],
             "user_type": normalize_user_type(u["user_type"]),
             "email": u["email"],
+            "retro_token_enabled": resolve_retro_enabled(u.get("email"), u.get("retro_token_enabled"), str(u.get("id"))),
         },
     }
 
@@ -592,9 +667,12 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
         raise HTTPException(status_code=401, detail="Token inválido")
 
     with get_conn() as conn, conn.cursor() as cur:
+        select_cols = "id, full_name, sector, user_type, email, is_active"
+        if has_retro_token_column():
+            select_cols += ", retro_token_enabled"
         cur.execute(
-            """
-            select id, full_name, sector, user_type, email, is_active
+            f"""
+            select {select_cols}
             from public.bv_users
             where id=%s
             """,
@@ -611,6 +689,7 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
         "sector": u["sector"],
         "user_type": normalize_user_type(u["user_type"]),
         "email": u["email"],
+        "retro_token_enabled": resolve_retro_enabled(u.get("email"), u.get("retro_token_enabled"), str(u.get("id"))),
     }
 
 
@@ -619,14 +698,18 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
 # =========================
 def _dev_list_users():
     with get_conn() as conn, conn.cursor() as cur:
+        select_cols = "id, full_name, sector, user_type, email, is_active, created_at"
+        if has_retro_token_column():
+            select_cols = "id, full_name, sector, user_type, email, is_active, retro_token_enabled, created_at"
         cur.execute(
-            """
-            select id, full_name, sector, user_type, email, is_active, created_at
+            f"""
+            select {select_cols}
             from public.bv_users
             order by created_at desc
             """
         )
         rows = cur.fetchall() or []
+
     return [
         {
             "id": str(r["id"]),
@@ -635,6 +718,7 @@ def _dev_list_users():
             "user_type": normalize_user_type(r["user_type"]),
             "email": r["email"],
             "is_active": bool(r["is_active"]),
+            "retro_token_enabled": resolve_retro_enabled(r.get("email"), r.get("retro_token_enabled"), str(r["id"])),
             "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
         }
         for r in rows
@@ -670,15 +754,33 @@ def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[
 
         pw_hash = pwd.hash(body.password)
 
-        cur.execute(
-            """
-            insert into public.bv_users(full_name, sector, user_type, email, password_hash, is_active)
-            values (%s,%s,%s,%s,%s,true)
-            returning id
-            """,
-            (body.full_name.strip(), body.sector.strip(), user_type, email, pw_hash),
-        )
+        if has_retro_token_column():
+            cur.execute(
+                """
+                insert into public.bv_users(full_name, sector, user_type, email, password_hash, is_active, retro_token_enabled)
+                values (%s,%s,%s,%s,%s,true,%s)
+                returning id
+                """,
+                (
+                    body.full_name.strip(),
+                    body.sector.strip(),
+                    user_type,
+                    email,
+                    pw_hash,
+                    is_master_retro_user(email),
+                ),
+            )
+        else:
+            cur.execute(
+                """
+                insert into public.bv_users(full_name, sector, user_type, email, password_hash, is_active)
+                values (%s,%s,%s,%s,%s,true)
+                returning id
+                """,
+                (body.full_name.strip(), body.sector.strip(), user_type, email, pw_hash),
+            )
         new_id = cur.fetchone()["id"]
+
         conn.commit()
 
     log_action(
@@ -742,6 +844,24 @@ def dev_update_user(
         fields.append("is_active=%s")
         values.append(bool(body.is_active))
 
+    if body.retro_token_enabled is not None:
+        target_email = None
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute("select email from public.bv_users where id=%s", (user_id,))
+            target = cur.fetchone()
+            target_email = (target or {}).get("email")
+
+        retro_value = True if is_master_retro_user(target_email) else bool(body.retro_token_enabled)
+
+        wrote_retro_flag = False
+        if has_retro_token_column():
+            fields.append("retro_token_enabled=%s")
+            values.append(retro_value)
+            wrote_retro_flag = True
+
+        if not wrote_retro_flag:
+            raise HTTPException(status_code=500, detail="Storage de token retroativo indisponível")
+
     if body.reset_password is not None:
         fields.append("password_hash=%s")
         values.append(pwd.hash(body.reset_password))
@@ -749,16 +869,17 @@ def dev_update_user(
     if not fields:
         return {"ok": True, "changed": False}
 
-    values.append(user_id)
+    if fields:
+        values.append(user_id)
 
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            f"update public.bv_users set {', '.join(fields)} where id=%s",
-            tuple(values),
-        )
-        if cur.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Usuário não encontrado")
-        conn.commit()
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"update public.bv_users set {', '.join(fields)} where id=%s",
+                tuple(values),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Usuário não encontrado")
+            conn.commit()
 
     log_action(
         action="UPDATE_USER",
@@ -1036,10 +1157,9 @@ def put_plant_day_by_plant(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(day, x_dev_key)
-
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
+    block_retro(day, x_dev_key, user_id)
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -1169,10 +1289,9 @@ def put_plant_day(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(day, x_dev_key)
-
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
+    block_retro(day, x_dev_key, user_id)
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -1246,10 +1365,9 @@ def create_stop_by_plant(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(body.day, x_dev_key)
-
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
+    block_retro(body.day, x_dev_key, user_id)
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -1357,10 +1475,9 @@ def create_stop(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(body.day, x_dev_key)
-
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
+    block_retro(body.day, x_dev_key, user_id)
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -3436,4 +3553,3 @@ def api_close_notice(
     )
 
     return {"ok": True}
-

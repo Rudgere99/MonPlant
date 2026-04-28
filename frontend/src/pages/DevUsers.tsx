@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 
 type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
@@ -10,6 +11,7 @@ type DevUser = {
   user_type: UserType;
   email: string;
   is_active: boolean;
+  retro_token_enabled?: boolean;
   created_at?: string | null;
 };
 
@@ -155,10 +157,12 @@ function StatCard({
 }
 
 export default function DevUsers() {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [rows, setRows] = useState<DevUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [savingRetroUserId, setSavingRetroUserId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState("");
@@ -173,12 +177,26 @@ export default function DevUsers() {
     return h;
   }, [token]);
 
+  function handleAuthError(message: string) {
+    const m = (message || "").toLowerCase();
+    if (m.includes("token expirado") || m.includes("sem token") || m.includes("token inválido")) {
+      logout();
+      navigate("/login", { replace: true });
+      return true;
+    }
+    return false;
+  }
+
   async function load() {
     setErr(null);
     setLoading(true);
     try {
       const res = await fetch(apiUrl("/api/dev/users"), { headers });
-      if (!res.ok) throw new Error(await readErr(res));
+      if (!res.ok) {
+        const msg = await readErr(res);
+        if (!handleAuthError(msg)) setErr(msg);
+        return;
+      }
       const data = await res.json();
       setRows(Array.isArray(data) ? data : []);
     } catch (e: any) {
@@ -215,7 +233,11 @@ export default function DevUsers() {
         }),
       });
 
-      if (!res.ok) throw new Error(await readErr(res));
+      if (!res.ok) {
+        const msg = await readErr(res);
+        if (!handleAuthError(msg)) throw new Error(msg);
+        return;
+      }
 
       setFullName("");
       setSector("");
@@ -228,6 +250,35 @@ export default function DevUsers() {
       setErr(e?.message || "Erro ao criar usuário");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function toggleRetroToken(user: DevUser) {
+    setErr(null);
+    if (!token) {
+      setErr("Sem token. Faça login com um usuário DEV.");
+      return;
+    }
+
+    setSavingRetroUserId(user.id);
+    try {
+      const res = await fetch(apiUrl(`/api/dev/users/${user.id}`), {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          retro_token_enabled: !Boolean(user.retro_token_enabled),
+        }),
+      });
+      if (!res.ok) {
+        const msg = await readErr(res);
+        if (!handleAuthError(msg)) throw new Error(msg);
+        return;
+      }
+      await load();
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao atualizar token retroativo");
+    } finally {
+      setSavingRetroUserId(null);
     }
   }
 
@@ -517,7 +568,7 @@ export default function DevUsers() {
             >
               <thead>
                 <tr style={{ background: "rgba(255,255,255,.035)" }}>
-                  {["Nome", "Setor", "Tipo", "E-mail", "Status", "Criado em"].map((h) => (
+                  {["Nome", "Setor", "Tipo", "Token retroativo", "E-mail", "Status", "Criado em"].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -602,6 +653,35 @@ export default function DevUsers() {
                           padding: 14,
                           borderBottom: "1px solid rgba(255,255,255,.05)",
                           verticalAlign: "top",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="mp-btn"
+                          onClick={() => toggleRetroToken(u)}
+                          disabled={savingRetroUserId === u.id}
+                          style={{
+                            height: 34,
+                            minWidth: 132,
+                            borderRadius: 10,
+                            border: `1px solid ${
+                              u.retro_token_enabled ? "rgba(34,197,94,.35)" : "rgba(148,163,184,.25)"
+                            }`,
+                            background: u.retro_token_enabled ? "rgba(34,197,94,.16)" : "rgba(148,163,184,.10)",
+                            color: u.retro_token_enabled ? "#86efac" : "#cbd5e1",
+                            fontSize: 12,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {savingRetroUserId === u.id ? "Salvando..." : u.retro_token_enabled ? "Ativado" : "Desativado"}
+                        </button>
+                      </td>
+
+                      <td
+                        style={{
+                          padding: 14,
+                          borderBottom: "1px solid rgba(255,255,255,.05)",
+                          verticalAlign: "top",
                           color: "rgba(255,255,255,.82)",
                         }}
                       >
@@ -652,7 +732,7 @@ export default function DevUsers() {
                 {!rows.length && !loading && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       style={{
                         padding: 32,
                         textAlign: "center",
@@ -667,7 +747,7 @@ export default function DevUsers() {
                 {loading && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       style={{
                         padding: 32,
                         textAlign: "center",
