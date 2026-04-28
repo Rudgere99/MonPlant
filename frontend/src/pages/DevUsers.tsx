@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 
 type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
@@ -156,7 +157,8 @@ function StatCard({
 }
 
 export default function DevUsers() {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [rows, setRows] = useState<DevUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -174,12 +176,26 @@ export default function DevUsers() {
     return h;
   }, [token]);
 
+  function handleAuthError(message: string) {
+    const m = (message || "").toLowerCase();
+    if (m.includes("token expirado") || m.includes("sem token") || m.includes("token inválido")) {
+      logout();
+      navigate("/login", { replace: true });
+      return true;
+    }
+    return false;
+  }
+
   async function load() {
     setErr(null);
     setLoading(true);
     try {
       const res = await fetch(apiUrl("/api/dev/users"), { headers });
-      if (!res.ok) throw new Error(await readErr(res));
+      if (!res.ok) {
+        const msg = await readErr(res);
+        if (!handleAuthError(msg)) setErr(msg);
+        return;
+      }
       const data = await res.json();
       setRows(Array.isArray(data) ? data : []);
     } catch (e: any) {
@@ -216,7 +232,11 @@ export default function DevUsers() {
         }),
       });
 
-      if (!res.ok) throw new Error(await readErr(res));
+      if (!res.ok) {
+        const msg = await readErr(res);
+        if (!handleAuthError(msg)) throw new Error(msg);
+        return;
+      }
 
       setFullName("");
       setSector("");
@@ -248,7 +268,11 @@ export default function DevUsers() {
           retro_token_enabled: !Boolean(user.retro_token_enabled),
         }),
       });
-      if (!res.ok) throw new Error(await readErr(res));
+      if (!res.ok) {
+        const msg = await readErr(res);
+        if (!handleAuthError(msg)) throw new Error(msg);
+        return;
+      }
       await load();
     } catch (e: any) {
       setErr(e?.message || "Erro ao atualizar token retroativo");
