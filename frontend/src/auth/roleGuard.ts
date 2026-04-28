@@ -115,6 +115,7 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/historico",
       "/ufdf",
       "/abastecimento",
+      "/desvio-producao"
     ]);
   }
 
