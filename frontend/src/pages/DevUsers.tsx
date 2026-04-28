@@ -162,6 +162,7 @@ export default function DevUsers() {
 
   const [rows, setRows] = useState<DevUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [savingRetroUserId, setSavingRetroUserId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState("");
@@ -259,7 +260,7 @@ export default function DevUsers() {
       return;
     }
 
-    setLoading(true);
+    setSavingRetroUserId(user.id);
     try {
       const res = await fetch(apiUrl(`/api/dev/users/${user.id}`), {
         method: "PATCH",
@@ -277,7 +278,7 @@ export default function DevUsers() {
     } catch (e: any) {
       setErr(e?.message || "Erro ao atualizar token retroativo");
     } finally {
-      setLoading(false);
+      setSavingRetroUserId(null);
     }
   }
 
@@ -655,9 +656,10 @@ export default function DevUsers() {
                         }}
                       >
                         <button
+                          type="button"
                           className="mp-btn"
                           onClick={() => toggleRetroToken(u)}
-                          disabled={loading}
+                          disabled={savingRetroUserId === u.id}
                           style={{
                             height: 34,
                             minWidth: 132,
@@ -671,7 +673,7 @@ export default function DevUsers() {
                             fontWeight: 800,
                           }}
                         >
-                          {u.retro_token_enabled ? "Ativado" : "Desativado"}
+                          {savingRetroUserId === u.id ? "Salvando..." : u.retro_token_enabled ? "Ativado" : "Desativado"}
                         </button>
                       </td>
 
