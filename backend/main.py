@@ -767,7 +767,7 @@ def _dev_list_users():
                         """
                         select user_id, retro_token_enabled
                         from public.bv_user_flags
-                        where user_id = any(%s)
+                        where user_id::text = any(%s)
                         """,
                         (ids,),
                     )
