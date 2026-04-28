@@ -66,9 +66,26 @@ def ensure_notice_tables():
         return
 
 
+
+
+def ensure_user_permission_columns():
+    """Garante coluna de permissão para edição retroativa por usuário."""
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                alter table public.bv_users
+                add column if not exists can_edit_retroactive boolean not null default false;
+                """
+            )
+            conn.commit()
+    except Exception:
+        return
+
 @app.on_event("startup")
 def _startup_bootstrap():
     ensure_notice_tables()
+    ensure_user_permission_columns()
 
 # =========================
 # CORS
@@ -157,7 +174,44 @@ def is_dev(dev_key: Optional[str]) -> bool:
     return bool(expected) and dev_key.strip() == expected
 
 
-def block_retro(d: date, dev_key: Optional[str] = None):
+def user_can_edit_retroactive(authorization: Optional[str]) -> bool:
+    """Retorna True quando o usuário autenticado recebeu permissão retroativa."""
+    tok = bearer_token(authorization)
+    if not tok:
+        return False
+
+    try:
+        payload = decode_token(tok)
+    except Exception:
+        return False
+
+    uid = payload.get("uid")
+    typ = normalize_user_type(payload.get("typ"))
+
+    # DEV continua liberado por segurança administrativa
+    if typ == "dev":
+        return True
+
+    if not uid:
+        return False
+
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                select coalesce(can_edit_retroactive, false) as can_edit_retroactive
+                from public.bv_users
+                where id=%s and is_active=true
+                """,
+                (uid,),
+            )
+            row = cur.fetchone()
+        return bool(row and row.get("can_edit_retroactive"))
+    except Exception:
+        return False
+
+
+def block_retro(d: date, dev_key: Optional[str] = None, authorization: Optional[str] = None):
     """
     Regra (Brasil):
       - Bloqueia somente se for dia ANTERIOR ao "hoje"
@@ -167,7 +221,7 @@ def block_retro(d: date, dev_key: Optional[str] = None):
     Configure no Railway (opcional):
       - RETRO_ALLOW_UNTIL_HOUR (default 7)  -> permite editar ontem até HH:59
     """
-    if is_dev(dev_key):
+    if is_dev(dev_key) or user_can_edit_retroactive(authorization):
         return
 
     tdy = today_local()
@@ -495,6 +549,7 @@ class DevUpdateUserIn(BaseModel):
     sector: Optional[str] = None
     user_type: Optional[str] = None  # apontador | controlador | dev
     is_active: Optional[bool] = None
+    can_edit_retroactive: Optional[bool] = None
     reset_password: Optional[str] = None  # se vier, troca senha
 
 
@@ -532,7 +587,7 @@ def auth_login(body: LoginIn, request: Request):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select id, full_name, sector, user_type, email, password_hash, is_active
+            select id, full_name, sector, user_type, email, password_hash, is_active, coalesce(can_edit_retroactive,false) as can_edit_retroactive
             from public.bv_users
             where email=%s
             """,
@@ -576,6 +631,7 @@ def auth_login(body: LoginIn, request: Request):
             "sector": u["sector"],
             "user_type": normalize_user_type(u["user_type"]),
             "email": u["email"],
+            "can_edit_retroactive": bool(u.get("can_edit_retroactive", False)),
         },
     }
 
@@ -594,7 +650,7 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select id, full_name, sector, user_type, email, is_active
+            select id, full_name, sector, user_type, email, is_active, coalesce(can_edit_retroactive,false) as can_edit_retroactive
             from public.bv_users
             where id=%s
             """,
@@ -611,6 +667,7 @@ def auth_me(authorization: Optional[str] = Header(default=None, alias="Authoriza
         "sector": u["sector"],
         "user_type": normalize_user_type(u["user_type"]),
         "email": u["email"],
+        "can_edit_retroactive": bool(u.get("can_edit_retroactive", False)),
     }
 
 
@@ -621,7 +678,7 @@ def _dev_list_users():
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select id, full_name, sector, user_type, email, is_active, created_at
+            select id, full_name, sector, user_type, email, is_active, coalesce(can_edit_retroactive,false) as can_edit_retroactive, created_at
             from public.bv_users
             order by created_at desc
             """
@@ -635,6 +692,7 @@ def _dev_list_users():
             "user_type": normalize_user_type(r["user_type"]),
             "email": r["email"],
             "is_active": bool(r["is_active"]),
+            "can_edit_retroactive": bool(r.get("can_edit_retroactive", False)),
             "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
         }
         for r in rows
@@ -741,6 +799,10 @@ def dev_update_user(
     if body.is_active is not None:
         fields.append("is_active=%s")
         values.append(bool(body.is_active))
+
+    if body.can_edit_retroactive is not None:
+        fields.append("can_edit_retroactive=%s")
+        values.append(bool(body.can_edit_retroactive))
 
     if body.reset_password is not None:
         fields.append("password_hash=%s")
@@ -1036,7 +1098,7 @@ def put_plant_day_by_plant(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(day, x_dev_key)
+    block_retro(day, x_dev_key, authorization)
 
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
@@ -1169,7 +1231,7 @@ def put_plant_day(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(day, x_dev_key)
+    block_retro(day, x_dev_key, authorization)
 
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
@@ -1246,7 +1308,7 @@ def create_stop_by_plant(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(body.day, x_dev_key)
+    block_retro(body.day, x_dev_key, authorization)
 
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
@@ -1357,7 +1419,7 @@ def create_stop(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    block_retro(body.day, x_dev_key)
+    block_retro(body.day, x_dev_key, authorization)
 
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
@@ -1452,7 +1514,7 @@ def create_horimetro_by_plant(
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
     # ✅ Horímetros: NÃO trava retroativo (dia anterior, etc.)
-    # block_retro(body.day, x_dev_key)
+    # block_retro(body.day, x_dev_key, authorization)
 
     if body.horimetro_fim < body.horimetro_ini:
         raise HTTPException(status_code=400, detail="horimetro_fim deve ser >= horimetro_ini")
@@ -1632,7 +1694,7 @@ def create_horimetro(
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
     # ✅ Horímetros: NÃO trava retroativo (dia anterior, etc.)
-    # block_retro(body.day, x_dev_key)
+    # block_retro(body.day, x_dev_key, authorization)
 
     if body.horimetro_fim < body.horimetro_ini:
         raise HTTPException(status_code=400, detail="horimetro_fim deve ser >= horimetro_ini")
