@@ -3364,7 +3364,8 @@ def stats_month_aggregate(
 
 # =========================
 # Avisos Supervisor automáticos
-# Página do front apenas exibe/confirma; o backend calcula e cria os lembretes.
+# Usa SOMENTE bv_notices + bv_notice_reads neste main.py.
+# A página do front apenas exibe/confirma; o backend cria os lembretes.
 # =========================
 
 def _require_user_payload(authorization: Optional[str]) -> Dict[str, Any]:
@@ -3377,23 +3378,7 @@ def _require_user_payload(authorization: Optional[str]) -> Dict[str, Any]:
     return payload
 
 
-def _safe_notice_row_to_out(r: Dict[str, Any]) -> Dict[str, Any]:
-    created_at = r.get("created_at")
-    read_at = r.get("read_at")
-    return {
-        "id": str(r.get("id")),
-        "title": r.get("title") or "",
-        "message": r.get("message") or "",
-        "tipo": r.get("notice_type") or "sistema",
-        "notice_type": r.get("notice_type") or "sistema",
-        "created_at": created_at.isoformat() if created_at else None,
-        "read": read_at is not None,
-        "read_at": read_at.isoformat() if read_at else None,
-        "is_active": bool(r.get("is_active", True)),
-    }
-
-
-def _notice_value(r: Dict[str, Any], key: str, default=None):
+def _notice_value(r: Any, key: str, default=None):
     try:
         if isinstance(r, dict):
             return r.get(key, default)
@@ -3425,89 +3410,68 @@ def _safe_notice_row_to_out(r: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _insert_system_notice_once(*, cur, uid: str, source_key: str, notice_type: str, title: str, message: str):
-    try:
-        cur.execute(
-            """
-            select id
-            from public.bv_notices
-            where source_key=%s and created_by=%s
-            limit 1
-            """,
-            (source_key, uid),
-        )
-        if cur.fetchone():
-            return
+    """Insere aviso uma única vez por source_key+usuário."""
+    cur.execute(
+        """
+        select id
+        from public.bv_notices
+        where source_key=%s and created_by=%s
+        limit 1
+        """,
+        (source_key, uid),
+    )
+    if cur.fetchone():
+        return
 
-        cur.execute(
-            """
-            insert into public.bv_notices(
-              title, message, created_by, created_by_name,
-              is_active, source_key, notice_type, created_at
-            )
-            values (%s,%s,%s,%s,true,%s,%s,now())
-            """,
-            (title, message, uid, "Sistema MonPlant", source_key, notice_type),
+    cur.execute(
+        """
+        insert into public.bv_notices(
+          title, message, created_by, created_by_name,
+          is_active, source_key, notice_type, created_at
         )
-    except Exception:
-        # Fallback para schema antigo da tabela bv_notices.
-        try:
-            cur.connection.rollback()
-        except Exception:
-            pass
-        with get_conn() as conn2, conn2.cursor() as cur2:
-            cur2.execute(
-                """
-                select id
-                from public.bv_notices
-                where created_by=%s
-                  and title=%s
-                  and created_at::date = now()::date
-                limit 1
-                """,
-                (uid, title),
-            )
-            if cur2.fetchone():
-                conn2.commit()
-                return
-            cur2.execute(
-                """
-                insert into public.bv_notices(title, message, created_by, created_by_name, is_active, created_at)
-                values (%s,%s,%s,%s,true,now())
-                """,
-                (title, message, uid, "Sistema MonPlant"),
-            )
-            conn2.commit()
+        values (%s,%s,%s,%s,true,%s,%s,now())
+        """,
+        (title, message, uid, "Sistema MonPlant", source_key, notice_type),
+    )
 
 
 def _ensure_supervisor_auto_reminders(uid: str):
-    try:
-        ensure_notice_tables()
-        now = now_local()
-        prev_hour = (now.hour - 1) % 24
-        cur_hour = now.hour
-        prod_key = f"prod-hour:{uid}:{now.strftime('%Y-%m-%d')}:{cur_hour:02d}"
+    """
+    Cria automaticamente:
+      1) Um lembrete de produção por hora.
+      2) Um lembrete de impacto/baixa produção de tempos em tempos.
 
+    A criação acontece quando o AppShell consulta /unread ou quando a página lista /api/avisos-supervisor.
+    """
+    ensure_notice_tables()
+    now = now_local()
+
+    try:
         with get_conn() as conn, conn.cursor() as cur:
+            # 1) Produção da última hora — 1 aviso por hora por usuário.
+            prev_hour = (now.hour - 1) % 24
+            cur_hour = now.hour
+            prod_key = f"prod-hour:{uid}:{now.strftime('%Y-%m-%d')}:{cur_hour:02d}"
             _insert_system_notice_once(
                 cur=cur,
                 uid=uid,
                 source_key=prod_key,
                 notice_type="producao_horaria",
                 title="Enviar produção da última hora",
-                message=f"Enviar no grupo de WhatsApp a produção realizada no período {prev_hour:02d}-{cur_hour:02d}.",
+                message=(
+                    "Enviar no grupo de WhatsApp a produção realizada no período "
+                    f"{prev_hour:02d}-{cur_hour:02d}."
+                ),
             )
-            conn.commit()
-    except Exception:
-        return
 
-    try:
-        with get_conn() as conn, conn.cursor() as cur:
+            # 2) Impacto/baixa produção — cria o primeiro automaticamente.
+            # Depois, cria novo se passaram 90min; entre 45 e 90min tem chance controlada.
             cur.execute(
                 """
                 select created_at
                 from public.bv_notices
                 where created_by=%s
-                  and (notice_type='impacto_supervisor' or title ilike 'Confirmar impacto%%')
+                  and notice_type='impacto_supervisor'
                 order by created_at desc
                 limit 1
                 """,
@@ -3516,10 +3480,10 @@ def _ensure_supervisor_auto_reminders(uid: str):
             last = cur.fetchone()
 
             should_create_impact = False
-            if not last or not last.get("created_at"):
-                should_create_impact = random.random() < 0.25
+            if not last or not _notice_value(last, "created_at"):
+                should_create_impact = True
             else:
-                last_dt = last["created_at"]
+                last_dt = _notice_value(last, "created_at")
                 if last_dt.tzinfo is None:
                     last_dt = last_dt.replace(tzinfo=timezone.utc)
                 elapsed_min = (datetime.now(timezone.utc) - last_dt.astimezone(timezone.utc)).total_seconds() / 60
@@ -3529,17 +3493,22 @@ def _ensure_supervisor_auto_reminders(uid: str):
                     should_create_impact = random.random() < 0.20
 
             if should_create_impact:
-                impact_key = f"impact:{uid}:{now.strftime('%Y%m%d%H%M%S')}"
+                impact_key = f"impact:{uid}:{now.strftime('%Y%m%d%H%M')}"
                 _insert_system_notice_once(
                     cur=cur,
                     uid=uid,
                     source_key=impact_key,
                     notice_type="impacto_supervisor",
                     title="Confirmar impacto ou baixa produção",
-                    message="Perguntar ao supervisor se houve impacto operacional, baixa produção ou restrição na última hora.",
+                    message=(
+                        "Perguntar ao supervisor se houve impacto operacional, baixa produção, "
+                        "parada relevante ou restrição que precise entrar no boletim do turno."
+                    ),
                 )
-                conn.commit()
+
+            conn.commit()
     except Exception:
+        # Não derruba a API nem quebra o AppShell.
         return
 
 
@@ -3555,7 +3524,7 @@ def api_avisos_supervisor_unread(
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                select count(*) as unread
+                select count(*) as total
                 from public.bv_notices n
                 left join public.bv_notice_reads r
                   on r.notice_id = n.id and r.user_id = %s
@@ -3565,10 +3534,12 @@ def api_avisos_supervisor_unread(
                 """,
                 (uid, uid),
             )
-            row = cur.fetchone() or {"unread": 0}
-        return {"unread": int(row.get("unread") or 0)}
+            row = cur.fetchone() or {"total": 0}
+        pending_count = int(_notice_value(row, "total", 0) or 0)
+        # unread numérico mantém compatibilidade com AppShell que usa data.unread > 0.
+        return {"unread": pending_count, "pending_count": pending_count, "has_unread": pending_count > 0}
     except Exception:
-        return {"unread": 0, "error": "avisos_unread_db_error"}
+        return {"unread": 0, "pending_count": 0, "has_unread": False, "error": "avisos_unread_db_error"}
 
 
 @app.get("/api/avisos-supervisor")
@@ -3603,7 +3574,7 @@ def api_avisos_supervisor_list(
 
     items = [_safe_notice_row_to_out(r) for r in rows]
     pending_count = sum(1 for i in items if i.get("status") == "pendente")
-    return {"unread": pending_count > 0, "pending_count": pending_count, "items": items}
+    return {"unread": pending_count, "pending_count": pending_count, "has_unread": pending_count > 0, "items": items}
 
 
 @app.post("/api/avisos-supervisor/{notice_id}/read")
@@ -3674,6 +3645,7 @@ def api_avisos_supervisor_mark_all_read(
         return {"ok": False, "marked": 0, "error": "avisos_mark_all_db_error"}
 
 
+# Alias legados apenas para evitar quebra caso algum front antigo ainda chame sem /api.
 @app.get("/avisos-supervisor/unread")
 def legacy_avisos_supervisor_unread(
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
