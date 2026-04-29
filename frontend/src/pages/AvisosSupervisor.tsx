@@ -22,7 +22,8 @@ type ReminderItem = {
 };
 
 type ApiResponse = {
-  unread: boolean;
+  unread: boolean | number;
+  has_unread?: boolean;
   pending_count: number;
   items: ReminderItem[];
 };
@@ -37,6 +38,24 @@ const apiUrl = (path: string) => `${API_BASE}${path}`;
 
 const NOTIFICATION_KEY = "monplant:avisos_unread";
 const NOTIFICATION_EVENT = "monplant:avisos-notification-change";
+
+
+function getStoredToken() {
+  const keys = [
+    "token",
+    "monplant_token",
+    "auth_token",
+    "access_token",
+    "bv_token",
+  ];
+
+  for (const key of keys) {
+    const value = localStorage.getItem(key);
+    if (value && value.trim()) return value.trim();
+  }
+
+  return "";
+}
 
 function authHeaders(token?: string | null, user?: any): HeadersInit {
   const cleanToken = String(token || "").trim();
@@ -84,6 +103,7 @@ function typeLabel(type: ReminderType) {
 
 export default function AvisosSupervisor() {
   const { token, user, loading: authLoading } = useAuth() as any;
+  const activeToken = String(token || getStoredToken() || "").trim();
 
   const [items, setItems] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -103,7 +123,7 @@ export default function AvisosSupervisor() {
   const loadReminders = useCallback(async () => {
     if (authLoading) return;
 
-    if (!token) {
+    if (!activeToken) {
       setItems([]);
       setUnreadFlag(false);
       setError("Sessão não identificada. Faça login novamente para carregar os avisos.");
@@ -116,7 +136,7 @@ export default function AvisosSupervisor() {
     try {
       const res = await fetch(apiUrl("/api/avisos-supervisor"), {
         method: "GET",
-        headers: authHeaders(token, user),
+        headers: authHeaders(activeToken, user),
       });
 
       if (!res.ok) throw new Error(`Falha ao carregar lembretes (${res.status})`);
@@ -135,18 +155,18 @@ export default function AvisosSupervisor() {
     } finally {
       setLoading(false);
     }
-  }, [authLoading, token, user]);
+  }, [authLoading, activeToken, user]);
 
   async function confirmReminder(id: number | string) {
     setLoading(true);
     setError(null);
 
     try {
-      if (!token) throw new Error("Sessão não identificada. Faça login novamente.");
+      if (!activeToken) throw new Error("Sessão não identificada. Faça login novamente.");
 
       const res = await fetch(apiUrl(`/api/avisos-supervisor/${id}/confirmar`), {
         method: "POST",
-        headers: authHeaders(token, user),
+        headers: authHeaders(activeToken, user),
       });
 
       if (!res.ok) throw new Error(`Falha ao confirmar lembrete (${res.status})`);
