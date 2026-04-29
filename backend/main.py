@@ -13,6 +13,7 @@ import hmac
 import hashlib
 import re
 import unicodedata
+import random
 
 from passlib.context import CryptContext
 
@@ -59,6 +60,11 @@ def ensure_notice_tables():
                 );
                 """
             )
+
+            cur.execute("alter table public.bv_notices add column if not exists closed_at timestamptz null;")
+            cur.execute("alter table public.bv_notices add column if not exists source_key text null;")
+            cur.execute("alter table public.bv_notices add column if not exists notice_type text null;")
+            cur.execute("create index if not exists idx_bv_notices_source_key on public.bv_notices(source_key);")
 
             conn.commit()
     except Exception:
@@ -3354,6 +3360,247 @@ def stats_month_aggregate(
 
 
 
+
+
+# =========================
+# Avisos Supervisor automáticos
+# Página do front apenas exibe/confirma; o backend calcula e cria os lembretes.
+# =========================
+
+def _require_user_payload(authorization: Optional[str]) -> Dict[str, Any]:
+    tok = bearer_token(authorization)
+    if not tok:
+        raise HTTPException(status_code=401, detail="Sem token")
+    payload = decode_token(tok)
+    if not payload.get("uid"):
+        raise HTTPException(status_code=401, detail="Token inválido")
+    return payload
+
+
+def _safe_notice_row_to_out(r: Dict[str, Any]) -> Dict[str, Any]:
+    created_at = r.get("created_at")
+    read_at = r.get("read_at")
+    return {
+        "id": str(r.get("id")),
+        "title": r.get("title") or "",
+        "message": r.get("message") or "",
+        "tipo": r.get("notice_type") or "sistema",
+        "notice_type": r.get("notice_type") or "sistema",
+        "created_at": created_at.isoformat() if created_at else None,
+        "read": read_at is not None,
+        "read_at": read_at.isoformat() if read_at else None,
+        "is_active": bool(r.get("is_active", True)),
+    }
+
+
+def _insert_system_notice_once(*, cur, uid: str, source_key: str, notice_type: str, title: str, message: str):
+    cur.execute(
+        """
+        select id
+        from public.bv_notices
+        where source_key=%s and created_by=%s
+        limit 1
+        """,
+        (source_key, uid),
+    )
+    if cur.fetchone():
+        return
+
+    cur.execute(
+        """
+        insert into public.bv_notices(
+          title, message, created_by, created_by_name,
+          is_active, source_key, notice_type, created_at
+        )
+        values (%s,%s,%s,%s,true,%s,%s,now())
+        """,
+        (title, message, uid, "Sistema MonPlant", source_key, notice_type),
+    )
+
+
+def _ensure_supervisor_auto_reminders(uid: str):
+    """
+    Backend gera os lembretes automaticamente:
+      1) produção da última hora, uma vez por hora;
+      2) pergunta aleatória de impacto/baixa produção entre 45 e 90 min.
+    """
+    ensure_notice_tables()
+    now = now_local()
+
+    prev_hour = (now.hour - 1) % 24
+    cur_hour = now.hour
+    prod_key = f"prod-hour:{uid}:{now.strftime('%Y-%m-%d')}:{cur_hour:02d}"
+
+    with get_conn() as conn, conn.cursor() as cur:
+        _insert_system_notice_once(
+            cur=cur,
+            uid=uid,
+            source_key=prod_key,
+            notice_type="producao_horaria",
+            title="Enviar produção da última hora",
+            message=f"Enviar no grupo de WhatsApp a produção realizada no período {prev_hour:02d}-{cur_hour:02d}.",
+        )
+
+        cur.execute(
+            """
+            select created_at
+            from public.bv_notices
+            where created_by=%s and notice_type='impacto_supervisor'
+            order by created_at desc
+            limit 1
+            """,
+            (uid,),
+        )
+        last = cur.fetchone()
+
+        should_create_impact = False
+        if not last or not last.get("created_at"):
+            should_create_impact = random.random() < 0.35
+        else:
+            last_dt = last["created_at"]
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            elapsed_min = (datetime.now(timezone.utc) - last_dt.astimezone(timezone.utc)).total_seconds() / 60
+            if elapsed_min >= 90:
+                should_create_impact = True
+            elif elapsed_min >= 45:
+                should_create_impact = random.random() < 0.20
+
+        if should_create_impact:
+            impact_key = f"impact:{uid}:{now.strftime('%Y%m%d%H%M%S')}"
+            _insert_system_notice_once(
+                cur=cur,
+                uid=uid,
+                source_key=impact_key,
+                notice_type="impacto_supervisor",
+                title="Confirmar impacto ou baixa produção",
+                message="Perguntar ao supervisor se houve impacto operacional, baixa produção ou restrição na última hora.",
+            )
+
+        conn.commit()
+
+
+@app.get("/api/avisos-supervisor/unread")
+def api_avisos_supervisor_unread(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    payload = _require_user_payload(authorization)
+    uid = str(payload["uid"])
+    _ensure_supervisor_auto_reminders(uid)
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select count(*) as unread
+            from public.bv_notices n
+            left join public.bv_notice_reads r
+              on r.notice_id = n.id and r.user_id = %s
+            where n.is_active = true
+              and (n.created_by = %s or n.created_by is null)
+              and r.read_at is null
+            """,
+            (uid, uid),
+        )
+        row = cur.fetchone() or {"unread": 0}
+
+    return {"unread": int(row.get("unread") or 0)}
+
+
+@app.get("/api/avisos-supervisor")
+def api_avisos_supervisor_list(
+    limit: int = Query(100, ge=1, le=500),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    payload = _require_user_payload(authorization)
+    uid = str(payload["uid"])
+    _ensure_supervisor_auto_reminders(uid)
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select n.id, n.title, n.message, n.notice_type, n.is_active, n.created_at,
+                   r.read_at
+            from public.bv_notices n
+            left join public.bv_notice_reads r
+              on r.notice_id = n.id and r.user_id = %s
+            where n.is_active = true
+              and (n.created_by = %s or n.created_by is null)
+            order by n.created_at desc
+            limit %s
+            """,
+            (uid, uid, limit),
+        )
+        rows = cur.fetchall() or []
+
+    return [_safe_notice_row_to_out(r) for r in rows]
+
+
+@app.post("/api/avisos-supervisor/{notice_id}/read")
+def api_avisos_supervisor_read(
+    notice_id: str,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    payload = _require_user_payload(authorization)
+    uid = str(payload["uid"])
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select 1
+            from public.bv_notices
+            where id=%s and is_active=true and (created_by=%s or created_by is null)
+            """,
+            (notice_id, uid),
+        )
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Aviso não encontrado")
+
+        cur.execute(
+            """
+            insert into public.bv_notice_reads(notice_id, user_id, read_at)
+            values (%s,%s,now())
+            on conflict (notice_id, user_id) do update set read_at=excluded.read_at
+            """,
+            (notice_id, uid),
+        )
+        conn.commit()
+
+    return {"ok": True}
+
+
+@app.post("/api/avisos-supervisor/mark-all-read")
+def api_avisos_supervisor_mark_all_read(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    payload = _require_user_payload(authorization)
+    uid = str(payload["uid"])
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into public.bv_notice_reads(notice_id, user_id, read_at)
+            select n.id, %s, now()
+            from public.bv_notices n
+            left join public.bv_notice_reads r
+              on r.notice_id=n.id and r.user_id=%s
+            where n.is_active=true
+              and (n.created_by=%s or n.created_by is null)
+              and r.read_at is null
+            on conflict (notice_id, user_id) do update set read_at=excluded.read_at
+            """,
+            (uid, uid, uid),
+        )
+        changed = cur.rowcount
+        conn.commit()
+
+    return {"ok": True, "marked": int(changed or 0)}
+
+
+@app.get("/avisos-supervisor/unread")
+def legacy_avisos_supervisor_unread(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    return api_avisos_supervisor_unread(authorization)
 
 # =========================
 # Notices (Supervisor broadcast + confirmação de leitura)
