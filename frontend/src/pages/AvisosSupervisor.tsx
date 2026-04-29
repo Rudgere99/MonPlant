@@ -1,63 +1,53 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuth } from "../auth/AuthProvider";
+import { Bell, CheckCircle2, Clock3, RefreshCw, AlertTriangle } from "lucide-react";
+
+// Página nova: SOMENTE exibe e confirma lembretes.
+// Toda regra de criação/cálculo fica no backend.
 
 type ReminderType = "producao_horaria" | "impacto_aleatorio";
 type ReminderStatus = "pendente" | "confirmado";
 
 type ReminderItem = {
-  id: string;
+  id: number | string;
   type: ReminderType;
   title: string;
   message: string;
-  created_at: string;
   scheduled_for: string;
+  created_at: string;
   status: ReminderStatus;
   confirmed_at?: string | null;
   confirmed_by?: string | null;
 };
 
-type ReminderConfig = {
-  hourlyEnabled: boolean;
-  randomEnabled: boolean;
-  hourlyMinute: number;
-  randomMinMinutes: number;
-  randomMaxMinutes: number;
-  nextRandomAt: string | null;
+type ApiResponse = {
+  unread: boolean;
+  pending_count: number;
+  items: ReminderItem[];
 };
 
-const STORAGE_ITEMS = "monplant:auto_reminders:v1";
-const STORAGE_CONFIG = "monplant:auto_reminders_config:v1";
-const STORAGE_LAST_HOURLY = "monplant:auto_reminders_last_hourly:v1";
-const REMINDER_EVENT = "monplant:avisos-notification-change";
+const API_BASE =
+  (import.meta as any).env?.VITE_API_BASE ||
+  (import.meta as any).env?.VITE_API_URL ||
+  "https://monplant-production.up.railway.app/api";
 
-const DEFAULT_CONFIG: ReminderConfig = {
-  hourlyEnabled: true,
-  randomEnabled: true,
-  hourlyMinute: 5,
-  randomMinMinutes: 40,
-  randomMaxMinutes: 90,
-  nextRandomAt: null,
-};
+const NOTIFICATION_KEY = "monplant:avisos_unread";
+const NOTIFICATION_EVENT = "monplant:avisos-notification-change";
 
-const pad2 = (n: number) => String(n).padStart(2, "0");
-
-function uid() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+function getToken() {
+  return localStorage.getItem("token") || localStorage.getItem("monplant_token") || "";
 }
 
-function readJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+function authHeaders(): HeadersInit {
+  const token = getToken();
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }
 
-function writeJson<T>(key: string, value: T) {
-  localStorage.setItem(key, JSON.stringify(value));
+function setUnreadFlag(unread: boolean) {
+  localStorage.setItem(NOTIFICATION_KEY, unread ? "true" : "false");
+  window.dispatchEvent(new CustomEvent(NOTIFICATION_EVENT, { detail: { unread } }));
 }
 
 function fmtDateTime(value?: string | null) {
@@ -73,404 +63,200 @@ function fmtDateTime(value?: string | null) {
   });
 }
 
-function fmtTime(value?: string | null) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-}
-
-function previousHourRange(now = new Date()) {
-  const end = new Date(now);
-  end.setMinutes(0, 0, 0);
-
-  const start = new Date(end);
-  start.setHours(start.getHours() - 1);
-
-  return `${pad2(start.getHours())}:00–${pad2(end.getHours())}:00`;
-}
-
-function nextRandomDate(config: ReminderConfig, base = new Date()) {
-  const min = Math.max(5, Number(config.randomMinMinutes || 40));
-  const max = Math.max(min, Number(config.randomMaxMinutes || 90));
-  const minutes = Math.floor(Math.random() * (max - min + 1)) + min;
-  const d = new Date(base.getTime() + minutes * 60_000);
-  return d.toISOString();
-}
-
-function isSameHourlySlot(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate() &&
-    a.getHours() === b.getHours()
-  );
-}
-
-function notifyUnreadChange(items: ReminderItem[]) {
-  const unread = items.some((i) => i.status === "pendente");
-  localStorage.setItem("monplant:avisos_unread", unread ? "true" : "false");
-  window.dispatchEvent(new CustomEvent(REMINDER_EVENT, { detail: { unread } }));
+function typeLabel(type: ReminderType) {
+  if (type === "producao_horaria") return "Produção horária";
+  return "Impacto / baixa produção";
 }
 
 export default function AvisosSupervisor() {
-  const { user } = useAuth();
-  const userName = user?.full_name || user?.email || "Usuário";
-
   const [items, setItems] = useState<ReminderItem[]>([]);
-  const [config, setConfig] = useState<ReminderConfig>(DEFAULT_CONFIG);
-  const [now, setNow] = useState(new Date());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState<string | null>(null);
 
   const pending = useMemo(() => items.filter((i) => i.status === "pendente"), [items]);
-  const doneToday = useMemo(() => {
+  const confirmedToday = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    return items.filter((i) => (i.confirmed_at || i.created_at).slice(0, 10) === today && i.status === "confirmado");
+    return items.filter((i) => i.status === "confirmado" && (i.confirmed_at || i.created_at).slice(0, 10) === today);
   }, [items]);
 
-  const hourlyPending = pending.filter((i) => i.type === "producao_horaria").length;
-  const impactPending = pending.filter((i) => i.type === "impacto_aleatorio").length;
+  const loadReminders = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-  const saveItems = useCallback((next: ReminderItem[]) => {
-    const ordered = [...next].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 300);
-    setItems(ordered);
-    writeJson(STORAGE_ITEMS, ordered);
-    notifyUnreadChange(ordered);
-  }, []);
-
-  const saveConfig = useCallback((next: ReminderConfig) => {
-    setConfig(next);
-    writeJson(STORAGE_CONFIG, next);
-  }, []);
-
-  const createReminder = useCallback(
-    (type: ReminderType, base = new Date()) => {
-      const range = previousHourRange(base);
-      const reminder: ReminderItem =
-        type === "producao_horaria"
-          ? {
-              id: uid(),
-              type,
-              title: `Enviar produção da última hora (${range})`,
-              message:
-                `Lembrete automático do sistema: enviar nos grupos de WhatsApp a produção da última hora (${range}). ` +
-                "Após enviar, confirme este aviso para retirar a notificação.",
-              created_at: base.toISOString(),
-              scheduled_for: base.toISOString(),
-              status: "pendente",
-            }
-          : {
-              id: uid(),
-              type,
-              title: "Confirmar impacto ou baixa produção",
-              message:
-                "Lembrete automático do sistema: perguntar ao supervisor se houve impacto operacional, baixa produção, parada relevante ou condição que precise entrar no boletim do turno.",
-              created_at: base.toISOString(),
-              scheduled_for: base.toISOString(),
-              status: "pendente",
-            };
-
-      setItems((current) => {
-        const existsSameHour =
-          type === "producao_horaria" &&
-          current.some((i) => i.type === "producao_horaria" && isSameHourlySlot(new Date(i.created_at), base));
-        if (existsSameHour) return current;
-
-        const next = [reminder, ...current].slice(0, 300);
-        writeJson(STORAGE_ITEMS, next);
-        notifyUnreadChange(next);
-        return next;
+    try {
+      const res = await fetch(`${API_BASE}/avisos-supervisor`, {
+        method: "GET",
+        headers: authHeaders(),
       });
-    },
-    []
-  );
 
-  useEffect(() => {
-    const loadedItems = readJson<ReminderItem[]>(STORAGE_ITEMS, []);
-    const loadedConfig = { ...DEFAULT_CONFIG, ...readJson<Partial<ReminderConfig>>(STORAGE_CONFIG, {}) };
+      if (!res.ok) throw new Error(`Falha ao carregar lembretes (${res.status})`);
 
-    if (!loadedConfig.nextRandomAt) loadedConfig.nextRandomAt = nextRandomDate(loadedConfig);
+      const data: ApiResponse = await res.json();
+      const list = Array.isArray(data.items) ? data.items : [];
 
-    setItems(loadedItems);
-    setConfig(loadedConfig);
-    writeJson(STORAGE_CONFIG, loadedConfig);
-    notifyUnreadChange(loadedItems);
-  }, []);
-
-  useEffect(() => {
-    const tick = () => {
-      const current = new Date();
-      setNow(current);
-
-      setConfig((cfg) => {
-        let nextCfg = { ...cfg };
-
-        if (nextCfg.hourlyEnabled && current.getMinutes() === Number(nextCfg.hourlyMinute || 5)) {
-          const lastRaw = localStorage.getItem(STORAGE_LAST_HOURLY);
-          const last = lastRaw ? new Date(lastRaw) : null;
-          if (!last || !isSameHourlySlot(last, current)) {
-            createReminder("producao_horaria", current);
-            localStorage.setItem(STORAGE_LAST_HOURLY, current.toISOString());
-          }
-        }
-
-        if (nextCfg.randomEnabled) {
-          const nextRandom = nextCfg.nextRandomAt ? new Date(nextCfg.nextRandomAt) : null;
-          if (!nextRandom || current >= nextRandom) {
-            createReminder("impacto_aleatorio", current);
-            nextCfg = { ...nextCfg, nextRandomAt: nextRandomDate(nextCfg, current) };
-            writeJson(STORAGE_CONFIG, nextCfg);
-          }
-        }
-
-        return nextCfg;
-      });
-    };
-
-    tick();
-    const timer = window.setInterval(tick, 30_000);
-    return () => window.clearInterval(timer);
-  }, [createReminder]);
-
-  function confirmReminder(id: string) {
-    const next = items.map((item) =>
-      item.id === id
-        ? {
-            ...item,
-            status: "confirmado" as ReminderStatus,
-            confirmed_at: new Date().toISOString(),
-            confirmed_by: userName,
-          }
-        : item
-    );
-    saveItems(next);
-  }
-
-  function confirmAll() {
-    const date = new Date().toISOString();
-    const next = items.map((item) =>
-      item.status === "pendente"
-        ? { ...item, status: "confirmado" as ReminderStatus, confirmed_at: date, confirmed_by: userName }
-        : item
-    );
-    saveItems(next);
-  }
-
-  function updateConfig(partial: Partial<ReminderConfig>) {
-    const next = { ...config, ...partial };
-    if (partial.randomMinMinutes || partial.randomMaxMinutes || partial.randomEnabled) {
-      next.nextRandomAt = next.randomEnabled ? nextRandomDate(next) : null;
+      setItems(list);
+      setUnreadFlag(Boolean(data.unread || data.pending_count > 0));
+      setLastSync(new Date().toISOString());
+    } catch (e: any) {
+      setError(e?.message || "Erro ao carregar lembretes.");
+    } finally {
+      setLoading(false);
     }
-    saveConfig(next);
+  }, []);
+
+  async function confirmReminder(id: number | string) {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/avisos-supervisor/${id}/confirmar`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+
+      if (!res.ok) throw new Error(`Falha ao confirmar lembrete (${res.status})`);
+
+      await loadReminders();
+    } catch (e: any) {
+      setError(e?.message || "Erro ao confirmar lembrete.");
+      setLoading(false);
+    }
   }
 
-  function forceHourly() {
-    createReminder("producao_horaria", new Date());
-  }
-
-  function forceImpact() {
-    createReminder("impacto_aleatorio", new Date());
-    updateConfig({ nextRandomAt: nextRandomDate(config) });
-  }
+  useEffect(() => {
+    loadReminders();
+    const timer = window.setInterval(loadReminders, 30_000);
+    return () => window.clearInterval(timer);
+  }, [loadReminders]);
 
   return (
-    <div className="mp-page">
-      <div className="mp-container" style={{ maxWidth: 1220 }}>
-        <div className="mp-breadcrumb">MonPlant • CCO • Lembretes automáticos</div>
+    <div className="min-h-screen bg-[#05080d] text-zinc-100">
+      <style>{`
+        .mp-page { padding: 22px; }
+        .mp-head { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; flex-wrap:wrap; margin-bottom:18px; }
+        .mp-title { font-size:26px; font-weight:950; letter-spacing:-0.04em; color:#f5f7fb; }
+        .mp-sub { margin-top:6px; color:#9aa4b2; font-size:14px; font-weight:700; }
+        .mp-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+        .mp-btn { border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.06); color:#f4f7fb; border-radius:14px; padding:10px 14px; font-weight:900; font-size:13px; display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+        .mp-btn:hover { background:rgba(255,255,255,.1); }
+        .mp-btn:disabled { opacity:.55; cursor:not-allowed; }
+        .mp-btn-primary { background:rgba(249,115,22,.16); border-color:rgba(249,115,22,.45); color:#fff7ed; }
+        .mp-grid { display:grid; grid-template-columns:repeat(12, minmax(0, 1fr)); gap:14px; }
+        .mp-card { background:linear-gradient(180deg, rgba(18,24,33,.96), rgba(8,12,18,.96)); border:1px solid rgba(255,255,255,.09); border-radius:22px; box-shadow:0 18px 45px rgba(0,0,0,.22); }
+        .mp-kpi { grid-column:span 4; padding:18px; min-height:116px; }
+        .mp-list { grid-column:span 8; padding:18px; }
+        .mp-side { grid-column:span 4; padding:18px; }
+        .mp-kpi-label { color:#9aa4b2; font-size:12px; font-weight:950; text-transform:uppercase; letter-spacing:.08em; }
+        .mp-kpi-value { margin-top:10px; font-size:34px; font-weight:1000; letter-spacing:-.04em; }
+        .mp-muted { color:#9aa4b2; font-weight:700; }
+        .mp-item { padding:16px; border:1px solid rgba(255,255,255,.08); border-radius:18px; background:rgba(255,255,255,.035); margin-top:12px; }
+        .mp-item-new { border-color:rgba(239,68,68,.45); box-shadow:0 0 0 1px rgba(239,68,68,.10) inset; }
+        .mp-row { display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; align-items:flex-start; }
+        .mp-badge { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:7px 10px; font-size:12px; font-weight:950; border:1px solid rgba(255,255,255,.12); }
+        .mp-badge-red { background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.36); color:#fecaca; }
+        .mp-badge-ok { background:rgba(34,197,94,.13); border-color:rgba(34,197,94,.32); color:#bbf7d0; }
+        .mp-badge-blue { background:rgba(14,165,233,.13); border-color:rgba(14,165,233,.32); color:#bae6fd; }
+        .mp-empty { padding:28px; text-align:center; color:#9aa4b2; border:1px dashed rgba(255,255,255,.14); border-radius:18px; margin-top:12px; font-weight:800; }
+        .mp-alert { margin-bottom:14px; padding:13px 14px; border-radius:16px; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.28); color:#fecaca; font-weight:850; }
+        @media (max-width: 980px) { .mp-kpi, .mp-list, .mp-side { grid-column:span 12; } .mp-page { padding:14px; } }
+      `}</style>
 
-        <div className="mp-hero" style={{ marginTop: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <div style={{ minWidth: 300, flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <h1 className="mp-title" style={{ margin: 0 }}>Avisos Automáticos</h1>
-                {pending.length > 0 && (
-                  <span
-                    title="Existem lembretes pendentes"
-                    style={{
-                      width: 13,
-                      height: 13,
-                      borderRadius: 999,
-                      background: "#ef4444",
-                      boxShadow: "0 0 0 5px rgba(239,68,68,.16), 0 0 18px rgba(239,68,68,.75)",
-                      display: "inline-block",
-                    }}
-                  />
-                )}
-              </div>
-
-              <p className="mp-lead" style={{ marginTop: 8 }}>
-                Sistema de lembretes do CCO para envio horário da produção nos grupos de WhatsApp e confirmação aleatória de impactos ou baixa produção com o supervisor.
-              </p>
-
-              <div className="mp-muted" style={{ marginTop: 8 }}>
-                Agora: <strong>{fmtDateTime(now.toISOString())}</strong> • Próximo lembrete aleatório: <strong>{fmtTime(config.nextRandomAt)}</strong>
-              </div>
+      <div className="mp-page">
+        <div className="mp-head">
+          <div>
+            <div className="mp-title">Avisos do Supervisor</div>
+            <div className="mp-sub">
+              Lembretes automáticos gerados pelo sistema para rotina horária do CCO.
             </div>
+          </div>
 
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <button className="mp-btn" onClick={forceHourly}>Gerar lembrete produção</button>
-              <button className="mp-btn" onClick={forceImpact}>Gerar lembrete impacto</button>
-              <button className="mp-btn mp-btn-primary" onClick={confirmAll} disabled={pending.length === 0}>
-                Confirmar todos
-              </button>
-            </div>
+          <div className="mp-actions">
+            <span className="mp-badge mp-badge-blue">
+              <Clock3 size={14} /> Última sincronização: {fmtDateTime(lastSync)}
+            </span>
+            <button className="mp-btn" onClick={loadReminders} disabled={loading}>
+              <RefreshCw size={16} /> Atualizar
+            </button>
           </div>
         </div>
 
-        <div className="mp-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 14, marginTop: 16 }}>
-          <div className="mp-card" style={{ padding: 16 }}>
-            <div className="mp-muted">Pendentes</div>
-            <div style={{ fontSize: 34, fontWeight: 950, color: pending.length ? "#ef4444" : "#fff" }}>{pending.length}</div>
-          </div>
-          <div className="mp-card" style={{ padding: 16 }}>
-            <div className="mp-muted">Produção horária</div>
-            <div style={{ fontSize: 34, fontWeight: 950 }}>{hourlyPending}</div>
-          </div>
-          <div className="mp-card" style={{ padding: 16 }}>
-            <div className="mp-muted">Impacto / baixa</div>
-            <div style={{ fontSize: 34, fontWeight: 950 }}>{impactPending}</div>
-          </div>
-          <div className="mp-card" style={{ padding: 16 }}>
-            <div className="mp-muted">Confirmados hoje</div>
-            <div style={{ fontSize: 34, fontWeight: 950 }}>{doneToday.length}</div>
-          </div>
-        </div>
+        {error && <div className="mp-alert">{error}</div>}
 
-        <div className="mp-grid" style={{ gridTemplateColumns: "0.82fr 1.18fr", gap: 16, marginTop: 16 }}>
-          <div className="mp-card">
-            <div className="mp-card-h">
+        <div className="mp-grid">
+          <div className="mp-card mp-kpi">
+            <div className="mp-kpi-label">Pendentes</div>
+            <div className="mp-kpi-value" style={{ color: pending.length ? "#f87171" : "#e5e7eb" }}>{pending.length}</div>
+            <div className="mp-muted">gera bolinha vermelha no menu</div>
+          </div>
+
+          <div className="mp-card mp-kpi">
+            <div className="mp-kpi-label">Confirmados hoje</div>
+            <div className="mp-kpi-value">{confirmedToday.length}</div>
+            <div className="mp-muted">avisos tratados no dia</div>
+          </div>
+
+          <div className="mp-card mp-kpi">
+            <div className="mp-kpi-label">Origem</div>
+            <div className="mp-kpi-value" style={{ fontSize: 22 }}>Backend</div>
+            <div className="mp-muted">sem cálculo no front</div>
+          </div>
+
+          <div className="mp-card mp-list">
+            <div className="mp-row">
               <div>
-                <div className="mp-card-title">Configuração automática</div>
-                <div className="mp-muted" style={{ marginTop: 4 }}>Sem lançamento manual de aviso. O sistema gera sozinho.</div>
+                <div style={{ fontSize: 18, fontWeight: 950 }}>Lembretes ativos</div>
+                <div className="mp-muted" style={{ marginTop: 4 }}>{pending.length} aviso(s) aguardando confirmação</div>
               </div>
+              {pending.length > 0 && <span className="mp-badge mp-badge-red"><Bell size={14} /> Notificação ativa</span>}
             </div>
 
-            <div className="mp-card-b">
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <label className="mp-card" style={{ padding: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <div>
-                    <div style={{ fontWeight: 900 }}>Lembrete horário de produção</div>
-                    <div className="mp-muted" style={{ fontSize: 12, marginTop: 4 }}>Gera aviso para enviar a produção da última hora.</div>
+            {pending.length === 0 ? (
+              <div className="mp-empty">Nenhum lembrete pendente no momento.</div>
+            ) : (
+              pending.map((item) => (
+                <div key={item.id} className="mp-item mp-item-new">
+                  <div className="mp-row">
+                    <div style={{ minWidth: 260, flex: 1 }}>
+                      <div style={{ fontSize: 17, fontWeight: 950 }}>{item.title}</div>
+                      <div className="mp-muted" style={{ marginTop: 5, fontSize: 12 }}>{typeLabel(item.type)} • {fmtDateTime(item.scheduled_for)}</div>
+                    </div>
+                    <span className="mp-badge mp-badge-red"><AlertTriangle size={14} /> Pendente</span>
                   </div>
-                  <input type="checkbox" checked={config.hourlyEnabled} onChange={(e) => updateConfig({ hourlyEnabled: e.target.checked })} />
-                </label>
 
-                <div>
-                  <label className="mp-label">Minuto do disparo horário</label>
-                  <select
-                    className="mp-input"
-                    value={config.hourlyMinute}
-                    onChange={(e) => updateConfig({ hourlyMinute: Number(e.target.value) })}
-                    disabled={!config.hourlyEnabled}
-                  >
-                    <option value={0}>Na virada da hora (:00)</option>
-                    <option value={5}>5 minutos após (:05)</option>
-                    <option value={10}>10 minutos após (:10)</option>
-                    <option value={15}>15 minutos após (:15)</option>
-                  </select>
-                </div>
+                  <div style={{ marginTop: 12, lineHeight: 1.55, color: "#d7dde7", whiteSpace: "pre-wrap" }}>{item.message}</div>
 
-                <div className="mp-divider" />
-
-                <label className="mp-card" style={{ padding: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <div>
-                    <div style={{ fontWeight: 900 }}>Pergunta aleatória ao supervisor</div>
-                    <div className="mp-muted" style={{ fontSize: 12, marginTop: 4 }}>Pergunta se houve impacto, baixa produção ou parada relevante.</div>
-                  </div>
-                  <input type="checkbox" checked={config.randomEnabled} onChange={(e) => updateConfig({ randomEnabled: e.target.checked })} />
-                </label>
-
-                <div className="mp-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label className="mp-label">Mínimo</label>
-                    <input
-                      className="mp-input"
-                      type="number"
-                      min={5}
-                      value={config.randomMinMinutes}
-                      onChange={(e) => updateConfig({ randomMinMinutes: Number(e.target.value) })}
-                      disabled={!config.randomEnabled}
-                    />
-                  </div>
-                  <div>
-                    <label className="mp-label">Máximo</label>
-                    <input
-                      className="mp-input"
-                      type="number"
-                      min={10}
-                      value={config.randomMaxMinutes}
-                      onChange={(e) => updateConfig({ randomMaxMinutes: Number(e.target.value) })}
-                      disabled={!config.randomEnabled}
-                    />
+                  <div style={{ marginTop: 14 }}>
+                    <button className="mp-btn mp-btn-primary" onClick={() => confirmReminder(item.id)} disabled={loading}>
+                      <CheckCircle2 size={16} /> Confirmar lembrete
+                    </button>
                   </div>
                 </div>
-
-                <div className="mp-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>
-                  Para a bolinha vermelha aparecer também no menu lateral, o AppShell deve ler <strong>localStorage.getItem("monplant:avisos_unread")</strong> e ouvir o evento <strong>{REMINDER_EVENT}</strong>.
-                </div>
-              </div>
-            </div>
+              ))
+            )}
           </div>
 
-          <div className="mp-card">
-            <div className="mp-card-h">
-              <div>
-                <div className="mp-card-title">Fila de lembretes</div>
-                <div className="mp-muted" style={{ marginTop: 4 }}>{pending.length} pendente(s) • {items.length} registro(s)</div>
-              </div>
-            </div>
+          <div className="mp-card mp-side">
+            <div style={{ fontSize: 18, fontWeight: 950 }}>Histórico recente</div>
+            <div className="mp-muted" style={{ marginTop: 4 }}>últimos avisos confirmados/gerados</div>
 
-            <div className="mp-card-b">
-              {items.length === 0 ? (
-                <div className="mp-empty">Nenhum lembrete gerado ainda.</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {items.map((item) => {
-                    const isPending = item.status === "pendente";
-                    return (
-                      <div
-                        key={item.id}
-                        className="mp-card"
-                        style={{
-                          padding: 14,
-                          borderColor: isPending ? "rgba(239,68,68,.45)" : "rgba(148,163,184,.18)",
-                          background: isPending ? "rgba(127,29,29,.16)" : "rgba(15,23,42,.34)",
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                          <div style={{ minWidth: 260, flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                              {isPending && <span style={{ width: 9, height: 9, borderRadius: 999, background: "#ef4444", display: "inline-block" }} />}
-                              <div style={{ fontWeight: 950, fontSize: 16 }}>{item.title}</div>
-                            </div>
-                            <div className="mp-muted" style={{ marginTop: 5, fontSize: 12 }}>
-                              Gerado em {fmtDateTime(item.created_at)}
-                            </div>
-                          </div>
-
-                          <span className={isPending ? "mp-badge mp-badge-warn" : "mp-badge mp-badge-ok"}>
-                            {isPending ? "Pendente" : "Confirmado"}
-                          </span>
-                        </div>
-
-                        <div style={{ marginTop: 10, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{item.message}</div>
-
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-                          <div className="mp-muted" style={{ fontSize: 12 }}>
-                            {item.confirmed_at ? `Confirmado por ${item.confirmed_by || "—"} em ${fmtDateTime(item.confirmed_at)}` : "Aguardando confirmação"}
-                          </div>
-
-                          {isPending && (
-                            <button className="mp-btn mp-btn-primary" onClick={() => confirmReminder(item.id)}>
-                              Confirmar aviso
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+            {items.length === 0 ? (
+              <div className="mp-empty">Sem histórico.</div>
+            ) : (
+              items.slice(0, 12).map((item) => (
+                <div key={item.id} className="mp-item" style={{ padding: 13 }}>
+                  <div className="mp-row">
+                    <div style={{ fontWeight: 950 }}>{item.title}</div>
+                    {item.status === "pendente" ? (
+                      <span className="mp-badge mp-badge-red">Pendente</span>
+                    ) : (
+                      <span className="mp-badge mp-badge-ok">Confirmado</span>
+                    )}
+                  </div>
+                  <div className="mp-muted" style={{ marginTop: 7, fontSize: 12 }}>{fmtDateTime(item.created_at)}</div>
                 </div>
-              )}
-            </div>
+              ))
+            )}
           </div>
         </div>
       </div>
