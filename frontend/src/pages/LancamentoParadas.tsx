@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
   Tooltip,
-  Legend,
+  LabelList,
 } from "recharts";
 import { useIsMobile } from "../mobile/useIsMobile";
 
@@ -76,6 +78,25 @@ function makePeriods24(): string[] {
   }
   return res;
 }
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+function daysBetweenInclusive(start: string, end: string): string[] {
+  if (!start || !end) return [];
+  const a = start <= end ? start : end;
+  const b = start <= end ? end : start;
+  const out: string[] = [];
+  let cur = a;
+  for (let i = 0; i < 370; i++) {
+    out.push(cur);
+    if (cur === b) break;
+    cur = addDaysISO(cur, 1);
+  }
+  return out;
+}
 function clamp60(n: number) {
   return Math.max(0, Math.min(60, n));
 }
@@ -107,42 +128,6 @@ function colorForType(type: any) {
   if (t.includes("operac")) return TYPE_COLORS.Operacional;
   if (!t) return TYPE_COLORS.Outros;
   return TYPE_COLORS.Outros;
-}
-
-/* donut callouts */
-const RAD = Math.PI / 180;
-function renderPieCalloutLabel(props: any) {
-  const { cx, cy, midAngle, outerRadius, payload, value } = props;
-  const rLine = outerRadius + 12;
-  const rText = outerRadius + 26;
-  const x1 = cx + rLine * Math.cos(-midAngle * RAD);
-  const y1 = cy + rLine * Math.sin(-midAngle * RAD);
-  const x2 = cx + rText * Math.cos(-midAngle * RAD);
-  const y2 = cy + rText * Math.sin(-midAngle * RAD);
-  const xMid = x2 + (x2 > cx ? 12 : -12);
-  const yMid = y2;
-
-  const hours = Number(value || 0);
-  const type = String(payload?.type ?? payload?.name ?? "").trim() || "Outros";
-  const stroke = colorForType(type);
-
-  return (
-    <g>
-      <path d={`M${x1},${y1} L${x2},${y2} L${xMid},${yMid}`} stroke={stroke} strokeWidth={2} fill="none" opacity={0.9} />
-      <circle cx={xMid} cy={yMid} r={3} fill={stroke} />
-      <text
-        x={xMid + (xMid > cx ? 8 : -8)}
-        y={yMid}
-        textAnchor={xMid > cx ? "start" : "end"}
-        dominantBaseline="central"
-        fill="rgba(255,255,255,0.92)"
-        fontWeight={900}
-        fontSize={11}
-      >
-        {type}: {fmt1(hours)} h
-      </text>
-    </g>
-  );
 }
 
 /* UI */
@@ -201,6 +186,11 @@ export default function LancamentoParadas() {
   const mobile = useIsMobile();
   const periods = useMemo(() => makePeriods24(), []);
   const [day, setDay] = useState<string>(isoTodayLocal());
+  const [periodMode, setPeriodMode] = useState(false);
+  const [startDay, setStartDay] = useState<string>(isoTodayLocal());
+  const [endDay, setEndDay] = useState<string>(isoTodayLocal());
+  const [metricMode, setMetricMode] = useState<"minutes" | "count">("minutes");
+  const [periodRows, setPeriodRows] = useState<StopRow[]>([]);
   const [plants, setPlants] = useState<PlantInfo[]>([]);
   const [plantId, setPlantId] = useState<number | null>(null);
 
@@ -244,6 +234,26 @@ export default function LancamentoParadas() {
     }
   }
 
+  async function loadOneDay(targetDay: string): Promise<StopRow[]> {
+    if (!plantId) return [];
+    const r = await fetch(`${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(targetDay)}`, {
+      headers: { ...authHeaders() },
+    });
+    if (r.status === 404) return [];
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      throw new Error(t || `HTTP ${r.status}`);
+    }
+    const data = (await r.json()) as StopDayPayload;
+    return (data.rows || []).map((x: any) => ({
+      period: String(x.period || ""),
+      equipamento: x.equipamento ?? x.equipment ?? "",
+      tipo_parada: x.tipo_parada ?? x.stop_type ?? "",
+      descricao: x.descricao ?? x.description ?? "",
+      minutos: clamp60(Number(x.minutos ?? x.minutes ?? 0)),
+    }));
+  }
+
   async function load() {
     if (!API_BASE) {
       setMsg("VITE_API_BASE não configurado.");
@@ -267,31 +277,11 @@ export default function LancamentoParadas() {
         return;
       }
 
-      const r = await fetch(`${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(day)}`, {
-        headers: { ...authHeaders() },
-      });
-
-      if (r.status === 404) {
-        setLoading(false);
-        return;
-      }
-
-      if (!r.ok) {
-        const t = await r.text().catch(() => "");
-        throw new Error(t || `HTTP ${r.status}`);
-      }
-
-      const data = (await r.json()) as StopDayPayload;
+      const dayRows = await loadOneDay(day);
       const map: Record<string, StopRow> = {};
-      for (const x of data.rows || []) {
-        const p = (x as any).period;
-        map[p] = {
-          period: p,
-          equipamento: (x as any).equipamento ?? (x as any).equipment ?? "",
-          tipo_parada: (x as any).tipo_parada ?? (x as any).stop_type ?? "",
-          descricao: (x as any).descricao ?? (x as any).description ?? "",
-          minutos: Number((x as any).minutos ?? (x as any).minutes ?? 0),
-        };
+      for (const x of dayRows) {
+        const p = x.period;
+        map[p] = x;
       }
 
       setRows(
@@ -305,6 +295,31 @@ export default function LancamentoParadas() {
       );
     } catch (e: any) {
       setMsg(e?.message || "Erro ao carregar");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadPeriod() {
+    if (!API_BASE) {
+      setMsg("VITE_API_BASE não configurado.");
+      return;
+    }
+    if (!plantId) {
+      setMsg("Selecione uma planta.");
+      return;
+    }
+
+    setLoading(true);
+    setMsg("");
+    try {
+      const days = daysBetweenInclusive(startDay, endDay);
+      const all = (await Promise.all(days.map((d) => loadOneDay(d)))).flat();
+      setPeriodRows(all);
+      setMsg(`Período carregado: ${days.length} dia(s).`);
+    } catch (e: any) {
+      setPeriodRows([]);
+      setMsg(e?.message || "Erro ao carregar período");
     } finally {
       setLoading(false);
     }
@@ -359,28 +374,31 @@ export default function LancamentoParadas() {
 
   useEffect(() => {
     if (!plantId) return;
-    load();
+    if (periodMode) loadPeriod();
+    else load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day, plantId]);
+  }, [day, startDay, endDay, plantId, periodMode]);
 
   const selectedPlantName =
     plants.find((x) => Number(x.id) === Number(plantId))?.name || "Planta";
 
-  const totalMinutes = useMemo(() => rows.reduce((s, r) => s + clamp60(Number(r.minutos || 0)), 0), [rows]);
-  const totalHours = totalMinutes / 60;
+  const activeChartRows = periodMode ? periodRows : rows;
 
-  const pieData = useMemo(() => {
-    const agg: Record<string, number> = {};
-    for (const r of rows) {
-      const min = clamp60(Number(r.minutos || 0));
-      if (min <= 0) continue;
-      const tp = (r.tipo_parada || "Outros").trim() || "Outros";
-      agg[tp] = (agg[tp] || 0) + min / 60;
-    }
-    return Object.entries(agg)
-      .map(([type, hours]) => ({ type, hours: Number(hours.toFixed(2)) }))
-      .sort((a, b) => b.hours - a.hours);
-  }, [rows]);
+  const chartData = useMemo(() => {
+    return periods.map((p) => {
+      const items = activeChartRows.filter((r) => r.period === p && clamp60(Number(r.minutos || 0)) > 0);
+      const minutes = items.reduce((s, r) => s + clamp60(Number(r.minutos || 0)), 0);
+      const count = items.length;
+      return {
+        period: p,
+        minutes,
+        count,
+        value: metricMode === "minutes" ? minutes : count,
+      };
+    });
+  }, [activeChartRows, metricMode, periods]);
+
+  const chartTotal = useMemo(() => chartData.reduce((s, x) => s + Number(x.value || 0), 0), [chartData]);
 
   function updateRow(idx: number, patch: Partial<StopRow>) {
     setRows((prev) => {
@@ -415,7 +433,7 @@ export default function LancamentoParadas() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: mobile ? "1fr" : "auto auto auto auto",
+            gridTemplateColumns: mobile ? "1fr" : "auto auto auto auto auto auto",
             gap: 10,
             alignItems: "end",
             width: mobile ? "100%" : undefined,
@@ -438,12 +456,46 @@ export default function LancamentoParadas() {
             </select>
           </div>
 
+          {!periodMode ? (
+            <div>
+              <div style={labelStyle}>Dia</div>
+              <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={inputStyle as any} />
+            </div>
+          ) : (
+            <>
+              <div>
+                <div style={labelStyle}>Início</div>
+                <input type="date" value={startDay} onChange={(e) => setStartDay(e.target.value)} style={inputStyle as any} />
+              </div>
+              <div>
+                <div style={labelStyle}>Fim</div>
+                <input type="date" value={endDay} onChange={(e) => setEndDay(e.target.value)} style={inputStyle as any} />
+              </div>
+            </>
+          )}
+
           <div>
-            <div style={labelStyle}>Data</div>
-            <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={inputStyle as any} />
+            <div style={labelStyle}>Visualizar</div>
+            <select value={metricMode} onChange={(e) => setMetricMode(e.target.value as "minutes" | "count")} style={inputStyle as any}>
+              <option value="minutes">Minutos parados/hora</option>
+              <option value="count">Qtd. de paradas/hora</option>
+            </select>
           </div>
 
-          <button onClick={load} style={{ ...btnStyle, width: mobile ? "100%" : undefined }} disabled={loading || !plantId}>
+          <button
+            type="button"
+            onClick={() => setPeriodMode((v) => !v)}
+            style={{
+              ...btnStyle,
+              width: mobile ? "100%" : undefined,
+              background: periodMode ? "rgba(249,115,22,0.18)" : "rgba(255,255,255,0.06)",
+              borderColor: periodMode ? "rgba(249,115,22,0.45)" : "rgba(255,255,255,0.12)",
+            }}
+          >
+            {periodMode ? "Período ativo" : "Dia"}
+          </button>
+
+          <button onClick={periodMode ? loadPeriod : load} style={{ ...btnStyle, width: mobile ? "100%" : undefined }} disabled={loading || !plantId}>
             Atualizar
           </button>
 
@@ -455,7 +507,7 @@ export default function LancamentoParadas() {
               background: "rgba(16,185,129,0.16)",
               borderColor: "rgba(16,185,129,0.35)",
             }}
-            disabled={saving || loading || !plantId}
+            disabled={saving || loading || !plantId || periodMode}
           >
             {saving ? "Salvando..." : "Salvar"}
           </button>
@@ -474,67 +526,52 @@ export default function LancamentoParadas() {
           }}
         >
           <div>
-            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950 }}>Horas por tipo de parada</div>
-            <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
-              Total: {fmt1(totalHours)}h
+            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950 }}>
+              {metricMode === "minutes" ? "Minutos parados por hora" : "Quantidade de paradas por hora"}
             </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-              color: "rgba(255,255,255,0.65)",
-              fontWeight: 850,
-              fontSize: 12,
-            }}
-          >
-            {["Operacional", "Preventiva", "Corretiva", "Elétrica", "Segurança"].map((t) => (
-              <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <Dot color={colorForType(t)} /> {t}
-              </span>
-            ))}
+            <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
+              {periodMode
+                ? `Período: ${startDay} até ${endDay} • Total: ${fmt1(chartTotal)} ${metricMode === "minutes" ? "min" : "paradas"}`
+                : `Dia: ${day} • Total: ${fmt1(chartTotal)} ${metricMode === "minutes" ? "min" : "paradas"}`}
+            </div>
           </div>
         </div>
 
-        <div style={{ height: mobile ? 280 : 340 }}>
+        <div style={{ height: mobile ? 300 : 380 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={pieData}
-                dataKey="hours"
-                nameKey="type"
-                innerRadius={mobile ? 54 : 70}
-                outerRadius={mobile ? 88 : 115}
-                paddingAngle={2}
-                stroke="rgba(255,255,255,0.18)"
-                strokeWidth={1}
-                labelLine={false}
-                label={renderPieCalloutLabel}
-              >
-                {pieData.map((entry, idx) => (
-                  <Cell key={`c-${idx}`} fill={colorForType(entry.type)} />
-                ))}
-              </Pie>
-
+            <BarChart data={chartData} margin={{ top: 28, right: 16, left: 0, bottom: 6 }}>
+              <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+              <XAxis
+                dataKey="period"
+                tick={{ fill: "rgba(255,255,255,0.62)", fontSize: mobile ? 9 : 11, fontWeight: 800 }}
+                interval={mobile ? 1 : 0}
+                axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: "rgba(255,255,255,0.62)", fontSize: 11, fontWeight: 800 }}
+                axisLine={false}
+                tickLine={false}
+                allowDecimals={false}
+              />
               <Tooltip
                 contentStyle={{
-                  background: "rgba(0,0,0,0.85)",
+                  background: "rgba(0,0,0,0.88)",
                   border: "1px solid rgba(255,255,255,0.15)",
                   borderRadius: 12,
                 }}
-                formatter={(v: any) => [`${fmt1(Number(v || 0))} h`, "Horas"]}
-                labelFormatter={(l: any) => String(l || "")}
+                formatter={(v: any) => [`${fmt1(Number(v || 0))} ${metricMode === "minutes" ? "min" : "paradas"}`, metricMode === "minutes" ? "Minutos" : "Paradas"]}
+                labelFormatter={(l: any) => `Hora ${String(l || "")}`}
               />
-              {!mobile ? (
-                <Legend
-                  formatter={(value: any) => (
-                    <span style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900 }}>{String(value)}</span>
-                  )}
+              <Bar dataKey="value" fill="#16C8F3" radius={[10, 10, 0, 0]} maxBarSize={42}>
+                <LabelList
+                  dataKey="value"
+                  position="top"
+                  formatter={(v: any) => (Number(v || 0) > 0 ? fmt1(Number(v || 0)) : "")}
+                  style={{ fill: "rgba(255,255,255,0.88)", fontWeight: 950, fontSize: mobile ? 9 : 11 }}
                 />
-              ) : null}
-            </PieChart>
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
