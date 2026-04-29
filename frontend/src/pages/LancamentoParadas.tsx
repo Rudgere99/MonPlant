@@ -44,15 +44,24 @@ type PlantInfo = {
 };
 
 /* helpers */
-const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
+const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(
+  /\/+$/,
+  "",
+);
 
 function authHeaders(): HeadersInit {
-  const t = (localStorage.getItem("mp_token") || localStorage.getItem("token") || "").trim();
+  const t = (
+    localStorage.getItem("mp_token") ||
+    localStorage.getItem("token") ||
+    ""
+  ).trim();
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
 async function apiGet<T>(path: string): Promise<T> {
-  const r = await fetch(`${API_BASE}${path}`, { headers: { ...authHeaders() } });
+  const r = await fetch(`${API_BASE}${path}`, {
+    headers: { ...authHeaders() },
+  });
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     throw new Error(t || `HTTP ${r.status}`);
@@ -103,6 +112,14 @@ function clamp60(n: number) {
 function fmt1(n: number) {
   return (Number(n) || 0).toLocaleString("pt-BR", {
     minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+function fmtSmart(n: number) {
+  const value = Number(n) || 0;
+  return value.toLocaleString("pt-BR", {
+    minimumFractionDigits: value % 1 === 0 ? 0 : 1,
     maximumFractionDigits: 1,
   });
 }
@@ -201,7 +218,7 @@ export default function LancamentoParadas() {
       tipo_parada: "",
       descricao: "",
       minutos: 0,
-    }))
+    })),
   );
 
   const [loading, setLoading] = useState(false);
@@ -209,10 +226,22 @@ export default function LancamentoParadas() {
   const [msg, setMsg] = useState("");
 
   const equipmentOptions = useMemo(
-    () => ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08", "EH-04", "Peneiras", "Todos"],
-    []
+    () => [
+      "BT-01",
+      "BT-02",
+      "PN-01",
+      "PN-02",
+      "EH-08",
+      "EH-04",
+      "Peneiras",
+      "Todos",
+    ],
+    [],
   );
-  const stopTypes = useMemo(() => ["Operacional", "Preventiva", "Corretiva"], []);
+  const stopTypes = useMemo(
+    () => ["Operacional", "Preventiva", "Corretiva"],
+    [],
+  );
 
   async function loadPlants() {
     if (!API_BASE) {
@@ -224,7 +253,8 @@ export default function LancamentoParadas() {
       const list = Array.isArray(data) ? data : [];
       setPlants(list);
       setPlantId((current) => {
-        if (current && list.some((x) => Number(x.id) === Number(current))) return current;
+        if (current && list.some((x) => Number(x.id) === Number(current)))
+          return current;
         return list.length ? Number(list[0].id) : null;
       });
     } catch (e: any) {
@@ -236,9 +266,12 @@ export default function LancamentoParadas() {
 
   async function loadOneDay(targetDay: string): Promise<StopRow[]> {
     if (!plantId) return [];
-    const r = await fetch(`${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(targetDay)}`, {
-      headers: { ...authHeaders() },
-    });
+    const r = await fetch(
+      `${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(targetDay)}`,
+      {
+        headers: { ...authHeaders() },
+      },
+    );
     if (r.status === 404) return [];
     if (!r.ok) {
       const t = await r.text().catch(() => "");
@@ -271,7 +304,7 @@ export default function LancamentoParadas() {
             tipo_parada: "",
             descricao: "",
             minutos: 0,
-          }))
+          })),
         );
         setLoading(false);
         return;
@@ -291,7 +324,7 @@ export default function LancamentoParadas() {
           tipo_parada: map[p]?.tipo_parada ?? "",
           descricao: map[p]?.descricao ?? "",
           minutos: clamp60(Number(map[p]?.minutos ?? 0)),
-        }))
+        })),
       );
     } catch (e: any) {
       setMsg(e?.message || "Erro ao carregar");
@@ -347,11 +380,14 @@ export default function LancamentoParadas() {
 
       const body: StopDayPayload = { day, rows: normalized };
 
-      const r = await fetch(`${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(day)}`, {
-        method: "PUT",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const r = await fetch(
+        `${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(day)}`,
+        {
+          method: "PUT",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
 
       if (!r.ok) {
         const t = await r.text().catch(() => "");
@@ -384,21 +420,46 @@ export default function LancamentoParadas() {
 
   const activeChartRows = periodMode ? periodRows : rows;
 
+  const chartUnit =
+    periodMode && metricMode === "minutes"
+      ? "h"
+      : metricMode === "minutes"
+        ? "min"
+        : "paradas";
+
+  const chartTitle =
+    metricMode === "count"
+      ? "Quantidade de paradas por hora"
+      : periodMode
+        ? "Horas paradas por hora"
+        : "Minutos parados por hora";
+
   const chartData = useMemo(() => {
     return periods.map((p) => {
-      const items = activeChartRows.filter((r) => r.period === p && clamp60(Number(r.minutos || 0)) > 0);
-      const minutes = items.reduce((s, r) => s + clamp60(Number(r.minutos || 0)), 0);
+      const items = activeChartRows.filter(
+        (r) => r.period === p && clamp60(Number(r.minutos || 0)) > 0,
+      );
+      const minutes = items.reduce(
+        (s, r) => s + clamp60(Number(r.minutos || 0)),
+        0,
+      );
+      const hours = minutes / 60;
       const count = items.length;
+
       return {
         period: p,
         minutes,
+        hours,
         count,
-        value: metricMode === "minutes" ? minutes : count,
+        value: metricMode === "count" ? count : periodMode ? hours : minutes,
       };
     });
-  }, [activeChartRows, metricMode, periods]);
+  }, [activeChartRows, metricMode, periodMode, periods]);
 
-  const chartTotal = useMemo(() => chartData.reduce((s, x) => s + Number(x.value || 0), 0), [chartData]);
+  const chartTotal = useMemo(
+    () => chartData.reduce((s, x) => s + Number(x.value || 0), 0),
+    [chartData],
+  );
 
   function updateRow(idx: number, patch: Partial<StopRow>) {
     setRows((prev) => {
@@ -422,18 +483,36 @@ export default function LancamentoParadas() {
         }}
       >
         <div>
-          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: mobile ? 18 : 20 }}>
+          <div
+            style={{
+              color: "rgba(255,255,255,0.92)",
+              fontWeight: 980,
+              fontSize: mobile ? 18 : 20,
+            }}
+          >
             Lançamento de Paradas
           </div>
-          <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
-            {loading ? "Carregando..." : msg ? msg : `Lance paradas por hora (máx. 60 min por faixa). • ${selectedPlantName}`}
+          <div
+            style={{
+              color: "rgba(255,255,255,0.55)",
+              fontWeight: 800,
+              marginTop: 2,
+            }}
+          >
+            {loading
+              ? "Carregando..."
+              : msg
+                ? msg
+                : `Lance paradas por hora (máx. 60 min por faixa). • ${selectedPlantName}`}
           </div>
         </div>
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: mobile ? "1fr" : "auto auto auto auto auto auto",
+            gridTemplateColumns: mobile
+              ? "1fr"
+              : "auto auto auto auto auto auto",
             gap: 10,
             alignItems: "end",
             width: mobile ? "100%" : undefined,
@@ -443,11 +522,15 @@ export default function LancamentoParadas() {
             <div style={labelStyle}>Planta</div>
             <select
               value={plantId ?? ""}
-              onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) =>
+                setPlantId(e.target.value ? Number(e.target.value) : null)
+              }
               style={inputStyle as any}
               disabled={plants.length === 0}
             >
-              {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+              {plants.length === 0 ? (
+                <option value="">Sem plantas</option>
+              ) : null}
               {plants.map((x) => (
                 <option key={x.id} value={x.id}>
                   {x.name}
@@ -459,25 +542,48 @@ export default function LancamentoParadas() {
           {!periodMode ? (
             <div>
               <div style={labelStyle}>Dia</div>
-              <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={inputStyle as any} />
+              <input
+                type="date"
+                value={day}
+                onChange={(e) => setDay(e.target.value)}
+                style={inputStyle as any}
+              />
             </div>
           ) : (
             <>
               <div>
                 <div style={labelStyle}>Início</div>
-                <input type="date" value={startDay} onChange={(e) => setStartDay(e.target.value)} style={inputStyle as any} />
+                <input
+                  type="date"
+                  value={startDay}
+                  onChange={(e) => setStartDay(e.target.value)}
+                  style={inputStyle as any}
+                />
               </div>
               <div>
                 <div style={labelStyle}>Fim</div>
-                <input type="date" value={endDay} onChange={(e) => setEndDay(e.target.value)} style={inputStyle as any} />
+                <input
+                  type="date"
+                  value={endDay}
+                  onChange={(e) => setEndDay(e.target.value)}
+                  style={inputStyle as any}
+                />
               </div>
             </>
           )}
 
           <div>
             <div style={labelStyle}>Visualizar</div>
-            <select value={metricMode} onChange={(e) => setMetricMode(e.target.value as "minutes" | "count")} style={inputStyle as any}>
-              <option value="minutes">Minutos parados/hora</option>
+            <select
+              value={metricMode}
+              onChange={(e) =>
+                setMetricMode(e.target.value as "minutes" | "count")
+              }
+              style={inputStyle as any}
+            >
+              <option value="minutes">
+                {periodMode ? "Horas paradas/hora" : "Minutos parados/hora"}
+              </option>
               <option value="count">Qtd. de paradas/hora</option>
             </select>
           </div>
@@ -488,14 +594,22 @@ export default function LancamentoParadas() {
             style={{
               ...btnStyle,
               width: mobile ? "100%" : undefined,
-              background: periodMode ? "rgba(249,115,22,0.18)" : "rgba(255,255,255,0.06)",
-              borderColor: periodMode ? "rgba(249,115,22,0.45)" : "rgba(255,255,255,0.12)",
+              background: periodMode
+                ? "rgba(249,115,22,0.18)"
+                : "rgba(255,255,255,0.06)",
+              borderColor: periodMode
+                ? "rgba(249,115,22,0.45)"
+                : "rgba(255,255,255,0.12)",
             }}
           >
             {periodMode ? "Período ativo" : "Dia"}
           </button>
 
-          <button onClick={periodMode ? loadPeriod : load} style={{ ...btnStyle, width: mobile ? "100%" : undefined }} disabled={loading || !plantId}>
+          <button
+            onClick={periodMode ? loadPeriod : load}
+            style={{ ...btnStyle, width: mobile ? "100%" : undefined }}
+            disabled={loading || !plantId}
+          >
             Atualizar
           </button>
 
@@ -514,7 +628,14 @@ export default function LancamentoParadas() {
         </div>
       </div>
 
-      <div style={{ ...cardStyle, display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+      <div
+        style={{
+          ...cardStyle,
+          display: "grid",
+          gridTemplateColumns: "1fr",
+          gap: 10,
+        }}
+      >
         <div
           style={{
             display: "flex",
@@ -527,32 +648,49 @@ export default function LancamentoParadas() {
         >
           <div>
             <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950 }}>
-              {metricMode === "minutes" ? "Minutos parados por hora" : "Quantidade de paradas por hora"}
+              {chartTitle}
             </div>
-            <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
+            <div
+              style={{
+                color: "rgba(255,255,255,0.55)",
+                fontWeight: 800,
+                marginTop: 2,
+              }}
+            >
               {periodMode
-                ? `Período: ${startDay} até ${endDay} • Total: ${fmt1(chartTotal)} ${metricMode === "minutes" ? "min" : "paradas"}`
-                : `Dia: ${day} • Total: ${fmt1(chartTotal)} ${metricMode === "minutes" ? "min" : "paradas"}`}
+                ? `Período: ${startDay} até ${endDay} • Total: ${fmtSmart(chartTotal)} ${chartUnit}`
+                : `Dia: ${day} • Total: ${fmtSmart(chartTotal)} ${chartUnit}`}
             </div>
           </div>
         </div>
 
         <div style={{ height: mobile ? 300 : 380 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 28, right: 16, left: 0, bottom: 6 }}>
+            <BarChart
+              data={chartData}
+              margin={{ top: 28, right: 16, left: 0, bottom: 6 }}
+            >
               <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
               <XAxis
                 dataKey="period"
-                tick={{ fill: "rgba(255,255,255,0.62)", fontSize: mobile ? 9 : 11, fontWeight: 800 }}
+                tick={{
+                  fill: "rgba(255,255,255,0.62)",
+                  fontSize: mobile ? 9 : 11,
+                  fontWeight: 800,
+                }}
                 interval={mobile ? 1 : 0}
                 axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: "rgba(255,255,255,0.62)", fontSize: 11, fontWeight: 800 }}
+                tick={{
+                  fill: "rgba(255,255,255,0.62)",
+                  fontSize: 11,
+                  fontWeight: 800,
+                }}
                 axisLine={false}
                 tickLine={false}
-                allowDecimals={false}
+                allowDecimals={periodMode && metricMode === "minutes"}
               />
               <Tooltip
                 contentStyle={{
@@ -560,15 +698,33 @@ export default function LancamentoParadas() {
                   border: "1px solid rgba(255,255,255,0.15)",
                   borderRadius: 12,
                 }}
-                formatter={(v: any) => [`${fmt1(Number(v || 0))} ${metricMode === "minutes" ? "min" : "paradas"}`, metricMode === "minutes" ? "Minutos" : "Paradas"]}
+                formatter={(v: any) => [
+                  `${fmtSmart(Number(v || 0))} ${chartUnit}`,
+                  metricMode === "count"
+                    ? "Paradas"
+                    : periodMode
+                      ? "Horas"
+                      : "Minutos",
+                ]}
                 labelFormatter={(l: any) => `Hora ${String(l || "")}`}
               />
-              <Bar dataKey="value" fill="#16C8F3" radius={[10, 10, 0, 0]} maxBarSize={42}>
+              <Bar
+                dataKey="value"
+                fill="#16C8F3"
+                radius={[10, 10, 0, 0]}
+                maxBarSize={42}
+              >
                 <LabelList
                   dataKey="value"
                   position="top"
-                  formatter={(v: any) => (Number(v || 0) > 0 ? fmt1(Number(v || 0)) : "")}
-                  style={{ fill: "rgba(255,255,255,0.88)", fontWeight: 950, fontSize: mobile ? 9 : 11 }}
+                  formatter={(v: any) =>
+                    Number(v || 0) > 0 ? fmtSmart(Number(v || 0)) : ""
+                  }
+                  style={{
+                    fill: "rgba(255,255,255,0.88)",
+                    fontWeight: 950,
+                    fontSize: mobile ? 9 : 11,
+                  }}
                 />
               </Bar>
             </BarChart>
@@ -577,21 +733,50 @@ export default function LancamentoParadas() {
       </div>
 
       <div style={cardStyle}>
-        <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950, marginBottom: 10 }}>
+        <div
+          style={{
+            color: "rgba(255,255,255,0.92)",
+            fontWeight: 950,
+            marginBottom: 10,
+          }}
+        >
           Lançamento por hora (00-01 … 23-00)
         </div>
 
         {!mobile ? (
           <>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 10px", minWidth: 920 }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "separate",
+                  borderSpacing: "0 10px",
+                  minWidth: 920,
+                }}
+              >
                 <thead>
-                  <tr style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>
-                    <th style={{ textAlign: "left", padding: "0 10px" }}>Hora</th>
-                    <th style={{ textAlign: "left", padding: "0 10px" }}>Equipamento</th>
-                    <th style={{ textAlign: "left", padding: "0 10px" }}>Tipo</th>
-                    <th style={{ textAlign: "left", padding: "0 10px" }}>Descrição</th>
-                    <th style={{ textAlign: "left", padding: "0 10px" }}>Minutos (0–60)</th>
+                  <tr
+                    style={{
+                      color: "rgba(255,255,255,0.55)",
+                      fontWeight: 900,
+                      fontSize: 12,
+                    }}
+                  >
+                    <th style={{ textAlign: "left", padding: "0 10px" }}>
+                      Hora
+                    </th>
+                    <th style={{ textAlign: "left", padding: "0 10px" }}>
+                      Equipamento
+                    </th>
+                    <th style={{ textAlign: "left", padding: "0 10px" }}>
+                      Tipo
+                    </th>
+                    <th style={{ textAlign: "left", padding: "0 10px" }}>
+                      Descrição
+                    </th>
+                    <th style={{ textAlign: "left", padding: "0 10px" }}>
+                      Minutos (0–60)
+                    </th>
                   </tr>
                 </thead>
 
@@ -599,20 +784,57 @@ export default function LancamentoParadas() {
                   {rows.map((r, idx) => {
                     const c = colorForType(r.tipo_parada);
                     return (
-                      <tr key={r.period} style={{ background: "rgba(255,255,255,0.04)" }}>
-                        <td style={{ padding: "10px 10px", color: "rgba(255,255,255,0.85)", fontWeight: 950 }}>{r.period}</td>
+                      <tr
+                        key={r.period}
+                        style={{ background: "rgba(255,255,255,0.04)" }}
+                      >
+                        <td
+                          style={{
+                            padding: "10px 10px",
+                            color: "rgba(255,255,255,0.85)",
+                            fontWeight: 950,
+                          }}
+                        >
+                          {r.period}
+                        </td>
                         <td style={{ padding: "10px 10px" }}>
-                          <select style={inputStyle} value={r.equipamento} onChange={(e) => updateRow(idx, { equipamento: e.target.value })}>
+                          <select
+                            style={inputStyle}
+                            value={r.equipamento}
+                            onChange={(e) =>
+                              updateRow(idx, { equipamento: e.target.value })
+                            }
+                          >
                             <option value="">—</option>
-                            {equipmentOptions.map((x) => <option key={x} value={x}>{x}</option>)}
+                            {equipmentOptions.map((x) => (
+                              <option key={x} value={x}>
+                                {x}
+                              </option>
+                            ))}
                           </select>
                         </td>
                         <td style={{ padding: "10px 10px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                            }}
+                          >
                             <Dot color={c} />
-                            <select style={inputStyle} value={r.tipo_parada} onChange={(e) => updateRow(idx, { tipo_parada: e.target.value })}>
+                            <select
+                              style={inputStyle}
+                              value={r.tipo_parada}
+                              onChange={(e) =>
+                                updateRow(idx, { tipo_parada: e.target.value })
+                              }
+                            >
                               <option value="">—</option>
-                              {stopTypes.map((x) => <option key={x} value={x}>{x}</option>)}
+                              {stopTypes.map((x) => (
+                                <option key={x} value={x}>
+                                  {x}
+                                </option>
+                              ))}
                             </select>
                           </div>
                         </td>
@@ -620,7 +842,9 @@ export default function LancamentoParadas() {
                           <input
                             style={inputStyle}
                             value={r.descricao}
-                            onChange={(e) => updateRow(idx, { descricao: e.target.value })}
+                            onChange={(e) =>
+                              updateRow(idx, { descricao: e.target.value })
+                            }
                             placeholder="Ex.: troca de correia / limpeza / ajuste / etc."
                           />
                         </td>
@@ -631,7 +855,11 @@ export default function LancamentoParadas() {
                             min={0}
                             max={60}
                             value={String(r.minutos ?? 0)}
-                            onChange={(e) => updateRow(idx, { minutos: clamp60(Number(e.target.value) || 0) })}
+                            onChange={(e) =>
+                              updateRow(idx, {
+                                minutos: clamp60(Number(e.target.value) || 0),
+                              })
+                            }
                             placeholder="0-60"
                           />
                         </td>
@@ -658,26 +886,69 @@ export default function LancamentoParadas() {
                     gap: 10,
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                    <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950 }}>{r.period}</div>
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "rgba(255,255,255,0.72)", fontWeight: 850, fontSize: 12 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        color: "rgba(255,255,255,0.92)",
+                        fontWeight: 950,
+                      }}
+                    >
+                      {r.period}
+                    </div>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        color: "rgba(255,255,255,0.72)",
+                        fontWeight: 850,
+                        fontSize: 12,
+                      }}
+                    >
                       <Dot color={c} /> {r.tipo_parada || "—"}
                     </div>
                   </div>
 
                   <div>
                     <div style={labelStyle}>Equipamento</div>
-                    <select style={inputStyle} value={r.equipamento} onChange={(e) => updateRow(idx, { equipamento: e.target.value })}>
+                    <select
+                      style={inputStyle}
+                      value={r.equipamento}
+                      onChange={(e) =>
+                        updateRow(idx, { equipamento: e.target.value })
+                      }
+                    >
                       <option value="">—</option>
-                      {equipmentOptions.map((x) => <option key={x} value={x}>{x}</option>)}
+                      {equipmentOptions.map((x) => (
+                        <option key={x} value={x}>
+                          {x}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
                   <div>
                     <div style={labelStyle}>Tipo</div>
-                    <select style={inputStyle} value={r.tipo_parada} onChange={(e) => updateRow(idx, { tipo_parada: e.target.value })}>
+                    <select
+                      style={inputStyle}
+                      value={r.tipo_parada}
+                      onChange={(e) =>
+                        updateRow(idx, { tipo_parada: e.target.value })
+                      }
+                    >
                       <option value="">—</option>
-                      {stopTypes.map((x) => <option key={x} value={x}>{x}</option>)}
+                      {stopTypes.map((x) => (
+                        <option key={x} value={x}>
+                          {x}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -686,7 +957,9 @@ export default function LancamentoParadas() {
                     <input
                       style={inputStyle}
                       value={r.descricao}
-                      onChange={(e) => updateRow(idx, { descricao: e.target.value })}
+                      onChange={(e) =>
+                        updateRow(idx, { descricao: e.target.value })
+                      }
                       placeholder="Ex.: troca de correia / limpeza / ajuste / etc."
                     />
                   </div>
@@ -699,7 +972,11 @@ export default function LancamentoParadas() {
                       min={0}
                       max={60}
                       value={String(r.minutos ?? 0)}
-                      onChange={(e) => updateRow(idx, { minutos: clamp60(Number(e.target.value) || 0) })}
+                      onChange={(e) =>
+                        updateRow(idx, {
+                          minutos: clamp60(Number(e.target.value) || 0),
+                        })
+                      }
                       placeholder="0-60"
                     />
                   </div>
@@ -709,7 +986,14 @@ export default function LancamentoParadas() {
           </div>
         )}
 
-        <div style={{ marginTop: 10, color: "rgba(255,255,255,0.55)", fontWeight: 850, fontSize: 12 }}>
+        <div
+          style={{
+            marginTop: 10,
+            color: "rgba(255,255,255,0.55)",
+            fontWeight: 850,
+            fontSize: 12,
+          }}
+        >
           Obs.: o campo minutos é limitado em <b>60</b> por faixa horária.
         </div>
       </div>
