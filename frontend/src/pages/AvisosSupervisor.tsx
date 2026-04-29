@@ -1,22 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Bell, CheckCircle2, Clock3, RefreshCw, AlertTriangle } from "lucide-react";
+import { useAuth } from "../auth/AuthProvider";
 
-// Página nova: SOMENTE exibe e confirma lembretes.
-// Toda regra de criação/cálculo fica no backend.
-
-type ReminderType = "producao_horaria" | "impacto_aleatorio";
+type ReminderType = "producao_horaria" | "impacto_aleatorio" | "impacto_supervisor" | "sistema";
 type ReminderStatus = "pendente" | "confirmado";
 
 type ReminderItem = {
   id: number | string;
-  type: ReminderType;
+  type?: ReminderType;
+  tipo?: ReminderType;
+  notice_type?: ReminderType;
   title: string;
   message: string;
-  scheduled_for: string;
+  scheduled_for?: string | null;
   created_at: string;
-  status: ReminderStatus;
+  status?: ReminderStatus;
   confirmed_at?: string | null;
   confirmed_by?: string | null;
+  read?: boolean;
+  read_at?: string | null;
 };
 
 type ApiResponse = {
@@ -36,15 +38,14 @@ const apiUrl = (path: string) => `${API_BASE}${path}`;
 const NOTIFICATION_KEY = "monplant:avisos_unread";
 const NOTIFICATION_EVENT = "monplant:avisos-notification-change";
 
-function getToken() {
-  return localStorage.getItem("token") || localStorage.getItem("monplant_token") || "";
-}
+function authHeaders(token?: string | null, user?: any): HeadersInit {
+  const cleanToken = String(token || "").trim();
+  const email = user?.email || user?.user_email || "";
 
-function authHeaders(): HeadersInit {
-  const token = getToken();
   return {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(cleanToken ? { Authorization: `Bearer ${cleanToken}` } : {}),
+    ...(email ? { "X-User-Email": String(email) } : {}),
   };
 }
 
@@ -66,31 +67,56 @@ function fmtDateTime(value?: string | null) {
   });
 }
 
+function getType(item: ReminderItem): ReminderType {
+  return item.type || item.tipo || item.notice_type || "sistema";
+}
+
+function getStatus(item: ReminderItem): ReminderStatus {
+  if (item.status === "confirmado" || item.read || item.read_at || item.confirmed_at) return "confirmado";
+  return "pendente";
+}
+
 function typeLabel(type: ReminderType) {
   if (type === "producao_horaria") return "Produção horária";
-  return "Impacto / baixa produção";
+  if (type === "impacto_aleatorio" || type === "impacto_supervisor") return "Impacto / baixa produção";
+  return "Sistema";
 }
 
 export default function AvisosSupervisor() {
+  const { token, user, loading: authLoading } = useAuth() as any;
+
   const [items, setItems] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
-  const pending = useMemo(() => items.filter((i) => i.status === "pendente"), [items]);
+  const pending = useMemo(() => items.filter((i) => getStatus(i) === "pendente"), [items]);
+
   const confirmedToday = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    return items.filter((i) => i.status === "confirmado" && (i.confirmed_at || i.created_at).slice(0, 10) === today);
+    return items.filter((i) => {
+      const ref = i.confirmed_at || i.read_at || i.created_at;
+      return getStatus(i) === "confirmado" && String(ref || "").slice(0, 10) === today;
+    });
   }, [items]);
 
   const loadReminders = useCallback(async () => {
+    if (authLoading) return;
+
+    if (!token) {
+      setItems([]);
+      setUnreadFlag(false);
+      setError("Sessão não identificada. Faça login novamente para carregar os avisos.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
       const res = await fetch(apiUrl("/api/avisos-supervisor"), {
         method: "GET",
-        headers: authHeaders(),
+        headers: authHeaders(token, user),
       });
 
       if (!res.ok) throw new Error(`Falha ao carregar lembretes (${res.status})`);
@@ -98,7 +124,7 @@ export default function AvisosSupervisor() {
       const data: ApiResponse | ReminderItem[] = await res.json();
       const list = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
       const pendingCount = Array.isArray(data)
-        ? list.filter((i) => i.status !== "confirmado" && !i.confirmed_at).length
+        ? list.filter((i) => getStatus(i) === "pendente").length
         : Number(data.pending_count || 0);
 
       setItems(list);
@@ -109,16 +135,18 @@ export default function AvisosSupervisor() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authLoading, token, user]);
 
   async function confirmReminder(id: number | string) {
     setLoading(true);
     setError(null);
 
     try {
+      if (!token) throw new Error("Sessão não identificada. Faça login novamente.");
+
       const res = await fetch(apiUrl(`/api/avisos-supervisor/${id}/confirmar`), {
         method: "POST",
-        headers: authHeaders(),
+        headers: authHeaders(token, user),
       });
 
       if (!res.ok) throw new Error(`Falha ao confirmar lembrete (${res.status})`);
@@ -172,16 +200,14 @@ export default function AvisosSupervisor() {
         <div className="mp-head">
           <div>
             <div className="mp-title">Avisos do Supervisor</div>
-            <div className="mp-sub">
-              Lembretes automáticos gerados pelo sistema para rotina horária do CCO.
-            </div>
+            <div className="mp-sub">Lembretes automáticos gerados pelo sistema para rotina horária do CCO.</div>
           </div>
 
           <div className="mp-actions">
             <span className="mp-badge mp-badge-blue">
               <Clock3 size={14} /> Última sincronização: {fmtDateTime(lastSync)}
             </span>
-            <button className="mp-btn" onClick={loadReminders} disabled={loading}>
+            <button className="mp-btn" onClick={loadReminders} disabled={loading || authLoading}>
               <RefreshCw size={16} /> Atualizar
             </button>
           </div>
@@ -225,7 +251,9 @@ export default function AvisosSupervisor() {
                   <div className="mp-row">
                     <div style={{ minWidth: 260, flex: 1 }}>
                       <div style={{ fontSize: 17, fontWeight: 950 }}>{item.title}</div>
-                      <div className="mp-muted" style={{ marginTop: 5, fontSize: 12 }}>{typeLabel(item.type)} • {fmtDateTime(item.scheduled_for)}</div>
+                      <div className="mp-muted" style={{ marginTop: 5, fontSize: 12 }}>
+                        {typeLabel(getType(item))} • {fmtDateTime(item.scheduled_for || item.created_at)}
+                      </div>
                     </div>
                     <span className="mp-badge mp-badge-red"><AlertTriangle size={14} /> Pendente</span>
                   </div>
@@ -253,7 +281,7 @@ export default function AvisosSupervisor() {
                 <div key={item.id} className="mp-item" style={{ padding: 13 }}>
                   <div className="mp-row">
                     <div style={{ fontWeight: 950 }}>{item.title}</div>
-                    {item.status === "pendente" ? (
+                    {getStatus(item) === "pendente" ? (
                       <span className="mp-badge mp-badge-red">Pendente</span>
                     ) : (
                       <span className="mp-badge mp-badge-ok">Confirmado</span>
