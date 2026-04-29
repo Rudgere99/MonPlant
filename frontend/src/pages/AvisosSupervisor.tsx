@@ -25,10 +25,13 @@ type ApiResponse = {
   items: ReminderItem[];
 };
 
-const API_BASE =
+const RAW_API_BASE =
   (import.meta as any).env?.VITE_API_BASE ||
   (import.meta as any).env?.VITE_API_URL ||
-  "https://monplant-production.up.railway.app/api";
+  "https://monplant-production.up.railway.app";
+
+const API_BASE = String(RAW_API_BASE).replace(/\/api\/?$/, "");
+const apiUrl = (path: string) => `${API_BASE}${path}`;
 
 const NOTIFICATION_KEY = "monplant:avisos_unread";
 const NOTIFICATION_EVENT = "monplant:avisos-notification-change";
@@ -85,18 +88,21 @@ export default function AvisosSupervisor() {
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/avisos-supervisor`, {
+      const res = await fetch(apiUrl("/api/avisos-supervisor"), {
         method: "GET",
         headers: authHeaders(),
       });
 
       if (!res.ok) throw new Error(`Falha ao carregar lembretes (${res.status})`);
 
-      const data: ApiResponse = await res.json();
-      const list = Array.isArray(data.items) ? data.items : [];
+      const data: ApiResponse | ReminderItem[] = await res.json();
+      const list = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
+      const pendingCount = Array.isArray(data)
+        ? list.filter((i) => i.status !== "confirmado" && !i.confirmed_at).length
+        : Number(data.pending_count || 0);
 
       setItems(list);
-      setUnreadFlag(Boolean(data.unread || data.pending_count > 0));
+      setUnreadFlag(Array.isArray(data) ? pendingCount > 0 : Boolean(data.unread || pendingCount > 0));
       setLastSync(new Date().toISOString());
     } catch (e: any) {
       setError(e?.message || "Erro ao carregar lembretes.");
@@ -110,7 +116,7 @@ export default function AvisosSupervisor() {
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/avisos-supervisor/${id}/confirmar`, {
+      const res = await fetch(apiUrl(`/api/avisos-supervisor/${id}/confirmar`), {
         method: "POST",
         headers: authHeaders(),
       });
