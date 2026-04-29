@@ -105,6 +105,24 @@ function getInitials(label: string) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
+function NotificationDot({ size = 10 }: { size?: number }) {
+  return (
+    <span
+      style={{
+        position: "absolute",
+        top: -2,
+        right: -2,
+        height: size,
+        width: size,
+        borderRadius: 999,
+        background: "#ef4444",
+        border: "2px solid #05080C",
+        boxShadow: "0 0 0 4px rgba(239,68,68,0.18), 0 0 18px rgba(239,68,68,0.85)",
+      }}
+    />
+  );
+}
+
 /** ===== topo da sidebar SEM LOGO (mostra usuário) ===== */
 function ShellUser({
   onClick,
@@ -201,6 +219,7 @@ function AppShell() {
   const [noticeModal, setNoticeModal] = React.useState<ActiveNotice | null>(null);
   const [noticeBusy, setNoticeBusy] = React.useState(false);
   const [noticeErr, setNoticeErr] = React.useState<string | null>(null);
+  const [temAvisoSupervisor, setTemAvisoSupervisor] = React.useState(false);
 
   const overlayStyle: React.CSSProperties = {
     position: "fixed",
@@ -276,7 +295,7 @@ function AppShell() {
       // não quebra o app
       return;
     }
-  }, [token]);
+  }, [API_BASE, token]);
 
   const confirmNotice = React.useCallback(async () => {
     if (!token || !noticeModal?.id) return;
@@ -298,7 +317,43 @@ function AppShell() {
     } finally {
       setNoticeBusy(false);
     }
-  }, [token, noticeModal, loadActiveNotices]);
+  }, [API_BASE, token, noticeModal, loadActiveNotices]);
+
+  const loadAvisosSupervisorUnread = React.useCallback(async () => {
+    if (!token) {
+      setTemAvisoSupervisor(false);
+      return;
+    }
+
+    try {
+      const r = await fetch(`${API_BASE}/api/avisos-supervisor/unread`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!r.ok) {
+        setTemAvisoSupervisor(false);
+        return;
+      }
+
+      const data = await r.json().catch(() => ({}));
+      const unread = Number(data?.unread ?? data?.count ?? 0);
+      setTemAvisoSupervisor(unread > 0);
+    } catch {
+      setTemAvisoSupervisor(false);
+    }
+  }, [API_BASE, token]);
+
+  React.useEffect(() => {
+    if (!token) {
+      setTemAvisoSupervisor(false);
+      return;
+    }
+
+    loadAvisosSupervisorUnread();
+    const interval = window.setInterval(loadAvisosSupervisorUnread, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [token, loadAvisosSupervisorUnread, location.pathname]);
 
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -322,6 +377,13 @@ function AppShell() {
     navigate(defaultPathFor(role), { replace: true });
   }
 }, [loading, user, role, location.pathname, navigate]);
+
+  React.useEffect(() => {
+    if (!token) return;
+    loadActiveNotices();
+    const interval = window.setInterval(loadActiveNotices, 60000);
+    return () => window.clearInterval(interval);
+  }, [token, loadActiveNotices]);
 
 
 
@@ -521,6 +583,7 @@ function AppShell() {
                       >
                         <span
                           style={{
+                            position: "relative",
                             height: 40,
                             width: 40,
                             borderRadius: 14,
@@ -531,6 +594,7 @@ function AppShell() {
                           }}
                         >
                           <Icon size={18} />
+                          {i.to === "/avisos" && temAvisoSupervisor ? <NotificationDot size={11} /> : null}
                         </span>
                       </NavLink>
                     );
@@ -559,6 +623,7 @@ function AppShell() {
                         <>
                           <span
                             style={{
+                              position: "relative",
                               height: 36,
                               width: 36,
                               borderRadius: 12,
@@ -572,6 +637,7 @@ function AppShell() {
                             }}
                           >
                             <Icon size={18} />
+                            {i.to === "/avisos" && temAvisoSupervisor ? <NotificationDot size={10} /> : null}
                           </span>
                           <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
                             <div
@@ -742,6 +808,7 @@ function AppShell() {
                       >
                         <span
                           style={{
+                            position: "relative",
                             height: 36,
                             width: 36,
                             borderRadius: 12,
@@ -752,6 +819,7 @@ function AppShell() {
                           }}
                         >
                           <Icon size={18} />
+                          {i.to === "/avisos" && temAvisoSupervisor ? <NotificationDot size={10} /> : null}
                         </span>
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
