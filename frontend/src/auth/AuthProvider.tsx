@@ -1,12 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-export type UserType =
-  | "apontador"
-  | "controlador"
-  | "gerencia"
-  | "supervisor"
-  | "gestao_vista"
-  | "dev";
+export type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "gestao_vista" | "dev";
 
 export type MpUser = {
   id: string;
@@ -14,6 +8,7 @@ export type MpUser = {
   sector: string;
   user_type: UserType;
   email: string;
+  can_edit_retroactive?: boolean;
 };
 
 type AuthCtx = {
@@ -28,12 +23,36 @@ type AuthCtx = {
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
+function normalizeUserType(v: any): UserType {
+  const t = String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s-]+/g, "_")
+    .replace(/_+/g, "_");
+
+  if (t === "gestao_vista" || t === "gestao_a_vista" || (t.includes("gestao") && t.includes("vista"))) return "gestao_vista";
+  if (t === "dev" || t.includes("dev")) return "dev";
+  if (t === "supervisor" || t.includes("supervis")) return "supervisor";
+  if (t === "gerencia" || t.includes("gerenc")) return "gerencia";
+  if (t === "controlador" || t.includes("control")) return "controlador";
+  return "apontador";
+}
+
+function normalizeUser(u: any): MpUser | null {
+  if (!u) return null;
+  return {
+    ...u,
+    user_type: normalizeUserType(u.user_type ?? u.role ?? u.perfil ?? u.type),
+  } as MpUser;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [user, setUserState] = useState<MpUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Hidratação inicial
   useEffect(() => {
     const t = localStorage.getItem("mp_token");
     const u = localStorage.getItem("mp_user");
@@ -42,7 +61,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (u) {
       try {
-        setUserState(JSON.parse(u));
+        const normalized = normalizeUser(JSON.parse(u));
+        setUserState(normalized);
+        if (normalized) localStorage.setItem("mp_user", JSON.stringify(normalized));
       } catch {
         setUserState(null);
       }
@@ -58,8 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setUser = (u: MpUser | null) => {
-    setUserState(u);
-    if (u) localStorage.setItem("mp_user", JSON.stringify(u));
+    const normalized = normalizeUser(u);
+    setUserState(normalized);
+    if (normalized) localStorage.setItem("mp_user", JSON.stringify(normalized));
     else localStorage.removeItem("mp_user");
   };
 
