@@ -169,6 +169,9 @@ def normalize_user_type(v: str | None) -> str:
     return t
 
 
+ALLOWED_USER_TYPES = {"apontador", "controlador", "dev", "gerencia", "supervisor", "gestao_vista"}
+
+
 def is_dev(dev_key: Optional[str]) -> bool:
     """
     Habilita bypass do bloqueio retroativo, usando header X-Dev-Key.
@@ -545,7 +548,7 @@ class LoginIn(BaseModel):
 class DevCreateUserIn(BaseModel):
     full_name: str
     sector: str
-    user_type: str  # apontador | controlador | dev
+    user_type: str  # apontador | controlador | gerencia | supervisor | gestao_vista | dev
     email: EmailStr
     password: str
 
@@ -553,7 +556,7 @@ class DevCreateUserIn(BaseModel):
 class DevUpdateUserIn(BaseModel):
     full_name: Optional[str] = None
     sector: Optional[str] = None
-    user_type: Optional[str] = None  # apontador | controlador | dev
+    user_type: Optional[str] = None  # apontador | controlador | gerencia | supervisor | gestao_vista | dev
     is_active: Optional[bool] = None
     can_edit_retroactive: Optional[bool] = None
     reset_password: Optional[str] = None  # se vier, troca senha
@@ -717,12 +720,8 @@ def api_dev_list_users(dev_payload=Depends(require_dev_user)):
 
 
 def _dev_create_user(body: DevCreateUserIn, request: Request, dev_payload: Dict[str, Any]):
-    allowed = {"apontador", "controlador", "dev", "gerencia", "supervisor"}
-
     user_type = normalize_user_type(body.user_type)
-    if user_type not in allowed:
-        raise HTTPException(status_code=400, detail="user_type inválido")
-
+    if user_type not in ALLOWED_USER_TYPES:
         raise HTTPException(status_code=400, detail="user_type inválido")
 
     email = str(body.email).lower().strip()
@@ -783,8 +782,6 @@ def dev_update_user(
     request: Request,
     dev_payload=Depends(require_dev_user),
 ):
-    allowed = {"apontador", "controlador", "dev", "gerencia", "supervisor"}
-
     fields = []
     values = []
 
@@ -797,10 +794,10 @@ def dev_update_user(
         values.append(body.sector.strip())
 
     if body.user_type is not None:
-        if normalize_user_type(body.user_type) not in allowed:
+        if normalize_user_type(body.user_type) not in ALLOWED_USER_TYPES:
             raise HTTPException(status_code=400, detail="user_type inválido")
         fields.append("user_type=%s")
-        values.append(body.user_type)
+        values.append(normalize_user_type(body.user_type))
 
     if body.is_active is not None:
         fields.append("is_active=%s")
