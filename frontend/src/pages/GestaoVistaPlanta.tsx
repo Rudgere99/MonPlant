@@ -283,6 +283,18 @@ async function apiGet<T>(path: string, token?: string | null): Promise<T> {
   }
   return (await r.json()) as T;
 }
+
+function goalDayPath(scope: PlantScope, d: string): string {
+  return scope === "all"
+    ? `/api/aggregate/goals/day/${encodeURIComponent(d)}`
+    : `/api/plants/${scope}/goals/day/${encodeURIComponent(d)}`;
+}
+
+function goalMonthPath(scope: PlantScope, month: string): string {
+  return scope === "all"
+    ? `/api/aggregate/goals/month/${encodeURIComponent(month)}`
+    : `/api/plants/${scope}/goals/month/${encodeURIComponent(month)}`;
+}
 function panelStyle(extra?: React.CSSProperties): React.CSSProperties {
   return {
     background: `linear-gradient(180deg, ${COLORS.panel}, ${COLORS.panel2})`,
@@ -464,7 +476,7 @@ export default function GestaoVistaPlanta() {
       const dayPath = plantId === "all" ? `/api/aggregate/plant-production/${encodeURIComponent(day)}` : `/api/plants/${plantId}/plant-production/${encodeURIComponent(day)}`;
       const stopsPath = plantId === "all" ? `/api/aggregate/stops-launch?day=${encodeURIComponent(day)}` : `/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(day)}`;
       const p = await apiGet<PlantDayPayload>(dayPath, token).catch(() => ({ day, rows: [], obs: "" }));
-      const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`, token).catch(() => null as any);
+      const g = await apiGet<GoalDay>(goalDayPath(plantId, day), token).catch(() => null as any);
       const s = await apiGet<StopDayPayload>(stopsPath, token).catch(() => ({ day, rows: [] }));
       const h = plantId === "all" ? [] : await apiGet<HorimetroRow[]>(`/api/plants/${plantId}/horimetros/last-by-eq`, token).catch(() => []);
 
@@ -488,7 +500,7 @@ export default function GestaoVistaPlanta() {
             return apiGet<PlantDayPayload>(path, token).catch(() => ({ day: d, rows: [], obs: "" }));
           })
         ),
-        apiGet<GoalMonthPayload>(`/api/goals/month/${encodeURIComponent(month)}`, token).catch(() => ({ month, days: [] })),
+        apiGet<GoalMonthPayload>(goalMonthPath(plantId, month), token).catch(() => ({ month, days: [] })),
       ]);
 
       const goalMapFromMonth = new Map<string, GoalDay>();
@@ -507,7 +519,7 @@ export default function GestaoVistaPlanta() {
         monthDays.map(async (d) => {
           const fromMonth = goalMapFromMonth.get(d);
           if (fromMonth) return [d, fromMonth] as const;
-          const goal = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(d)}`, token).catch(() => null as any);
+          const goal = await apiGet<GoalDay>(goalDayPath(plantId, d), token).catch(() => null as any);
           return [d, goal] as const;
         })
       );
