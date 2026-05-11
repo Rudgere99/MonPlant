@@ -106,6 +106,7 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/ritmo-do-turno",
       "/ufdf",
       "/statisticas",
+      "/equipamentos",
     ]);
   }
 
@@ -128,6 +129,7 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/abastecimento",
       "/desvio-producao",
       "/dashboard/gestao-vista-planta",
+      "/equipamentos",
     ]);
   }
 
@@ -143,6 +145,7 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/producao-planta",
       "/avisos",
       "/avisos-supervisor",
+      "/equipamentos",
     ]);
   }
 
