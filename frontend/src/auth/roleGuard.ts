@@ -1,29 +1,40 @@
 // src/auth/roleGuard.ts
-// Regras de acesso por papel (inclui supervisor) — MENU e ROTAS usam esta mesma regra.
+// Regras de acesso por papel — MENU e ROTAS usam esta mesma regra.
 
-export type UserRole = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
+export type UserRole =
+  | "apontador"
+  | "controlador"
+  | "gerencia"
+  | "supervisor"
+  | "gestao_vista"
+  | "dev";
 
 function norm(v: any): string {
   return String(v ?? "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s-]+/g, "_");
 }
 
 function normalizeRole(v: any): UserRole {
   const t = norm(v);
 
-  // aceita variações comuns (ex.: "Supervisor CCO", "GERÊNCIA", "Controlador_cco", etc.)
+  // aceita variações comuns vindas do banco/token/localStorage
+  // Ex.: "Gestão à Vista", "gestao_vista", "gestao-a-vista", "Gestao Vista"
   if (!t) return "apontador";
 
   if (t === "dev" || t.includes("dev")) return "dev";
+  if (t === "gestao_vista" || t.includes("gestao_vista") || t.includes("gestao_a_vista")) {
+    return "gestao_vista";
+  }
   if (t === "controlador" || t.includes("control")) return "controlador";
   if (t === "gerencia" || t.includes("gerenc")) return "gerencia";
   if (t === "supervisor" || t.includes("supervis")) return "supervisor";
   if (t === "apontador" || t.includes("apont")) return "apontador";
 
-  // fallback
+  // fallback seguro
   return "apontador";
 }
 
@@ -56,6 +67,15 @@ const DEV_ONLY_PATHS = [
   "/dev-dash",
 ];
 
+// ÚNICAS rotas liberadas para o perfil Gestão à Vista.
+// Mantive as variações mais prováveis para evitar bloqueio caso a rota esteja nomeada diferente.
+const GESTAO_VISTA_ONLY_PATHS = [
+  "/gestao-vista",
+  "/gestao-vista-planta",
+  "/gestao-vista-planta/1",
+  "/gestao-vista-planta/2",
+];
+
 function isDevOnly(path: string): boolean {
   const p = (path || "/").toLowerCase();
   return DEV_ONLY_PATHS.some((x) => p === x || p.startsWith(x.endsWith("/") ? x : x + "/"));
@@ -71,14 +91,21 @@ function isAllowedExactOrPrefix(path: string, allowed: string[]): boolean {
   });
 }
 
+export function getDefaultPathByRole(role: UserRole): string {
+  if (role === "gestao_vista") return "/gestao-vista-planta";
+  if (role === "apontador") return "/producao-planta";
+  if (role === "supervisor") return "/dashboard";
+  if (role === "controlador") return "/dashboard";
+  if (role === "gerencia") return "/dashboard";
+  if (role === "dev") return "/dashboard";
+  return "/dashboard";
+}
+
 export function canAccess(role: UserRole, path: string): boolean {
   const p = (path || "/").toLowerCase();
 
-  // home interno (route index) sempre ok — ele já decide redirect por role
-  if (p === "/") {
-    // todos autenticados podem cair no shell
-    return true;
-  }
+  // home interno sempre ok — ele deve redirecionar pelo getDefaultPathByRole(role)
+  if (p === "/") return true;
 
   // DEV: tudo
   if (role === "dev") return true;
@@ -86,18 +113,25 @@ export function canAccess(role: UserRole, path: string): boolean {
   // ninguém (exceto dev) entra em rotas dev-only
   if (isDevOnly(p)) return false;
 
-  // GERÊNCIA: mantém o que já tem hoje (assumindo: acesso total às páginas do app, exceto dev-only)
- if (role === "gerencia") {
+  // GESTÃO À VISTA: somente página Gestão à Vista
+  if (role === "gestao_vista") {
+    return isAllowedExactOrPrefix(p, GESTAO_VISTA_ONLY_PATHS);
+  }
+
+  // GERÊNCIA: acesso às páginas principais do app, exceto dev-only
+  if (role === "gerencia") {
     return isAllowedExactOrPrefix(p, [
       "/dashboard",
       "/ritmo",
       "/ritmo-do-turno",
       "/ufdf",
       "/statisticas",
+      "/gestao-vista",
+      "/gestao-vista-planta",
     ]);
   }
 
-  // CONTROLADOR: conforme sua lista
+  // CONTROLADOR
   if (role === "controlador") {
     return isAllowedExactOrPrefix(p, [
       "/dashboard",
@@ -115,7 +149,9 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/historico",
       "/ufdf",
       "/abastecimento",
-      "/desvio-producao"
+      "/desvio-producao",
+      "/gestao-vista",
+      "/gestao-vista-planta",
     ]);
   }
 
