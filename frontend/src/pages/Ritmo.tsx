@@ -88,9 +88,6 @@ function fmtBR(n: number, dec = 1) {
   });
 }
 
-function fmtBR0(n: number) {
-  return (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
-}
 
 function fmtPct(n: number, dec = 1) {
   return `${(Number(n) || 0).toLocaleString("pt-BR", {
@@ -147,7 +144,6 @@ function dayElapsedHours(now = new Date()) {
   return Math.max(0, mins / 60);
 }
 
-const LS_BUCKET = "mp_bucket_ton_v1";
 
 const card: React.CSSProperties = {
   borderRadius: 22,
@@ -345,7 +341,6 @@ export default function Ritmo() {
   const [goal, setGoal] = useState<GoalDay | null>(null);
   const [rhythmEquipment, setRhythmEquipment] = useState<RhythmEquipmentPayload | null>(null);
 
-  const [bucketTon, setBucketTon] = useState<string>(() => localStorage.getItem(LS_BUCKET) || "4,2");
 
   async function loadPlants() {
     try {
@@ -412,8 +407,6 @@ export default function Ritmo() {
           try {
             const eq = await apiGet<RhythmEquipmentPayload>(`/api/plants/${plantId}/rhythm-equipment`);
             setRhythmEquipment(eq);
-            const ton = Number(eq?.equipment?.bucket_ton || 0);
-            if (ton > 0) setBucketTon(String(ton).replace(".", ","));
           } catch {
             setRhythmEquipment(null);
           }
@@ -428,14 +421,6 @@ export default function Ritmo() {
     })();
   }, [FETCH_URL, day, plantId]);
 
-  const bucket = useMemo(() => {
-    const n = parseNum(bucketTon);
-    return n && n > 0 ? n : null;
-  }, [bucketTon]);
-
-  useEffect(() => {
-    if (bucket !== null) localStorage.setItem(LS_BUCKET, String(bucket).replace(".", ","));
-  }, [bucket]);
 
   const rowsNorm = useMemo(() => {
     const map = new Map<string, number>();
@@ -482,7 +467,6 @@ export default function Ritmo() {
   const startH = (currH + 23) % 24;
 
   const currPeriod = isClosedDay ? lastFilledPeriod : `${pad2(startH)}-${pad2(endH)}`;
-  const periodTon = currPeriod ? (rowsNorm.get(currPeriod) ?? 0) : 0;
 
   const remainingH = isClosedDay ? 0 : Math.max(0, dayRemainingHours(nowRef));
   const elapsedH = isClosedDay ? 24 : Math.max(0.25, dayElapsedHours(nowRef));
@@ -498,10 +482,6 @@ export default function Ritmo() {
     return remaining / remainingH;
   }, [metaDay, produced, remainingH]);
 
-  const neededBucketsH = useMemo(() => {
-    if (neededTPH === null || bucket === null || bucket <= 0) return null;
-    return neededTPH / bucket;
-  }, [neededTPH, bucket]);
 
   const avgRealTPH = useMemo(() => {
     const filled = Array.from(rowsNorm.values()).filter((v) => (Number(v) || 0) > 0);
@@ -510,7 +490,6 @@ export default function Ritmo() {
     return sum / filled.length;
   }, [rowsNorm]);
 
-  const avgRealBucketsH = bucket ? avgRealTPH / bucket : null;
 
   const projectionTon = useMemo(() => {
     // Projeção correta: o que já foi produzido + (média real t/h * horas restantes)
@@ -677,17 +656,6 @@ return (
               <input style={{ ...input, minWidth: 170 }} type="date" value={day} onChange={(e) => setDay(e.target.value)} />
             </label>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <span style={label}>t / Conchada</span>
-              <input
-                style={{ ...input, minWidth: 140 }}
-                value={bucketTon}
-                onChange={(e) => setBucketTon(e.target.value)}
-                inputMode="decimal"
-                placeholder="4,2"
-                title={rhythmEquipment?.equipment ? "Valor automático vindo da alocação da planta" : "Sem equipamento alocado: valor manual de contingência"}
-              />
-            </label>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 210 }}>
               <span style={label}>Escavadeira alocada</span>
@@ -815,65 +783,9 @@ return (
         </div>
       </div>
 
-      {/* Período atual + Ritmo (necessário vs média real) + Resumo exportável */}
+      {/* Resumo exportável */}
       <div style={grid12}>
-        <div style={{ ...span(7), ...card }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <div>
-              <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 16 }}>Período atual</div>
-              <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>
-                {currPeriod ? (
-                  <>
-                    <span style={{ opacity: 0.8 }}>{currPeriod.replace("-", "h às ")}</span>h • Produção:{" "}
-                    <b style={{ color: "rgba(255,255,255,0.94)" }}>{fmtBR(periodTon, dTon)} t</b>
-                  </>
-                ) : (
-                  "—"
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                <div style={label}>⚙ Conchadas / h</div>
-                <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 24 }}>
-                  {avgRealBucketsH !== null ? fmtBR0(avgRealBucketsH) : "—"}
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                <div style={label}>📦 t / h</div>
-                <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 24 }}>{fmtBR(avgRealTPH, dTPH)}</div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "12px 0" }} />
-
-          <div style={grid12}>
-            <div style={{ ...span(6), ...card, background: "rgba(255,255,255,0.03)" }}>
-              <div style={label}>Necessário</div>
-              <div style={{ color: neededTPH !== null && avgRealTPH < neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)", fontWeight: 980, fontSize: 30, marginTop: 6 }}>
-                {neededTPH === null ? "—" : `${fmtBR(neededTPH, dTPH)} t/h`}
-              </div>
-              <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>
-                {neededBucketsH === null ? "—" : `≈ ${fmtBR0(neededBucketsH)} conchadas/h`}
-              </div>
-            </div>
-
-            <div style={{ ...span(6), ...card, background: "rgba(255,255,255,0.03)" }}>
-              <div style={label}>Média real</div>
-              <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 30, marginTop: 6 }}>
-                {`${fmtBR(avgRealTPH, dTPH)} t/h`}
-              </div>
-              <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>
-                {avgRealBucketsH === null ? "—" : `≈ ${fmtBR0(avgRealBucketsH)} conchadas/h`}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ ...span(5), ...card }}>
+        <div style={{ ...span(12), ...card }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
             <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 16 }}>Resumo</div>
             <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>{dayBR}</div>
@@ -914,22 +826,9 @@ return (
               <div style={exportSep} />
 
               <div style={exportLineRow}>
-                <span style={exportLabel}>Período:</span>
-                <span style={exportValue}>{currPeriod ? currPeriod.replace("-", "h às ") + "h" : "—"}</span>
-              </div>
-
-              <div style={exportLineRow}>
-                <span style={exportLabel}>Produção do período:</span>
-                <span style={exportValue}>{`${fmtBR(periodTon, dTon)} t`}</span>
-              </div>
-
-              <div style={exportSep} />
-
-              <div style={exportLineRow}>
                 <span style={exportLabel}>Necessário:</span>
                 <span style={{ ...exportValue, color: neededTPH !== null && avgRealTPH < neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)" }}>
                   {neededTPH === null ? "—" : `${fmtBR(neededTPH, dTPH)} t/h`}
-                  {neededBucketsH === null ? "" : `  ≈ ${fmtBR0(neededBucketsH)} conchadas/h`}
                 </span>
               </div>
 
@@ -937,14 +836,13 @@ return (
                 <span style={exportLabel}>Média real:</span>
                 <span style={exportValue}>
                   {`${fmtBR(avgRealTPH, dTPH)} t/h`}
-                  {avgRealBucketsH === null ? "" : `  ≈ ${fmtBR0(avgRealBucketsH)} conchadas/h`}
                 </span>
               </div>
             </div>
           </div>
 
           <div style={{ marginTop: 10, color: "rgba(255,255,255,0.60)", fontWeight: 900, fontSize: 12 }}>
-            * t/h (1 casa), toneladas (1), % (1), conchadas (inteiro).
+            * t/h (1 casa), toneladas (1), % (1).
           </div>
         </div>
       </div>
