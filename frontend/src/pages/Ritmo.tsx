@@ -933,7 +933,7 @@ export default function Ritmo() {
               borderLeft: mobile ? "none" : "1px solid rgba(255,255,255,0.12)",
             }}
           >
-            <img src="/assets/ogo-trindade.png" alt="Trindade" style={exportLogoImg} />
+            <img src="/assets/logo-trindade.png" alt="Trindade" style={exportLogoImg} />
           </div>
         </div>
       </div>
