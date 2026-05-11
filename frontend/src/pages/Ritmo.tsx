@@ -282,12 +282,29 @@ const exportMiniCard: React.CSSProperties = {
   borderRadius: 26,
   border: "1px solid rgba(255,255,255,0.12)",
   background: "linear-gradient(180deg, rgba(18,22,26,0.98) 0%, rgba(10,14,18,0.98) 100%)",
-  padding: 18,
+  padding: 0,
   lineHeight: 1.55,
   display: "inline-block",
   width: "fit-content",
   maxWidth: 780,
   boxShadow: "0 18px 46px rgba(0,0,0,0.55)",
+  overflow: "hidden",
+};
+
+const exportPlantStrip: React.CSSProperties = {
+  background: "#fff200",
+  color: "#050505",
+  fontWeight: 990,
+  fontSize: 22,
+  letterSpacing: 1.2,
+  textTransform: "uppercase",
+  textAlign: "center",
+  padding: "5px 18px 6px",
+  lineHeight: 1.1,
+};
+
+const exportMiniBody: React.CSSProperties = {
+  padding: 18,
 };
 
 const exportLineRow: React.CSSProperties = {
@@ -533,6 +550,13 @@ export default function Ritmo() {
     if (plantId === "all") return "Todas as plantas";
     return plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
   }, [plants, plantId]);
+
+  const exportPlantTitle = useMemo(() => {
+    if (plantId === "all") return "TODAS AS PLANTAS";
+    const n = Number(plantId || 0);
+    if (Number.isFinite(n) && n > 0) return `PLANTA ${pad2(n)}`;
+    return String(selectedPlantName || "PLANTA").toUpperCase();
+  }, [plantId, selectedPlantName]);
 
   const [yy, mm, dd] = day.split("-");
   const dayBR = `${dd}/${mm}/${yy}`;
@@ -793,50 +817,53 @@ return (
 
           <div style={{ marginTop: 12 }}>
             <div ref={exportCompactRef} style={exportMiniCard}>
-              <div style={exportLineRow}>
-                <span style={exportLabel}>Meta:</span>
-                <span style={exportValue}>{metaDay !== null ? `${fmtBR(metaDay, dTon)} t` : "—"}</span>
-              </div>
+              <div style={exportPlantStrip}>{exportPlantTitle}</div>
+              <div style={exportMiniBody}>
+                <div style={exportLineRow}>
+                  <span style={exportLabel}>Meta:</span>
+                  <span style={exportValue}>{metaDay !== null ? `${fmtBR(metaDay, dTon)} t` : "—"}</span>
+                </div>
 
-              <div style={exportLineRow}>
-                <span style={exportLabel}>Produzido:</span>
-                <span style={{ ...exportValue, color: "rgba(250,204,21,0.95)" }}>{`${fmtBR(produced, dTon)} t`}</span>
-              </div>
-              <div style={exportLineRow}>
-                <span style={exportLabel}>Projeção:</span>
-                <span style={{ ...exportValue, color: metaDay !== null && projectionTon < metaDay ? "rgba(248,113,113,0.95)" : metaDay !== null ? "rgba(34,197,94,0.95)" : exportValue.color }}>{`${fmtBR(projectionTon, dTon)} t`}</span>
-              </div>
+                <div style={exportLineRow}>
+                  <span style={exportLabel}>Produzido:</span>
+                  <span style={{ ...exportValue, color: "rgba(250,204,21,0.95)" }}>{`${fmtBR(produced, dTon)} t`}</span>
+                </div>
+                <div style={exportLineRow}>
+                  <span style={exportLabel}>Projeção:</span>
+                  <span style={{ ...exportValue, color: metaDay !== null && projectionTon < metaDay ? "rgba(248,113,113,0.95)" : metaDay !== null ? "rgba(34,197,94,0.95)" : exportValue.color }}>{`${fmtBR(projectionTon, dTon)} t`}</span>
+                </div>
 
 
-              <div style={exportLineRow}>
-                <span style={exportLabel}>Atingimento:</span>
-                <span style={exportValue}>{attainment !== null ? fmtPct(attainment, dPct) : "—"}</span>
-              </div>
+                <div style={exportLineRow}>
+                  <span style={exportLabel}>Atingimento:</span>
+                  <span style={exportValue}>{attainment !== null ? fmtPct(attainment, dPct) : "—"}</span>
+                </div>
 
-              <div style={exportLineRow}>
-                <span style={exportLabel}>Diferença:</span>
-                <span style={exportValue}>{diff !== null ? `${diff >= 0 ? "+" : ""}${fmtBR(diff, dTon)} t` : "—"}</span>
-              </div>
+                <div style={exportLineRow}>
+                  <span style={exportLabel}>Diferença:</span>
+                  <span style={exportValue}>{diff !== null ? `${diff >= 0 ? "+" : ""}${fmtBR(diff, dTon)} t` : "—"}</span>
+                </div>
 
-              <div style={exportLineRow}>
-                <span style={exportLabel}>Tempo restante:</span>
-                <span style={exportValue}>{isClosedDay ? "0 h" : `${fmtBR(remainingH, 1)} h`}</span>
-              </div>
+                <div style={exportLineRow}>
+                  <span style={exportLabel}>Tempo restante:</span>
+                  <span style={exportValue}>{isClosedDay ? "0 h" : `${fmtBR(remainingH, 1)} h`}</span>
+                </div>
 
-              <div style={exportSep} />
+                <div style={exportSep} />
 
-              <div style={exportLineRow}>
-                <span style={exportLabel}>Necessário:</span>
-                <span style={{ ...exportValue, color: neededTPH !== null && avgRealTPH < neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)" }}>
-                  {neededTPH === null ? "—" : `${fmtBR(neededTPH, dTPH)} t/h`}
-                </span>
-              </div>
+                <div style={exportLineRow}>
+                  <span style={exportLabel}>Necessário:</span>
+                  <span style={{ ...exportValue, color: neededTPH !== null && avgRealTPH < neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)" }}>
+                    {neededTPH === null ? "—" : `${fmtBR(neededTPH, dTPH)} t/h`}
+                  </span>
+                </div>
 
-              <div style={exportLineRow}>
-                <span style={exportLabel}>Média real:</span>
-                <span style={exportValue}>
-                  {`${fmtBR(avgRealTPH, dTPH)} t/h`}
-                </span>
+                <div style={exportLineRow}>
+                  <span style={exportLabel}>Média real:</span>
+                  <span style={exportValue}>
+                    {`${fmtBR(avgRealTPH, dTPH)} t/h`}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
