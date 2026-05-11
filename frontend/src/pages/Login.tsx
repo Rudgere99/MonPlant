@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 
-type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
+type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "gestao_vista" | "dev";
 
 type MpUser = {
   id: string;
@@ -17,14 +17,22 @@ function normRole(v?: string | null) {
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s-]+/g, "_");
 }
 
 function defaultRouteForRole(userType?: string | null) {
   const r = normRole(userType);
-  if (r === "dev") return "/dev-dash";
+
+  // Perfil exclusivo de painel: não pode cair em dashboard, usuários ou produção.
+  if (r === "gestao_vista" || r === "gestao_a_vista" || r.includes("gestao_vista")) {
+    return "/dashboard/gestao-vista-planta";
+  }
+
+  if (r === "dev") return "/dashboard";
   if (r === "gerencia") return "/dashboard";
   if (r === "supervisor") return "/dashboard";
+  if (r === "controlador") return "/dashboard";
   return "/producao-planta";
 }
 
