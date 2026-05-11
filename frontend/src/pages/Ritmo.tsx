@@ -656,39 +656,10 @@ export default function Ritmo() {
     return makeSummaryTitle(plant, plantId);
   }, [plantId, plants]);
 
-  const singleSummary = useMemo(() => {
-    const base = buildSummaryMetrics({ title: exportPlantTitle, data, goal, day });
-
-    // Mantém o card de Resumo puxando exatamente os mesmos cálculos da tela principal
-    // quando uma planta específica ou o consolidado estiver selecionado.
-    // Isso evita o "Necessário" ficar diferente/zerado por recálculo separado do card.
-    return {
-      ...base,
-      metaDay,
-      produced,
-      projectionTon,
-      attainment,
-      diff,
-      remainingH,
-      neededTPH,
-      avgRealTPH,
-      isClosedDay,
-    };
-  }, [
-    exportPlantTitle,
-    data,
-    goal,
-    day,
-    metaDay,
-    produced,
-    projectionTon,
-    attainment,
-    diff,
-    remainingH,
-    neededTPH,
-    avgRealTPH,
-    isClosedDay,
-  ]);
+  const singleSummary = useMemo(
+    () => buildSummaryMetrics({ title: exportPlantTitle, data, goal, day }),
+    [exportPlantTitle, data, goal, day]
+  );
 
   const allPlantSummaries = useMemo(
     () =>
