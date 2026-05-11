@@ -430,17 +430,9 @@ const exportSummaryCell: React.CSSProperties = {
 };
 
 const exportSummaryTotalTitle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
-  color: "rgba(255,255,255,0.94)",
-  fontWeight: 990,
-  fontSize: 18,
-  letterSpacing: 0.8,
-  textTransform: "uppercase",
-  textAlign: "center",
-  padding: "10px 18px",
-  lineHeight: 1.1,
-  borderTop: "1px solid rgba(255,255,255,0.10)",
-  borderBottom: "1px solid rgba(255,255,255,0.10)",
+  ...exportPlantStrip,
+  borderTop: "none",
+  borderBottom: "none",
 };
 
 const exportLogoBox: React.CSSProperties = {
