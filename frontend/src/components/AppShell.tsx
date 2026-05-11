@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { canAccess as canAccessRole, getUserRole, type UserRole } from "../auth/roleGuard";
+import { canAccess as canAccessRole, getDefaultPathByRole, getUserRole, type UserRole } from "../auth/roleGuard";
 import {
   LayoutDashboard,
   BarChart3,
@@ -66,19 +66,23 @@ const nav: NavItem[] = [
 
 
 function defaultPathFor(role: UserRole) {
-  // Gerência vê somente Dashboard
-  if (role === "apontador") return "/producao-planta";
-  return "/dashboard";
+  return getDefaultPathByRole(role);
 }
 
 
 function getTitleFromPath(pathname: string) {
-  const hit = nav.find((n) => pathname.startsWith(n.to));
+  const path = pathname || "/";
+  const hit = [...nav]
+    .sort((a, b) => b.to.length - a.to.length)
+    .find((n) => path === n.to || path.startsWith(n.to.endsWith("/") ? n.to : n.to + "/"));
   return hit?.label ?? "Dashboard";
 }
 
 function getGroupFromPath(pathname: string) {
-  const hit = nav.find((n) => pathname.startsWith(n.to));
+  const path = pathname || "/";
+  const hit = [...nav]
+    .sort((a, b) => b.to.length - a.to.length)
+    .find((n) => path === n.to || path.startsWith(n.to.endsWith("/") ? n.to : n.to + "/"));
   return hit?.group ?? "";
 }
 
@@ -363,6 +367,7 @@ function AppShell() {
   const pageGroup = useMemo(() => getGroupFromPath(location.pathname), [location.pathname]);
   const role = useMemo(() => getUserRole(user), [user]);
   const isDev = role === "dev";
+  const isGestaoVistaUser = role === "gestao_vista";
   const userLabel = useMemo(() => getUserDisplay(user), [user]);
 
 
@@ -395,7 +400,13 @@ function AppShell() {
   }, [isDev, role]);
   const navItemsFiltered = navItems;
   const gestaoVistaPath = "/dashboard/gestao-vista-planta";
-  const sidebarNavItems = navItemsFiltered.filter((item) => item.to !== gestaoVistaPath);
+
+  // Perfil Gestão à Vista: exibe somente a própria página no menu.
+  // Demais perfis continuam com o botão destacado no topo e sem duplicar no menu lateral.
+  const sidebarNavItems = isGestaoVistaUser
+    ? navItemsFiltered.filter((item) => item.to === gestaoVistaPath)
+    : navItemsFiltered.filter((item) => item.to !== gestaoVistaPath);
+
   const canAccessGestaoVista = navItemsFiltered.some((item) => item.to === gestaoVistaPath);
   const isGestaoVistaActive = location.pathname.startsWith(gestaoVistaPath);
 
@@ -941,7 +952,7 @@ function AppShell() {
               </div>
 
               <div style={{ flex: "0 0 auto", display: "flex", justifyContent: "center" }}>
-                {canAccessGestaoVista ? (
+                {canAccessGestaoVista && !isGestaoVistaUser ? (
                   <button
                     onClick={() => navigate(gestaoVistaPath)}
                     title="Gestão à Vista"
@@ -970,25 +981,27 @@ function AppShell() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, flex: 1, minWidth: 0 }}>
-                <button
-                  onClick={() => navigate("/configuracoes")}
-                  title="Configurações"
-                  aria-label="Configurações"
-                  style={{
-                    height: 36,
-                    width: 36,
-                    borderRadius: 12,
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    background: "rgba(255,255,255,0.05)",
-                    color: "white",
-                    display: "grid",
-                    placeItems: "center",
-                    cursor: "pointer",
-                    flex: "0 0 auto",
-                  }}
-                >
-                  <Settings size={18} />
-                </button>
+                {!isGestaoVistaUser ? (
+                  <button
+                    onClick={() => navigate("/configuracoes")}
+                    title="Configurações"
+                    aria-label="Configurações"
+                    style={{
+                      height: 36,
+                      width: 36,
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      background: "rgba(255,255,255,0.05)",
+                      color: "white",
+                      display: "grid",
+                      placeItems: "center",
+                      cursor: "pointer",
+                      flex: "0 0 auto",
+                    }}
+                  >
+                    <Settings size={18} />
+                  </button>
+                ) : null}
 
                 <div
                   style={{
