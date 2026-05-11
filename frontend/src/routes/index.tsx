@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { RequireAuth } from "../auth/RequireAuth";
 import AppShell from "../components/AppShell";
 import { useAuth } from "../auth/AuthProvider";
-import { canAccess as canAccessRole, getUserRole } from "../auth/roleGuard";
+import { canAccess as canAccessRole, getDefaultPathByRole, getUserRole } from "../auth/roleGuard";
 
 import Login from "../pages/Login";
 import Home from "../pages/Home";
@@ -40,7 +40,7 @@ import { isMobileViewport } from "../mobile/isMobile";
 type Role = ReturnType<typeof getUserRole>;
 
 function defaultPathFor(role: Role) {
-  return role === "apontador" ? "/producao-planta" : "/dashboard";
+  return getDefaultPathByRole(role);
 }
 
 function RequireRole({ children }: { children: ReactNode }) {
@@ -107,6 +107,8 @@ function RoleIndexRedirect() {
 export function AppRoutes() {
   const loc = useLocation();
   const nav = useNavigate();
+  const { user } = useAuth() as any;
+  const role = getUserRole(user);
 
   useEffect(() => {
     const onResize = () => {
@@ -115,6 +117,15 @@ export function AppRoutes() {
       const path = loc.pathname;
       const isMobileRoute = path.startsWith("/m");
       const isAuthRoute = path.startsWith("/login") || path.startsWith("/home");
+
+      // Gestão à Vista tem uma única tela. Não envia para /m/dashboard para evitar loop/tela preta.
+      if (role === "gestao_vista") {
+        const target = getDefaultPathByRole(role);
+        if (!isAuthRoute && path !== target && !path.startsWith(target + "/")) {
+          nav(target, { replace: true });
+        }
+        return;
+      }
 
       if (mobile && !isMobileRoute && !isAuthRoute) {
         nav("/m/dashboard", { replace: true });
@@ -128,8 +139,7 @@ export function AppRoutes() {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize as any);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loc.pathname]);
+  }, [loc.pathname, nav, role]);
 
   return (
     <Routes>
