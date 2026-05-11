@@ -419,6 +419,29 @@ const exportSep: React.CSSProperties = {
   margin: "12px 0",
 };
 
+const exportSummaryGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  alignItems: "stretch",
+};
+
+const exportSummaryCell: React.CSSProperties = {
+  minWidth: 0,
+};
+
+const exportSummaryTotalTitle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.06)",
+  color: "rgba(255,255,255,0.94)",
+  fontWeight: 990,
+  fontSize: 18,
+  letterSpacing: 0.8,
+  textTransform: "uppercase",
+  textAlign: "center",
+  padding: "10px 18px",
+  lineHeight: 1.1,
+  borderTop: "1px solid rgba(255,255,255,0.10)",
+  borderBottom: "1px solid rgba(255,255,255,0.10)",
+};
 
 export default function Ritmo() {
   const [day, setDay] = useState<string>(isoTodayLocal());
@@ -661,6 +684,11 @@ export default function Ritmo() {
     [exportPlantTitle, data, goal, day]
   );
 
+  const aggregateSummary = useMemo(
+    () => buildSummaryMetrics({ title: "ACUMULADO DAS PLANTAS", data, goal, day }),
+    [data, goal, day]
+  );
+
   const allPlantSummaries = useMemo(
     () =>
       allSummaryInputs.map((item) =>
@@ -828,19 +856,45 @@ export default function Ritmo() {
     );
   }
 
-  function renderSummaryCombinedCard(items: SummaryMetrics[]) {
+  function renderSummaryCombinedCard(items: SummaryMetrics[], total: SummaryMetrics) {
+    const visibleItems = items.slice(0, 2);
+
     return (
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: mobile ? "1fr" : "repeat(2, minmax(320px, 1fr))",
-          gap: 14,
+          ...exportMiniCard,
+          display: "block",
           width: "100%",
-          maxWidth: mobile ? 380 : 760,
-          alignItems: "stretch",
+          maxWidth: mobile ? 420 : 760,
         }}
       >
-        {items.map((m, idx) => renderSummaryCard(m, idx))}
+        <div
+          style={{
+            ...exportSummaryGrid,
+            gridTemplateColumns: mobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+          }}
+        >
+          {visibleItems.map((m, idx) => {
+            const isLastMobile = mobile && idx < visibleItems.length - 1;
+            const isRightCol = !mobile && idx % 2 === 1;
+            return (
+              <div
+                key={`${m.title}-${idx}`}
+                style={{
+                  ...exportSummaryCell,
+                  borderRight: !mobile && !isRightCol ? "1px solid rgba(255,255,255,0.12)" : "none",
+                  borderBottom: isLastMobile ? "1px solid rgba(255,255,255,0.12)" : "none",
+                }}
+              >
+                <div style={exportPlantStrip}>{m.title}</div>
+                {renderSummaryBody(m)}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={exportSummaryTotalTitle}>Acumulado das plantas</div>
+        {renderSummaryBody(total)}
       </div>
     );
   }
@@ -1038,7 +1092,7 @@ return (
             }}
           >
             {plantId === "all"
-              ? renderSummaryCombinedCard(summariesToRender.length ? summariesToRender : [singleSummary])
+              ? renderSummaryCombinedCard(summariesToRender.length ? summariesToRender : [singleSummary], aggregateSummary)
               : renderSummaryCard(singleSummary, 0)}
           </div>
 
