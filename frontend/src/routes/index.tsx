@@ -107,7 +107,7 @@ function RoleIndexRedirect() {
 export function AppRoutes() {
   const loc = useLocation();
   const nav = useNavigate();
-  const { user } = useAuth() as any;
+  const { user, loading } = useAuth() as any;
   const role = getUserRole(user);
 
   useEffect(() => {
@@ -118,10 +118,11 @@ export function AppRoutes() {
       const isMobileRoute = path.startsWith("/m");
       const isAuthRoute = path.startsWith("/login") || path.startsWith("/home");
 
-      // Gestão à Vista tem uma única tela. Não envia para /m/dashboard para evitar loop/tela preta.
-      if (role === "gestao_vista") {
+      // Gestão à Vista é perfil de tela única. Não manda para /m/dashboard.
+      if (!loading && role === "gestao_vista") {
         const target = getDefaultPathByRole(role);
-        if (!isAuthRoute && path !== target && !path.startsWith(target + "/")) {
+        const isTarget = path === target || path.startsWith(target + "/");
+        if (!isAuthRoute && !isTarget) {
           nav(target, { replace: true });
         }
         return;
@@ -139,7 +140,8 @@ export function AppRoutes() {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize as any);
     };
-  }, [loc.pathname, nav, role]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loc.pathname, nav, role, loading]);
 
   return (
     <Routes>
