@@ -40,6 +40,7 @@ const nav: NavItem[] = [
   { to: "/desvio-producao", label: "Desvio Produção", icon: LayoutDashboard, group: "Produção" },
   { to: "/statisticas", label: "Estatísticas", icon: BarChart3, group: "Configurações" },
   { to: "/ritmo", label: "Ritmo", icon: Factory, group: "Operação" },
+  { to: "/equipamentos", label: "Equipamentos", icon: Factory, group: "Configurações" },
 
   // ✅ Avisos (somente supervisor / dev)
   { to: "/avisos", label: "Avisos", icon: Bell, group: "Visão geral" },
