@@ -1549,7 +1549,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                                   style={{
                                     fill: "rgba(255,255,255,0.95)",
                                     fontWeight: 900,
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     textShadow: "0 1px 2px rgba(0,0,0,.55)",
                                     pointerEvents: "none",
                                   }}
@@ -1676,7 +1676,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={2} tickMargin={10} angle={-35} textAnchor="end" height={34} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
+                              <XAxis dataKey="period" interval={3} tickMargin={6} angle={-35} textAnchor="end" height={24} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 9 }} />
                               <YAxis domain={miniTonDomain} hide />
                               <Tooltip
                                 formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
@@ -2101,7 +2101,17 @@ const EXPECTED_TON_H = metaHoraEsperada;
         </div>
 
         {/* MÉDIA (4 col) */}
-        <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 4" }}>
+        <div
+          style={{
+            ...cardBase,
+            padding: 14,
+            gridColumn: mobile ? "span 12" : "span 4",
+            minHeight: mobile ? undefined : 222,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
           <div style={headerStyle}>
             <div>
               <div style={titleStyle}>Média/Hora</div>
@@ -2177,9 +2187,9 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </div>
           </div>
 
-          <div style={{ height: mobile ? 160 : 190 }}>
+          <div style={{ height: mobile ? 150 : 122, marginTop: -2 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+              <AreaChart data={hourlySeries} margin={{ top: 6, right: 12, left: -10, bottom: -6 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                 <XAxis dataKey="period" interval={2} tickMargin={10} angle={-35} textAnchor="end" height={34} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
                 <YAxis domain={miniTonDomain} hide />
@@ -2202,9 +2212,9 @@ const EXPECTED_TON_H = metaHoraEsperada;
           {/* legenda (igual padrão do gráfico de produção) */}
           <div
             style={{
-              marginTop: 8,
+              marginTop: 2,
               display: "flex",
-              gap: 14,
+              gap: 10,
               alignItems: "center",
               justifyContent: "center",
               fontSize: 12,
@@ -2223,8 +2233,8 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </div>
           </div>
 
-          <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
-            Considera somente horas preenchidas (Ton/H &gt; 0).
+          <div style={{ marginTop: 2, textAlign: "center", fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.45)", lineHeight: 1.1 }}>
+            Somente horas preenchidas (Ton/H &gt; 0).
           </div>
         </div>
 
