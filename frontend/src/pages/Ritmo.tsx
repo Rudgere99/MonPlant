@@ -830,20 +830,17 @@ export default function Ritmo() {
 
   function renderSummaryCombinedCard(items: SummaryMetrics[]) {
     return (
-      <div style={{ ...exportMiniCard, display: "block", width: "100%", maxWidth: 360 }}>
-        {items.map((m, idx) => (
-          <React.Fragment key={`${m.title}-${idx}`}>
-            <div
-              style={{
-                ...exportPlantStrip,
-                borderTop: idx === 0 ? "none" : "1px solid rgba(0,0,0,0.28)",
-              }}
-            >
-              {m.title}
-            </div>
-            {renderSummaryBody(m)}
-          </React.Fragment>
-        ))}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: mobile ? "1fr" : "repeat(2, minmax(320px, 1fr))",
+          gap: 14,
+          width: "100%",
+          maxWidth: mobile ? 380 : 760,
+          alignItems: "stretch",
+        }}
+      >
+        {items.map((m, idx) => renderSummaryCard(m, idx))}
       </div>
     );
   }
@@ -1036,7 +1033,7 @@ return (
               flexDirection: "column",
               alignItems: "flex-start",
               gap: 12,
-              width: "fit-content",
+              width: plantId === "all" ? "100%" : "fit-content",
               maxWidth: "100%",
             }}
           >
