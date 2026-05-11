@@ -1,7 +1,12 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-// ✅ incluir supervisor
-export type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
+export type UserType =
+  | "apontador"
+  | "controlador"
+  | "gerencia"
+  | "supervisor"
+  | "gestao_vista"
+  | "dev";
 
 export type MpUser = {
   id: string;
@@ -28,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<MpUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 🔥 Hidratação inicial
+  // Hidratação inicial
   useEffect(() => {
     const t = localStorage.getItem("mp_token");
     const u = localStorage.getItem("mp_user");
