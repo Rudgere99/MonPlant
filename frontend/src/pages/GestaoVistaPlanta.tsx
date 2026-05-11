@@ -565,6 +565,18 @@ export default function GestaoVistaPlanta() {
     return Array.from(map.values());
   }, [prodDay]);
 
+
+  const hourlyBarsChart = useMemo(() => {
+    const launched = hourlyBars.filter((x) => Number(x.ton || 0) > 0);
+    return launched.length ? launched : hourlyBars;
+  }, [hourlyBars]);
+
+  const hourlyChartMax = useMemo(() => {
+    const maxTon = Math.max(...hourlyBarsChart.map((x) => Number(x.ton || 0)), 0);
+    if (maxTon <= 0) return 100;
+    return Math.ceil((maxTon * 1.22) / 50) * 50;
+  }, [hourlyBarsChart]);
+
   const operationalDailyFromStats = useMemo(() => {
     const currentDaily = [...(statsMonth?.series?.daily || [])]
       .filter((row) => String(row.day || "") >= firstDayOfMonth(month) && String(row.day || "") <= day)
@@ -753,19 +765,18 @@ export default function GestaoVistaPlanta() {
 
         <section style={{ marginTop: 14, display: "grid", gridTemplateColumns: "minmax(0, 1.08fr) minmax(0, .92fr)", gap: 14 }} className="mp-gestao-main-grid">
           <div style={{ ...panelStyle(), padding: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950, textTransform: "uppercase" }}>Produção por hora — gráfico de barras</h2>
-              <span style={{ color: COLORS.sub, fontWeight: 850 }}>{brDate(firstDayOfMonth(month))} até {brDate(day)}</span>
             </div>
             <div style={{ height: 330 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hourlyBars} margin={{ top: 26, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
-                  <XAxis dataKey="period" stroke="rgba(255,255,255,.55)" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis stroke="rgba(255,255,255,.55)" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(value: any, name: any) => [name === "freq" ? `${fmtBR1(Number(value))}%` : `${fmtBR0(Number(value))} t`, name === "freq" ? "Frequência" : "Produção"]} />
-                  <Bar dataKey="ton" name="Produção" radius={[9, 9, 0, 0]} fill={COLORS.chartBlue}>
-                    <LabelList dataKey="ton" position="top" formatter={(v: any) => (Number(v) > 0 ? fmtBR0(Number(v)) : "")} fill="rgba(255,255,255,.9)" fontSize={11} fontWeight={900} />
+                <BarChart data={hourlyBarsChart} margin={{ top: 30, right: 18, left: -8, bottom: 2 }} barCategoryGap="18%" barGap={4}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
+                  <XAxis dataKey="period" stroke="rgba(255,255,255,.55)" tick={{ fontSize: 11, fontWeight: 800 }} tickLine={false} axisLine={false} interval={0} />
+                  <YAxis domain={[0, hourlyChartMax]} stroke="rgba(255,255,255,.55)" tick={{ fontSize: 11, fontWeight: 800 }} tickLine={false} axisLine={false} width={42} />
+                  <Tooltip cursor={{ fill: "rgba(255,255,255,.045)" }} contentStyle={tooltipStyle} formatter={(value: any, name: any) => [name === "freq" ? `${fmtBR1(Number(value))}%` : `${fmtBR0(Number(value))} t`, name === "freq" ? "Frequência" : "Produção"]} />
+                  <Bar dataKey="ton" name="Produção" radius={[10, 10, 0, 0]} fill={COLORS.chartBlue} maxBarSize={46}>
+                    <LabelList dataKey="ton" position="top" formatter={(v: any) => (Number(v) > 0 ? fmtBR0(Number(v)) : "")} fill="rgba(255,255,255,.92)" fontSize={11} fontWeight={950} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
