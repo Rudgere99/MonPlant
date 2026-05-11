@@ -18,6 +18,7 @@ import UfDF from "../pages/UfDF";
 import DesvioProducao from "../pages/DesvioProducao";
 import Abastecimento from "../pages/Abastecimento";
 import Configuracoes from "../pages/Configuracoes";
+import Equipamentos from "../pages/Equipamentos";
 
 import Horimetros from "../pages/Horimetros";
 import Paradas from "../pages/Paradas";
@@ -373,6 +374,14 @@ export function AppRoutes() {
           element={
             <RequireRole>
               <Configuracoes />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="equipamentos"
+          element={
+            <RequireRole>
+              <Equipamentos />
             </RequireRole>
           }
         />
