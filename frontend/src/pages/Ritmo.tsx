@@ -443,6 +443,26 @@ const exportSummaryTotalTitle: React.CSSProperties = {
   borderBottom: "1px solid rgba(255,255,255,0.10)",
 };
 
+const exportLogoBox: React.CSSProperties = {
+  minHeight: 280,
+  height: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 24,
+  borderLeft: "1px solid rgba(255,255,255,0.12)",
+  borderTop: "1px solid rgba(255,255,255,0.10)",
+  background: "linear-gradient(180deg, rgba(18,22,26,0.98) 0%, rgba(10,14,18,0.98) 100%)",
+};
+
+const exportLogoImg: React.CSSProperties = {
+  display: "block",
+  width: "min(260px, 82%)",
+  maxHeight: 170,
+  objectFit: "contain",
+  opacity: 0.96,
+};
+
 export default function Ritmo() {
   const [day, setDay] = useState<string>(isoTodayLocal());
 
@@ -895,8 +915,27 @@ export default function Ritmo() {
           })}
         </div>
 
-        <div style={exportSummaryTotalTitle}>Acumulado das plantas</div>
-        {renderSummaryBody(total)}
+        <div
+          style={{
+            ...exportSummaryGrid,
+            gridTemplateColumns: mobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+            borderTop: "1px solid rgba(255,255,255,0.10)",
+          }}
+        >
+          <div style={{ ...exportSummaryCell, borderBottom: mobile ? "1px solid rgba(255,255,255,0.12)" : "none" }}>
+            <div style={exportSummaryTotalTitle}>Acumulado das plantas</div>
+            {renderSummaryBody(total)}
+          </div>
+
+          <div
+            style={{
+              ...exportLogoBox,
+              borderLeft: mobile ? "none" : "1px solid rgba(255,255,255,0.12)",
+            }}
+          >
+            <img src="/assets/ogo-trindade.png" alt="Trindade" style={exportLogoImg} />
+          </div>
+        </div>
       </div>
     );
   }
