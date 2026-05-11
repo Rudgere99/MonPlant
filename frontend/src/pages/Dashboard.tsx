@@ -389,6 +389,12 @@ async function apiGet<T>(path: string, token?: string | null): Promise<T> {
   return (await r.json()) as T;
 }
 
+function goalDayPath(scope: PlantScope, d: string): string {
+  return scope === "all"
+    ? `/api/aggregate/goals/day/${encodeURIComponent(d)}`
+    : `/api/plants/${scope}/goals/day/${encodeURIComponent(d)}`;
+}
+
 /* ===================== types ===================== */
 type PlantHourRow = { period: string; ton?: any; freq?: any };
 type PlantDayPayload = { day: string; obs?: string | null; rows: PlantHourRow[]; updated_at?: string | null };
@@ -596,7 +602,7 @@ export default function Dashboard() {
 
         const goalResults = await Promise.all(
           days.map(async (d) => {
-            const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(d)}`, token).catch(() => null as any);
+            const g = await apiGet<GoalDay>(goalDayPath(plantId, d), token).catch(() => null as any);
             return g ? ({ ...g, day: d } as GoalDay) : ({ day: d, meta_ton: null, discount_hours: null } as GoalDay);
           })
         );
@@ -626,7 +632,7 @@ export default function Dashboard() {
         return { day, rows: [], obs: "" } as PlantDayPayload;
       });
 
-      const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`, token).catch(() => null as any);
+      const g = await apiGet<GoalDay>(goalDayPath(plantId, day), token).catch(() => null as any);
       if (g && typeof g === "object") {
         const mdRaw = (g as any).meta_ton;
         const dhRaw = (g as any).discount_hours;
