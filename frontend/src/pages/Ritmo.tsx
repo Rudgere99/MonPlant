@@ -53,6 +53,25 @@ type ApiPayload = {
   updated_at?: string | null;
 };
 
+type PlantSummaryInput = {
+  plant: PlantInfo;
+  data: ApiPayload | null;
+  goal: GoalDay | null;
+};
+
+type SummaryMetrics = {
+  title: string;
+  metaDay: number | null;
+  produced: number;
+  projectionTon: number;
+  attainment: number | null;
+  diff: number | null;
+  remainingH: number;
+  neededTPH: number | null;
+  avgRealTPH: number;
+  isClosedDay: boolean;
+};
+
 const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 function authHeaders(): HeadersInit {
@@ -142,6 +161,74 @@ function dayRemainingHours(now = new Date()) {
 function dayElapsedHours(now = new Date()) {
   const mins = now.getHours() * 60 + now.getMinutes();
   return Math.max(0, mins / 60);
+}
+
+function rowsToNormMap(rows: HourRow[] | undefined | null): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const r of rows || []) {
+    const p = normalizePeriodToHH(r.period);
+    const ton = parseNum(r.ton) ?? 0;
+    map.set(p, (map.get(p) || 0) + ton);
+  }
+  return map;
+}
+
+function metaFromPayload(goal: GoalDay | null, data: ApiPayload | null): number | null {
+  const v = goal?.meta_ton ?? data?.meta_ton ?? data?.meta ?? data?.meta_day ?? data?.planned_ton ?? null;
+  return v !== null && v !== undefined ? Number(v) : null;
+}
+
+function makeSummaryTitle(plant: PlantInfo | null, plantId: PlantScope | null): string {
+  if (plantId === "all") return "TODAS AS PLANTAS";
+  const id = plant ? Number(plant.id) : Number(plantId || 0);
+  if (Number.isFinite(id) && id > 0) return `PLANTA ${pad2(id)}`;
+  return String(plant?.name || "PLANTA").toUpperCase();
+}
+
+function buildSummaryMetrics(args: {
+  title: string;
+  data: ApiPayload | null;
+  goal: GoalDay | null;
+  day: string;
+}): SummaryMetrics {
+  const rowsNorm = rowsToNormMap(args.data?.rows);
+  const metaDay = metaFromPayload(args.goal, args.data);
+
+  let produced = 0;
+  rowsNorm.forEach((v) => (produced += Number(v || 0)));
+
+  const todayISO = isoTodayLocal();
+  const isPastDay = args.day < todayISO;
+  const filledCount = Array.from(rowsNorm.values()).filter((v) => (Number(v) || 0) > 0).length;
+  const isClosedDay = isPastDay || filledCount >= 24;
+  const nowRef = isClosedDay ? new Date(`${args.day}T23:59:00`) : new Date();
+  const remainingH = isClosedDay ? 0 : Math.max(0, dayRemainingHours(nowRef));
+
+  const filled = Array.from(rowsNorm.values()).filter((v) => (Number(v) || 0) > 0);
+  const avgRealTPH = filled.length ? filled.reduce((acc, v) => acc + (Number(v) || 0), 0) / filled.length : 0;
+
+  const projectionTon = isClosedDay || avgRealTPH <= 0 ? produced : produced + avgRealTPH * remainingH;
+  const diff = metaDay !== null ? produced - metaDay : null;
+  const attainment = metaDay !== null && metaDay > 0 ? (produced / metaDay) * 100 : null;
+
+  let neededTPH: number | null = null;
+  if (metaDay !== null) {
+    const remaining = Math.max(0, metaDay - produced);
+    neededTPH = remaining <= 0 ? 0 : remainingH > 0 ? remaining / remainingH : null;
+  }
+
+  return {
+    title: args.title,
+    metaDay,
+    produced,
+    projectionTon,
+    attainment,
+    diff,
+    remainingH,
+    neededTPH,
+    avgRealTPH,
+    isClosedDay,
+  };
 }
 
 
@@ -357,6 +444,7 @@ export default function Ritmo() {
   const [data, setData] = useState<ApiPayload | null>(null);
   const [goal, setGoal] = useState<GoalDay | null>(null);
   const [rhythmEquipment, setRhythmEquipment] = useState<RhythmEquipmentPayload | null>(null);
+  const [allSummaryInputs, setAllSummaryInputs] = useState<PlantSummaryInput[]>([]);
 
 
   async function loadPlants() {
@@ -421,6 +509,7 @@ export default function Ritmo() {
         }
 
         if (plantId && plantId !== "all") {
+          setAllSummaryInputs([]);
           try {
             const eq = await apiGet<RhythmEquipmentPayload>(`/api/plants/${plantId}/rhythm-equipment`);
             setRhythmEquipment(eq);
@@ -429,6 +518,28 @@ export default function Ritmo() {
           }
         } else {
           setRhythmEquipment(null);
+          if (plantId === "all" && plants.length) {
+            const summaries = await Promise.all(
+              plants.map(async (p) => {
+                let plantData: ApiPayload | null = null;
+                let plantGoal: GoalDay | null = null;
+                try {
+                  plantData = await apiGet<ApiPayload>(`/api/plants/${p.id}/plant-production/${encodeURIComponent(day)}`);
+                } catch {
+                  plantData = { day, rows: [], meta_ton: null };
+                }
+                try {
+                  plantGoal = await apiGet<GoalDay>(`/api/plants/${p.id}/goals/day/${encodeURIComponent(day)}`);
+                } catch {
+                  plantGoal = null;
+                }
+                return { plant: p, data: plantData, goal: plantGoal };
+              })
+            );
+            setAllSummaryInputs(summaries);
+          } else {
+            setAllSummaryInputs([]);
+          }
         }
       } catch (e: any) {
         setErr(e?.message || "Erro ao carregar dados.");
@@ -436,23 +547,12 @@ export default function Ritmo() {
         setLoading(false);
       }
     })();
-  }, [FETCH_URL, day, plantId]);
+  }, [FETCH_URL, day, plantId, plants]);
 
 
-  const rowsNorm = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of data?.rows || []) {
-      const p = normalizePeriodToHH(r.period);
-      const ton = parseNum(r.ton) ?? 0;
-      map.set(p, (map.get(p) || 0) + ton);
-    }
-    return map;
-  }, [data]);
+  const rowsNorm = useMemo(() => rowsToNormMap(data?.rows), [data]);
 
-  const metaDayRaw = useMemo(() => {
-    const v = goal?.meta_ton ?? data?.meta_ton ?? data?.meta ?? data?.meta_day ?? data?.planned_ton ?? null;
-    return v !== null && v !== undefined ? Number(v) : null;
-  }, [goal, data]);
+  const metaDayRaw = useMemo(() => metaFromPayload(goal, data), [goal, data]);
 
   const metaDay = metaDayRaw;
 
@@ -552,11 +652,29 @@ export default function Ritmo() {
   }, [plants, plantId]);
 
   const exportPlantTitle = useMemo(() => {
-    if (plantId === "all") return "TODAS AS PLANTAS";
-    const n = Number(plantId || 0);
-    if (Number.isFinite(n) && n > 0) return `PLANTA ${pad2(n)}`;
-    return String(selectedPlantName || "PLANTA").toUpperCase();
-  }, [plantId, selectedPlantName]);
+    const plant = plantId !== "all" ? plants.find((p) => Number(p.id) === Number(plantId)) || null : null;
+    return makeSummaryTitle(plant, plantId);
+  }, [plantId, plants]);
+
+  const singleSummary = useMemo(
+    () => buildSummaryMetrics({ title: exportPlantTitle, data, goal, day }),
+    [exportPlantTitle, data, goal, day]
+  );
+
+  const allPlantSummaries = useMemo(
+    () =>
+      allSummaryInputs.map((item) =>
+        buildSummaryMetrics({
+          title: makeSummaryTitle(item.plant, Number(item.plant.id)),
+          data: item.data,
+          goal: item.goal,
+          day,
+        })
+      ),
+    [allSummaryInputs, day]
+  );
+
+  const summariesToRender = plantId === "all" ? allPlantSummaries : [singleSummary];
 
   const [yy, mm, dd] = day.split("-");
   const dayBR = `${dd}/${mm}/${yy}`;
@@ -632,6 +750,76 @@ export default function Ritmo() {
   function tooltipFmt(v: any) {
     const n = Number(v) || 0;
     return `${fmtBR(n, dTon)} t`;
+  }
+
+  function renderSummaryCard(m: SummaryMetrics, idx: number) {
+    return (
+      <div key={`${m.title}-${idx}`} style={{ ...exportMiniCard, display: "block", width: "100%", maxWidth: 360 }}>
+        <div style={exportPlantStrip}>{m.title}</div>
+        <div style={exportMiniBody}>
+          <div style={exportLineRow}>
+            <span style={exportLabel}>Meta:</span>
+            <span style={exportValue}>{m.metaDay !== null ? `${fmtBR(m.metaDay, dTon)} t` : "—"}</span>
+          </div>
+
+          <div style={exportLineRow}>
+            <span style={exportLabel}>Produzido:</span>
+            <span style={{ ...exportValue, color: "rgba(250,204,21,0.95)" }}>{`${fmtBR(m.produced, dTon)} t`}</span>
+          </div>
+
+          <div style={exportLineRow}>
+            <span style={exportLabel}>Projeção:</span>
+            <span
+              style={{
+                ...exportValue,
+                color:
+                  m.metaDay !== null && m.projectionTon < m.metaDay
+                    ? "rgba(248,113,113,0.95)"
+                    : m.metaDay !== null
+                      ? "rgba(34,197,94,0.95)"
+                      : exportValue.color,
+              }}
+            >
+              {`${fmtBR(m.projectionTon, dTon)} t`}
+            </span>
+          </div>
+
+          <div style={exportLineRow}>
+            <span style={exportLabel}>Atingimento:</span>
+            <span style={exportValue}>{m.attainment !== null ? fmtPct(m.attainment, dPct) : "—"}</span>
+          </div>
+
+          <div style={exportLineRow}>
+            <span style={exportLabel}>Diferença:</span>
+            <span style={exportValue}>{m.diff !== null ? `${m.diff >= 0 ? "+" : ""}${fmtBR(m.diff, dTon)} t` : "—"}</span>
+          </div>
+
+          <div style={exportLineRow}>
+            <span style={exportLabel}>Tempo restante:</span>
+            <span style={exportValue}>{m.isClosedDay ? "0 h" : `${fmtBR(m.remainingH, 1)} h`}</span>
+          </div>
+
+          <div style={exportSep} />
+
+          <div style={exportLineRow}>
+            <span style={exportLabel}>Necessário:</span>
+            <span
+              style={{
+                ...exportValue,
+                color: m.neededTPH !== null && m.avgRealTPH < m.neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)",
+              }}
+            >
+              {m.neededTPH === null ? "—" : `${fmtBR(m.neededTPH, dTPH)} t/h`}
+            </span>
+          </div>
+
+          <div style={exportLineRow}>
+            <span style={exportLabel}>Média real:</span>
+            <span style={exportValue}>{`${fmtBR(m.avgRealTPH, dTPH)} t/h`}</span>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   
@@ -815,57 +1003,19 @@ return (
             <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>{dayBR}</div>
           </div>
 
-          <div style={{ marginTop: 12 }}>
-            <div ref={exportCompactRef} style={exportMiniCard}>
-              <div style={exportPlantStrip}>{exportPlantTitle}</div>
-              <div style={exportMiniBody}>
-                <div style={exportLineRow}>
-                  <span style={exportLabel}>Meta:</span>
-                  <span style={exportValue}>{metaDay !== null ? `${fmtBR(metaDay, dTon)} t` : "—"}</span>
-                </div>
-
-                <div style={exportLineRow}>
-                  <span style={exportLabel}>Produzido:</span>
-                  <span style={{ ...exportValue, color: "rgba(250,204,21,0.95)" }}>{`${fmtBR(produced, dTon)} t`}</span>
-                </div>
-                <div style={exportLineRow}>
-                  <span style={exportLabel}>Projeção:</span>
-                  <span style={{ ...exportValue, color: metaDay !== null && projectionTon < metaDay ? "rgba(248,113,113,0.95)" : metaDay !== null ? "rgba(34,197,94,0.95)" : exportValue.color }}>{`${fmtBR(projectionTon, dTon)} t`}</span>
-                </div>
-
-
-                <div style={exportLineRow}>
-                  <span style={exportLabel}>Atingimento:</span>
-                  <span style={exportValue}>{attainment !== null ? fmtPct(attainment, dPct) : "—"}</span>
-                </div>
-
-                <div style={exportLineRow}>
-                  <span style={exportLabel}>Diferença:</span>
-                  <span style={exportValue}>{diff !== null ? `${diff >= 0 ? "+" : ""}${fmtBR(diff, dTon)} t` : "—"}</span>
-                </div>
-
-                <div style={exportLineRow}>
-                  <span style={exportLabel}>Tempo restante:</span>
-                  <span style={exportValue}>{isClosedDay ? "0 h" : `${fmtBR(remainingH, 1)} h`}</span>
-                </div>
-
-                <div style={exportSep} />
-
-                <div style={exportLineRow}>
-                  <span style={exportLabel}>Necessário:</span>
-                  <span style={{ ...exportValue, color: neededTPH !== null && avgRealTPH < neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)" }}>
-                    {neededTPH === null ? "—" : `${fmtBR(neededTPH, dTPH)} t/h`}
-                  </span>
-                </div>
-
-                <div style={exportLineRow}>
-                  <span style={exportLabel}>Média real:</span>
-                  <span style={exportValue}>
-                    {`${fmtBR(avgRealTPH, dTPH)} t/h`}
-                  </span>
-                </div>
-              </div>
-            </div>
+          <div
+            ref={exportCompactRef}
+            style={{
+              marginTop: 12,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: 12,
+              width: "fit-content",
+              maxWidth: "100%",
+            }}
+          >
+            {summariesToRender.length ? summariesToRender.map((m, idx) => renderSummaryCard(m, idx)) : renderSummaryCard(singleSummary, 0)}
           </div>
 
           <div style={{ marginTop: 10, color: "rgba(255,255,255,0.60)", fontWeight: 900, fontSize: 12 }}>
