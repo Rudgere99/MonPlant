@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 
-type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "dev";
+type UserType = "apontador" | "controlador" | "gerencia" | "supervisor" | "gestao_vista" | "dev";
 
 type DevUser = {
   id: string;
@@ -47,6 +47,7 @@ function normalizeUserType(v: any): UserType {
     .replace(/[\u0300-\u036f]/g, "");
 
   if (s === "dev") return "dev";
+  if (s === "gestao_vista" || s === "gestao a vista" || s === "gestaoavista" || s === "gestao-vista") return "gestao_vista";
   if (s === "controlador") return "controlador";
   if (s === "gerencia" || s === "gerência") return "gerencia";
   if (s === "supervisor" || s === "supervisao" || s === "supervisao_planta" || s === "supervisor_planta") {
@@ -90,6 +91,15 @@ function getUserTypeTone(userType?: UserType) {
       bd: "rgba(59,130,246,.28)",
       color: "#93c5fd",
       label: "Supervisor",
+    };
+  }
+
+  if (t === "gestao_vista") {
+    return {
+      bg: "rgba(14,165,233,.14)",
+      bd: "rgba(14,165,233,.30)",
+      color: "#7dd3fc",
+      label: "Gestão à Vista",
     };
   }
 
@@ -289,9 +299,10 @@ export default function DevUsers() {
     const ativos = rows.filter((u) => u.is_active).length;
     const devs = rows.filter((u) => u.user_type === "dev").length;
     const supervisaoGerencia = rows.filter((u) => u.user_type === "supervisor" || u.user_type === "gerencia").length;
+    const gestaoVista = rows.filter((u) => u.user_type === "gestao_vista").length;
     const retroativos = rows.filter((u) => Boolean(u.can_edit_retroactive)).length;
 
-    return { total, ativos, devs, supervisaoGerencia, retroativos };
+    return { total, ativos, devs, supervisaoGerencia, gestaoVista, retroativos };
   }, [rows]);
 
   return (
@@ -372,6 +383,7 @@ export default function DevUsers() {
             <StatCard title="Perfis DEV" value={stats.devs} />
             <StatCard title="Permissão retroativa" value={stats.retroativos} />
             <StatCard title="Supervisão / Gerência" value={stats.supervisaoGerencia} />
+            <StatCard title="Gestão à Vista" value={stats.gestaoVista} />
           </div>
 
           <div
@@ -453,6 +465,7 @@ export default function DevUsers() {
                   <option value="controlador">Controlador</option>
                   <option value="gerencia">Gerência</option>
                   <option value="supervisor">Supervisor</option>
+                  <option value="gestao_vista">Gestão à Vista</option>
                   <option value="dev">Dev</option>
                 </select>
               </div>
@@ -495,7 +508,7 @@ export default function DevUsers() {
               </button>
 
               <span style={{ color: "rgba(255,255,255,.48)", fontSize: 12 }}>
-                Perfis permitidos: apontador, controlador, supervisão, gerência e dev.
+                Perfis permitidos: apontador, controlador, supervisão, gerência, gestão à vista e dev.
               </span>
             </div>
           </div>
