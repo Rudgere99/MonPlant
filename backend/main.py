@@ -1910,15 +1910,65 @@ def _col(r, key: str, idx: int):
 
 
 def _ensure_goals_table():
+    """
+    Garante metas por planta.
+
+    Modelo novo:
+      - owner_id + plant_id + day
+
+    Compatibilidade:
+      - se a tabela antiga já existir com PRIMARY KEY(owner_id, day),
+        a migração remove essa PK antiga e cria uma chave única por planta.
+      - registros antigos recebem plant_id=1, preservando a Planta 01.
+    """
     ddl = """
     CREATE TABLE IF NOT EXISTS public.bv_goals_daily(
       owner_id TEXT NOT NULL,
+      plant_id INTEGER NOT NULL DEFAULT 1,
       day DATE NOT NULL,
       meta_ton NUMERIC(18,2) NOT NULL DEFAULT 0,
       discount_hours NUMERIC(10,2) NOT NULL DEFAULT 2,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY(owner_id, day)
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE public.bv_goals_daily
+      ADD COLUMN IF NOT EXISTS plant_id INTEGER;
+
+    UPDATE public.bv_goals_daily
+       SET plant_id = 1
+     WHERE plant_id IS NULL;
+
+    ALTER TABLE public.bv_goals_daily
+      ALTER COLUMN plant_id SET DEFAULT 1;
+
+    ALTER TABLE public.bv_goals_daily
+      ALTER COLUMN plant_id SET NOT NULL;
+
+    DO $$
+    DECLARE
+      pk_name text;
+      pk_cols text;
+    BEGIN
+      SELECT c.conname,
+             string_agg(a.attname, ',' ORDER BY u.idx) AS cols
+        INTO pk_name, pk_cols
+        FROM pg_constraint c
+        JOIN unnest(c.conkey) WITH ORDINALITY AS u(attnum, idx) ON true
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = u.attnum
+       WHERE c.conrelid = 'public.bv_goals_daily'::regclass
+         AND c.contype = 'p'
+       GROUP BY c.conname;
+
+      IF pk_name IS NOT NULL AND pk_cols <> 'owner_id,plant_id,day' THEN
+        EXECUTE format('ALTER TABLE public.bv_goals_daily DROP CONSTRAINT %I', pk_name);
+      END IF;
+    END $$;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_bv_goals_daily_owner_plant_day
+      ON public.bv_goals_daily(owner_id, plant_id, day);
+
+    CREATE INDEX IF NOT EXISTS idx_bv_goals_daily_owner_day
+      ON public.bv_goals_daily(owner_id, day);
     """
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -1950,42 +2000,63 @@ def _month_range(first: date):
         nxt = date(first.year, first.month + 1, 1)
     return first, nxt
 
-@app.get("/api/goals/day/{day}", response_model=GoalDayOut)
-def goals_get_day(day: date, owner_id: str = Depends(require_owner_id)):
+
+def _validate_plant_id(plant_id: int) -> int:
+    try:
+        pid = int(plant_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="plant_id inválido")
+    if pid <= 0:
+        raise HTTPException(status_code=400, detail="plant_id inválido")
+    return pid
+
+
+def _goal_day_default(day: date, plant_id: int = 1) -> GoalDayOut:
+    return GoalDayOut(day=day, meta_ton=0.0, discount_hours=2.0)
+
+
+# -------- Metas por planta --------
+@app.get("/api/plants/{plant_id}/goals/day/{day}", response_model=GoalDayOut)
+def goals_get_day_by_plant(plant_id: int, day: date, owner_id: str = Depends(require_owner_id)):
     _ensure_goals_table()
+    plant_id = _validate_plant_id(plant_id)
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT meta_ton, discount_hours
                      FROM public.bv_goals_daily
-                     WHERE owner_id=%s AND day=%s""",
-                (owner_id, day),
+                     WHERE owner_id=%s AND plant_id=%s AND day=%s""",
+                (owner_id, plant_id, day),
             )
             row = cur.fetchone()
     if not row:
-        return GoalDayOut(day=day, meta_ton=0.0, discount_hours=2.0)
+        return _goal_day_default(day, plant_id)
     return GoalDayOut(day=day, meta_ton=float(_col(row,'meta_ton',0) or 0), discount_hours=float(_col(row,'discount_hours',1) or 0))
 
-@app.put("/api/goals/day/{day}", response_model=GoalDayOut)
-def goals_put_day(day: date, body: GoalDayIn, owner_id: str = Depends(require_owner_id)):
+
+@app.put("/api/plants/{plant_id}/goals/day/{day}", response_model=GoalDayOut)
+def goals_put_day_by_plant(plant_id: int, day: date, body: GoalDayIn, owner_id: str = Depends(require_owner_id)):
     _ensure_goals_table()
+    plant_id = _validate_plant_id(plant_id)
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO public.bv_goals_daily(owner_id, day, meta_ton, discount_hours)
-                     VALUES(%s,%s,%s,%s)
-                     ON CONFLICT (owner_id, day)
+                """INSERT INTO public.bv_goals_daily(owner_id, plant_id, day, meta_ton, discount_hours)
+                     VALUES(%s,%s,%s,%s,%s)
+                     ON CONFLICT (owner_id, plant_id, day)
                      DO UPDATE SET meta_ton=EXCLUDED.meta_ton,
                                    discount_hours=EXCLUDED.discount_hours,
                                    updated_at=NOW()""",
-                (owner_id, day, body.meta_ton, body.discount_hours),
+                (owner_id, plant_id, day, body.meta_ton, body.discount_hours),
             )
         conn.commit()
     return GoalDayOut(day=day, meta_ton=float(body.meta_ton), discount_hours=float(body.discount_hours))
 
-@app.get("/api/goals/month/{month}", response_model=GoalMonthOut)
-def goals_get_month(month: str, owner_id: str = Depends(require_owner_id)):
+
+@app.get("/api/plants/{plant_id}/goals/month/{month}", response_model=GoalMonthOut)
+def goals_get_month_by_plant(plant_id: int, month: str, owner_id: str = Depends(require_owner_id)):
     _ensure_goals_table()
+    plant_id = _validate_plant_id(plant_id)
     first = _parse_yyyy_mm(month)
     a, b = _month_range(first)
     with get_conn() as conn:
@@ -1993,7 +2064,60 @@ def goals_get_month(month: str, owner_id: str = Depends(require_owner_id)):
             cur.execute(
                 """SELECT day, meta_ton, discount_hours
                      FROM public.bv_goals_daily
+                     WHERE owner_id=%s AND plant_id=%s AND day >= %s AND day < %s
+                     ORDER BY day ASC""",
+                (owner_id, plant_id, a, b),
+            )
+            rows = cur.fetchall() or []
+
+    days = [GoalDayOut(day=_col(r,'day',0), meta_ton=float(_col(r,'meta_ton',1) or 0), discount_hours=float(_col(r,'discount_hours',2) or 0)) for r in rows]
+    total_month = float(sum(d.meta_ton for d in days))
+    return GoalMonthOut(month=month, total_month_ton=total_month, days=days)
+
+
+@app.put("/api/plants/{plant_id}/goals/month/{month}", response_model=GoalMonthOut)
+def goals_put_month_by_plant(plant_id: int, month: str, body: GoalMonthIn, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    plant_id = _validate_plant_id(plant_id)
+    first = _parse_yyyy_mm(month)
+    a, b = _month_range(first)
+
+    for d in body.days:
+        if d.day < a or d.day >= b:
+            raise HTTPException(status_code=400, detail=f"Dia {d.day} fora do mês {month}")
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            for d in body.days:
+                cur.execute(
+                    """INSERT INTO public.bv_goals_daily(owner_id, plant_id, day, meta_ton, discount_hours)
+                         VALUES(%s,%s,%s,%s,%s)
+                         ON CONFLICT (owner_id, plant_id, day)
+                         DO UPDATE SET meta_ton=EXCLUDED.meta_ton,
+                                       discount_hours=EXCLUDED.discount_hours,
+                                       updated_at=NOW()""",
+                    (owner_id, plant_id, d.day, d.meta_ton, d.discount_hours),
+                )
+        conn.commit()
+
+    return goals_get_month_by_plant(plant_id, month, owner_id)
+
+
+# -------- Metas consolidadas / todas as plantas --------
+@app.get("/api/aggregate/goals/month/{month}", response_model=GoalMonthOut)
+def goals_get_month_aggregate(month: str, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    first = _parse_yyyy_mm(month)
+    a, b = _month_range(first)
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT day,
+                          COALESCE(SUM(COALESCE(meta_ton,0)),0) AS meta_ton,
+                          COALESCE(AVG(COALESCE(discount_hours,2)),2) AS discount_hours
+                     FROM public.bv_goals_daily
                      WHERE owner_id=%s AND day >= %s AND day < %s
+                     GROUP BY day
                      ORDER BY day ASC""",
                 (owner_id, a, b),
             )
@@ -2003,33 +2127,26 @@ def goals_get_month(month: str, owner_id: str = Depends(require_owner_id)):
     total_month = float(sum(d.meta_ton for d in days))
     return GoalMonthOut(month=month, total_month_ton=total_month, days=days)
 
+
+# -------- Endpoints legados: mantêm Planta 01 como padrão --------
+@app.get("/api/goals/day/{day}", response_model=GoalDayOut)
+def goals_get_day(day: date, owner_id: str = Depends(require_owner_id)):
+    return goals_get_day_by_plant(1, day, owner_id)
+
+
+@app.put("/api/goals/day/{day}", response_model=GoalDayOut)
+def goals_put_day(day: date, body: GoalDayIn, owner_id: str = Depends(require_owner_id)):
+    return goals_put_day_by_plant(1, day, body, owner_id)
+
+
+@app.get("/api/goals/month/{month}", response_model=GoalMonthOut)
+def goals_get_month(month: str, owner_id: str = Depends(require_owner_id)):
+    return goals_get_month_by_plant(1, month, owner_id)
+
+
 @app.put("/api/goals/month/{month}", response_model=GoalMonthOut)
 def goals_put_month(month: str, body: GoalMonthIn, owner_id: str = Depends(require_owner_id)):
-    _ensure_goals_table()
-    first = _parse_yyyy_mm(month)
-    a, b = _month_range(first)
-
-    # valida: só aceita dias dentro do mês
-    for d in body.days:
-        if d.day < a or d.day >= b:
-            raise HTTPException(status_code=400, detail=f"Dia {d.day} fora do mês {month}")
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            for d in body.days:
-                cur.execute(
-                    """INSERT INTO public.bv_goals_daily(owner_id, day, meta_ton, discount_hours)
-                         VALUES(%s,%s,%s,%s)
-                         ON CONFLICT (owner_id, day)
-                         DO UPDATE SET meta_ton=EXCLUDED.meta_ton,
-                                       discount_hours=EXCLUDED.discount_hours,
-                                       updated_at=NOW()""",
-                    (owner_id, d.day, d.meta_ton, d.discount_hours),
-                )
-        conn.commit()
-
-    # retorna consolidado
-    return goals_get_month(month, owner_id)
+    return goals_put_month_by_plant(1, month, body, owner_id)
 
 
 # =========================
@@ -2085,9 +2202,12 @@ def stats_month(month: str, owner_id: str = Depends(require_owner_id)):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select day, meta_ton, discount_hours
+            select day,
+                   coalesce(sum(coalesce(meta_ton,0)),0) as meta_ton,
+                   coalesce(avg(coalesce(discount_hours,2)),2) as discount_hours
             from public.bv_goals_daily
             where owner_id=%s and day >= %s and day < %s
+            group by day
             order by day asc
             """,
             (owner_id, a, b),
@@ -2371,16 +2491,16 @@ def stats_month_by_plant(
     first = _parse_yyyy_mm(month)
     a, b = _month_range(first)
 
-    # -------- Goals (mantidas por owner/dia) --------
+    # -------- Goals (consolidada por owner/dia/planta) --------
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
             select day, meta_ton, discount_hours
             from public.bv_goals_daily
-            where owner_id=%s and day >= %s and day < %s
+            where owner_id=%s and plant_id=%s and day >= %s and day < %s
             order by day asc
             """,
-            (owner_id, a, b),
+            (owner_id, plant_id, a, b),
         )
         goal_rows = cur.fetchall() or []
 
@@ -3098,13 +3218,16 @@ def stats_month_aggregate(
     first = _parse_yyyy_mm(month)
     a, b = _month_range(first)
 
-    # -------- Goals (mantidas por owner/dia) --------
+    # -------- Goals (por planta) --------
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select day, meta_ton, discount_hours
+            select day,
+                   coalesce(sum(coalesce(meta_ton,0)),0) as meta_ton,
+                   coalesce(avg(coalesce(discount_hours,2)),2) as discount_hours
             from public.bv_goals_daily
             where owner_id=%s and day >= %s and day < %s
+            group by day
             order by day asc
             """,
             (owner_id, a, b),
