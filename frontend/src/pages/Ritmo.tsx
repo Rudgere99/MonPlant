@@ -37,6 +37,12 @@ type PlantInfo = {
 
 type PlantScope = number | "all";
 
+type RhythmEquipmentPayload = {
+  plant_id: number;
+  allocation: null | { id: number; plant_id: number; equipment_id: number; is_active: boolean; updated_at?: string | null };
+  equipment: null | { id: number; equipment_type?: string | null; tag: string; bucket_ton: number; is_active?: boolean };
+};
+
 type ApiPayload = {
   day: string;
   meta_ton?: number | null;
@@ -337,6 +343,7 @@ export default function Ritmo() {
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<ApiPayload | null>(null);
   const [goal, setGoal] = useState<GoalDay | null>(null);
+  const [rhythmEquipment, setRhythmEquipment] = useState<RhythmEquipmentPayload | null>(null);
 
   const [bucketTon, setBucketTon] = useState<string>(() => localStorage.getItem(LS_BUCKET) || "4,2");
 
@@ -391,10 +398,27 @@ export default function Ritmo() {
         setData(j);
 
         try {
-          const g = await apiGet<GoalDay>(`/api/goals/day/${encodeURIComponent(day)}`);
+          const goalPath =
+            plantId === "all"
+              ? `/api/aggregate/goals/day/${encodeURIComponent(day)}`
+              : `/api/plants/${plantId}/goals/day/${encodeURIComponent(day)}`;
+          const g = await apiGet<GoalDay>(goalPath);
           setGoal(g);
         } catch {
           setGoal(null);
+        }
+
+        if (plantId && plantId !== "all") {
+          try {
+            const eq = await apiGet<RhythmEquipmentPayload>(`/api/plants/${plantId}/rhythm-equipment`);
+            setRhythmEquipment(eq);
+            const ton = Number(eq?.equipment?.bucket_ton || 0);
+            if (ton > 0) setBucketTon(String(ton).replace(".", ","));
+          } catch {
+            setRhythmEquipment(null);
+          }
+        } else {
+          setRhythmEquipment(null);
         }
       } catch (e: any) {
         setErr(e?.message || "Erro ao carregar dados.");
@@ -661,8 +685,28 @@ return (
                 onChange={(e) => setBucketTon(e.target.value)}
                 inputMode="decimal"
                 placeholder="4,2"
+                title={rhythmEquipment?.equipment ? "Valor automático vindo da alocação da planta" : "Sem equipamento alocado: valor manual de contingência"}
               />
             </label>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 210 }}>
+              <span style={label}>Escavadeira alocada</span>
+              <div
+                style={{
+                  ...input,
+                  minHeight: 41,
+                  display: "flex",
+                  alignItems: "center",
+                  color: rhythmEquipment?.equipment ? "#ffb84d" : "rgba(255,255,255,0.58)",
+                }}
+              >
+                {plantId === "all"
+                  ? "Consolidado"
+                  : rhythmEquipment?.equipment
+                    ? `${rhythmEquipment.equipment.tag} • ${fmtBR(Number(rhythmEquipment.equipment.bucket_ton || 0), 2)} t`
+                    : "Sem alocação"}
+              </div>
+            </div>
 
             <button style={btn} onClick={exportResumoJPEG}>
               Exportar resumo (JPG)
