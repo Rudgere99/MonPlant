@@ -517,6 +517,24 @@ class PlantCreateIn(BaseModel):
     is_active: bool = True
 
 
+class EquipmentIn(BaseModel):
+    equipment_type: Optional[str] = "escavadeira"
+    tag: str
+    bucket_ton: float = Field(0, ge=0)
+    is_active: bool = True
+
+
+class EquipmentUpdateIn(BaseModel):
+    equipment_type: Optional[str] = None
+    tag: Optional[str] = None
+    bucket_ton: Optional[float] = Field(None, ge=0)
+    is_active: Optional[bool] = None
+
+
+class EquipmentAllocationIn(BaseModel):
+    equipment_id: Optional[int] = None
+
+
 class StopIn(BaseModel):
     day: date
     turno: int  # 1|2
@@ -1007,6 +1025,338 @@ def create_plant(
         "description": row["description"],
         "is_active": bool(row["is_active"]),
     }
+
+
+
+# =========================
+# Equipamentos / Escavadeiras + Alocação por Planta
+# =========================
+def _equipment_out(r: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": int(r["id"]),
+        "owner_id": r.get("owner_id"),
+        "equipment_type": r.get("equipment_type") or "escavadeira",
+        "tag": r.get("tag") or "",
+        "bucket_ton": float(r.get("bucket_ton") or 0),
+        "is_active": bool(r.get("is_active")),
+        "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+        "updated_at": r["updated_at"].isoformat() if r.get("updated_at") else None,
+    }
+
+
+@app.get("/api/equipments")
+def list_equipments(
+    include_inactive: bool = Query(False),
+    owner_id: str = Depends(require_owner_id),
+):
+    where = "where owner_id=%s"
+    args: List[Any] = [owner_id]
+    if not include_inactive:
+        where += " and is_active=true"
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            select id, owner_id, equipment_type, tag, bucket_ton, is_active, created_at, updated_at
+            from public.bv_equipments
+            {where}
+            order by is_active desc, tag asc
+            """,
+            tuple(args),
+        )
+        rows = cur.fetchall() or []
+
+    return [_equipment_out(r) for r in rows]
+
+
+@app.post("/api/equipments")
+def create_equipment(
+    body: EquipmentIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    tag = (body.tag or "").strip().upper()
+    if not tag:
+        raise HTTPException(status_code=400, detail="TAG é obrigatória")
+
+    equipment_type = (body.equipment_type or "escavadeira").strip().lower() or "escavadeira"
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into public.bv_equipments(owner_id, equipment_type, tag, bucket_ton, is_active, updated_at)
+                values (%s,%s,%s,%s,%s,now())
+                returning id, owner_id, equipment_type, tag, bucket_ton, is_active, created_at, updated_at
+                """,
+                (owner_id, equipment_type, tag, float(body.bucket_ton or 0), bool(body.is_active)),
+            )
+            row = cur.fetchone()
+            conn.commit()
+    except Exception as e:
+        msg = str(e).lower()
+        if "unique" in msg or "duplicate" in msg:
+            raise HTTPException(status_code=400, detail="Já existe equipamento com esta TAG")
+        raise
+
+    log_action(
+        action="CREATE_EQUIPMENT",
+        request=request,
+        user_id=user_id,
+        entity="bv_equipments",
+        entity_id=str(row["id"]),
+        payload={"owner_id": owner_id, "tag": tag, "bucket_ton": float(body.bucket_ton or 0)},
+    )
+    return _equipment_out(row)
+
+
+@app.put("/api/equipments/{equipment_id}")
+def update_equipment(
+    equipment_id: int,
+    body: EquipmentUpdateIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    fields = []
+    values: List[Any] = []
+
+    if body.equipment_type is not None:
+        fields.append("equipment_type=%s")
+        values.append((body.equipment_type or "escavadeira").strip().lower() or "escavadeira")
+    if body.tag is not None:
+        tag = (body.tag or "").strip().upper()
+        if not tag:
+            raise HTTPException(status_code=400, detail="TAG é obrigatória")
+        fields.append("tag=%s")
+        values.append(tag)
+    if body.bucket_ton is not None:
+        fields.append("bucket_ton=%s")
+        values.append(float(body.bucket_ton or 0))
+    if body.is_active is not None:
+        fields.append("is_active=%s")
+        values.append(bool(body.is_active))
+
+    if not fields:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+
+    fields.append("updated_at=now()")
+    values.extend([owner_id, equipment_id])
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                update public.bv_equipments
+                set {', '.join(fields)}
+                where owner_id=%s and id=%s
+                returning id, owner_id, equipment_type, tag, bucket_ton, is_active, created_at, updated_at
+                """,
+                tuple(values),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Equipamento não encontrado")
+            conn.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        msg = str(e).lower()
+        if "unique" in msg or "duplicate" in msg:
+            raise HTTPException(status_code=400, detail="Já existe equipamento com esta TAG")
+        raise
+
+    log_action(
+        action="UPDATE_EQUIPMENT",
+        request=request,
+        user_id=user_id,
+        entity="bv_equipments",
+        entity_id=str(equipment_id),
+        payload=body.model_dump(exclude_none=True),
+    )
+    return _equipment_out(row)
+
+
+@app.delete("/api/equipments/{equipment_id}")
+def delete_equipment(
+    equipment_id: int,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    """Inativa o equipamento para preservar histórico e não quebrar alocações antigas."""
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            update public.bv_equipments
+            set is_active=false, updated_at=now()
+            where owner_id=%s and id=%s
+            returning id
+            """,
+            (owner_id, equipment_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Equipamento não encontrado")
+
+        # Desativa vínculos ativos desse equipamento.
+        cur.execute(
+            """
+            update public.bv_plant_equipment_allocations
+            set is_active=false, updated_at=now()
+            where owner_id=%s and equipment_id=%s and is_active=true
+            """,
+            (owner_id, equipment_id),
+        )
+        conn.commit()
+
+    log_action(
+        action="DELETE_EQUIPMENT",
+        request=request,
+        user_id=user_id,
+        entity="bv_equipments",
+        entity_id=str(equipment_id),
+        payload={"owner_id": owner_id, "soft_delete": True},
+    )
+    return {"ok": True, "id": equipment_id, "is_active": False}
+
+
+def _equipment_allocation_payload(plant_id: int, row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not row:
+        return {"plant_id": plant_id, "allocation": None, "equipment": None}
+    equipment = {
+        "id": int(row["equipment_id"]),
+        "equipment_type": row.get("equipment_type") or "escavadeira",
+        "tag": row.get("tag") or "",
+        "bucket_ton": float(row.get("bucket_ton") or 0),
+        "is_active": bool(row.get("equipment_is_active", True)),
+    }
+    return {
+        "plant_id": plant_id,
+        "allocation": {
+            "id": int(row["allocation_id"]),
+            "plant_id": int(row["plant_id"]),
+            "equipment_id": int(row["equipment_id"]),
+            "is_active": bool(row.get("allocation_is_active", True)),
+            "updated_at": row["allocation_updated_at"].isoformat() if row.get("allocation_updated_at") else None,
+        },
+        "equipment": equipment,
+    }
+
+
+def _get_equipment_allocation(owner_id: str, plant_id: int) -> Dict[str, Any]:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select a.id as allocation_id, a.plant_id, a.equipment_id,
+                   a.is_active as allocation_is_active, a.updated_at as allocation_updated_at,
+                   e.equipment_type, e.tag, e.bucket_ton, e.is_active as equipment_is_active
+            from public.bv_plant_equipment_allocations a
+            join public.bv_equipments e on e.id = a.equipment_id and e.owner_id = a.owner_id
+            where a.owner_id=%s and a.plant_id=%s and a.is_active=true
+            limit 1
+            """,
+            (owner_id, plant_id),
+        )
+        row = cur.fetchone()
+    return _equipment_allocation_payload(plant_id, row)
+
+
+@app.get("/api/plants/{plant_id}/equipment-allocation")
+def get_equipment_allocation(
+    plant_id: int,
+    owner_id: str = Depends(require_owner_id),
+):
+    plant_id = _validate_plant_id(plant_id)
+    return _get_equipment_allocation(owner_id, plant_id)
+
+
+@app.put("/api/plants/{plant_id}/equipment-allocation")
+def put_equipment_allocation(
+    plant_id: int,
+    body: EquipmentAllocationIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    plant_id = _validate_plant_id(plant_id)
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    if body.equipment_id is None:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                update public.bv_plant_equipment_allocations
+                set is_active=false, updated_at=now()
+                where owner_id=%s and plant_id=%s and is_active=true
+                """,
+                (owner_id, plant_id),
+            )
+            conn.commit()
+        log_action(
+            action="REMOVE_PLANT_EQUIPMENT_ALLOCATION",
+            request=request,
+            user_id=user_id,
+            entity="bv_plant_equipment_allocations",
+            entity_id=f"plant::{plant_id}",
+            payload={"owner_id": owner_id, "plant_id": plant_id},
+        )
+        return {"ok": True, **_get_equipment_allocation(owner_id, plant_id)}
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select id
+            from public.bv_equipments
+            where owner_id=%s and id=%s and is_active=true
+            """,
+            (owner_id, body.equipment_id),
+        )
+        if not cur.fetchone():
+            raise HTTPException(status_code=400, detail="Equipamento ativo não encontrado")
+
+        cur.execute(
+            """
+            insert into public.bv_plant_equipment_allocations(owner_id, plant_id, equipment_id, is_active, updated_at)
+            values (%s,%s,%s,true,now())
+            on conflict (owner_id, plant_id)
+            do update set equipment_id=excluded.equipment_id, is_active=true, updated_at=now()
+            returning id
+            """,
+            (owner_id, plant_id, body.equipment_id),
+        )
+        allocation_id = cur.fetchone()["id"]
+        conn.commit()
+
+    log_action(
+        action="SET_PLANT_EQUIPMENT_ALLOCATION",
+        request=request,
+        user_id=user_id,
+        entity="bv_plant_equipment_allocations",
+        entity_id=str(allocation_id),
+        payload={"owner_id": owner_id, "plant_id": plant_id, "equipment_id": body.equipment_id},
+    )
+    return {"ok": True, **_get_equipment_allocation(owner_id, plant_id)}
+
+
+@app.get("/api/plants/{plant_id}/rhythm-equipment")
+def get_rhythm_equipment(
+    plant_id: int,
+    owner_id: str = Depends(require_owner_id),
+):
+    """Endpoint dedicado ao Ritmo: retorna a escavadeira vinculada à planta e sua t/conchada."""
+    plant_id = _validate_plant_id(plant_id)
+    return _get_equipment_allocation(owner_id, plant_id)
 
 
 # =========================
