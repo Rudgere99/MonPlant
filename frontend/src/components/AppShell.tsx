@@ -71,18 +71,16 @@ function defaultPathFor(role: UserRole) {
 
 
 function getTitleFromPath(pathname: string) {
-  const path = pathname || "/";
   const hit = [...nav]
     .sort((a, b) => b.to.length - a.to.length)
-    .find((n) => path === n.to || path.startsWith(n.to.endsWith("/") ? n.to : n.to + "/"));
+    .find((n) => pathname === n.to || pathname.startsWith(n.to + "/"));
   return hit?.label ?? "Dashboard";
 }
 
 function getGroupFromPath(pathname: string) {
-  const path = pathname || "/";
   const hit = [...nav]
     .sort((a, b) => b.to.length - a.to.length)
-    .find((n) => path === n.to || path.startsWith(n.to.endsWith("/") ? n.to : n.to + "/"));
+    .find((n) => pathname === n.to || pathname.startsWith(n.to + "/"));
   return hit?.group ?? "";
 }
 
@@ -204,6 +202,10 @@ function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const API_BASE = (import.meta as any).env?.VITE_API_BASE || "";
+  const role = useMemo(() => getUserRole(user), [user]);
+  const isGestaoVistaUser = role === "gestao_vista";
+  const isDev = role === "dev";
+  const userLabel = useMemo(() => getUserDisplay(user), [user]);
 
   // =========================
   // Aviso global (modal) — aparece em qualquer página até confirmar leitura
@@ -283,7 +285,7 @@ function AppShell() {
   };
 
   const loadActiveNotices = React.useCallback(async () => {
-    if (!token) return;
+    if (!token || isGestaoVistaUser) return;
     try {
       setNoticeErr(null);
       const r = await fetch(`${API_BASE}/api/notices/active`, {
@@ -299,7 +301,7 @@ function AppShell() {
       // não quebra o app
       return;
     }
-  }, [API_BASE, token]);
+  }, [API_BASE, token, isGestaoVistaUser]);
 
   const confirmNotice = React.useCallback(async () => {
     if (!token || !noticeModal?.id) return;
@@ -324,7 +326,7 @@ function AppShell() {
   }, [API_BASE, token, noticeModal, loadActiveNotices]);
 
   const loadAvisosSupervisorUnread = React.useCallback(async () => {
-    if (!token) {
+    if (!token || isGestaoVistaUser) {
       setTemAvisoSupervisor(false);
       return;
     }
@@ -345,10 +347,10 @@ function AppShell() {
     } catch {
       setTemAvisoSupervisor(false);
     }
-  }, [API_BASE, token]);
+  }, [API_BASE, token, isGestaoVistaUser]);
 
   React.useEffect(() => {
-    if (!token) {
+    if (!token || isGestaoVistaUser) {
       setTemAvisoSupervisor(false);
       return;
     }
@@ -357,7 +359,7 @@ function AppShell() {
     const interval = window.setInterval(loadAvisosSupervisorUnread, 10000);
 
     return () => window.clearInterval(interval);
-  }, [token, loadAvisosSupervisorUnread, location.pathname]);
+  }, [token, isGestaoVistaUser, loadAvisosSupervisorUnread, location.pathname]);
 
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -365,30 +367,35 @@ function AppShell() {
 
   const pageTitle = useMemo(() => getTitleFromPath(location.pathname), [location.pathname]);
   const pageGroup = useMemo(() => getGroupFromPath(location.pathname), [location.pathname]);
-  const role = useMemo(() => getUserRole(user), [user]);
-  const isDev = role === "dev";
-  const isGestaoVistaUser = role === "gestao_vista";
-  const userLabel = useMemo(() => getUserDisplay(user), [user]);
-
-
   // ⏳ enquanto hidrata, evita renderizar shell parcial (que causa "piscar")
 
   React.useEffect(() => {
-  if (loading) return;
-  if (!user) return;
+    if (loading) return;
+    if (!user) return;
 
-  // ✅ regra única: roleGuard decide (sem exceções por role aqui)
-  if (!canAccessRole(role, location.pathname)) {
-    navigate(defaultPathFor(role), { replace: true });
-  }
-}, [loading, user, role, location.pathname, navigate]);
+    const target = defaultPathFor(role);
+
+    // Gestão à Vista é perfil de tela única. Se cair em qualquer outra rota, volta imediatamente.
+    if (role === "gestao_vista") {
+      const current = location.pathname;
+      const isTarget = current === target || current.startsWith(target + "/");
+      if (!isTarget) {
+        navigate(target, { replace: true });
+      }
+      return;
+    }
+
+    if (!canAccessRole(role, location.pathname)) {
+      navigate(target, { replace: true });
+    }
+  }, [loading, user, role, location.pathname, navigate]);
 
   React.useEffect(() => {
-    if (!token) return;
+    if (!token || isGestaoVistaUser) return;
     loadActiveNotices();
     const interval = window.setInterval(loadActiveNotices, 60000);
     return () => window.clearInterval(interval);
-  }, [token, loadActiveNotices]);
+  }, [token, isGestaoVistaUser, loadActiveNotices]);
 
 
 
@@ -400,20 +407,23 @@ function AppShell() {
   }, [isDev, role]);
   const navItemsFiltered = navItems;
   const gestaoVistaPath = "/dashboard/gestao-vista-planta";
-
-  // Perfil Gestão à Vista: exibe somente a própria página no menu.
-  // Demais perfis continuam com o botão destacado no topo e sem duplicar no menu lateral.
   const sidebarNavItems = isGestaoVistaUser
-    ? navItemsFiltered.filter((item) => item.to === gestaoVistaPath)
+    ? navItemsFiltered
     : navItemsFiltered.filter((item) => item.to !== gestaoVistaPath);
-
-  const canAccessGestaoVista = navItemsFiltered.some((item) => item.to === gestaoVistaPath);
+  const canAccessGestaoVista = !isGestaoVistaUser && navItemsFiltered.some((item) => item.to === gestaoVistaPath);
   const isGestaoVistaActive = location.pathname.startsWith(gestaoVistaPath);
 
   const handleLogout = () => {
     logout?.();
     navigate("/login");
   };
+
+  if (!loading && user && isGestaoVistaUser) {
+    const target = defaultPathFor(role);
+    const current = location.pathname;
+    const isTarget = current === target || current.startsWith(target + "/");
+    if (!isTarget) return null;
+  }
 
   const sideW = sideCollapsed ? 86 : 300;
 
@@ -952,7 +962,7 @@ function AppShell() {
               </div>
 
               <div style={{ flex: "0 0 auto", display: "flex", justifyContent: "center" }}>
-                {canAccessGestaoVista && !isGestaoVistaUser ? (
+                {canAccessGestaoVista ? (
                   <button
                     onClick={() => navigate(gestaoVistaPath)}
                     title="Gestão à Vista"
@@ -982,25 +992,25 @@ function AppShell() {
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, flex: 1, minWidth: 0 }}>
                 {!isGestaoVistaUser ? (
-                  <button
-                    onClick={() => navigate("/configuracoes")}
-                    title="Configurações"
-                    aria-label="Configurações"
-                    style={{
-                      height: 36,
-                      width: 36,
-                      borderRadius: 12,
-                      border: "1px solid rgba(255,255,255,0.10)",
-                      background: "rgba(255,255,255,0.05)",
-                      color: "white",
-                      display: "grid",
-                      placeItems: "center",
-                      cursor: "pointer",
-                      flex: "0 0 auto",
-                    }}
-                  >
-                    <Settings size={18} />
-                  </button>
+                <button
+                  onClick={() => navigate("/configuracoes")}
+                  title="Configurações"
+                  aria-label="Configurações"
+                  style={{
+                    height: 36,
+                    width: 36,
+                    borderRadius: 12,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "rgba(255,255,255,0.05)",
+                    color: "white",
+                    display: "grid",
+                    placeItems: "center",
+                    cursor: "pointer",
+                    flex: "0 0 auto",
+                  }}
+                >
+                  <Settings size={18} />
+                </button>
                 ) : null}
 
                 <div
