@@ -711,6 +711,8 @@ export default function Ritmo() {
     const el = exportCompactRef.current;
     if (!el) return;
 
+    const targetEl = (el.firstElementChild as HTMLElement | null) ?? el;
+
     // garante layout/medidas estabilizadas antes do capture
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
     // @ts-ignore
@@ -721,7 +723,7 @@ export default function Ritmo() {
       } catch {}
     }
 
-    const rect = el.getBoundingClientRect();
+    const rect = targetEl.getBoundingClientRect();
 
     // ✅ IMPORTANTE:
     // Não force windowWidth/windowHeight para o tamanho do card,
@@ -730,7 +732,7 @@ export default function Ritmo() {
     const ww = document.documentElement.clientWidth || window.innerWidth;
     const wh = document.documentElement.clientHeight || window.innerHeight;
 
-    const canvas = await html2canvas(el, {
+    const canvas = await html2canvas(targetEl, {
       backgroundColor: null,
       scale: 2,
       useCORS: true,
@@ -864,8 +866,8 @@ export default function Ritmo() {
         style={{
           ...exportMiniCard,
           display: "block",
-          width: "100%",
-          maxWidth: mobile ? 420 : 760,
+          width: mobile ? "100%" : 760,
+          maxWidth: "100%",
         }}
       >
         <div
@@ -1087,7 +1089,7 @@ return (
               flexDirection: "column",
               alignItems: "flex-start",
               gap: 12,
-              width: plantId === "all" ? "100%" : "fit-content",
+              width: "fit-content",
               maxWidth: "100%",
             }}
           >
