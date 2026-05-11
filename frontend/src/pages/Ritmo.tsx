@@ -752,77 +752,102 @@ export default function Ritmo() {
     return `${fmtBR(n, dTon)} t`;
   }
 
-  function renderSummaryCard(m: SummaryMetrics, idx: number) {
+  function renderSummaryBody(m: SummaryMetrics) {
     return (
-      <div key={`${m.title}-${idx}`} style={{ ...exportMiniCard, display: "block", width: "100%", maxWidth: 360 }}>
-        <div style={exportPlantStrip}>{m.title}</div>
-        <div style={exportMiniBody}>
-          <div style={exportLineRow}>
-            <span style={exportLabel}>Meta:</span>
-            <span style={exportValue}>{m.metaDay !== null ? `${fmtBR(m.metaDay, dTon)} t` : "—"}</span>
-          </div>
+      <div style={exportMiniBody}>
+        <div style={exportLineRow}>
+          <span style={exportLabel}>Meta:</span>
+          <span style={exportValue}>{m.metaDay !== null ? `${fmtBR(m.metaDay, dTon)} t` : "—"}</span>
+        </div>
 
-          <div style={exportLineRow}>
-            <span style={exportLabel}>Produzido:</span>
-            <span style={{ ...exportValue, color: "rgba(250,204,21,0.95)" }}>{`${fmtBR(m.produced, dTon)} t`}</span>
-          </div>
+        <div style={exportLineRow}>
+          <span style={exportLabel}>Produzido:</span>
+          <span style={{ ...exportValue, color: "rgba(250,204,21,0.95)" }}>{`${fmtBR(m.produced, dTon)} t`}</span>
+        </div>
 
-          <div style={exportLineRow}>
-            <span style={exportLabel}>Projeção:</span>
-            <span
-              style={{
-                ...exportValue,
-                color:
-                  m.metaDay !== null && m.projectionTon < m.metaDay
-                    ? "rgba(248,113,113,0.95)"
-                    : m.metaDay !== null
-                      ? "rgba(34,197,94,0.95)"
-                      : exportValue.color,
-              }}
-            >
-              {`${fmtBR(m.projectionTon, dTon)} t`}
-            </span>
-          </div>
+        <div style={exportLineRow}>
+          <span style={exportLabel}>Projeção:</span>
+          <span
+            style={{
+              ...exportValue,
+              color:
+                m.metaDay !== null && m.projectionTon < m.metaDay
+                  ? "rgba(248,113,113,0.95)"
+                  : m.metaDay !== null
+                    ? "rgba(34,197,94,0.95)"
+                    : exportValue.color,
+            }}
+          >
+            {`${fmtBR(m.projectionTon, dTon)} t`}
+          </span>
+        </div>
 
-          <div style={exportLineRow}>
-            <span style={exportLabel}>Atingimento:</span>
-            <span style={exportValue}>{m.attainment !== null ? fmtPct(m.attainment, dPct) : "—"}</span>
-          </div>
+        <div style={exportLineRow}>
+          <span style={exportLabel}>Atingimento:</span>
+          <span style={exportValue}>{m.attainment !== null ? fmtPct(m.attainment, dPct) : "—"}</span>
+        </div>
 
-          <div style={exportLineRow}>
-            <span style={exportLabel}>Diferença:</span>
-            <span style={exportValue}>{m.diff !== null ? `${m.diff >= 0 ? "+" : ""}${fmtBR(m.diff, dTon)} t` : "—"}</span>
-          </div>
+        <div style={exportLineRow}>
+          <span style={exportLabel}>Diferença:</span>
+          <span style={exportValue}>{m.diff !== null ? `${m.diff >= 0 ? "+" : ""}${fmtBR(m.diff, dTon)} t` : "—"}</span>
+        </div>
 
-          <div style={exportLineRow}>
-            <span style={exportLabel}>Tempo restante:</span>
-            <span style={exportValue}>{m.isClosedDay ? "0 h" : `${fmtBR(m.remainingH, 1)} h`}</span>
-          </div>
+        <div style={exportLineRow}>
+          <span style={exportLabel}>Tempo restante:</span>
+          <span style={exportValue}>{m.isClosedDay ? "0 h" : `${fmtBR(m.remainingH, 1)} h`}</span>
+        </div>
 
-          <div style={exportSep} />
+        <div style={exportSep} />
 
-          <div style={exportLineRow}>
-            <span style={exportLabel}>Necessário:</span>
-            <span
-              style={{
-                ...exportValue,
-                color: m.neededTPH !== null && m.avgRealTPH < m.neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)",
-              }}
-            >
-              {m.neededTPH === null ? "—" : `${fmtBR(m.neededTPH, dTPH)} t/h`}
-            </span>
-          </div>
+        <div style={exportLineRow}>
+          <span style={exportLabel}>Necessário:</span>
+          <span
+            style={{
+              ...exportValue,
+              color: m.neededTPH !== null && m.avgRealTPH < m.neededTPH ? "rgba(248,113,113,0.95)" : "rgba(34,197,94,0.95)",
+            }}
+          >
+            {m.neededTPH === null ? "—" : `${fmtBR(m.neededTPH, dTPH)} t/h`}
+          </span>
+        </div>
 
-          <div style={exportLineRow}>
-            <span style={exportLabel}>Média real:</span>
-            <span style={exportValue}>{`${fmtBR(m.avgRealTPH, dTPH)} t/h`}</span>
-          </div>
+        <div style={exportLineRow}>
+          <span style={exportLabel}>Média real:</span>
+          <span style={exportValue}>{`${fmtBR(m.avgRealTPH, dTPH)} t/h`}</span>
         </div>
       </div>
     );
   }
 
-  
+  function renderSummaryCard(m: SummaryMetrics, idx: number) {
+    return (
+      <div key={`${m.title}-${idx}`} style={{ ...exportMiniCard, display: "block", width: "100%", maxWidth: 360 }}>
+        <div style={exportPlantStrip}>{m.title}</div>
+        {renderSummaryBody(m)}
+      </div>
+    );
+  }
+
+  function renderSummaryCombinedCard(items: SummaryMetrics[]) {
+    return (
+      <div style={{ ...exportMiniCard, display: "block", width: "100%", maxWidth: 360 }}>
+        {items.map((m, idx) => (
+          <React.Fragment key={`${m.title}-${idx}`}>
+            <div
+              style={{
+                ...exportPlantStrip,
+                borderTop: idx === 0 ? "none" : "1px solid rgba(0,0,0,0.28)",
+              }}
+            >
+              {m.title}
+            </div>
+            {renderSummaryBody(m)}
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  }
+
   const heroGridStyle: React.CSSProperties = {
     ...heroGrid,
     gridTemplateColumns: mobile ? "repeat(2, minmax(0, 1fr))" : "repeat(12, minmax(0, 1fr))",
@@ -1015,7 +1040,9 @@ return (
               maxWidth: "100%",
             }}
           >
-            {summariesToRender.length ? summariesToRender.map((m, idx) => renderSummaryCard(m, idx)) : renderSummaryCard(singleSummary, 0)}
+            {plantId === "all"
+              ? renderSummaryCombinedCard(summariesToRender.length ? summariesToRender : [singleSummary])
+              : renderSummaryCard(singleSummary, 0)}
           </div>
 
           <div style={{ marginTop: 10, color: "rgba(255,255,255,0.60)", fontWeight: 900, fontSize: 12 }}>
