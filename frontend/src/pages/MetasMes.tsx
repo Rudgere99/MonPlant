@@ -188,6 +188,7 @@ function redistributeFutureGoals(rows: GoalDay[], actualMap: Map<string, ActualD
 
 export default function MetasMes() {
   const [month, setMonth] = useState<string>(() => isoMonth(new Date()));
+  const [plantId, setPlantId] = useState<number>(1);
   const [rows, setRows] = useState<GoalDay[]>([]);
   const [actuals, setActuals] = useState<Record<string, ActualDay>>({});
   const [loading, setLoading] = useState(false);
@@ -211,7 +212,7 @@ export default function MetasMes() {
 
     (async () => {
       try {
-        const payload = await apiGet<{ month: string; days: any[] }>(`/api/goals/month/${encodeURIComponent(month)}`).catch(
+        const payload = await apiGet<{ month: string; days: any[] }>(`/api/plants/${plantId}/goals/month/${encodeURIComponent(month)}`).catch(
           () => ({ month, days: [] })
         );
         const map = new Map<string, GoalDay>();
@@ -240,7 +241,7 @@ export default function MetasMes() {
     return () => {
       alive = false;
     };
-  }, [month, monthDays]);
+  }, [month, monthDays, plantId]);
 
   useEffect(() => {
     let alive = true;
@@ -251,7 +252,7 @@ export default function MetasMes() {
         const out: Record<string, ActualDay> = {};
         for (const day of monthDays) {
           try {
-            const pd = await apiGet<PlantDayPayload>(`/api/plant-production/${encodeURIComponent(day)}`);
+            const pd = await apiGet<PlantDayPayload>(`/api/plants/${plantId}/plant-production/${encodeURIComponent(day)}`);
             out[day] = {
               day,
               actual_ton: sumPlantDayTon(pd),
@@ -270,7 +271,7 @@ export default function MetasMes() {
     return () => {
       alive = false;
     };
-  }, [monthDays]);
+  }, [monthDays, plantId]);
 
   function setRow(day: string, patch: Partial<GoalDay>) {
     setRows((prev) => prev.map((r) => (r.day === day ? { ...r, ...patch } : r)));
@@ -305,14 +306,14 @@ export default function MetasMes() {
     setOkMsg(null);
 
     try {
-      await apiPut(`/api/goals/month/${encodeURIComponent(month)}`, {
+      await apiPut(`/api/plants/${plantId}/goals/month/${encodeURIComponent(month)}`, {
         days: rows.map((r) => ({
           day: r.day,
           meta_ton: Number(r.meta_ton) || 0,
           discount_hours: Number(r.discount_hours) || 0,
         })),
       });
-      setOkMsg("Metas do mês salvas.");
+      setOkMsg(`Metas do mês salvas para a Planta ${String(plantId).padStart(2, "0")}.`);
     } catch (e: any) {
       setErr(e?.message || "Falha ao salvar metas");
     } finally {
@@ -449,12 +450,24 @@ export default function MetasMes() {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.60)", marginBottom: 6 }}>
-            Configurações • Metas do mês
+            Configurações • Metas do mês • Planta selecionada
           </div>
-          <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: -0.3 }}>Metas por dia com redistribuição</div>
+          <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: -0.3 }}>Metas por planta com redistribuição</div>
         </div>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <label style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>
+            Planta&nbsp;
+            <select
+              value={plantId}
+              onChange={(e) => setPlantId(Number(e.target.value) || 1)}
+              style={{ ...input, width: 150, display: "inline-block" }}
+            >
+              <option value={1}>Planta 01</option>
+              <option value={2}>Planta 02</option>
+            </select>
+          </label>
+
           <label style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>
             Mês&nbsp;
             <input
@@ -528,7 +541,7 @@ export default function MetasMes() {
           <div style={{ padding: 16, paddingBottom: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 950 }}>Planejamento base</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.60)", fontWeight: 800, marginTop: 4 }}>
-              Meta manual por dia e desconto de horas.
+              Meta manual por dia e desconto de horas da planta selecionada.
             </div>
           </div>
 
@@ -577,7 +590,7 @@ export default function MetasMes() {
             <div>
               <div style={{ fontSize: 18, fontWeight: 950 }}>Meta recalculada</div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.60)", fontWeight: 800, marginTop: 4 }}>
-                Considera o realizado da página Produção do dia e redistribui o saldo para os próximos dias.
+                Considera o realizado da planta selecionada e redistribui o saldo para os próximos dias.
               </div>
             </div>
             <div style={{ marginLeft: "auto" }}>{loadingActuals ? <span style={badge("muted")}>Lendo produção...</span> : null}</div>
@@ -630,7 +643,7 @@ export default function MetasMes() {
       </div>
 
       <div style={{ marginTop: 10, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 700, lineHeight: 1.55 }}>
-        A tabela da direita usa o realizado da produção diária para recalcular só os dias em aberto. O realizado diário vem da soma das linhas Ton/H da página Produção do dia; por isso, quando um dia fecha acima ou abaixo da meta, o saldo é redistribuído automaticamente entre os próximos dias.
+        A tabela da direita usa o realizado da produção diária para recalcular só os dias em aberto. O realizado diário vem da soma das linhas Ton/H da página Produção do dia da planta selecionada; por isso, quando um dia fecha acima ou abaixo da meta, o saldo é redistribuído automaticamente entre os próximos dias.
       </div>
     </div>
   );
