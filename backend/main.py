@@ -2128,6 +2128,29 @@ def goals_get_month_aggregate(month: str, owner_id: str = Depends(require_owner_
     return GoalMonthOut(month=month, total_month_ton=total_month, days=days)
 
 
+
+
+@app.get("/api/aggregate/goals/day/{day}", response_model=GoalDayOut)
+def goals_get_day_aggregate(day: date, owner_id: str = Depends(require_owner_id)):
+    _ensure_goals_table()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT COALESCE(SUM(COALESCE(meta_ton,0)),0) AS meta_ton,
+                          COALESCE(AVG(COALESCE(discount_hours,2)),2) AS discount_hours
+                     FROM public.bv_goals_daily
+                     WHERE owner_id=%s AND day=%s""",
+                (owner_id, day),
+            )
+            row = cur.fetchone()
+    if not row:
+        return GoalDayOut(day=day, meta_ton=0.0, discount_hours=2.0)
+    return GoalDayOut(
+        day=day,
+        meta_ton=float(_col(row, 'meta_ton', 0) or 0),
+        discount_hours=float(_col(row, 'discount_hours', 1) or 0),
+    )
+
 # -------- Endpoints legados: mantêm Planta 01 como padrão --------
 @app.get("/api/goals/day/{day}", response_model=GoalDayOut)
 def goals_get_day(day: date, owner_id: str = Depends(require_owner_id)):
