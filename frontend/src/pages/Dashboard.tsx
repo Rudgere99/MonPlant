@@ -1571,7 +1571,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </div>
                         </div>
 
-                        <div style={{ height: mobile ? 160 : 190, position: "relative" }}>
+                        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
                               <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
@@ -1972,7 +1972,17 @@ const EXPECTED_TON_H = metaHoraEsperada;
         </div>
 
         {/* TAXA (4 col) */}
-        <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 4" }}>
+        <div
+          style={{
+            ...cardBase,
+            padding: 14,
+            gridColumn: mobile ? "span 12" : "span 4",
+            height: mobile ? undefined : 250,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
           <div style={headerStyle}>
             <div>
               <div style={titleStyle}>Taxa Média</div>
@@ -1995,7 +2005,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </span>
           </div>
 
-          <div style={{ height: mobile ? 160 : 190 }}>
+          <div style={{ flex: 1, minHeight: 0, height: mobile ? 160 : undefined }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -2028,7 +2038,19 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </ResponsiveContainer>
           </div>
         </div>        {/* META (4 col) */}
-        <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 4", cursor: "pointer" }} onClick={() => nav("/plant-production")}>
+        <div
+          style={{
+            ...cardBase,
+            padding: 14,
+            gridColumn: mobile ? "span 12" : "span 4",
+            cursor: "pointer",
+            height: mobile ? undefined : 250,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+          onClick={() => nav("/plant-production")}
+        >
           <div style={headerStyle}>
             <div>
               <div style={titleStyle}>{rangeMode ? "Média da meta do período" : "Produção do dia"}</div>
@@ -2039,7 +2061,8 @@ const EXPECTED_TON_H = metaHoraEsperada;
           {rangeMode ? (
             <div
               style={{
-                minHeight: mobile ? 160 : 190,
+                flex: 1,
+                minHeight: 0,
                 display: "grid",
                 alignItems: "center",
               }}
@@ -2106,7 +2129,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             ...cardBase,
             padding: 14,
             gridColumn: mobile ? "span 12" : "span 4",
-            minHeight: mobile ? undefined : 222,
+            height: mobile ? undefined : 250,
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -2187,9 +2210,9 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </div>
           </div>
 
-          <div style={{ height: mobile ? 150 : 122, marginTop: -2 }}>
+          <div style={{ flex: 1, minHeight: 0, marginTop: 2 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={hourlySeries} margin={{ top: 6, right: 12, left: -10, bottom: -6 }}>
+              <AreaChart data={hourlySeries} margin={{ top: 6, right: 12, left: -10, bottom: -2 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                 <XAxis dataKey="period" interval={2} tickMargin={10} angle={-35} textAnchor="end" height={34} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
                 <YAxis domain={miniTonDomain} hide />
