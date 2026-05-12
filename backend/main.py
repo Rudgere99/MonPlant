@@ -88,10 +88,51 @@ def ensure_user_permission_columns():
     except Exception:
         return
 
+
+
+def ensure_supervisor_planta_tables():
+    """Garante a tabela de cadastro de supervisores da planta."""
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                create table if not exists public.bv_supervisores_planta (
+                  id bigserial primary key,
+                  owner_id text not null,
+                  nome_completo text not null,
+                  empresa text not null,
+                  plant_id integer not null,
+                  letra_turno text not null,
+                  ativo boolean not null default true,
+                  created_at timestamptz not null default now(),
+                  updated_at timestamptz not null default now(),
+                  constraint ck_bv_supervisores_planta_letra
+                    check (upper(letra_turno) in ('A','B','C','D'))
+                );
+
+                create index if not exists idx_bv_supervisores_planta_owner
+                  on public.bv_supervisores_planta(owner_id);
+
+                create index if not exists idx_bv_supervisores_planta_owner_plant
+                  on public.bv_supervisores_planta(owner_id, plant_id);
+
+                create index if not exists idx_bv_supervisores_planta_owner_letra
+                  on public.bv_supervisores_planta(owner_id, letra_turno);
+
+                create unique index if not exists ux_bv_supervisores_planta_owner_nome_plant_letra
+                  on public.bv_supervisores_planta(owner_id, lower(nome_completo), plant_id, upper(letra_turno));
+                """
+            )
+            conn.commit()
+    except Exception:
+        # não pode derrubar a API por causa de DDL
+        return
+
 @app.on_event("startup")
 def _startup_bootstrap():
     ensure_notice_tables()
     ensure_user_permission_columns()
+    ensure_supervisor_planta_tables()
 
 # =========================
 # CORS
@@ -515,6 +556,22 @@ class PlantCreateIn(BaseModel):
     name: str
     description: Optional[str] = None
     is_active: bool = True
+
+
+class SupervisorPlantaIn(BaseModel):
+    nome_completo: str
+    empresa: str
+    plant_id: int
+    letra_turno: str
+    ativo: bool = True
+
+
+class SupervisorPlantaUpdateIn(BaseModel):
+    nome_completo: Optional[str] = None
+    empresa: Optional[str] = None
+    plant_id: Optional[int] = None
+    letra_turno: Optional[str] = None
+    ativo: Optional[bool] = None
 
 
 class EquipmentIn(BaseModel):
@@ -1026,6 +1083,260 @@ def create_plant(
         "is_active": bool(row["is_active"]),
     }
 
+
+# =========================
+# Supervisores Planta
+# =========================
+def _normalize_letra_turno(letra: Optional[str]) -> str:
+    v = (letra or "").strip().upper()
+    if v not in {"A", "B", "C", "D"}:
+        raise HTTPException(status_code=400, detail="Letra do turno inválida. Use A, B, C ou D.")
+    return v
+
+
+def _supervisor_planta_out(r: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": int(r["id"]),
+        "owner_id": r.get("owner_id"),
+        "nome_completo": r.get("nome_completo") or "",
+        "empresa": r.get("empresa") or "",
+        "plant_id": int(r.get("plant_id") or 0),
+        "letra_turno": (r.get("letra_turno") or "").upper(),
+        "ativo": bool(r.get("ativo")),
+        "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+        "updated_at": r["updated_at"].isoformat() if r.get("updated_at") else None,
+    }
+
+
+@app.get("/api/supervisores-planta")
+def listar_supervisores_planta(
+    plant_id: Optional[int] = Query(None),
+    letra_turno: Optional[str] = Query(None),
+    include_inactive: bool = Query(False),
+    owner_id: str = Depends(require_owner_id),
+):
+    ensure_supervisor_planta_tables()
+
+    where = ["owner_id=%s"]
+    args: List[Any] = [owner_id]
+
+    if plant_id is not None:
+        where.append("plant_id=%s")
+        args.append(int(plant_id))
+
+    if letra_turno:
+        where.append("upper(letra_turno)=upper(%s)")
+        args.append(_normalize_letra_turno(letra_turno))
+
+    if not include_inactive:
+        where.append("ativo=true")
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            select id, owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
+            from public.bv_supervisores_planta
+            where {' and '.join(where)}
+            order by plant_id asc, letra_turno asc, nome_completo asc
+            """,
+            tuple(args),
+        )
+        rows = cur.fetchall() or []
+
+    return [_supervisor_planta_out(r) for r in rows]
+
+
+@app.post("/api/supervisores-planta")
+def criar_supervisor_planta(
+    body: SupervisorPlantaIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    ensure_supervisor_planta_tables()
+
+    nome = (body.nome_completo or "").strip()
+    empresa = (body.empresa or "").strip()
+    plant_id = int(body.plant_id)
+    letra = _normalize_letra_turno(body.letra_turno)
+
+    if not nome:
+        raise HTTPException(status_code=400, detail="Nome completo é obrigatório")
+    if not empresa:
+        raise HTTPException(status_code=400, detail="Empresa é obrigatória")
+    if plant_id <= 0:
+        raise HTTPException(status_code=400, detail="Planta de operação inválida")
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into public.bv_supervisores_planta(
+                  owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, updated_at
+                )
+                values (%s,%s,%s,%s,%s,%s,now())
+                returning id, owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
+                """,
+                (owner_id, nome, empresa, plant_id, letra, bool(body.ativo)),
+            )
+            row = cur.fetchone()
+            conn.commit()
+    except Exception as e:
+        msg = str(e).lower()
+        if "unique" in msg or "duplicate" in msg:
+            raise HTTPException(status_code=400, detail="Este supervisor já está cadastrado para esta planta e letra")
+        raise
+
+    log_action(
+        action="CREATE_SUPERVISOR_PLANTA",
+        request=request,
+        user_id=user_id,
+        entity="bv_supervisores_planta",
+        entity_id=str(row["id"]),
+        payload={"owner_id": owner_id, "plant_id": plant_id, "letra_turno": letra, "nome_completo": nome},
+    )
+
+    return {"ok": True, **_supervisor_planta_out(row)}
+
+
+@app.put("/api/supervisores-planta/{supervisor_id}")
+def atualizar_supervisor_planta(
+    supervisor_id: int,
+    body: SupervisorPlantaIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    return alterar_supervisor_planta(supervisor_id, SupervisorPlantaUpdateIn(**body.model_dump()), request, owner_id, authorization)
+
+
+@app.patch("/api/supervisores-planta/{supervisor_id}")
+def alterar_supervisor_planta(
+    supervisor_id: int,
+    body: SupervisorPlantaUpdateIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    ensure_supervisor_planta_tables()
+
+    fields = []
+    values: List[Any] = []
+
+    if body.nome_completo is not None:
+        nome = (body.nome_completo or "").strip()
+        if not nome:
+            raise HTTPException(status_code=400, detail="Nome completo é obrigatório")
+        fields.append("nome_completo=%s")
+        values.append(nome)
+
+    if body.empresa is not None:
+        empresa = (body.empresa or "").strip()
+        if not empresa:
+            raise HTTPException(status_code=400, detail="Empresa é obrigatória")
+        fields.append("empresa=%s")
+        values.append(empresa)
+
+    if body.plant_id is not None:
+        plant_id = int(body.plant_id)
+        if plant_id <= 0:
+            raise HTTPException(status_code=400, detail="Planta de operação inválida")
+        fields.append("plant_id=%s")
+        values.append(plant_id)
+
+    if body.letra_turno is not None:
+        fields.append("letra_turno=%s")
+        values.append(_normalize_letra_turno(body.letra_turno))
+
+    if body.ativo is not None:
+        fields.append("ativo=%s")
+        values.append(bool(body.ativo))
+
+    if not fields:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+
+    fields.append("updated_at=now()")
+    values.extend([owner_id, int(supervisor_id)])
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                update public.bv_supervisores_planta
+                set {', '.join(fields)}
+                where owner_id=%s and id=%s
+                returning id, owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
+                """,
+                tuple(values),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Supervisor não encontrado")
+            conn.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        msg = str(e).lower()
+        if "unique" in msg or "duplicate" in msg:
+            raise HTTPException(status_code=400, detail="Este supervisor já está cadastrado para esta planta e letra")
+        raise
+
+    log_action(
+        action="UPDATE_SUPERVISOR_PLANTA",
+        request=request,
+        user_id=user_id,
+        entity="bv_supervisores_planta",
+        entity_id=str(supervisor_id),
+        payload=body.model_dump(exclude_none=True),
+    )
+
+    return {"ok": True, **_supervisor_planta_out(row)}
+
+
+@app.delete("/api/supervisores-planta/{supervisor_id}")
+def remover_supervisor_planta(
+    supervisor_id: int,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    """Inativa o cadastro para preservar histórico."""
+    ensure_supervisor_planta_tables()
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            update public.bv_supervisores_planta
+            set ativo=false, updated_at=now()
+            where owner_id=%s and id=%s
+            returning id, owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
+            """,
+            (owner_id, supervisor_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Supervisor não encontrado")
+        conn.commit()
+
+    log_action(
+        action="DELETE_SUPERVISOR_PLANTA",
+        request=request,
+        user_id=user_id,
+        entity="bv_supervisores_planta",
+        entity_id=str(supervisor_id),
+        payload={"owner_id": owner_id, "soft_delete": True},
+    )
+
+    return {"ok": True, **_supervisor_planta_out(row)}
 
 
 # =========================
