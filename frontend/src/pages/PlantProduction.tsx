@@ -257,7 +257,7 @@ export default function PlantProduction() {
   const [calcObs, setCalcObs] = useState<string>("");
   const [allocatedEquipment, setAllocatedEquipment] =
     useState<RhythmEquipment | null>(null);
-  const [, setEquipmentLoading] = useState(false);
+  const [equipmentLoading, setEquipmentLoading] = useState(false);
   const [, setEquipmentErr] = useState<string | null>(null);
 
   const calcTotal = useMemo(() => {
@@ -1004,6 +1004,33 @@ export default function PlantProduction() {
             </div>
 
             <div style={modalBody}>
+              <div style={{ ...softCard, marginBottom: 12 }}>
+                <div
+                  style={{
+                    color: "rgba(255,255,255,0.55)",
+                    fontWeight: 900,
+                    fontSize: 12,
+                  }}
+                >
+                  ESCAVADEIRA CONSIDERADA
+                </div>
+                <div
+                  style={{
+                    marginTop: 6,
+                    color: allocatedEquipment
+                      ? "#FFA31A"
+                      : "rgba(255,255,255,0.72)",
+                    fontWeight: 980,
+                    fontSize: 18,
+                  }}
+                >
+                  {equipmentLoading
+                    ? "Carregando vínculo..."
+                    : allocatedEquipment
+                      ? `${allocatedEquipment.tag} • ${fmtBR2(Number(allocatedEquipment.bucket_ton || 0))} t/conchada`
+                      : "Nenhuma escavadeira vinculada — preencher peso manualmente"}
+                </div>
+              </div>
 
               <div style={grid2}>
                 <div>
