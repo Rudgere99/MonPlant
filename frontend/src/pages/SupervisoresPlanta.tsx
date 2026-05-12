@@ -110,7 +110,7 @@ export default function SupervisoresPlanta() {
       const params = new URLSearchParams();
       if (plantFilter !== "all") params.set("plant_id", String(plantFilter));
       if (letterFilter !== "all") params.set("letra_turno", letterFilter);
-      if (!showInactive) params.set("somente_ativos", "true");
+      params.set("include_inactive", showInactive ? "true" : "false");
 
       const url = `${API_BASE}/api/supervisores-planta${params.toString() ? `?${params.toString()}` : ""}`;
       const r = await fetch(url, { headers });
