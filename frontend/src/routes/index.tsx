@@ -19,6 +19,7 @@ import DesvioProducao from "../pages/DesvioProducao";
 import Abastecimento from "../pages/Abastecimento";
 import Configuracoes from "../pages/Configuracoes";
 import Equipamentos from "../pages/Equipamentos";
+import SupervisoresPlanta from "../pages/SupervisoresPlanta";
 
 import Horimetros from "../pages/Horimetros";
 import Paradas from "../pages/Paradas";
@@ -44,6 +45,13 @@ function defaultPathFor(role: Role) {
   return getDefaultPathByRole(role);
 }
 
+function canAccessAppPath(role: Role, path: string) {
+  if (path === "/supervisores-planta" || path.startsWith("/supervisores-planta/")) {
+    return role === "dev" || role === "gerencia" || role === "controlador";
+  }
+  return canAccessRole(role, path);
+}
+
 function RequireRole({ children }: { children: ReactNode }) {
   const { user, token, loading } = useAuth() as any;
   const location = useLocation();
@@ -54,7 +62,7 @@ function RequireRole({ children }: { children: ReactNode }) {
 
   const role = getUserRole(user);
 
-  if (!canAccessRole(role, path)) {
+  if (!canAccessAppPath(role, path)) {
     return <Navigate to={defaultPathFor(role)} replace />;
   }
 
@@ -299,6 +307,16 @@ export function AppRoutes() {
         }
       />
       <Route
+        path="/m/supervisores-planta"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Supervisores Planta" tab="configuracoes">
+              <SupervisoresPlanta />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/m/avisos"
         element={
           <RequireAuth>
@@ -382,6 +400,14 @@ export function AppRoutes() {
           element={
             <RequireRole>
               <Equipamentos />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="supervisores-planta"
+          element={
+            <RequireRole>
+              <SupervisoresPlanta />
             </RequireRole>
           }
         />
