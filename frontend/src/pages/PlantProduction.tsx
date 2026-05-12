@@ -1117,20 +1117,6 @@ export default function PlantProduction() {
                 </div>
               </div>
 
-                <div
-                  style={{
-                    marginTop: 6,
-                    color: "rgba(255,255,255,0.92)",
-                    fontWeight: 980,
-                    fontSize: 22,
-                  }}
-                >
-                  {parseBRNumber(calcAvg)
-                    ? `${fmtBR2(parseBRNumber(calcAvg) as number)} t`
-                    : "—"}
-                </div>
-              </div>
-
               <div style={btnRow}>
                 <button
                   className="mp-btn"
