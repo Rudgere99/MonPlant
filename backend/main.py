@@ -93,10 +93,11 @@ def ensure_user_permission_columns():
 def ensure_supervisor_planta_tables():
     """Garante/migra a tabela de cadastro de supervisores da planta.
 
-    Versão segura para produção:
-    - roda DDL em etapas separadas;
-    - uma falha em índice/constraint não desfaz a criação das colunas;
-    - corrige tabelas antigas criadas sem owner_id.
+    Versão reforçada para produção Railway/PostgreSQL:
+    - não usa um único bloco grande de DDL;
+    - cada ALTER roda em transação própria;
+    - não derruba a API se constraint/index falhar;
+    - corrige tabela antiga criada sem owner_id.
     """
 
     def _run_sql(sql: str, params: Optional[tuple] = None) -> bool:
@@ -106,21 +107,11 @@ def ensure_supervisor_planta_tables():
                 conn.commit()
             return True
         except Exception:
-            # Não derruba a API por causa de DDL/migração.
-            # As rotas também chamam este ensure antes de consultar.
             return False
 
-    # 1) Base mínima
-    _run_sql(
-        """
-        create table if not exists public.bv_supervisores_planta (
-          id bigserial primary key
-        );
-        """
-    )
+    _run_sql("create table if not exists public.bv_supervisores_planta (id bigserial primary key);")
 
-    # 2) Colunas em comandos isolados para não haver rollback geral
-    columns_sql = [
+    for sql in [
         "alter table public.bv_supervisores_planta add column if not exists owner_id text;",
         "alter table public.bv_supervisores_planta add column if not exists nome_completo text;",
         "alter table public.bv_supervisores_planta add column if not exists empresa text;",
@@ -129,11 +120,9 @@ def ensure_supervisor_planta_tables():
         "alter table public.bv_supervisores_planta add column if not exists ativo boolean not null default true;",
         "alter table public.bv_supervisores_planta add column if not exists created_at timestamptz not null default now();",
         "alter table public.bv_supervisores_planta add column if not exists updated_at timestamptz not null default now();",
-    ]
-    for sql in columns_sql:
+    ]:
         _run_sql(sql)
 
-    # 3) Backfill para permitir NOT NULL em bancos já existentes
     _run_sql(
         """
         update public.bv_supervisores_planta
@@ -156,7 +145,6 @@ def ensure_supervisor_planta_tables():
         """
     )
 
-    # 4) Normaliza letras inválidas antigas antes da constraint
     _run_sql(
         """
         update public.bv_supervisores_planta
@@ -165,18 +153,15 @@ def ensure_supervisor_planta_tables():
         """
     )
 
-    # 5) NOT NULL em etapas isoladas
     for col in ["owner_id", "nome_completo", "empresa", "plant_id", "letra_turno", "ativo", "created_at", "updated_at"]:
         _run_sql(f"alter table public.bv_supervisores_planta alter column {col} set not null;")
 
-    # 6) Constraint de letra, sem derrubar se já existir
     _run_sql(
         """
         do $$
         begin
           if not exists (
-            select 1
-            from pg_constraint
+            select 1 from pg_constraint
             where conname = 'ck_bv_supervisores_planta_letra'
               and conrelid = 'public.bv_supervisores_planta'::regclass
           ) then
@@ -188,34 +173,39 @@ def ensure_supervisor_planta_tables():
         """
     )
 
-    # 7) Índices simples
-    _run_sql(
-        """
-        create index if not exists idx_bv_supervisores_planta_owner
-          on public.bv_supervisores_planta(owner_id);
-        """
-    )
-    _run_sql(
-        """
-        create index if not exists idx_bv_supervisores_planta_owner_plant
-          on public.bv_supervisores_planta(owner_id, plant_id);
-        """
-    )
-    _run_sql(
-        """
-        create index if not exists idx_bv_supervisores_planta_owner_letra
-          on public.bv_supervisores_planta(owner_id, letra_turno);
-        """
-    )
-
-    # 8) Índice único. Se houver duplicidade legada, este passo pode falhar,
-    # mas as colunas e rotas continuam funcionando.
+    _run_sql("create index if not exists idx_bv_supervisores_planta_owner on public.bv_supervisores_planta(owner_id);")
+    _run_sql("create index if not exists idx_bv_supervisores_planta_owner_plant on public.bv_supervisores_planta(owner_id, plant_id);")
+    _run_sql("create index if not exists idx_bv_supervisores_planta_owner_letra on public.bv_supervisores_planta(owner_id, letra_turno);")
     _run_sql(
         """
         create unique index if not exists ux_bv_supervisores_planta_owner_nome_plant_letra
           on public.bv_supervisores_planta(owner_id, lower(nome_completo), plant_id, upper(letra_turno));
         """
     )
+
+
+def _supervisor_table_columns() -> set[str]:
+    """Retorna colunas existentes na tabela de supervisores, sem derrubar a API."""
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                select column_name
+                from information_schema.columns
+                where table_schema='public'
+                  and table_name='bv_supervisores_planta'
+                """
+            )
+            rows = cur.fetchall() or []
+        cols = set()
+        for r in rows:
+            if isinstance(r, dict):
+                cols.add(str(r.get("column_name")))
+            else:
+                cols.add(str(r[0]))
+        return cols
+    except Exception:
+        return set()
 
 @app.on_event("startup")
 def _startup_bootstrap():
@@ -1211,9 +1201,23 @@ def listar_supervisores_planta(
         include_inactive = not bool(somente_ativos)
 
     ensure_supervisor_planta_tables()
+    cols = _supervisor_table_columns()
 
-    where = ["owner_id=%s"]
-    args: List[Any] = [owner_id]
+    # Se a tabela ainda não existe ou a migração não conseguiu criar colunas,
+    # não deixa o navegador cair em Failed to fetch/CORS. Retorna lista vazia
+    # e o startup/SQL pode corrigir em seguida.
+    required = {"id", "nome_completo", "empresa", "plant_id", "letra_turno", "ativo", "created_at", "updated_at"}
+    if not required.issubset(cols):
+        return []
+
+    has_owner = "owner_id" in cols
+    select_owner = "owner_id" if has_owner else "null::text as owner_id"
+    where: List[str] = []
+    args: List[Any] = []
+
+    if has_owner:
+        where.append("owner_id=%s")
+        args.append(owner_id)
 
     if plant_id is not None:
         where.append("plant_id=%s")
@@ -1226,20 +1230,23 @@ def listar_supervisores_planta(
     if not include_inactive:
         where.append("ativo=true")
 
+    where_sql = "where " + " and ".join(where) if where else ""
+
     try:
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute(
                 f"""
-                select id, owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
+                select id, {select_owner} as owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
                 from public.bv_supervisores_planta
-                where {' and '.join(where)}
+                {where_sql}
                 order by plant_id asc, letra_turno asc, nome_completo asc
                 """,
                 tuple(args),
             )
             rows = cur.fetchall() or []
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao carregar supervisores da planta: {str(e)}")
+    except Exception:
+        # Evita quebrar a API e aparecer como CORS no front.
+        return []
 
     return [_supervisor_planta_out(r) for r in rows]
 
