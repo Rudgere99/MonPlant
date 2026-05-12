@@ -1117,16 +1117,6 @@ export default function PlantProduction() {
                 </div>
               </div>
 
-              <div style={{ marginTop: 12, ...softCard }}>
-                <div
-                  style={{
-                    color: "rgba(255,255,255,0.55)",
-                    fontWeight: 900,
-                    fontSize: 12,
-                  }}
-                >
-                  T/CONCHADA ATUAL
-                </div>
                 <div
                   style={{
                     marginTop: 6,
