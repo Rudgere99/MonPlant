@@ -72,7 +72,8 @@ function parseBRNumber(v: any): number | null {
   s = s.replace(/\s/g, "");
 
   // "1.234,5" -> "1234.5"
-  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  if (s.includes(",") && s.includes("."))
+    s = s.replace(/\./g, "").replace(",", ".");
   else if (s.includes(",")) s = s.replace(",", ".");
 
   const n = Number(s);
@@ -129,9 +130,22 @@ type PlantInfo = {
   is_active?: boolean;
 };
 
+type RhythmEquipment = {
+  id: number;
+  tag: string;
+  equipment_type?: string | null;
+  bucket_ton: number;
+};
+
+type RhythmEquipmentResponse = {
+  plant_id: number;
+  equipment?: RhythmEquipment | null;
+};
+
 /* ===================== auth / api ===================== */
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
+const API_BASE =
+  (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
 
 function authHeaders(): HeadersInit {
   const t = (localStorage.getItem("mp_token") || "").trim();
@@ -153,7 +167,11 @@ const TonLabel = (props: any) => {
       fill="rgba(255,255,255,0.94)"
       fontSize={11}
       fontWeight={900}
-      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.75)", strokeWidth: 3 }}
+      style={{
+        paintOrder: "stroke",
+        stroke: "rgba(0,0,0,0.75)",
+        strokeWidth: 3,
+      }}
     >
       {fmtBR(n)}
     </text>
@@ -176,7 +194,11 @@ const FreqLabel = (props: any) => {
       fill="rgba(255,255,255,0.94)"
       fontSize={11}
       fontWeight={900}
-      style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.70)", strokeWidth: 4 }}
+      style={{
+        paintOrder: "stroke",
+        stroke: "rgba(0,0,0,0.70)",
+        strokeWidth: 4,
+      }}
     >
       {fmtPct0(n)}%
     </text>
@@ -233,6 +255,10 @@ export default function PlantProduction() {
   const [calcRate, setCalcRate] = useState<string>("");
 
   const [calcObs, setCalcObs] = useState<string>("");
+  const [allocatedEquipment, setAllocatedEquipment] =
+    useState<RhythmEquipment | null>(null);
+  const [equipmentLoading, setEquipmentLoading] = useState(false);
+  const [equipmentErr, setEquipmentErr] = useState<string | null>(null);
 
   const calcTotal = useMemo(() => {
     const c = parseBRNumber(calcConchadas);
@@ -267,7 +293,11 @@ export default function PlantProduction() {
         if (String(r.period) !== targetPeriod) return r;
         const prevTon = parseBRNumber(String(r.ton ?? "")) || 0;
         const nextTon = prevTon + (Number(t) || 0);
-        return { ...r, ton: fmtBR2(nextTon), freq: fmtBR2(Math.max(0, Math.min(100, rate))) };
+        return {
+          ...r,
+          ton: fmtBR2(nextTon),
+          freq: fmtBR2(Math.max(0, Math.min(100, rate))),
+        };
       });
 
       // 2) grava observação no campo de observação do dia
@@ -277,7 +307,9 @@ export default function PlantProduction() {
       return { ...p, rows: nextRows, obs: nextObs };
     });
 
-    setInfo(`Produção registrada em ${targetPeriod} com frequência ${fmtBR2(Math.max(0, Math.min(100, rate)))}%. Clique em Salvar para gravar.`);
+    setInfo(
+      `Produção registrada em ${targetPeriod} com frequência ${fmtBR2(Math.max(0, Math.min(100, rate)))}%. Clique em Salvar para gravar.`,
+    );
     setCalcOpen(false);
   }
 
@@ -310,6 +342,48 @@ export default function PlantProduction() {
     }
   }
 
+  async function loadRhythmEquipment(selectedPlantId: number) {
+    setEquipmentLoading(true);
+    setEquipmentErr(null);
+
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/plants/${selectedPlantId}/rhythm-equipment`,
+        {
+          headers: authHeaders(),
+        },
+      );
+
+      if (r.status === 404) {
+        setAllocatedEquipment(null);
+        setEquipmentErr(null);
+        return;
+      }
+
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        throw new Error(t || `HTTP ${r.status}`);
+      }
+
+      const data = (await r.json()) as RhythmEquipmentResponse;
+      const eq = data?.equipment || null;
+      setAllocatedEquipment(eq);
+
+      if (
+        eq &&
+        Number.isFinite(Number(eq.bucket_ton)) &&
+        Number(eq.bucket_ton) > 0
+      ) {
+        setCalcAvg(fmtBR2(Number(eq.bucket_ton)));
+      }
+    } catch (e: any) {
+      setAllocatedEquipment(null);
+      setEquipmentErr(e?.message || "Erro ao carregar escavadeira alocada");
+    } finally {
+      setEquipmentLoading(false);
+    }
+  }
+
   function normalizeRows(rows: PlantHourRow[]): PlantHourRow[] {
     const map: Record<string, PlantHourRow> = {};
     for (const r of rows || []) map[r.period] = r;
@@ -331,7 +405,7 @@ export default function PlantProduction() {
         `${API_BASE}/api/plants/${selectedPlantId}/plant-production/${encodeURIComponent(d)}`,
         {
           headers: authHeaders(),
-        }
+        },
       );
 
       if (r.status === 404) {
@@ -390,7 +464,7 @@ export default function PlantProduction() {
           method: "PUT",
           headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify(body),
-        }
+        },
       );
 
       if (r.status === 403) {
@@ -430,6 +504,17 @@ export default function PlantProduction() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, plantId]);
 
+  useEffect(() => {
+    if (plantId !== null) {
+      loadRhythmEquipment(plantId);
+    } else {
+      setAllocatedEquipment(null);
+      setEquipmentErr(null);
+      setCalcAvg("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plantId]);
+
   const chartData = useMemo(() => {
     const map: Record<string, { ton: number | null; freq: number | null }> = {};
     for (const p of periods) map[p] = { ton: null, freq: null };
@@ -443,7 +528,11 @@ export default function PlantProduction() {
       };
     }
 
-    return periods.map((p) => ({ period: p, ton: map[p].ton, freq: map[p].freq }));
+    return periods.map((p) => ({
+      period: p,
+      ton: map[p].ton,
+      freq: map[p].freq,
+    }));
   }, [payload.rows, periods]);
 
   const totalTon = useMemo(() => {
@@ -458,7 +547,11 @@ export default function PlantProduction() {
     plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
 
   const chunks = useMemo(() => {
-    return [payload.rows.slice(0, 8), payload.rows.slice(8, 16), payload.rows.slice(16, 24)];
+    return [
+      payload.rows.slice(0, 8),
+      payload.rows.slice(8, 16),
+      payload.rows.slice(16, 24),
+    ];
   }, [payload.rows]);
 
   /* ===================== Modal styles ===================== */
@@ -531,7 +624,15 @@ export default function PlantProduction() {
 
       <div className="mp-card" style={{ marginTop: 12 }}>
         {/* header */}
-        <div className="mp-card-h" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+        <div
+          className="mp-card-h"
+          style={{
+            display: "flex",
+            gap: 12,
+            alignItems: "flex-end",
+            flexWrap: "wrap",
+          }}
+        >
           <div style={{ flex: 1, minWidth: 260 }}>
             <b>Produção por hora (Ton/H + Frequência)</b>
 
@@ -539,19 +640,26 @@ export default function PlantProduction() {
               {loading
                 ? "Carregando..."
                 : err
-                ? `Erro: ${err}`
-                : info
-                ? info
-                : payload?.updated_at
-                ? `Atualizado: ${payload.updated_at}`
-                : "—"}
+                  ? `Erro: ${err}`
+                  : info
+                    ? info
+                    : payload?.updated_at
+                      ? `Atualizado: ${payload.updated_at}`
+                      : "—"}
             </div>
 
             <div className="mp-help" style={{ marginTop: 6 }}>
               Total do dia (soma Ton/H): <b>{fmtBR(totalTon)}</b>
               {retro ? (
-                <span style={{ marginLeft: 10, color: "rgba(245,158,11,0.95)", fontWeight: 800 }}>
-                  (Retroativo bloqueado — exceto 00:00–00:59 p/ lançar 23:00–00:00)
+                <span
+                  style={{
+                    marginLeft: 10,
+                    color: "rgba(245,158,11,0.95)",
+                    fontWeight: 800,
+                  }}
+                >
+                  (Retroativo bloqueado — exceto 00:00–00:59 p/ lançar
+                  23:00–00:00)
                 </span>
               ) : null}
             </div>
@@ -562,7 +670,9 @@ export default function PlantProduction() {
             <select
               className="mp-input"
               value={plantId ?? ""}
-              onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) =>
+                setPlantId(e.target.value ? Number(e.target.value) : null)
+              }
               disabled={loading || plants.length === 0}
             >
               {plants.length === 0 ? (
@@ -578,13 +688,50 @@ export default function PlantProduction() {
 
           <div>
             <div className="mp-label">Data</div>
-            <input className="mp-input" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
+            <input
+              className="mp-input"
+              type="date"
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+            />
+          </div>
+
+          <div
+            style={{
+              minWidth: 210,
+              borderRadius: 14,
+              border: "1px solid rgba(255,255,255,0.10)",
+              background: "rgba(255,255,255,0.04)",
+              padding: "9px 12px",
+            }}
+            title={equipmentErr || undefined}
+          >
+            <div className="mp-label">Escavadeira alocada</div>
+            <div
+              style={{
+                color: "rgba(255,255,255,0.88)",
+                fontWeight: 950,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {equipmentLoading
+                ? "Carregando..."
+                : allocatedEquipment
+                  ? `${allocatedEquipment.tag} • ${fmtBR2(Number(allocatedEquipment.bucket_ton || 0))} t`
+                  : "Sem vínculo"}
+            </div>
           </div>
 
           {/* ✅ novo botão Calculadora */}
           <button
             className="mp-btn"
             onClick={() => {
+              if (
+                allocatedEquipment &&
+                Number(allocatedEquipment.bucket_ton) > 0
+              ) {
+                setCalcAvg(fmtBR2(Number(allocatedEquipment.bucket_ton)));
+              }
               setCalcOpen(true);
               setCalcObs("");
             }}
@@ -599,7 +746,13 @@ export default function PlantProduction() {
             className="mp-btn"
             onClick={saveDay}
             disabled={saving || loading || retro || !plantId}
-            title={!plantId ? "Selecione uma planta" : retro ? "Retroativo não pode ser editado" : "Salvar produção do dia"}
+            title={
+              !plantId
+                ? "Selecione uma planta"
+                : retro
+                  ? "Retroativo não pode ser editado"
+                  : "Salvar produção do dia"
+            }
             style={{ minWidth: 140 }}
           >
             {saving ? "Salvando..." : "Salvar"}
@@ -611,8 +764,14 @@ export default function PlantProduction() {
           {/* gráfico */}
           <div style={{ height: 440, width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 52, right: 24, bottom: 30, left: 10 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+              <ComposedChart
+                data={chartData}
+                margin={{ top: 52, right: 24, bottom: 30, left: 10 }}
+              >
+                <CartesianGrid
+                  stroke="rgba(255,255,255,0.08)"
+                  strokeDasharray="3 3"
+                />
 
                 <XAxis
                   dataKey="period"
@@ -642,8 +801,10 @@ export default function PlantProduction() {
 
                 <Tooltip
                   formatter={(value: any, name: any) => {
-                    if (value === null || value === undefined || value === "") return ["—", name];
-                    if (name === "Frequência (%)") return [`${fmtPct0(Number(value))}%`, name];
+                    if (value === null || value === undefined || value === "")
+                      return ["—", name];
+                    if (name === "Frequência (%)")
+                      return [`${fmtPct0(Number(value))}%`, name];
                     if (name === "Ton/H") return [fmtBR(Number(value)), name];
                     return [String(value), name];
                   }}
@@ -653,7 +814,10 @@ export default function PlantProduction() {
                     border: "1px solid rgba(255,255,255,0.12)",
                     borderRadius: 12,
                   }}
-                  labelStyle={{ color: "rgba(255,255,255,0.85)", fontWeight: 900 }}
+                  labelStyle={{
+                    color: "rgba(255,255,255,0.85)",
+                    fontWeight: 900,
+                  }}
                 />
 
                 <Legend wrapperStyle={{ color: "rgba(255,255,255,0.75)" }} />
@@ -679,8 +843,21 @@ export default function PlantProduction() {
                   strokeWidth={3}
                   connectNulls={false}
                   dot={(p: any) => {
-                    if (p?.payload?.freq === null || p?.payload?.freq === undefined) return null;
-                    return <circle cx={p.cx} cy={p.cy} r={4} fill="#FFA31A" stroke="rgba(0,0,0,.6)" strokeWidth={2} />;
+                    if (
+                      p?.payload?.freq === null ||
+                      p?.payload?.freq === undefined
+                    )
+                      return null;
+                    return (
+                      <circle
+                        cx={p.cx}
+                        cy={p.cy}
+                        r={4}
+                        fill="#FFA31A"
+                        stroke="rgba(0,0,0,.6)"
+                        strokeWidth={2}
+                      />
+                    );
                   }}
                   activeDot={{ r: 6 }}
                 >
@@ -697,7 +874,9 @@ export default function PlantProduction() {
               className="mp-textarea"
               value={payload.obs ?? ""}
               disabled={retro}
-              onChange={(e) => setPayload((p) => ({ ...p, obs: e.target.value }))}
+              onChange={(e) =>
+                setPayload((p) => ({ ...p, obs: e.target.value }))
+              }
               placeholder="Ex.: chuva, manutenção, falta de energia, etc."
               style={{ minHeight: 90 }}
             />
@@ -706,7 +885,8 @@ export default function PlantProduction() {
           {/* edição em 3 colunas */}
           <div style={{ marginTop: 14 }}>
             <div className="mp-help">
-              Edite Ton/H e Frequência (%) e clique em <b>Salvar</b>. Valores vazios ficam como <b>sem dado</b>.
+              Edite Ton/H e Frequência (%) e clique em <b>Salvar</b>. Valores
+              vazios ficam como <b>sem dado</b>.
             </div>
 
             <div
@@ -722,12 +902,21 @@ export default function PlantProduction() {
               {chunks.map((rows8, colIdx) => (
                 <div key={colIdx} className="mp-card" style={{ margin: 0 }}>
                   <div className="mp-card-h" style={{ padding: "10px 12px" }}>
-                    <b>{colIdx === 0 ? "00–08" : colIdx === 1 ? "08–16" : "16–24"}</b>
+                    <b>
+                      {colIdx === 0
+                        ? "00–08"
+                        : colIdx === 1
+                          ? "08–16"
+                          : "16–24"}
+                    </b>
                     <div className="mp-help">8 faixas horárias</div>
                   </div>
 
                   <div className="mp-card-b" style={{ padding: 12 }}>
-                    <table className="mp-table" style={{ width: "100%", minWidth: 0 }}>
+                    <table
+                      className="mp-table"
+                      style={{ width: "100%", minWidth: 0 }}
+                    >
                       <thead>
                         <tr>
                           <th style={{ width: 84 }}>Hora</th>
@@ -737,11 +926,18 @@ export default function PlantProduction() {
                       </thead>
                       <tbody>
                         {rows8.map((r) => {
-                          const globalIdx = payload.rows.findIndex((x) => x.period === r.period);
+                          const globalIdx = payload.rows.findIndex(
+                            (x) => x.period === r.period,
+                          );
 
                           return (
                             <tr key={r.period}>
-                              <td style={{ color: "rgba(255,255,255,0.85)", fontWeight: 800 }}>
+                              <td
+                                style={{
+                                  color: "rgba(255,255,255,0.85)",
+                                  fontWeight: 800,
+                                }}
+                              >
                                 {periodShort(r.period)}
                               </td>
 
@@ -754,7 +950,10 @@ export default function PlantProduction() {
                                     const v = e.target.value;
                                     setPayload((p) => {
                                       const rows = [...p.rows];
-                                      rows[globalIdx] = { ...rows[globalIdx], ton: v };
+                                      rows[globalIdx] = {
+                                        ...rows[globalIdx],
+                                        ton: v,
+                                      };
                                       return { ...p, rows };
                                     });
                                   }}
@@ -771,7 +970,10 @@ export default function PlantProduction() {
                                     const v = e.target.value;
                                     setPayload((p) => {
                                       const rows = [...p.rows];
-                                      rows[globalIdx] = { ...rows[globalIdx], freq: v };
+                                      rows[globalIdx] = {
+                                        ...rows[globalIdx],
+                                        freq: v,
+                                      };
                                       return { ...p, rows };
                                     });
                                   }}
@@ -801,15 +1003,18 @@ export default function PlantProduction() {
           role="dialog"
           aria-modal="true"
         >
-          <div
-            style={modalStyle}
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
             <div style={modalHeader}>
               <div style={{ minWidth: 0 }}>
                 <div style={modalTitle}>Calculadora</div>
-                <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, fontSize: 12 }}>
-                  Conchadas × Média (t)
+                <div
+                  style={{
+                    color: "rgba(255,255,255,0.55)",
+                    fontWeight: 800,
+                    fontSize: 12,
+                  }}
+                >
+                  Conchadas × concha da escavadeira alocada
                 </div>
               </div>
 
@@ -824,6 +1029,34 @@ export default function PlantProduction() {
             </div>
 
             <div style={modalBody}>
+              <div style={{ ...softCard, marginBottom: 12 }}>
+                <div
+                  style={{
+                    color: "rgba(255,255,255,0.55)",
+                    fontWeight: 900,
+                    fontSize: 12,
+                  }}
+                >
+                  ESCAVADEIRA CONSIDERADA
+                </div>
+                <div
+                  style={{
+                    marginTop: 6,
+                    color: allocatedEquipment
+                      ? "#FFA31A"
+                      : "rgba(255,255,255,0.72)",
+                    fontWeight: 980,
+                    fontSize: 18,
+                  }}
+                >
+                  {equipmentLoading
+                    ? "Carregando vínculo..."
+                    : allocatedEquipment
+                      ? `${allocatedEquipment.tag} • ${fmtBR2(Number(allocatedEquipment.bucket_ton || 0))} t/conchada`
+                      : "Nenhuma escavadeira vinculada — preencher peso manualmente"}
+                </div>
+              </div>
+
               <div style={grid2}>
                 <div>
                   <div className="mp-label">Taxa (%)</div>
@@ -848,13 +1081,19 @@ export default function PlantProduction() {
                 </div>
 
                 <div>
-                  <div className="mp-label">Peso médio por conchada (t)</div>
+                  <div className="mp-label">T/conchada considerada</div>
                   <input
                     className="mp-input"
                     value={calcAvg}
                     onChange={(e) => setCalcAvg(e.target.value)}
                     inputMode="decimal"
-                    placeholder="ex: 4,2"
+                    disabled={!!allocatedEquipment}
+                    placeholder={allocatedEquipment ? "Automático" : "ex: 4,2"}
+                    title={
+                      allocatedEquipment
+                        ? "Valor puxado automaticamente do cadastro/alocação da escavadeira"
+                        : "Sem escavadeira vinculada: informe manualmente"
+                    }
                   />
                 </div>
 
@@ -871,23 +1110,59 @@ export default function PlantProduction() {
 
               {/* total estimado */}
               <div style={{ marginTop: 12, ...softCard }}>
-                <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>
+                <div
+                  style={{
+                    color: "rgba(255,255,255,0.55)",
+                    fontWeight: 900,
+                    fontSize: 12,
+                  }}
+                >
                   TOTAL ESTIMADO
                 </div>
-                <div style={{ marginTop: 6, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 28, lineHeight: 1 }}>
+                <div
+                  style={{
+                    marginTop: 6,
+                    color: "rgba(255,255,255,0.92)",
+                    fontWeight: 980,
+                    fontSize: 28,
+                    lineHeight: 1,
+                  }}
+                >
                   {calcTotal === null ? "—" : `${fmtBR2(calcTotal)} t`}
                 </div>
-                <div style={{ marginTop: 4, color: "rgba(255,255,255,0.55)", fontWeight: 850, fontSize: 12 }}>
-                  Conchadas × Média
+                <div
+                  style={{
+                    marginTop: 4,
+                    color: "rgba(255,255,255,0.55)",
+                    fontWeight: 850,
+                    fontSize: 12,
+                  }}
+                >
+                  Conchadas × T/conchada
                 </div>
               </div>
 
               <div style={{ marginTop: 12, ...softCard }}>
-                <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>
-                  MÉDIA ATUAL
+                <div
+                  style={{
+                    color: "rgba(255,255,255,0.55)",
+                    fontWeight: 900,
+                    fontSize: 12,
+                  }}
+                >
+                  T/CONCHADA ATUAL
                 </div>
-                <div style={{ marginTop: 6, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 22 }}>
-                  {parseBRNumber(calcAvg) ? `${fmtBR2(parseBRNumber(calcAvg) as number)} t` : "—"}
+                <div
+                  style={{
+                    marginTop: 6,
+                    color: "rgba(255,255,255,0.92)",
+                    fontWeight: 980,
+                    fontSize: 22,
+                  }}
+                >
+                  {parseBRNumber(calcAvg)
+                    ? `${fmtBR2(parseBRNumber(calcAvg) as number)} t`
+                    : "—"}
                 </div>
               </div>
 
@@ -896,15 +1171,28 @@ export default function PlantProduction() {
                   className="mp-btn"
                   onClick={onRegisterCalc}
                   disabled={retro}
-                  title={retro ? "Retroativo bloqueado (não registra)" : "Adicionar registro na produção da hora anterior"}
+                  title={
+                    retro
+                      ? "Retroativo bloqueado (não registra)"
+                      : "Adicionar registro na produção da hora anterior"
+                  }
                   style={{ gridColumn: "1 / -1" }}
                 >
                   Registrar produção
                 </button>
               </div>
 
-              <div style={{ marginTop: 10, color: "rgba(255,255,255,0.50)", fontWeight: 800, fontSize: 12 }}>
-                Dica: após registrar, clique em <b>Salvar</b> na página para gravar no sistema.
+              <div
+                style={{
+                  marginTop: 10,
+                  color: "rgba(255,255,255,0.50)",
+                  fontWeight: 800,
+                  fontSize: 12,
+                }}
+              >
+                Dica: a T/conchada vem da escavadeira vinculada à planta. Após
+                registrar, clique em <b>Salvar</b> na página para gravar no
+                sistema.
               </div>
             </div>
           </div>
