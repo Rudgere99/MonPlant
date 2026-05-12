@@ -392,7 +392,16 @@ export default function PlantProductionDayView() {
   }
 
   return (
-    <div className="mp-container">
+    <div
+      className="mp-container"
+      style={{
+        width: "100%",
+        maxWidth: "none",
+        margin: 0,
+        paddingLeft: 18,
+        paddingRight: 18,
+      }}
+    >
       <div className="mp-page-title">Produção da Planta</div>
       <div className="mp-page-sub">
         Visualização por planta • Dia {br(day)} • {selectedPlantName} • Total ajustado: <b>{fmtBR0(totalTon)}</b> t
@@ -450,8 +459,8 @@ export default function PlantProductionDayView() {
         style={{
           marginTop: 14,
           display: "grid",
-          gridTemplateColumns: isPlant02 ? "minmax(0, 1fr) 340px" : "1fr",
-          gap: 14,
+          gridTemplateColumns: isPlant02 ? "minmax(0, 1fr) 360px" : "1fr",
+          gap: 12,
           alignItems: "stretch",
         }}
       >
@@ -463,7 +472,7 @@ export default function PlantProductionDayView() {
             ) : null}
           </div>
 
-          <div className="mp-card-b" style={{ height: 420 }}>
+          <div className="mp-card-b" style={{ height: 460 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 52, right: 24, bottom: 30, left: 10 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -471,7 +480,7 @@ export default function PlantProductionDayView() {
                 <XAxis
                   dataKey="period"
                   tick={<CustomTick />}
-                  interval={1}
+                  interval={0}
                   height={44}
                   axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
                   tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
@@ -642,7 +651,7 @@ export default function PlantProductionDayView() {
         style={{
           marginTop: 10,
           display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(260px, 1fr))",
+          gridTemplateColumns: "repeat(3, minmax(320px, 1fr))",
           gap: 12,
           overflowX: "auto",
           paddingBottom: 2,
