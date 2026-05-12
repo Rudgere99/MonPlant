@@ -91,24 +91,84 @@ def ensure_user_permission_columns():
 
 
 def ensure_supervisor_planta_tables():
-    """Garante a tabela de cadastro de supervisores da planta."""
+    """Garante/migra a tabela de cadastro de supervisores da planta.
+
+    Importante: versões anteriores da tabela podem ter sido criadas sem owner_id.
+    Por isso o bootstrap não usa apenas CREATE TABLE IF NOT EXISTS; ele também
+    adiciona as colunas faltantes via ALTER TABLE.
+    """
     try:
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute(
                 """
                 create table if not exists public.bv_supervisores_planta (
-                  id bigserial primary key,
-                  owner_id text not null,
-                  nome_completo text not null,
-                  empresa text not null,
-                  plant_id integer not null,
-                  letra_turno text not null,
-                  ativo boolean not null default true,
-                  created_at timestamptz not null default now(),
-                  updated_at timestamptz not null default now(),
-                  constraint ck_bv_supervisores_planta_letra
-                    check (upper(letra_turno) in ('A','B','C','D'))
+                  id bigserial primary key
                 );
+
+                alter table public.bv_supervisores_planta
+                  add column if not exists owner_id text;
+
+                alter table public.bv_supervisores_planta
+                  add column if not exists nome_completo text;
+
+                alter table public.bv_supervisores_planta
+                  add column if not exists empresa text;
+
+                alter table public.bv_supervisores_planta
+                  add column if not exists plant_id integer;
+
+                alter table public.bv_supervisores_planta
+                  add column if not exists letra_turno text;
+
+                alter table public.bv_supervisores_planta
+                  add column if not exists ativo boolean not null default true;
+
+                alter table public.bv_supervisores_planta
+                  add column if not exists created_at timestamptz not null default now();
+
+                alter table public.bv_supervisores_planta
+                  add column if not exists updated_at timestamptz not null default now();
+
+                update public.bv_supervisores_planta
+                   set owner_id = coalesce(owner_id, 'legacy'),
+                       nome_completo = coalesce(nome_completo, ''),
+                       empresa = coalesce(empresa, 'Trindade'),
+                       plant_id = coalesce(plant_id, 1),
+                       letra_turno = upper(coalesce(letra_turno, 'A'))
+                 where owner_id is null
+                    or nome_completo is null
+                    or empresa is null
+                    or plant_id is null
+                    or letra_turno is null;
+
+                alter table public.bv_supervisores_planta
+                  alter column owner_id set not null;
+
+                alter table public.bv_supervisores_planta
+                  alter column nome_completo set not null;
+
+                alter table public.bv_supervisores_planta
+                  alter column empresa set not null;
+
+                alter table public.bv_supervisores_planta
+                  alter column plant_id set not null;
+
+                alter table public.bv_supervisores_planta
+                  alter column letra_turno set not null;
+
+                do $$
+                begin
+                  if not exists (
+                    select 1
+                    from pg_constraint
+                    where conname = 'ck_bv_supervisores_planta_letra'
+                      and conrelid = 'public.bv_supervisores_planta'::regclass
+                  ) then
+                    alter table public.bv_supervisores_planta
+                      add constraint ck_bv_supervisores_planta_letra
+                      check (upper(letra_turno) in ('A','B','C','D'));
+                  end if;
+                end $$;
 
                 create index if not exists idx_bv_supervisores_planta_owner
                   on public.bv_supervisores_planta(owner_id);
