@@ -116,6 +116,7 @@ def ensure_supervisor_planta_tables():
         "alter table public.bv_supervisores_planta add column if not exists nome_completo text;",
         "alter table public.bv_supervisores_planta add column if not exists empresa text;",
         "alter table public.bv_supervisores_planta add column if not exists plant_id integer;",
+        "alter table public.bv_supervisores_planta add column if not exists planta_id integer;",  # compatibilidade com tabela antiga
         "alter table public.bv_supervisores_planta add column if not exists letra_turno text;",
         "alter table public.bv_supervisores_planta add column if not exists ativo boolean not null default true;",
         "alter table public.bv_supervisores_planta add column if not exists created_at timestamptz not null default now();",
@@ -129,7 +130,8 @@ def ensure_supervisor_planta_tables():
            set owner_id = coalesce(nullif(owner_id, ''), 'legacy'),
                nome_completo = coalesce(nullif(nome_completo, ''), 'Supervisor sem nome'),
                empresa = coalesce(nullif(empresa, ''), 'Trindade'),
-               plant_id = coalesce(plant_id, 1),
+               plant_id = coalesce(plant_id, planta_id, 1),
+               planta_id = coalesce(planta_id, plant_id, 1),
                letra_turno = upper(coalesce(nullif(letra_turno, ''), 'A')),
                ativo = coalesce(ativo, true),
                created_at = coalesce(created_at, now()),
@@ -138,6 +140,7 @@ def ensure_supervisor_planta_tables():
             or nome_completo is null or nome_completo = ''
             or empresa is null or empresa = ''
             or plant_id is null
+            or planta_id is null
             or letra_turno is null or letra_turno = ''
             or ativo is null
             or created_at is null
@@ -153,7 +156,7 @@ def ensure_supervisor_planta_tables():
         """
     )
 
-    for col in ["owner_id", "nome_completo", "empresa", "plant_id", "letra_turno", "ativo", "created_at", "updated_at"]:
+    for col in ["owner_id", "nome_completo", "empresa", "plant_id", "planta_id", "letra_turno", "ativo", "created_at", "updated_at"]:
         _run_sql(f"alter table public.bv_supervisores_planta alter column {col} set not null;")
 
     _run_sql(
@@ -1248,7 +1251,7 @@ def listar_supervisores_planta(
         args.append(owner_id)
 
     if plant_id is not None:
-        where.append("plant_id=%s")
+        where.append("coalesce(plant_id, planta_id)=%s")
         args.append(int(plant_id))
 
     if letra_turno:
@@ -1264,10 +1267,12 @@ def listar_supervisores_planta(
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute(
                 f"""
-                select id, {select_owner} as owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
+                select id, {select_owner} as owner_id, nome_completo, empresa,
+                       coalesce(plant_id, planta_id) as plant_id,
+                       letra_turno, ativo, created_at, updated_at
                 from public.bv_supervisores_planta
                 {where_sql}
-                order by plant_id asc, letra_turno asc, nome_completo asc
+                order by coalesce(plant_id, planta_id) asc, letra_turno asc, nome_completo asc
                 """,
                 tuple(args),
             )
@@ -1308,12 +1313,12 @@ def criar_supervisor_planta(
             cur.execute(
                 """
                 insert into public.bv_supervisores_planta(
-                  owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, updated_at
+                  owner_id, nome_completo, empresa, plant_id, planta_id, letra_turno, ativo, updated_at
                 )
-                values (%s,%s,%s,%s,%s,%s,now())
-                returning id, owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
+                values (%s,%s,%s,%s,%s,%s,%s,now())
+                returning id, owner_id, nome_completo, empresa, coalesce(plant_id, planta_id) as plant_id, letra_turno, ativo, created_at, updated_at
                 """,
-                (owner_id, nome, empresa, plant_id, letra, bool(body.ativo)),
+                (owner_id, nome, empresa, plant_id, plant_id, letra, bool(body.ativo)),
             )
             row = cur.fetchone()
             conn.commit()
@@ -1378,6 +1383,8 @@ def alterar_supervisor_planta(
             raise HTTPException(status_code=400, detail="Planta de operação inválida")
         fields.append("plant_id=%s")
         values.append(plant_id)
+        fields.append("planta_id=%s")
+        values.append(plant_id)
 
     if body.letra_turno is not None:
         fields.append("letra_turno=%s")
@@ -1403,7 +1410,7 @@ def alterar_supervisor_planta(
                 update public.bv_supervisores_planta
                 set {', '.join(fields)}
                 where owner_id=%s and id=%s
-                returning id, owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
+                returning id, owner_id, nome_completo, empresa, coalesce(plant_id, planta_id) as plant_id, letra_turno, ativo, created_at, updated_at
                 """,
                 tuple(values),
             )
@@ -1450,7 +1457,7 @@ def remover_supervisor_planta(
             update public.bv_supervisores_planta
             set ativo=false, updated_at=now()
             where owner_id=%s and id=%s
-            returning id, owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
+            returning id, owner_id, nome_completo, empresa, coalesce(plant_id, planta_id) as plant_id, letra_turno, ativo, created_at, updated_at
             """,
             (owner_id, supervisor_id),
         )
