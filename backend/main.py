@@ -93,100 +93,129 @@ def ensure_user_permission_columns():
 def ensure_supervisor_planta_tables():
     """Garante/migra a tabela de cadastro de supervisores da planta.
 
-    Importante: versões anteriores da tabela podem ter sido criadas sem owner_id.
-    Por isso o bootstrap não usa apenas CREATE TABLE IF NOT EXISTS; ele também
-    adiciona as colunas faltantes via ALTER TABLE.
+    Versão segura para produção:
+    - roda DDL em etapas separadas;
+    - uma falha em índice/constraint não desfaz a criação das colunas;
+    - corrige tabelas antigas criadas sem owner_id.
     """
-    try:
-        with get_conn() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                create table if not exists public.bv_supervisores_planta (
-                  id bigserial primary key
-                );
 
-                alter table public.bv_supervisores_planta
-                  add column if not exists owner_id text;
+    def _run_sql(sql: str, params: Optional[tuple] = None) -> bool:
+        try:
+            with get_conn() as conn, conn.cursor() as cur:
+                cur.execute(sql, params or ())
+                conn.commit()
+            return True
+        except Exception:
+            # Não derruba a API por causa de DDL/migração.
+            # As rotas também chamam este ensure antes de consultar.
+            return False
 
-                alter table public.bv_supervisores_planta
-                  add column if not exists nome_completo text;
+    # 1) Base mínima
+    _run_sql(
+        """
+        create table if not exists public.bv_supervisores_planta (
+          id bigserial primary key
+        );
+        """
+    )
 
-                alter table public.bv_supervisores_planta
-                  add column if not exists empresa text;
+    # 2) Colunas em comandos isolados para não haver rollback geral
+    columns_sql = [
+        "alter table public.bv_supervisores_planta add column if not exists owner_id text;",
+        "alter table public.bv_supervisores_planta add column if not exists nome_completo text;",
+        "alter table public.bv_supervisores_planta add column if not exists empresa text;",
+        "alter table public.bv_supervisores_planta add column if not exists plant_id integer;",
+        "alter table public.bv_supervisores_planta add column if not exists letra_turno text;",
+        "alter table public.bv_supervisores_planta add column if not exists ativo boolean not null default true;",
+        "alter table public.bv_supervisores_planta add column if not exists created_at timestamptz not null default now();",
+        "alter table public.bv_supervisores_planta add column if not exists updated_at timestamptz not null default now();",
+    ]
+    for sql in columns_sql:
+        _run_sql(sql)
 
-                alter table public.bv_supervisores_planta
-                  add column if not exists plant_id integer;
+    # 3) Backfill para permitir NOT NULL em bancos já existentes
+    _run_sql(
+        """
+        update public.bv_supervisores_planta
+           set owner_id = coalesce(nullif(owner_id, ''), 'legacy'),
+               nome_completo = coalesce(nullif(nome_completo, ''), 'Supervisor sem nome'),
+               empresa = coalesce(nullif(empresa, ''), 'Trindade'),
+               plant_id = coalesce(plant_id, 1),
+               letra_turno = upper(coalesce(nullif(letra_turno, ''), 'A')),
+               ativo = coalesce(ativo, true),
+               created_at = coalesce(created_at, now()),
+               updated_at = coalesce(updated_at, now())
+         where owner_id is null or owner_id = ''
+            or nome_completo is null or nome_completo = ''
+            or empresa is null or empresa = ''
+            or plant_id is null
+            or letra_turno is null or letra_turno = ''
+            or ativo is null
+            or created_at is null
+            or updated_at is null;
+        """
+    )
 
-                alter table public.bv_supervisores_planta
-                  add column if not exists letra_turno text;
+    # 4) Normaliza letras inválidas antigas antes da constraint
+    _run_sql(
+        """
+        update public.bv_supervisores_planta
+           set letra_turno = 'A'
+         where upper(coalesce(letra_turno, '')) not in ('A','B','C','D');
+        """
+    )
 
-                alter table public.bv_supervisores_planta
-                  add column if not exists ativo boolean not null default true;
+    # 5) NOT NULL em etapas isoladas
+    for col in ["owner_id", "nome_completo", "empresa", "plant_id", "letra_turno", "ativo", "created_at", "updated_at"]:
+        _run_sql(f"alter table public.bv_supervisores_planta alter column {col} set not null;")
 
-                alter table public.bv_supervisores_planta
-                  add column if not exists created_at timestamptz not null default now();
+    # 6) Constraint de letra, sem derrubar se já existir
+    _run_sql(
+        """
+        do $$
+        begin
+          if not exists (
+            select 1
+            from pg_constraint
+            where conname = 'ck_bv_supervisores_planta_letra'
+              and conrelid = 'public.bv_supervisores_planta'::regclass
+          ) then
+            alter table public.bv_supervisores_planta
+              add constraint ck_bv_supervisores_planta_letra
+              check (upper(letra_turno) in ('A','B','C','D'));
+          end if;
+        end $$;
+        """
+    )
 
-                alter table public.bv_supervisores_planta
-                  add column if not exists updated_at timestamptz not null default now();
+    # 7) Índices simples
+    _run_sql(
+        """
+        create index if not exists idx_bv_supervisores_planta_owner
+          on public.bv_supervisores_planta(owner_id);
+        """
+    )
+    _run_sql(
+        """
+        create index if not exists idx_bv_supervisores_planta_owner_plant
+          on public.bv_supervisores_planta(owner_id, plant_id);
+        """
+    )
+    _run_sql(
+        """
+        create index if not exists idx_bv_supervisores_planta_owner_letra
+          on public.bv_supervisores_planta(owner_id, letra_turno);
+        """
+    )
 
-                update public.bv_supervisores_planta
-                   set owner_id = coalesce(owner_id, 'legacy'),
-                       nome_completo = coalesce(nome_completo, ''),
-                       empresa = coalesce(empresa, 'Trindade'),
-                       plant_id = coalesce(plant_id, 1),
-                       letra_turno = upper(coalesce(letra_turno, 'A'))
-                 where owner_id is null
-                    or nome_completo is null
-                    or empresa is null
-                    or plant_id is null
-                    or letra_turno is null;
-
-                alter table public.bv_supervisores_planta
-                  alter column owner_id set not null;
-
-                alter table public.bv_supervisores_planta
-                  alter column nome_completo set not null;
-
-                alter table public.bv_supervisores_planta
-                  alter column empresa set not null;
-
-                alter table public.bv_supervisores_planta
-                  alter column plant_id set not null;
-
-                alter table public.bv_supervisores_planta
-                  alter column letra_turno set not null;
-
-                do $$
-                begin
-                  if not exists (
-                    select 1
-                    from pg_constraint
-                    where conname = 'ck_bv_supervisores_planta_letra'
-                      and conrelid = 'public.bv_supervisores_planta'::regclass
-                  ) then
-                    alter table public.bv_supervisores_planta
-                      add constraint ck_bv_supervisores_planta_letra
-                      check (upper(letra_turno) in ('A','B','C','D'));
-                  end if;
-                end $$;
-
-                create index if not exists idx_bv_supervisores_planta_owner
-                  on public.bv_supervisores_planta(owner_id);
-
-                create index if not exists idx_bv_supervisores_planta_owner_plant
-                  on public.bv_supervisores_planta(owner_id, plant_id);
-
-                create index if not exists idx_bv_supervisores_planta_owner_letra
-                  on public.bv_supervisores_planta(owner_id, letra_turno);
-
-                create unique index if not exists ux_bv_supervisores_planta_owner_nome_plant_letra
-                  on public.bv_supervisores_planta(owner_id, lower(nome_completo), plant_id, upper(letra_turno));
-                """
-            )
-            conn.commit()
-    except Exception:
-        # não pode derrubar a API por causa de DDL
-        return
+    # 8) Índice único. Se houver duplicidade legada, este passo pode falhar,
+    # mas as colunas e rotas continuam funcionando.
+    _run_sql(
+        """
+        create unique index if not exists ux_bv_supervisores_planta_owner_nome_plant_letra
+          on public.bv_supervisores_planta(owner_id, lower(nome_completo), plant_id, upper(letra_turno));
+        """
+    )
 
 @app.on_event("startup")
 def _startup_bootstrap():
