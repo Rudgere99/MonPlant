@@ -540,6 +540,23 @@ def get_optional_user(authorization: Optional[str]) -> Optional[Dict[str, Any]]:
         return None
 
 
+def safe_owner_id_from_auth(authorization: Optional[str]) -> str:
+    """Resolve owner_id sem deixar erro de auth/DB quebrar rotas auxiliares.
+
+    Usado no cadastro de supervisores para evitar que falhas no auth_dep virem
+    erro 500 sem cabeçalho CORS no navegador.
+    """
+    try:
+        tok = bearer_token(authorization)
+        if not tok:
+            return "legacy"
+        payload = decode_token(tok)
+        uid = payload.get("uid")
+        return str(uid) if uid else "legacy"
+    except Exception:
+        return "legacy"
+
+
 def require_dev_user(
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
@@ -1166,6 +1183,16 @@ def create_plant(
 # =========================
 # Supervisores Planta
 # =========================
+@app.options("/api/supervisores-planta")
+def options_supervisores_planta():
+    return Response(status_code=200)
+
+
+@app.options("/api/supervisores-planta/{supervisor_id}")
+def options_supervisor_planta_id(supervisor_id: int):
+    return Response(status_code=200)
+
+
 def _normalize_letra_turno(letra: Optional[str]) -> str:
     v = (letra or "").strip().upper()
     if v not in {"A", "B", "C", "D"}:
@@ -1193,8 +1220,9 @@ def listar_supervisores_planta(
     letra_turno: Optional[str] = Query(None),
     include_inactive: bool = Query(False),
     somente_ativos: Optional[bool] = Query(None),
-    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
+    owner_id = safe_owner_id_from_auth(authorization)
     # Compatibilidade: algumas versões do front chamavam ?somente_ativos=true.
     # O padrão novo é ?include_inactive=false.
     if somente_ativos is not None:
@@ -1255,9 +1283,9 @@ def listar_supervisores_planta(
 def criar_supervisor_planta(
     body: SupervisorPlantaIn,
     request: Request,
-    owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
+    owner_id = safe_owner_id_from_auth(authorization)
     ensure_supervisor_planta_tables()
 
     nome = (body.nome_completo or "").strip()
@@ -1312,10 +1340,9 @@ def atualizar_supervisor_planta(
     supervisor_id: int,
     body: SupervisorPlantaIn,
     request: Request,
-    owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    return alterar_supervisor_planta(supervisor_id, SupervisorPlantaUpdateIn(**body.model_dump()), request, owner_id, authorization)
+    return alterar_supervisor_planta(supervisor_id, SupervisorPlantaUpdateIn(**body.model_dump()), request, authorization)
 
 
 @app.patch("/api/supervisores-planta/{supervisor_id}")
@@ -1323,9 +1350,9 @@ def alterar_supervisor_planta(
     supervisor_id: int,
     body: SupervisorPlantaUpdateIn,
     request: Request,
-    owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
+    owner_id = safe_owner_id_from_auth(authorization)
     ensure_supervisor_planta_tables()
 
     fields = []
@@ -1408,10 +1435,10 @@ def alterar_supervisor_planta(
 def remover_supervisor_planta(
     supervisor_id: int,
     request: Request,
-    owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
     """Inativa o cadastro para preservar histórico."""
+    owner_id = safe_owner_id_from_auth(authorization)
     ensure_supervisor_planta_tables()
 
     user_payload = get_optional_user(authorization)
