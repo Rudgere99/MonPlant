@@ -41,6 +41,7 @@ const nav: NavItem[] = [
   { to: "/statisticas", label: "Estatísticas", icon: BarChart3, group: "Configurações" },
   { to: "/ritmo", label: "Ritmo", icon: Factory, group: "Operação" },
   { to: "/equipamentos", label: "Equipamentos", icon: Factory, group: "Configurações" },
+  { to: "/supervisores-planta", label: "Supervisores Planta", icon: Users, group: "Configurações" },
 
   // ✅ Avisos (somente supervisor / dev)
   { to: "/avisos", label: "Avisos", icon: Bell, group: "Visão geral" },
@@ -68,6 +69,13 @@ const nav: NavItem[] = [
 
 function defaultPathFor(role: UserRole) {
   return getDefaultPathByRole(role);
+}
+
+function canAccessMonPlantPath(role: UserRole, path: string) {
+  if (path === "/supervisores-planta" || path.startsWith("/supervisores-planta/")) {
+    return role === "dev" || role === "gerencia" || role === "controlador";
+  }
+  return canAccessRole(role, path);
 }
 
 
@@ -386,7 +394,7 @@ function AppShell() {
       return;
     }
 
-    if (!canAccessRole(role, location.pathname)) {
+    if (!canAccessMonPlantPath(role, location.pathname)) {
       navigate(target, { replace: true });
     }
   }, [loading, user, role, location.pathname, navigate]);
@@ -403,7 +411,7 @@ function AppShell() {
   const navItems = useMemo(() => {
     return nav.filter((i) => {
       if (i.devOnly && !isDev) return false;
-      return canAccessRole(role, i.to);
+      return canAccessMonPlantPath(role, i.to);
     });
   }, [isDev, role]);
   const navItemsFiltered = navItems;
