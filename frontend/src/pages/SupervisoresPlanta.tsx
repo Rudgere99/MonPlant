@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, CheckCircle2, Edit3, Plus, RefreshCw, Search, Trash2, Users } from "lucide-react";
+import { Building2, CalendarDays, CheckCircle2, Edit3, Plus, RefreshCw, Search, Trash2, Users } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 
 type Plant = {
@@ -31,13 +31,120 @@ type FormState = {
   ativo: boolean;
 };
 
+type LetraTurno = "A" | "B" | "C" | "D";
+
+type RegraBloco = {
+  turno_01: LetraTurno;
+  turno_02: LetraTurno;
+};
+
+type TurnoRegra = {
+  id?: number | string;
+  nome: string;
+  data_base: string;
+  dias_por_bloco: number;
+  blocos: RegraBloco[];
+  ativo: boolean;
+  observacao?: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type RegraFormState = {
+  id?: number | string | null;
+  nome: string;
+  data_base: string;
+  dias_por_bloco: number;
+  blocos: RegraBloco[];
+  ativo: boolean;
+  observacao: string;
+};
+
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "";
-const letras: Array<"A" | "B" | "C" | "D"> = ["A", "B", "C", "D"];
+const letras: LetraTurno[] = ["A", "B", "C", "D"];
+const TURNO_RULE_STORAGE_KEY = "monplant.turno.regra_2x2.v1";
+
+const regraPadrao: RegraFormState = {
+  nome: "Escala 2x2 Terra Minas",
+  data_base: "2026-03-19",
+  dias_por_bloco: 2,
+  ativo: true,
+  observacao: "Base conforme documento: em 19/03/2026, Turno 01 = C e Turno 02 = D.",
+  blocos: [
+    { turno_01: "C", turno_02: "D" },
+    { turno_01: "A", turno_02: "B" },
+    { turno_01: "D", turno_02: "C" },
+    { turno_01: "B", turno_02: "A" },
+  ],
+};
 
 const fallbackPlants: Plant[] = [
   { id: 1, code: "PLANTA_01", name: "Planta 01", is_active: true },
   { id: 2, code: "PLANTA_02", name: "Planta 02", is_active: true },
 ];
+
+
+function emptyRegraForm(): RegraFormState {
+  return {
+    ...regraPadrao,
+    blocos: regraPadrao.blocos.map((b) => ({ ...b })),
+  };
+}
+
+function toDateKey(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseDateKey(value: string) {
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+function addDays(dateKey: string, days: number) {
+  const d = parseDateKey(dateKey);
+  d.setDate(d.getDate() + days);
+  return toDateKey(d);
+}
+
+function diffDays(dateKey: string, baseKey: string) {
+  const d = parseDateKey(dateKey);
+  const b = parseDateKey(baseKey);
+  const utcD = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const utcB = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.floor((utcD - utcB) / 86400000);
+}
+
+function mod(n: number, size: number) {
+  return ((n % size) + size) % size;
+}
+
+function turnoPreview(regra: RegraFormState | TurnoRegra, dateKey: string) {
+  const diasPorBloco = Number(regra.dias_por_bloco || 2);
+  const blocos = regra.blocos?.length ? regra.blocos : regraPadrao.blocos;
+  const delta = diffDays(dateKey, regra.data_base || regraPadrao.data_base);
+  const blocoIndex = mod(Math.floor(delta / diasPorBloco), blocos.length);
+  const bloco = blocos[blocoIndex];
+  const trabalhando = [bloco.turno_01, bloco.turno_02];
+  const folga = letras.filter((l) => !trabalhando.includes(l));
+  return {
+    blocoIndex,
+    turno_01: bloco.turno_01,
+    turno_02: bloco.turno_02,
+    folga: folga.join(" e "),
+  };
+}
+
+function formatDateKeyPt(value: string) {
+  try {
+    const d = parseDateKey(value);
+    return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+  } catch {
+    return value;
+  }
+}
 
 function emptyForm(defaultPlant = 1): FormState {
   return {
@@ -83,6 +190,12 @@ export default function SupervisoresPlanta() {
   const [plantFilter, setPlantFilter] = useState<number | "all">("all");
   const [letterFilter, setLetterFilter] = useState<"all" | "A" | "B" | "C" | "D">("all");
   const [showInactive, setShowInactive] = useState(false);
+  const [turnoRegras, setTurnoRegras] = useState<TurnoRegra[]>([]);
+  const [regraForm, setRegraForm] = useState<RegraFormState>(() => emptyRegraForm());
+  const [savingRegra, setSavingRegra] = useState(false);
+  const [regraError, setRegraError] = useState<string | null>(null);
+  const [regraSuccess, setRegraSuccess] = useState<string | null>(null);
+  const [previewStart, setPreviewStart] = useState(() => toDateKey(new Date()));
 
   const headers = useMemo(() => {
     const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -129,6 +242,47 @@ export default function SupervisoresPlanta() {
     }
   }, [headers, plantFilter, letterFilter, showInactive]);
 
+  const loadTurnoRegras = useCallback(async () => {
+    setRegraError(null);
+    try {
+      const r = await fetch(`${API_BASE}/api/turno-regras-planta`, { headers });
+      const data = await r.json().catch(() => null);
+      if (r.ok && Array.isArray(data)) {
+        setTurnoRegras(data);
+        const ativa = data.find((item: TurnoRegra) => item.ativo) || data[0];
+        if (ativa) {
+          setRegraForm({
+            id: ativa.id,
+            nome: ativa.nome || regraPadrao.nome,
+            data_base: ativa.data_base || regraPadrao.data_base,
+            dias_por_bloco: Number(ativa.dias_por_bloco || 2),
+            blocos: (ativa.blocos?.length ? ativa.blocos : regraPadrao.blocos).map((b) => ({ ...b })),
+            ativo: Boolean(ativa.ativo),
+            observacao: ativa.observacao || "",
+          });
+        }
+        return;
+      }
+      throw new Error(data?.detail || "Endpoint de regra de turno indisponível.");
+    } catch {
+      const saved = window.localStorage.getItem(TURNO_RULE_STORAGE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as RegraFormState;
+          const normalized = { ...emptyRegraForm(), ...parsed, blocos: (parsed.blocos || regraPadrao.blocos).map((b) => ({ ...b })) };
+          setRegraForm(normalized);
+          setTurnoRegras([{ ...normalized, id: normalized.id || "local" }]);
+          return;
+        } catch {
+          // Mantém regra padrão caso o cache local esteja inválido.
+        }
+      }
+      const fallback = emptyRegraForm();
+      setRegraForm(fallback);
+      setTurnoRegras([{ ...fallback, id: "default" }]);
+    }
+  }, [headers]);
+
   useEffect(() => {
     loadPlants();
   }, [loadPlants]);
@@ -136,6 +290,10 @@ export default function SupervisoresPlanta() {
   useEffect(() => {
     loadSupervisores();
   }, [loadSupervisores]);
+
+  useEffect(() => {
+    loadTurnoRegras();
+  }, [loadTurnoRegras]);
 
   const filteredItems = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -168,6 +326,72 @@ export default function SupervisoresPlanta() {
     setForm(emptyForm(Number(plants[0]?.id || 1)));
     setError(null);
     setSuccess(null);
+  };
+
+  const previewRows = useMemo(() => {
+    return Array.from({ length: 16 }, (_, index) => {
+      const dateKey = addDays(previewStart, index);
+      const result = turnoPreview(regraForm, dateKey);
+      return { dateKey, ...result };
+    });
+  }, [previewStart, regraForm]);
+
+  const setBlocoLetra = (index: number, field: keyof RegraBloco, value: LetraTurno) => {
+    setRegraForm((prev) => {
+      const blocos = prev.blocos.map((b, i) => (i === index ? { ...b, [field]: value } : { ...b }));
+      return { ...prev, blocos };
+    });
+  };
+
+  const resetRegraPadrao = () => {
+    setRegraForm(emptyRegraForm());
+    setRegraError(null);
+    setRegraSuccess(null);
+  };
+
+  const submitRegra = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setSavingRegra(true);
+    setRegraError(null);
+    setRegraSuccess(null);
+
+    const payload: RegraFormState = {
+      ...regraForm,
+      nome: regraForm.nome.trim() || regraPadrao.nome,
+      data_base: regraForm.data_base || regraPadrao.data_base,
+      dias_por_bloco: Number(regraForm.dias_por_bloco || 2),
+      blocos: regraForm.blocos.map((b) => ({ turno_01: b.turno_01, turno_02: b.turno_02 })),
+      ativo: Boolean(regraForm.ativo),
+      observacao: regraForm.observacao.trim(),
+    };
+
+    const blocoInvalido = payload.blocos.some((b) => b.turno_01 === b.turno_02);
+    if (blocoInvalido) {
+      setSavingRegra(false);
+      setRegraError("No mesmo bloco, Turno 01 e Turno 02 precisam ter letras diferentes.");
+      return;
+    }
+
+    try {
+      const editingRegraId = payload.id && payload.id !== "local" && payload.id !== "default" ? payload.id : null;
+      const url = editingRegraId ? `${API_BASE}/api/turno-regras-planta/${editingRegraId}` : `${API_BASE}/api/turno-regras-planta`;
+      const r = await fetch(url, {
+        method: editingRegraId ? "PUT" : "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(data?.detail || "Endpoint ainda não disponível.");
+      setRegraSuccess("Regra de turno salva com sucesso.");
+      await loadTurnoRegras();
+    } catch {
+      window.localStorage.setItem(TURNO_RULE_STORAGE_KEY, JSON.stringify(payload));
+      setRegraForm(payload);
+      setTurnoRegras([{ ...payload, id: payload.id || "local" }]);
+      setRegraSuccess("Regra salva localmente nesta estação. Para valer para todos os usuários, criar a rota/tabela no backend.");
+    } finally {
+      setSavingRegra(false);
+    }
   };
 
   const submit = async (ev: React.FormEvent) => {
@@ -331,6 +555,206 @@ export default function SupervisoresPlanta() {
             <Metric title="Inativos" value={resumo.inativos} muted />
             <Metric title="Letra A / B" value={`${resumo.porLetra.A || 0} / ${resumo.porLetra.B || 0}`} />
             <Metric title="Letra C / D" value={`${resumo.porLetra.C || 0} / ${resumo.porLetra.D || 0}`} />
+          </div>
+        </section>
+
+
+        <section
+          style={{
+            borderRadius: 22,
+            border: "1px solid rgba(255,255,255,0.10)",
+            background: "rgba(10,14,20,0.82)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: 16,
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 16,
+                  display: "grid",
+                  placeItems: "center",
+                  background: "rgba(59,130,246,0.10)",
+                  border: "1px solid rgba(59,130,246,0.24)",
+                  color: "#93C5FD",
+                }}
+              >
+                <CalendarDays size={21} />
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Regra de Turno — Escala 2x2</h2>
+                <p style={{ margin: "4px 0 0", color: "rgba(255,255,255,0.50)", fontSize: 13, fontWeight: 750 }}>
+                  Cadastre o marco da escala e o ciclo de 8 dias. O MonPlant calcula passado e futuro automaticamente.
+                </p>
+              </div>
+            </div>
+            <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+              <span style={regraForm.ativo ? statusActive : statusInactive}>{regraForm.ativo ? "Regra ativa" : "Regra inativa"}</span>
+              <span style={{ ...statusInactive, color: "rgba(255,255,255,0.62)" }}>{turnoRegras.length} versão(ões)</span>
+              <button type="button" onClick={loadTurnoRegras} style={smallGhostButton}>
+                Recarregar
+              </button>
+            </div>
+          </div>
+
+          <div style={{ padding: 18, display: "grid", gridTemplateColumns: "minmax(340px, 470px) minmax(0, 1fr)", gap: 16 }}>
+            <form onSubmit={submitRegra} style={{ display: "grid", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 10 }}>
+                <Field label="Nome da regra">
+                  <input
+                    value={regraForm.nome}
+                    onChange={(e) => setRegraForm((p) => ({ ...p, nome: e.target.value }))}
+                    style={inputStyle}
+                  />
+                </Field>
+                <Field label="Data base">
+                  <input
+                    type="date"
+                    value={regraForm.data_base}
+                    onChange={(e) => setRegraForm((p) => ({ ...p, data_base: e.target.value }))}
+                    style={inputStyle}
+                  />
+                </Field>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 10 }}>
+                <Field label="Dias por bloco">
+                  <input
+                    type="number"
+                    min={1}
+                    max={7}
+                    value={regraForm.dias_por_bloco}
+                    onChange={(e) => setRegraForm((p) => ({ ...p, dias_por_bloco: Number(e.target.value || 2) }))}
+                    style={inputStyle}
+                  />
+                </Field>
+                <Field label="Observação">
+                  <input
+                    value={regraForm.observacao}
+                    onChange={(e) => setRegraForm((p) => ({ ...p, observacao: e.target.value }))}
+                    placeholder="Ex.: ajuste válido a partir da data base"
+                    style={inputStyle}
+                  />
+                </Field>
+              </div>
+
+              <div style={{ display: "grid", gap: 9 }}>
+                {regraForm.blocos.map((bloco, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      borderRadius: 16,
+                      border: "1px solid rgba(255,255,255,0.09)",
+                      background: "rgba(255,255,255,0.035)",
+                      padding: 12,
+                      display: "grid",
+                      gridTemplateColumns: "82px 1fr 1fr",
+                      gap: 10,
+                      alignItems: "center",
+                    }}
+                  >
+                    <strong style={{ color: "#FFB547" }}>Bloco {index + 1}</strong>
+                    <LetterSelect label="Turno 01" value={bloco.turno_01} onChange={(v) => setBlocoLetra(index, "turno_01", v)} />
+                    <LetterSelect label="Turno 02" value={bloco.turno_02} onChange={(v) => setBlocoLetra(index, "turno_02", v)} />
+                  </div>
+                ))}
+              </div>
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "11px 12px",
+                  borderRadius: 15,
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(255,255,255,0.04)",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={regraForm.ativo}
+                  onChange={(e) => setRegraForm((p) => ({ ...p, ativo: e.target.checked }))}
+                />
+                <span style={{ fontWeight: 850 }}>Usar esta regra como ativa</span>
+              </label>
+
+              {regraError ? <Alert tone="error" text={regraError} /> : null}
+              {regraSuccess ? <Alert tone="success" text={regraSuccess} /> : null}
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 10 }}>
+                <button type="submit" disabled={savingRegra} style={primaryButtonStyle}>
+                  <CheckCircle2 size={18} /> {savingRegra ? "Salvando..." : "Salvar regra de turno"}
+                </button>
+                <button type="button" onClick={resetRegraPadrao} style={smallGhostButton}>
+                  Restaurar padrão
+                </button>
+              </div>
+            </form>
+
+            <div style={{ minWidth: 0, display: "grid", gap: 12, alignSelf: "start" }}>
+              <div
+                style={{
+                  borderRadius: 18,
+                  border: "1px solid rgba(255,255,255,0.09)",
+                  background: "rgba(255,255,255,0.035)",
+                  padding: 13,
+                  display: "grid",
+                  gridTemplateColumns: "1fr 160px",
+                  gap: 10,
+                  alignItems: "end",
+                }}
+              >
+                <div>
+                  <div style={{ color: "rgba(255,255,255,0.48)", fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                    Método adotado
+                  </div>
+                  <p style={{ margin: "6px 0 0", color: "rgba(255,255,255,0.72)", fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>
+                    A data base marca o primeiro dia do Bloco 1. Cada bloco dura 2 dias. Ao terminar o Bloco 4, o ciclo volta
+                    para o Bloco 1. Esse cálculo funciona para datas anteriores e posteriores à data base.
+                  </p>
+                </div>
+                <Field label="Prévia a partir de">
+                  <input type="date" value={previewStart} onChange={(e) => setPreviewStart(e.target.value)} style={inputStyle} />
+                </Field>
+              </div>
+
+              <div style={{ overflowX: "auto", borderRadius: 18, border: "1px solid rgba(255,255,255,0.09)" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+                  <thead>
+                    <tr style={{ background: "rgba(255,255,255,0.04)" }}>
+                      <Th>Data</Th>
+                      <Th>Turno 01</Th>
+                      <Th>Turno 02</Th>
+                      <Th>Folga</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewRows.map((row) => (
+                      <tr key={row.dateKey} style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                        <Td>{formatDateKeyPt(row.dateKey)}</Td>
+                        <Td><span style={letterBadge}>{row.turno_01}</span></Td>
+                        <Td><span style={letterBadge}>{row.turno_02}</span></Td>
+                        <Td>{row.folga}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -598,6 +1022,34 @@ export default function SupervisoresPlanta() {
   );
 }
 
+function LetterSelect({ label, value, onChange }: { label: string; value: LetraTurno; onChange: (value: LetraTurno) => void }) {
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.48)", fontWeight: 900, textTransform: "uppercase" }}>{label}</span>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+        {letras.map((letra) => (
+          <button
+            type="button"
+            key={letra}
+            onClick={() => onChange(letra)}
+            style={{
+              height: 32,
+              borderRadius: 11,
+              border: `1px solid ${value === letra ? "rgba(255,159,26,0.45)" : "rgba(255,255,255,0.12)"}`,
+              background: value === letra ? "rgba(255,159,26,0.16)" : "rgba(255,255,255,0.05)",
+              color: value === letra ? "#FFB547" : "rgba(255,255,255,0.82)",
+              fontWeight: 950,
+              cursor: "pointer",
+            }}
+          >
+            {letra}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Metric({ title, value, muted }: { title: string; value: React.ReactNode; muted?: boolean }) {
   return (
     <div
@@ -667,6 +1119,20 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
   fontWeight: 800,
   boxSizing: "border-box",
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  height: 46,
+  borderRadius: 15,
+  border: "1px solid rgba(255,159,26,0.30)",
+  background: "linear-gradient(180deg, rgba(255,159,26,0.95), rgba(231,126,22,0.92))",
+  color: "#111827",
+  fontWeight: 950,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
 };
 
 const smallGhostButton: React.CSSProperties = {
