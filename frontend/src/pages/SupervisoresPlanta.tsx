@@ -256,7 +256,7 @@ export default function SupervisoresPlanta() {
             nome: ativa.nome || regraPadrao.nome,
             data_base: ativa.data_base || regraPadrao.data_base,
             dias_por_bloco: Number(ativa.dias_por_bloco || 2),
-            blocos: (ativa.blocos?.length ? ativa.blocos : regraPadrao.blocos).map((b) => ({ ...b })),
+            blocos: (ativa.blocos?.length ? ativa.blocos : regraPadrao.blocos).map((b: RegraBloco) => ({ ...b })),
             ativo: Boolean(ativa.ativo),
             observacao: ativa.observacao || "",
           });
@@ -269,7 +269,7 @@ export default function SupervisoresPlanta() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved) as RegraFormState;
-          const normalized = { ...emptyRegraForm(), ...parsed, blocos: (parsed.blocos || regraPadrao.blocos).map((b) => ({ ...b })) };
+          const normalized = { ...emptyRegraForm(), ...parsed, blocos: (parsed.blocos || regraPadrao.blocos).map((b: RegraBloco) => ({ ...b })) };
           setRegraForm(normalized);
           setTurnoRegras([{ ...normalized, id: normalized.id || "local" }]);
           return;
