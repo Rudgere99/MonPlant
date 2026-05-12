@@ -1113,8 +1113,14 @@ def listar_supervisores_planta(
     plant_id: Optional[int] = Query(None),
     letra_turno: Optional[str] = Query(None),
     include_inactive: bool = Query(False),
+    somente_ativos: Optional[bool] = Query(None),
     owner_id: str = Depends(require_owner_id),
 ):
+    # Compatibilidade: algumas versões do front chamavam ?somente_ativos=true.
+    # O padrão novo é ?include_inactive=false.
+    if somente_ativos is not None:
+        include_inactive = not bool(somente_ativos)
+
     ensure_supervisor_planta_tables()
 
     where = ["owner_id=%s"]
@@ -1131,17 +1137,20 @@ def listar_supervisores_planta(
     if not include_inactive:
         where.append("ativo=true")
 
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            f"""
-            select id, owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
-            from public.bv_supervisores_planta
-            where {' and '.join(where)}
-            order by plant_id asc, letra_turno asc, nome_completo asc
-            """,
-            tuple(args),
-        )
-        rows = cur.fetchall() or []
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                select id, owner_id, nome_completo, empresa, plant_id, letra_turno, ativo, created_at, updated_at
+                from public.bv_supervisores_planta
+                where {' and '.join(where)}
+                order by plant_id asc, letra_turno asc, nome_completo asc
+                """,
+                tuple(args),
+            )
+            rows = cur.fetchall() or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao carregar supervisores da planta: {str(e)}")
 
     return [_supervisor_planta_out(r) for r in rows]
 
