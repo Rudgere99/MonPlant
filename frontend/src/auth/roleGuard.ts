@@ -107,6 +107,7 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/ufdf",
       "/statisticas",
       "/equipamentos",
+      "/supervisores-planta",
     ]);
   }
 
@@ -130,6 +131,7 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/desvio-producao",
       "/dashboard/gestao-vista-planta",
       "/equipamentos",
+      "/supervisores-planta",
     ]);
   }
 
