@@ -164,6 +164,32 @@ function dayElapsedHours(now = new Date()) {
   return Math.max(0, mins / 60);
 }
 
+
+function getOperationalHourContext(day: string, isClosedDay: boolean, now = new Date()) {
+  const todayISO = isoTodayLocal();
+
+  if (day > todayISO) {
+    return { lastClosedPeriod: "", completedHours: 0 };
+  }
+
+  if (isClosedDay || day < todayISO) {
+    return { lastClosedPeriod: "23-00", completedHours: 24 };
+  }
+
+  const currentHour = now.getHours();
+
+  // Última hora operacional = último intervalo fechado.
+  // Ex.: 09:15 consulta 08-09. Se 08-09 estiver vazio, o valor deve ser 0.
+  if (currentHour <= 0) {
+    return { lastClosedPeriod: "23-00", completedHours: 0 };
+  }
+
+  return {
+    lastClosedPeriod: `${pad2(currentHour - 1)}-${pad2(currentHour)}`,
+    completedHours: currentHour,
+  };
+}
+
 function rowsToNormMap(rows: HourRow[] | undefined | null): Map<string, number> {
   const map = new Map<string, number>();
   for (const r of rows || []) {
@@ -198,12 +224,6 @@ function buildSummaryMetrics(args: {
   let produced = 0;
   rowsNorm.forEach((v) => (produced += Number(v || 0)));
 
-  let lastHourTon = 0;
-  for (const r of args.data?.rows || []) {
-    const ton = parseNum(r.ton) ?? 0;
-    if (ton > 0) lastHourTon = ton;
-  }
-
   const todayISO = isoTodayLocal();
   const isPastDay = args.day < todayISO;
   const filledCount = Array.from(rowsNorm.values()).filter((v) => (Number(v) || 0) > 0).length;
@@ -211,8 +231,12 @@ function buildSummaryMetrics(args: {
   const nowRef = isClosedDay ? new Date(`${args.day}T23:59:00`) : new Date();
   const remainingH = isClosedDay ? 0 : Math.max(0, dayRemainingHours(nowRef));
 
-  const filled = Array.from(rowsNorm.values()).filter((v) => (Number(v) || 0) > 0);
-  const avgRealTPH = filled.length ? filled.reduce((acc, v) => acc + (Number(v) || 0), 0) / filled.length : 0;
+  const hourCtx = getOperationalHourContext(args.day, isClosedDay);
+  const lastHourTon = hourCtx.lastClosedPeriod ? Number(rowsNorm.get(hourCtx.lastClosedPeriod) || 0) : 0;
+
+  // Média real/projeção considerando as horas já fechadas do dia, inclusive horas sem lançamento.
+  // Isso evita projetar usando a última hora com produção quando a última hora real foi 0 ou está vazia.
+  const avgRealTPH = hourCtx.completedHours > 0 ? produced / hourCtx.completedHours : 0;
 
   const projectionTon = isClosedDay || avgRealTPH <= 0 ? produced : produced + avgRealTPH * remainingH;
   const diff = metaDay !== null ? produced - metaDay : null;
@@ -620,16 +644,9 @@ export default function Ritmo() {
 
   const nowRef = isClosedDay ? new Date(`${day}T23:59:00`) : new Date();
 
-  const lastFilledPeriod = useMemo(() => (filledPeriods.length ? filledPeriods[filledPeriods.length - 1] : ""), [filledPeriods]);
-
-  const currH = nowRef.getHours();
-  const endH = currH;
-  const startH = (currH + 23) % 24;
-
-  const currPeriod = isClosedDay ? lastFilledPeriod : `${pad2(startH)}-${pad2(endH)}`;
-
+  const hourCtx = useMemo(() => getOperationalHourContext(day, isClosedDay, nowRef), [day, isClosedDay, nowRef]);
+  const currPeriod = hourCtx.lastClosedPeriod;
   const remainingH = isClosedDay ? 0 : Math.max(0, dayRemainingHours(nowRef));
-  const elapsedH = isClosedDay ? 24 : Math.max(0.25, dayElapsedHours(nowRef));
 
   const diff = metaDay !== null ? produced - metaDay : null;
   const attainment = metaDay !== null && metaDay > 0 ? (produced / metaDay) * 100 : null;
@@ -644,11 +661,11 @@ export default function Ritmo() {
 
 
   const avgRealTPH = useMemo(() => {
-    const filled = Array.from(rowsNorm.values()).filter((v) => (Number(v) || 0) > 0);
-    if (!filled.length) return 0;
-    const sum = filled.reduce((acc, v) => acc + (Number(v) || 0), 0);
-    return sum / filled.length;
-  }, [rowsNorm]);
+    // Média real do dia = produzido / horas já fechadas.
+    // Horas sem lançamento contam como 0 para não inflar a projeção.
+    if (hourCtx.completedHours <= 0) return 0;
+    return produced / hourCtx.completedHours;
+  }, [hourCtx.completedHours, produced]);
 
 
   const projectionTon = useMemo(() => {
