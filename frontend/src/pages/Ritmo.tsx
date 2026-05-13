@@ -63,6 +63,7 @@ type SummaryMetrics = {
   title: string;
   metaDay: number | null;
   produced: number;
+  lastHourTon: number;
   projectionTon: number;
   attainment: number | null;
   diff: number | null;
@@ -197,6 +198,12 @@ function buildSummaryMetrics(args: {
   let produced = 0;
   rowsNorm.forEach((v) => (produced += Number(v || 0)));
 
+  let lastHourTon = 0;
+  for (const r of args.data?.rows || []) {
+    const ton = parseNum(r.ton) ?? 0;
+    if (ton > 0) lastHourTon = ton;
+  }
+
   const todayISO = isoTodayLocal();
   const isPastDay = args.day < todayISO;
   const filledCount = Array.from(rowsNorm.values()).filter((v) => (Number(v) || 0) > 0).length;
@@ -221,6 +228,7 @@ function buildSummaryMetrics(args: {
     title: args.title,
     metaDay,
     produced,
+    lastHourTon,
     projectionTon,
     attainment,
     diff,
@@ -805,6 +813,11 @@ export default function Ritmo() {
         <div style={exportLineRow}>
           <span style={exportLabel}>Produzido:</span>
           <span style={{ ...exportValue, color: "rgba(250,204,21,0.95)" }}>{`${fmtBR(m.produced, dTon)} t`}</span>
+        </div>
+
+        <div style={exportLineRow}>
+          <span style={exportLabel}>Última hora:</span>
+          <span style={{ ...exportValue, color: "rgba(250,204,21,0.95)" }}>{`${fmtBR(m.lastHourTon, dTon)} t`}</span>
         </div>
 
         <div style={exportLineRow}>
