@@ -240,6 +240,26 @@ export default function PlantProductionDayView() {
     }));
   }
 
+  function buildRowsForSave(sourceRows: PlantHourRow[]): PlantHourRow[] {
+    return sourceRows.map((r) => ({
+      period: r.period,
+      ton: parseBRNumber(r.ton),
+      freq: parseBRNumber(r.freq),
+    }));
+  }
+
+  function buildRowsWithOverApplied(sourceRows: PlantHourRow[], discountPerHour: number): PlantHourRow[] {
+    return sourceRows.map((r) => {
+      const ton = parseBRNumber(r.ton);
+
+      return {
+        period: r.period,
+        ton: ton === null ? null : Math.max(0, ton - discountPerHour),
+        freq: parseBRNumber(r.freq),
+      };
+    });
+  }
+
   async function loadPlants() {
     setErr(null);
     try {
@@ -299,11 +319,7 @@ export default function PlantProductionDayView() {
     try {
       const body = {
         obs: obs ?? "",
-        rows: rows.map((r) => ({
-          period: r.period,
-          ton: parseBRNumber(r.ton),
-          freq: parseBRNumber(r.freq),
-        })),
+        rows: buildRowsForSave(rows),
       };
 
       const r = await fetch(`${API_BASE}/api/plants/${selectedPlantId}/plant-production/${encodeURIComponent(day)}`, {
@@ -326,9 +342,53 @@ export default function PlantProductionDayView() {
     }
   }
 
-  function saveOverMoved() {
-    localStorage.setItem(overStorageKey, overMoved || "");
-    setInfo("Ajuste de OVER aplicado nesta visualização.");
+  async function saveOverMoved() {
+    const selectedPlantId = plantId || 1;
+    const discountPerHour = isPlant02 ? overTotal / 24 : 0;
+
+    if (!isPlant02) {
+      setErr("O ajuste de OVER está disponível apenas para a Planta 02.");
+      return;
+    }
+
+    if (discountPerHour <= 0) {
+      setErr("Informe um valor de OVER maior que zero.");
+      return;
+    }
+
+    setSaving(true);
+    setErr(null);
+    setInfo(null);
+
+    try {
+      const adjustedRows = buildRowsWithOverApplied(rows, discountPerHour);
+
+      const body = {
+        obs: obs ?? "",
+        rows: adjustedRows,
+      };
+
+      const r = await fetch(`${API_BASE}/api/plants/${selectedPlantId}/plant-production/${encodeURIComponent(day)}`, {
+        method: "PUT",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!r.ok) throw new Error(await readErr(r));
+
+      localStorage.removeItem(overStorageKey);
+      setOverMoved("");
+      setRows(normalizeRows(adjustedRows));
+      setInfo("OVER abatido e produção salva no banco com sucesso.");
+      await loadDay();
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao aplicar OVER");
+    } finally {
+      setSaving(false);
+    }
   }
 
   useEffect(() => {
@@ -571,7 +631,7 @@ export default function PlantProductionDayView() {
             </div>
             <div className="mp-card-b">
               <div className="mp-help" style={{ marginBottom: 12 }}>
-                Informe o total de OVER movimentado no dia. O sistema divide por 24 horas e abate esse valor da Ton/H exibida.
+                Informe o total de OVER movimentado no dia. O sistema divide por 24 horas, abate da Ton/H e salva o resultado no banco.
               </div>
 
               <div className="mp-label">OVER movimentado no dia (t)</div>
@@ -583,8 +643,8 @@ export default function PlantProductionDayView() {
                 inputMode="decimal"
               />
 
-              <button className="mp-btn" onClick={saveOverMoved} style={{ width: "100%", marginTop: 10 }}>
-                Aplicar ajuste
+              <button className="mp-btn" onClick={saveOverMoved} disabled={saving || loading} style={{ width: "100%", marginTop: 10 }}>
+                {saving ? "Aplicando..." : "Aplicar e salvar no banco"}
               </button>
 
               <div
@@ -618,7 +678,7 @@ export default function PlantProductionDayView() {
               </div>
 
               <div className="mp-help" style={{ marginTop: 12 }}>
-                Esse ajuste é visual nesta página e não altera a produção lançada no banco.
+                Ao aplicar, o abatimento é salvo no banco. Assim, Dashboard, Statistics e outros usuários passam a enxergar a produção já ajustada.
               </div>
             </div>
           </div>
