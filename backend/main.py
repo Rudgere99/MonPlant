@@ -215,7 +215,6 @@ def _startup_bootstrap():
     ensure_notice_tables()
     ensure_user_permission_columns()
     ensure_supervisor_planta_tables()
-    ensure_plant_production_over_columns()
 
 # =========================
 # CORS
@@ -422,88 +421,6 @@ def normalize_period(p: str) -> Optional[str]:
         return None
 
     return None
-
-
-def ensure_plant_production_over_columns():
-    """
-    Garante os campos necessários para preservar o valor original antes do OVER.
-
-    - bv_plant_production_rows continua guardando a produção oficial ajustada.
-    - bv_plant_production_daily.original_rows guarda o lançamento original por hora.
-    - bv_plant_production_daily.over_moved_t guarda o total de OVER movimentado no dia.
-    """
-    try:
-        with get_conn() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                alter table public.bv_plant_production_daily
-                add column if not exists original_rows jsonb;
-                """
-            )
-            cur.execute(
-                """
-                alter table public.bv_plant_production_daily
-                add column if not exists over_moved_t numeric(18,2) not null default 0;
-                """
-            )
-            conn.commit()
-    except Exception:
-        # Não derruba a API por DDL; as rotas também tratam fallback.
-        return
-
-
-def _plant_rows_to_plain(rows: Optional[List[PlantRow]]) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    for r in rows or []:
-        if hasattr(r, "model_dump"):
-            d = r.model_dump()
-        else:
-            d = dict(r)
-        p = normalize_period(str(d.get("period") or "")) or str(d.get("period") or "")
-        out.append(
-            {
-                "period": p,
-                "ton": d.get("ton"),
-                "freq": d.get("freq"),
-            }
-        )
-    return out
-
-
-def _coerce_rows_like_to_full_rows(rows_like: Any, periods: List[str]) -> List[Dict[str, Any]]:
-    """
-    Converte original_rows salvo no JSONB em 24 linhas no mesmo padrão do front.
-    Se estiver vazio/inválido, retorna linhas zeradas.
-    """
-    by_period: Dict[str, Dict[str, Any]] = {}
-
-    if isinstance(rows_like, str):
-        try:
-            rows_like = json.loads(rows_like)
-        except Exception:
-            rows_like = []
-
-    if isinstance(rows_like, list):
-        for item in rows_like:
-            if not isinstance(item, dict):
-                continue
-            p = normalize_period(str(item.get("period") or ""))
-            if not p:
-                continue
-            by_period[p] = {
-                "period": p,
-                "ton": item.get("ton"),
-                "freq": item.get("freq"),
-            }
-
-    return [
-        {
-            "period": p,
-            "ton": by_period.get(p, {}).get("ton"),
-            "freq": by_period.get(p, {}).get("freq"),
-        }
-        for p in periods
-    ]
 
 
 # =========================
@@ -722,13 +639,7 @@ class PlantRow(BaseModel):
 
 class PlantDayUpsert(BaseModel):
     obs: Optional[str] = ""
-    # rows = produção oficial AJUSTADA, usada em Dashboard/Statistics.
     rows: List[PlantRow] = Field(default_factory=list)
-    # original_rows = produção antes do abatimento de OVER.
-    # Mantém compatibilidade: se o front não enviar, o backend salva igual a rows.
-    original_rows: Optional[List[PlantRow]] = None
-    # over_moved_t = total de OVER movimentado no dia.
-    over_moved_t: Optional[float] = 0
 
 
 class PlantOut(BaseModel):
@@ -1928,13 +1839,12 @@ def get_plant_day_by_plant(
     day: date,
     owner_id: str = Depends(require_owner_id),
 ):
-    ensure_plant_production_over_columns()
     periods = [_period_std_from_h(h) for h in range(24)]
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select obs, updated_at, original_rows, coalesce(over_moved_t,0) as over_moved_t
+            select obs, updated_at
             from public.bv_plant_production_daily
             where owner_id=%s and day=%s and plant_id=%s
             """,
@@ -1971,20 +1881,12 @@ def get_plant_day_by_plant(
 
     obs = (daily["obs"] if daily else "") or ""
     updated_at = daily["updated_at"].isoformat() if (daily and daily.get("updated_at")) else None
-    over_moved_t = float((daily.get("over_moved_t") if daily else 0) or 0)
-
-    # Se ainda não existir original_rows no banco, usa rows como fallback.
-    # A partir do primeiro salvamento com o front ajustado, original_rows preserva o valor antes do OVER.
-    original_rows_saved = daily.get("original_rows") if daily else None
-    original_rows = _coerce_rows_like_to_full_rows(original_rows_saved, periods) if original_rows_saved else full_rows
 
     return {
         "day": str(day),
         "plant_id": plant_id,
         "obs": obs,
         "rows": full_rows,
-        "original_rows": original_rows,
-        "over_moved_t": over_moved_t,
         "updated_at": updated_at,
     }
 
@@ -1999,38 +1901,20 @@ def put_plant_day_by_plant(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    ensure_plant_production_over_columns()
     block_retro(day, x_dev_key, authorization)
 
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
 
-    adjusted_rows_plain = _plant_rows_to_plain(body.rows)
-    original_rows_plain = _plant_rows_to_plain(body.original_rows) if body.original_rows is not None else adjusted_rows_plain
-    over_moved_t = float(body.over_moved_t or 0)
-
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            insert into public.bv_plant_production_daily(
-              owner_id, day, plant_id, obs, original_rows, over_moved_t, updated_at
-            )
-            values (%s,%s,%s,%s,%s::jsonb,%s,now())
+            insert into public.bv_plant_production_daily(owner_id, day, plant_id, obs, updated_at)
+            values (%s,%s,%s,%s, now())
             on conflict (owner_id, day, plant_id)
-            do update set
-              obs = excluded.obs,
-              original_rows = excluded.original_rows,
-              over_moved_t = excluded.over_moved_t,
-              updated_at = now()
+            do update set obs = excluded.obs, updated_at = now()
             """,
-            (
-                owner_id,
-                day,
-                plant_id,
-                body.obs or "",
-                json.dumps(original_rows_plain, ensure_ascii=False),
-                over_moved_t,
-            ),
+            (owner_id, day, plant_id, body.obs or ""),
         )
 
         cur.execute(
@@ -2059,20 +1943,10 @@ def put_plant_day_by_plant(
         user_id=user_id,
         entity="bv_plant_production_daily",
         entity_id=f"{day}::plant::{plant_id}",
-        payload={
-            "owner_id": owner_id,
-            "day": str(day),
-            "plant_id": plant_id,
-            "over_moved_t": over_moved_t,
-        },
+        payload={"owner_id": owner_id, "day": str(day), "plant_id": plant_id},
     )
 
-    return {
-        "ok": True,
-        "day": str(day),
-        "plant_id": plant_id,
-        "over_moved_t": over_moved_t,
-    }
+    return {"ok": True, "day": str(day), "plant_id": plant_id}
 
 
 # =========================
@@ -2102,14 +1976,13 @@ def plant_last7(owner_id: str = Depends(require_owner_id)):
 def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
     # Compatibilidade do endpoint legado: usa Planta 1 como padrão.
     # Isso evita erro quando o banco já está no modelo multi-planta com unique(owner_id, day, plant_id).
-    ensure_plant_production_over_columns()
     plant_id = 1
     periods = [_period_std_from_h(h) for h in range(24)]
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select obs, updated_at, original_rows, coalesce(over_moved_t,0) as over_moved_t
+            select obs, updated_at
             from public.bv_plant_production_daily
             where owner_id=%s and day=%s and coalesce(plant_id, 1)=%s
             order by plant_id nulls first
@@ -2148,17 +2021,12 @@ def get_plant_day(day: date, owner_id: str = Depends(require_owner_id)):
 
     obs = (daily["obs"] if daily else "") or ""
     updated_at = daily["updated_at"].isoformat() if (daily and daily.get("updated_at")) else None
-    over_moved_t = float((daily.get("over_moved_t") if daily else 0) or 0)
-    original_rows_saved = daily.get("original_rows") if daily else None
-    original_rows = _coerce_rows_like_to_full_rows(original_rows_saved, periods) if original_rows_saved else full_rows
 
     return {
         "day": str(day),
         "plant_id": plant_id,
         "obs": obs,
         "rows": full_rows,
-        "original_rows": original_rows,
-        "over_moved_t": over_moved_t,
         "updated_at": updated_at,
     }
 
@@ -2172,39 +2040,21 @@ def put_plant_day(
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ):
-    ensure_plant_production_over_columns()
     block_retro(day, x_dev_key, authorization)
 
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
     plant_id = 1  # endpoint legado = Planta 1
 
-    adjusted_rows_plain = _plant_rows_to_plain(body.rows)
-    original_rows_plain = _plant_rows_to_plain(body.original_rows) if body.original_rows is not None else adjusted_rows_plain
-    over_moved_t = float(body.over_moved_t or 0)
-
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            insert into public.bv_plant_production_daily(
-              owner_id, day, plant_id, obs, original_rows, over_moved_t, updated_at
-            )
-            values (%s,%s,%s,%s,%s::jsonb,%s,now())
+            insert into public.bv_plant_production_daily(owner_id, day, plant_id, obs, updated_at)
+            values (%s,%s,%s,%s, now())
             on conflict (owner_id, day, plant_id)
-            do update set
-              obs = excluded.obs,
-              original_rows = excluded.original_rows,
-              over_moved_t = excluded.over_moved_t,
-              updated_at = now()
+            do update set obs = excluded.obs, updated_at = now()
             """,
-            (
-                owner_id,
-                day,
-                plant_id,
-                body.obs or "",
-                json.dumps(original_rows_plain, ensure_ascii=False),
-                over_moved_t,
-            ),
+            (owner_id, day, plant_id, body.obs or ""),
         )
 
         cur.execute(
@@ -2233,20 +2083,10 @@ def put_plant_day(
         user_id=user_id,
         entity="bv_plant_production_daily",
         entity_id=f"{day}::plant::{plant_id}",
-        payload={
-            "owner_id": owner_id,
-            "day": str(day),
-            "plant_id": plant_id,
-            "over_moved_t": over_moved_t,
-        },
+        payload={"owner_id": owner_id, "day": str(day), "plant_id": plant_id},
     )
 
-    return {
-        "ok": True,
-        "day": str(day),
-        "plant_id": plant_id,
-        "over_moved_t": over_moved_t,
-    }
+    return {"ok": True, "day": str(day), "plant_id": plant_id}
 
 
 # Stops (Multi-planta)
