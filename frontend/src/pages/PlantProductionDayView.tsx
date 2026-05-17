@@ -83,7 +83,19 @@ type PlantHourRow = {
 type PlantDayPayload = {
   day: string;
   obs?: string | null;
+
+  // rows = produção oficial salva no banco. Quando existe OVER aplicado, já vem ajustada
+  // para alimentar Dashboard, Statistics e demais páginas.
   rows: PlantHourRow[];
+
+  // Campos novos esperados no backend para manter rastreabilidade do ajuste de OVER.
+  // original_rows = produção antes do abatimento.
+  // over_moved_t = total de OVER movimentado no dia.
+  original_rows?: PlantHourRow[] | null;
+  rows_original?: PlantHourRow[] | null;
+  over_moved_t?: string | number | null;
+  over_total?: string | number | null;
+
   updated_at?: string | null;
 };
 
@@ -211,7 +223,8 @@ export default function PlantProductionDayView() {
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   // Ajuste exclusivo para Planta 02: OVER movimentado no dia, redistribuído em 24h.
-  // Fica salvo localmente por dia/planta para não alterar a arquitetura atual do backend.
+  // IMPORTANTE: a produção original precisa vir do backend em original_rows.
+  // rows continua sendo a produção oficial ajustada para as demais páginas.
   const [overMoved, setOverMoved] = useState<string>("");
 
   const selectedPlant = useMemo(
@@ -226,8 +239,6 @@ export default function PlantProductionDayView() {
     const name = `${selectedPlant?.name || ""} ${selectedPlant?.code || ""}`.toLowerCase();
     return Number(plantId) === 2 || name.includes("planta 02") || name.includes("planta-02") || name.includes("planta 2");
   }, [plantId, selectedPlant]);
-
-  const overStorageKey = useMemo(() => `monplant:plant-production-day-view:over:${plantId || "none"}:${day}`, [plantId, day]);
 
   function normalizeRows(inRows: PlantHourRow[]): PlantHourRow[] {
     const map: Record<string, PlantHourRow> = {};
@@ -301,7 +312,15 @@ export default function PlantProductionDayView() {
 
       const data = (await r.json()) as PlantDayPayload;
       setObs(data?.obs ?? "");
-      setRows(normalizeRows(data?.rows || []));
+
+      // Se o backend já tiver a produção original, a tela usa ela como base de edição.
+      // Se ainda não tiver, cai no comportamento antigo usando rows.
+      const originalFromBackend = data?.original_rows || data?.rows_original || null;
+      setRows(normalizeRows(originalFromBackend || data?.rows || []));
+
+      const overFromBackend = data?.over_moved_t ?? data?.over_total ?? null;
+      setOverMoved(overFromBackend !== null && overFromBackend !== undefined ? String(overFromBackend) : "");
+
       setUpdatedAt(data?.updated_at ?? null);
     } catch (e: any) {
       setErr(e?.message || "Falha ao carregar");
@@ -320,6 +339,8 @@ export default function PlantProductionDayView() {
       const body = {
         obs: obs ?? "",
         rows: buildRowsForSave(rows),
+        original_rows: null,
+        over_moved_t: 0,
       };
 
       const r = await fetch(`${API_BASE}/api/plants/${selectedPlantId}/plant-production/${encodeURIComponent(day)}`, {
@@ -365,7 +386,13 @@ export default function PlantProductionDayView() {
 
       const body = {
         obs: obs ?? "",
+
+        // rows fica ajustado para as demais páginas consumirem o valor correto.
         rows: adjustedRows,
+
+        // original_rows guarda o valor antes do abatimento para esta tela não perder a referência.
+        original_rows: buildRowsForSave(rows),
+        over_moved_t: overTotal,
       };
 
       const r = await fetch(`${API_BASE}/api/plants/${selectedPlantId}/plant-production/${encodeURIComponent(day)}`, {
@@ -379,10 +406,9 @@ export default function PlantProductionDayView() {
 
       if (!r.ok) throw new Error(await readErr(r));
 
-      localStorage.removeItem(overStorageKey);
-      setOverMoved("");
-      setRows(normalizeRows(adjustedRows));
-      setInfo("OVER abatido e produção salva no banco com sucesso.");
+      // Mantém a tela exibindo a produção original como base e a produção ajustada nos cálculos.
+      setOverMoved(String(overTotal));
+      setInfo("OVER abatido, produção ajustada salva e produção original preservada no banco.");
       await loadDay();
     } catch (e: any) {
       setErr(e?.message || "Erro ao aplicar OVER");
@@ -400,11 +426,6 @@ export default function PlantProductionDayView() {
     if (plantId !== null) loadDay();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, plantId]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(overStorageKey) || "";
-    setOverMoved(saved);
-  }, [overStorageKey]);
 
   const overTotal = useMemo(() => Math.max(0, parseBRNumber(overMoved) || 0), [overMoved]);
   const overPerHour = useMemo(() => (isPlant02 && overTotal > 0 ? overTotal / 24 : 0), [isPlant02, overTotal]);
@@ -678,7 +699,7 @@ export default function PlantProductionDayView() {
               </div>
 
               <div className="mp-help" style={{ marginTop: 12 }}>
-                Ao aplicar, o abatimento é salvo no banco. Assim, Dashboard, Statistics e outros usuários passam a enxergar a produção já ajustada.
+                Ao aplicar, o valor ajustado é salvo em rows para Dashboard/Statistics e o valor antes do abatimento é salvo em original_rows para esta tela manter a rastreabilidade.
               </div>
             </div>
           </div>
