@@ -70,6 +70,7 @@ type SummaryMetrics = {
   remainingH: number;
   neededTPH: number | null;
   avgRealTPH: number;
+  avgFreqPct: number | null;
   isClosedDay: boolean;
 };
 
@@ -200,6 +201,21 @@ function rowsToNormMap(rows: HourRow[] | undefined | null): Map<string, number> 
   return map;
 }
 
+function avgFreqFromRows(rows: HourRow[] | undefined | null): number | null {
+  let sum = 0;
+  let count = 0;
+
+  for (const r of rows || []) {
+    const freq = parseNum(r.freq);
+    if (freq !== null && freq > 0) {
+      sum += freq;
+      count += 1;
+    }
+  }
+
+  return count > 0 ? sum / count : null;
+}
+
 function metaFromPayload(goal: GoalDay | null, data: ApiPayload | null): number | null {
   const v = goal?.meta_ton ?? data?.meta_ton ?? data?.meta ?? data?.meta_day ?? data?.planned_ton ?? null;
   return v !== null && v !== undefined ? Number(v) : null;
@@ -237,6 +253,7 @@ function buildSummaryMetrics(args: {
   // Média real/projeção considerando as horas já fechadas do dia, inclusive horas sem lançamento.
   // Isso evita projetar usando a última hora com produção quando a última hora real foi 0 ou está vazia.
   const avgRealTPH = hourCtx.completedHours > 0 ? produced / hourCtx.completedHours : 0;
+  const avgFreqPct = avgFreqFromRows(args.data?.rows);
 
   const projectionTon = isClosedDay || avgRealTPH <= 0 ? produced : produced + avgRealTPH * remainingH;
   const diff = metaDay !== null ? produced - metaDay : null;
@@ -259,6 +276,7 @@ function buildSummaryMetrics(args: {
     remainingH,
     neededTPH,
     avgRealTPH,
+    avgFreqPct,
     isClosedDay,
   };
 }
@@ -835,6 +853,11 @@ export default function Ritmo() {
         <div style={exportLineRow}>
           <span style={exportLabel}>Última hora:</span>
           <span style={{ ...exportValue, color: "rgba(250,204,21,0.95)" }}>{`${fmtBR(m.lastHourTon, dTon)} t`}</span>
+        </div>
+
+        <div style={exportLineRow}>
+          <span style={exportLabel}>Taxa média:</span>
+          <span style={{ ...exportValue, color: "rgba(96,165,250,0.95)" }}>{m.avgFreqPct !== null ? fmtPct(m.avgFreqPct, dPct) : "—"}</span>
         </div>
 
         <div style={exportLineRow}>
