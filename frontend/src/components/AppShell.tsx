@@ -16,13 +16,11 @@ import {
   LogOut,
   Menu,
   X,
-  Bell,
   ChevronRight,
   History,
   ChevronsLeft,
   ChevronsRight,
   User as UserIcon,
-  Fuel,
   Settings,
   Eye,
 } from "lucide-react";
@@ -43,8 +41,6 @@ const nav: NavItem[] = [
   { to: "/equipamentos", label: "Equipamentos", icon: Factory, group: "Configurações" },
   { to: "/supervisores-planta", label: "Supervisores Planta", icon: Users, group: "Configurações" },
 
-  // ✅ Avisos (somente supervisor / dev)
-  { to: "/avisos", label: "Avisos", icon: Bell, group: "Visão geral" },
   { to: "/dashboard/gestao-vista-planta", label: "Gestão à Vista", icon: LayoutDashboard, group: "Visão geral" },
 
   // ===== DEV =====
@@ -58,7 +54,6 @@ const nav: NavItem[] = [
   { to: "/paradas", label: "Paradas Horas", icon: PauseCircle, group: "Operação" },
   { to: "/lancamento-paradas", label: "Paradas Minutos", icon: PauseCircle, group: "Operação" },
   { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
-  { to: "/abastecimento", label: "Abastecimento", icon: Fuel, group: "Operação" },
 
 
   { to: "/historico", label: "Histórico", icon: History, group: "Operação" },

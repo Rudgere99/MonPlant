@@ -16,7 +16,6 @@ import Ritmo from "../pages/Ritmo";
 import Statistics from "../pages/Statistics";
 import UfDF from "../pages/UfDF";
 import DesvioProducao from "../pages/DesvioProducao";
-import Abastecimento from "../pages/Abastecimento";
 import Configuracoes from "../pages/Configuracoes";
 import Equipamentos from "../pages/Equipamentos";
 import SupervisoresPlanta from "../pages/SupervisoresPlanta";
@@ -26,7 +25,6 @@ import Paradas from "../pages/Paradas";
 import LancamentoParadas from "../pages/LancamentoParadas";
 import Exportar from "../pages/Exportar";
 import MetasMes from "../pages/MetasMes";
-import AvisosSupervisor from "../pages/AvisosSupervisor";
 import Historico from "../pages/Historico";
 
 import DevLogs from "../pages/Devlogs";
@@ -85,12 +83,10 @@ function MobileWrap({
     | "paradas"
     | "paradas-minutos"
     | "horimetros"
-    | "abastecimento"
     | "historico"
     | "metas"
     | "exportar"
     | "configuracoes"
-    | "avisos"
     | "contingencia"
     | "ultimos-7"
     | "dev-logs"
@@ -257,16 +253,6 @@ export function AppRoutes() {
         }
       />
       <Route
-        path="/m/abastecimento"
-        element={
-          <RequireAuth>
-            <MobileWrap title="Abastecimento" tab="abastecimento">
-              <Abastecimento />
-            </MobileWrap>
-          </RequireAuth>
-        }
-      />
-      <Route
         path="/m/historico"
         element={
           <RequireAuth>
@@ -312,16 +298,6 @@ export function AppRoutes() {
           <RequireAuth>
             <MobileWrap title="Supervisores Planta" tab="configuracoes">
               <SupervisoresPlanta />
-            </MobileWrap>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/m/avisos"
-        element={
-          <RequireAuth>
-            <MobileWrap title="Avisos" tab="avisos">
-              <AvisosSupervisor />
             </MobileWrap>
           </RequireAuth>
         }
@@ -477,14 +453,6 @@ export function AppRoutes() {
           }
         />
 
-        <Route
-          path="avisos"
-          element={
-            <RequireRole>
-              <AvisosSupervisor />
-            </RequireRole>
-          }
-        />
 
         <Route
           path="paradas"
@@ -532,14 +500,6 @@ export function AppRoutes() {
           element={
             <RequireRole>
               <Historico />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="abastecimento"
-          element={
-            <RequireRole>
-              <Abastecimento />
             </RequireRole>
           }
         />
