@@ -104,20 +104,20 @@ const COLORS = {
   panel: "#171b20",
   panel2: "#14181d",
   panel3: "#101418",
-  border: "rgba(255,255,255,0.10)",
+  border: "rgba(0,58,87,0.13)",
   borderStrong: "rgba(255,255,255,0.16)",
   text: "rgba(245,247,250,0.94)",
   sub: "rgba(245,247,250,0.56)",
   muted: "rgba(245,247,250,0.36)",
   grid: "rgba(255,255,255,0.075)",
-  green: "#ff9f1a",
+  green: "#009688",
   emerald: "#13c7e8",
   red: "#ff4d4f",
-  yellow: "#ff9f1a",
+  yellow: "#009688",
   cyan: "#18c7f3",
-  orange: "#ff9f1a",
+  orange: "#009688",
   chartBlue: "#18c7f3",
-  chartOrange: "#ff9f1a",
+  chartOrange: "#009688",
 };
 
 const SHIFT_RULE_SOURCE = "Regras de Turno Terra Minas.xlsx";
@@ -342,7 +342,7 @@ function MetricCard({ title, value, suffix, subtitle, trend, icon }: { title: st
           <div style={{ marginTop: 8, color: COLORS.text, fontSize: 14 }}>{subtitle}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-          <div style={{ padding: 10, borderRadius: 12, background: "rgba(255,159,26,0.12)", color: COLORS.green }}>{icon}</div>
+          <div style={{ padding: 10, borderRadius: 12, background: "rgba(0,150,136,0.12)", color: COLORS.green }}>{icon}</div>
           {hasTrend ? (
             <div style={{ display: "flex", alignItems: "center", gap: 4, color: isUp ? COLORS.green : COLORS.red, fontWeight: 950, fontSize: 16 }}>
               {isUp ? <ArrowUpRight size={17} /> : <ArrowDownRight size={17} />} {isUp ? "+" : "-"}{fmtBR1(Math.abs(trend || 0))}%
@@ -668,10 +668,10 @@ export default function GestaoVistaPlanta() {
     const currentLetter = bestDayRule.turno1;
 
     return [
-      <>📅 Maior produção: <span style={{color:"#ff9f1a"}}>{fmtBR0(bestDay?.produced_ton || 0)} t</span> em {brDate(bestDay?.day || day)}</>,
-      <>👷 Letra vigente: <span style={{color:"#ff9f1a"}}>{currentLetter}</span></>,
-      <>🏆 Melhor letra: <span style={{color:"#ff9f1a"}}>{bestLetter?.letter}</span> ({fmtBR1(bestLetter?.performance || 0)}%)</>,
-      <>⏱️ Melhor hora: <span style={{color:"#ff9f1a"}}>{bestHour.period}</span> com <span style={{color:"#ff9f1a"}}>{fmtBR0(bestHour.ton)} t</span></>,
+      <>📅 Maior produção: <span style={{color:"#009688"}}>{fmtBR0(bestDay?.produced_ton || 0)} t</span> em {brDate(bestDay?.day || day)}</>,
+      <>👷 Letra vigente: <span style={{color:"#009688"}}>{currentLetter}</span></>,
+      <>🏆 Melhor letra: <span style={{color:"#009688"}}>{bestLetter?.letter}</span> ({fmtBR1(bestLetter?.performance || 0)}%)</>,
+      <>⏱️ Melhor hora: <span style={{color:"#009688"}}>{bestHour.period}</span> com <span style={{color:"#009688"}}>{fmtBR0(bestHour.ton)} t</span></>,
     ];
   }, [statsMonth, hourlyBars, letterRanking, day]);
 
@@ -723,7 +723,7 @@ export default function GestaoVistaPlanta() {
     background: "rgba(5,7,10,0.96)",
     border: `1px solid ${COLORS.borderStrong}`,
     borderRadius: 14,
-    color: "white",
+    color: "#00324f",
     boxShadow: "0 18px 40px rgba(0,0,0,0.6)",
   } as const;
 
@@ -732,14 +732,14 @@ export default function GestaoVistaPlanta() {
       <div style={{ maxWidth: 1800, margin: "0 auto" }}>
         <header style={{ ...panelStyle(), padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 14, display: "grid", placeItems: "center", background: "rgba(255,159,26,0.12)", color: COLORS.green }}><Factory size={31} /></div>
+            <div style={{ width: 52, height: 52, borderRadius: 14, display: "grid", placeItems: "center", background: "rgba(0,150,136,0.12)", color: COLORS.green }}><Factory size={31} /></div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 950, letterSpacing: 4, color: COLORS.green }}>MONPLANT</div>
               <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.05, fontWeight: 950 }}>Gestão à Vista da Planta</h1>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid rgba(255,159,26,.28)", color: COLORS.green, background: "rgba(255,159,26,.10)", borderRadius: 12, padding: "9px 12px", fontWeight: 950 }}><CheckCircle2 size={18} /> Planta operando</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid rgba(0,150,136,.28)", color: COLORS.green, background: "rgba(0,150,136,.10)", borderRadius: 12, padding: "9px 12px", fontWeight: 950 }}><CheckCircle2 size={18} /> Planta operando</span>
             <Select value={String(plantId || "")} onChange={(v) => setPlantId(v === "all" ? "all" : Number(v))}>
               {plants.length > 1 ? <option value="all">Todas as plantas</option> : null}
               {plants.map((p) => <option key={p.id} value={p.id}>{p.name || p.code || `Planta ${p.id}`}</option>)}
@@ -749,7 +749,7 @@ export default function GestaoVistaPlanta() {
               <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={{ background: "transparent", color: COLORS.text, border: 0, outline: 0, fontWeight: 850 }} />
             </label>
             <span style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${COLORS.borderStrong}`, borderRadius: 12, padding: "9px 12px" }}><Clock3 size={18} /> {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-            <button onClick={loadAll} disabled={loading} style={{ height: 38, borderRadius: 12, border: "1px solid rgba(255,159,26,.30)", background: "rgba(255,159,26,.10)", color: COLORS.green, padding: "0 12px", fontWeight: 950, cursor: "pointer" }}><RefreshCw size={17} /></button>
+            <button onClick={loadAll} disabled={loading} style={{ height: 38, borderRadius: 12, border: "1px solid rgba(0,150,136,.30)", background: "rgba(0,150,136,.10)", color: COLORS.green, padding: "0 12px", fontWeight: 950, cursor: "pointer" }}><RefreshCw size={17} /></button>
           </div>
         </header>
 
@@ -838,7 +838,7 @@ export default function GestaoVistaPlanta() {
                   </div>
                   <div style={{ marginTop: 4, color: COLORS.text, fontSize: 13 }}>{a.subtitle}</div>
                 </div>
-              )) : <div style={{ border: "1px solid rgba(255,159,26,.25)", background: "rgba(255,159,26,.08)", borderRadius: 12, padding: 14, color: COLORS.green, fontWeight: 900 }}>Sem paradas lançadas para a planta neste dia.</div>}
+              )) : <div style={{ border: "1px solid rgba(0,150,136,.25)", background: "rgba(0,150,136,.08)", borderRadius: 12, padding: 14, color: COLORS.green, fontWeight: 900 }}>Sem paradas lançadas para a planta neste dia.</div>}
             </div>
           </div>
         </section>

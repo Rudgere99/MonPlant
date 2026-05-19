@@ -147,12 +147,12 @@ const FreqLabel = (props: any) => {
       x={x}
       y={y + bump}
       textAnchor="middle"
-      fill="rgba(255,255,255,0.86)"
+      fill="#0f3f5a"
       fontSize={11}
       fontWeight={900}
       style={{
         paintOrder: "stroke",
-        stroke: "rgba(0,0,0,0.70)",
+        stroke: "rgba(0,58,87,0.16)",
         strokeWidth: 3,
       }}
     >
@@ -171,12 +171,12 @@ const TonLabel = (props: any) => {
       x={x + width / 2}
       y={y - 8}
       textAnchor="middle"
-      fill="rgba(255,255,255,0.92)"
+      fill="#00324f"
       fontSize={11}
       fontWeight={900}
       style={{
         paintOrder: "stroke",
-        stroke: "rgba(0,0,0,0.70)",
+        stroke: "rgba(0,58,87,0.16)",
         strokeWidth: 3,
       }}
     >
@@ -194,7 +194,7 @@ const CustomTick = (props: any) => {
         y={0}
         dy={14}
         textAnchor="middle"
-        fill="rgba(255,255,255,0.75)"
+        fill="#355f75"
         fontSize={12}
         fontWeight={700}
       >
@@ -556,22 +556,22 @@ export default function PlantProductionDayView() {
           <div className="mp-card-b" style={{ height: 460 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 52, right: 24, bottom: 30, left: 10 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <CartesianGrid stroke="rgba(0,58,87,0.10)" strokeDasharray="3 3" />
 
                 <XAxis
                   dataKey="period"
                   tick={<CustomTick />}
                   interval={0}
                   height={44}
-                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                  axisLine={{ stroke: "rgba(0,58,87,0.13)" }}
+                  tickLine={{ stroke: "rgba(0,58,87,0.13)" }}
                 />
 
                 <YAxis
                   yAxisId="ton"
-                  tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                  tick={{ fill: "#4d7285", fontSize: 12 }}
+                  axisLine={{ stroke: "rgba(0,58,87,0.13)" }}
+                  tickLine={{ stroke: "rgba(0,58,87,0.13)" }}
                 />
 
                 <YAxis
@@ -579,9 +579,9 @@ export default function PlantProductionDayView() {
                   orientation="right"
                   domain={[0, 100]}
                   tickFormatter={(v) => `${v}%`}
-                  tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                  tick={{ fill: "#4d7285", fontSize: 12 }}
+                  axisLine={{ stroke: "rgba(0,58,87,0.13)" }}
+                  tickLine={{ stroke: "rgba(0,58,87,0.13)" }}
                 />
 
                 <Tooltip
@@ -603,13 +603,13 @@ export default function PlantProductionDayView() {
                   labelFormatter={(label) => `Faixa: ${label}`}
                   contentStyle={{
                     background: "rgba(0,0,0,0.86)",
-                    border: "1px solid rgba(255,255,255,0.12)",
+                    border: "1px solid rgba(0,58,87,0.14)",
                     borderRadius: 12,
                   }}
-                  labelStyle={{ color: "rgba(255,255,255,0.85)", fontWeight: 900 }}
+                  labelStyle={{ color: "#355f75", fontWeight: 900 }}
                 />
 
-                <Legend wrapperStyle={{ color: "rgba(255,255,255,0.75)" }} />
+                <Legend wrapperStyle={{ color: "#355f75" }} />
 
                 <Bar
                   yAxisId="ton"
@@ -759,7 +759,7 @@ export default function PlantProductionDayView() {
                     const adjusted = adjustedTonForPeriod(r.period);
                     return (
                       <tr key={r.period}>
-                        <td style={{ color: "rgba(255,255,255,0.85)", fontWeight: 800 }}>{periodShort(r.period)}</td>
+                        <td style={{ color: "#355f75", fontWeight: 800 }}>{periodShort(r.period)}</td>
 
                         <td>
                           <input

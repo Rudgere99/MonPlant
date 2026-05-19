@@ -164,7 +164,7 @@ const TonLabel = (props: any) => {
       x={x + width / 2}
       y={y - 8}
       textAnchor="middle"
-      fill="rgba(255,255,255,0.94)"
+      fill="#00324f"
       fontSize={11}
       fontWeight={900}
       style={{
@@ -191,12 +191,12 @@ const FreqLabel = (props: any) => {
       x={x}
       y={y + bump}
       textAnchor="middle"
-      fill="rgba(255,255,255,0.94)"
+      fill="#00324f"
       fontSize={11}
       fontWeight={900}
       style={{
         paintOrder: "stroke",
-        stroke: "rgba(0,0,0,0.70)",
+        stroke: "rgba(0,58,87,0.16)",
         strokeWidth: 4,
       }}
     >
@@ -214,7 +214,7 @@ const CustomTick = (props: any) => {
         y={0}
         dy={14}
         textAnchor="middle"
-        fill="rgba(255,255,255,0.75)"
+        fill="#355f75"
         fontSize={12}
         fontWeight={700}
       >
@@ -559,7 +559,7 @@ export default function PlantProduction() {
   const overlayStyle: React.CSSProperties = {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.65)",
+    background: "rgba(0,37,56,0.20)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -570,16 +570,16 @@ export default function PlantProduction() {
   const modalStyle: React.CSSProperties = {
     width: "min(520px, 96vw)",
     borderRadius: 22,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(14,18,22,0.94)",
-    boxShadow: "0 30px 70px rgba(0,0,0,0.75)",
+    border: "1px solid rgba(0,58,87,0.13)",
+    background: "rgba(255,255,255,0.94)",
+    boxShadow: "0 30px 70px rgba(0,58,87,0.16)",
     backdropFilter: "blur(12px)",
     overflow: "hidden",
   };
 
   const modalHeader: React.CSSProperties = {
     padding: "14px 16px",
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    borderBottom: "1px solid rgba(0,58,87,0.10)",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -588,7 +588,7 @@ export default function PlantProduction() {
 
   const modalTitle: React.CSSProperties = {
     fontWeight: 950,
-    color: "rgba(255,255,255,0.92)",
+    color: "#00324f",
     fontSize: 16,
     letterSpacing: -0.2,
   };
@@ -603,8 +603,8 @@ export default function PlantProduction() {
 
   const softCard: React.CSSProperties = {
     borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(0,58,87,0.10)",
+    background: "rgba(255,255,255,0.66)",
     padding: 12,
   };
 
@@ -744,7 +744,7 @@ export default function PlantProduction() {
                 margin={{ top: 52, right: 24, bottom: 30, left: 10 }}
               >
                 <CartesianGrid
-                  stroke="rgba(255,255,255,0.08)"
+                  stroke="rgba(0,58,87,0.10)"
                   strokeDasharray="3 3"
                 />
 
@@ -753,15 +753,15 @@ export default function PlantProduction() {
                   tick={<CustomTick />}
                   interval={1}
                   height={44}
-                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                  axisLine={{ stroke: "rgba(0,58,87,0.13)" }}
+                  tickLine={{ stroke: "rgba(0,58,87,0.13)" }}
                 />
 
                 <YAxis
                   yAxisId="ton"
-                  tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                  tick={{ fill: "#4d7285", fontSize: 12 }}
+                  axisLine={{ stroke: "rgba(0,58,87,0.13)" }}
+                  tickLine={{ stroke: "rgba(0,58,87,0.13)" }}
                 />
 
                 <YAxis
@@ -769,9 +769,9 @@ export default function PlantProduction() {
                   orientation="right"
                   domain={[0, 100]}
                   tickFormatter={(v) => `${v}%`}
-                  tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 12 }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.10)" }}
-                  tickLine={{ stroke: "rgba(255,255,255,0.10)" }}
+                  tick={{ fill: "#4d7285", fontSize: 12 }}
+                  axisLine={{ stroke: "rgba(0,58,87,0.13)" }}
+                  tickLine={{ stroke: "rgba(0,58,87,0.13)" }}
                 />
 
                 <Tooltip
@@ -786,16 +786,16 @@ export default function PlantProduction() {
                   labelFormatter={(label) => `Faixa: ${label}`}
                   contentStyle={{
                     background: "rgba(0,0,0,0.86)",
-                    border: "1px solid rgba(255,255,255,0.12)",
+                    border: "1px solid rgba(0,58,87,0.14)",
                     borderRadius: 12,
                   }}
                   labelStyle={{
-                    color: "rgba(255,255,255,0.85)",
+                    color: "#355f75",
                     fontWeight: 900,
                   }}
                 />
 
-                <Legend wrapperStyle={{ color: "rgba(255,255,255,0.75)" }} />
+                <Legend wrapperStyle={{ color: "#355f75" }} />
 
                 <Bar
                   yAxisId="ton"
@@ -909,7 +909,7 @@ export default function PlantProduction() {
                             <tr key={r.period}>
                               <td
                                 style={{
-                                  color: "rgba(255,255,255,0.85)",
+                                  color: "#355f75",
                                   fontWeight: 800,
                                 }}
                               >
@@ -984,7 +984,7 @@ export default function PlantProduction() {
                 <div style={modalTitle}>Calculadora</div>
                 <div
                   style={{
-                    color: "rgba(255,255,255,0.55)",
+                    color: "#60798b",
                     fontWeight: 800,
                     fontSize: 12,
                   }}
@@ -1007,7 +1007,7 @@ export default function PlantProduction() {
               <div style={{ ...softCard, marginBottom: 12 }}>
                 <div
                   style={{
-                    color: "rgba(255,255,255,0.55)",
+                    color: "#60798b",
                     fontWeight: 900,
                     fontSize: 12,
                   }}
@@ -1019,7 +1019,7 @@ export default function PlantProduction() {
                     marginTop: 6,
                     color: allocatedEquipment
                       ? "#FFA31A"
-                      : "rgba(255,255,255,0.72)",
+                      : "#456b7f",
                     fontWeight: 980,
                     fontSize: 18,
                   }}
@@ -1087,7 +1087,7 @@ export default function PlantProduction() {
               <div style={{ marginTop: 12, ...softCard }}>
                 <div
                   style={{
-                    color: "rgba(255,255,255,0.55)",
+                    color: "#60798b",
                     fontWeight: 900,
                     fontSize: 12,
                   }}
@@ -1097,7 +1097,7 @@ export default function PlantProduction() {
                 <div
                   style={{
                     marginTop: 6,
-                    color: "rgba(255,255,255,0.92)",
+                    color: "#00324f",
                     fontWeight: 980,
                     fontSize: 28,
                     lineHeight: 1,
@@ -1108,7 +1108,7 @@ export default function PlantProduction() {
                 <div
                   style={{
                     marginTop: 4,
-                    color: "rgba(255,255,255,0.55)",
+                    color: "#60798b",
                     fontWeight: 850,
                     fontSize: 12,
                   }}
@@ -1136,7 +1136,7 @@ export default function PlantProduction() {
               <div
                 style={{
                   marginTop: 10,
-                  color: "rgba(255,255,255,0.50)",
+                  color: "#7c94a5",
                   fontWeight: 800,
                   fontSize: 12,
                 }}

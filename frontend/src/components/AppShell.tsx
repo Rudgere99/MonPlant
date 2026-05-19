@@ -127,7 +127,7 @@ function NotificationDot({ size = 10 }: { size?: number }) {
         width: size,
         borderRadius: 999,
         background: "#ef4444",
-        border: "2px solid #05080C",
+        border: "2px solid #eef6f8",
         boxShadow: "0 0 0 4px rgba(239,68,68,0.18), 0 0 18px rgba(239,68,68,0.85)",
       }}
     />
@@ -157,7 +157,7 @@ function ShellUser({
         alignItems: "center",
         gap: collapsed ? 0 : 10,
         textDecoration: "none",
-        color: "white",
+        color: "#00324f",
         minWidth: 0,
         justifyContent: collapsed ? "center" : "flex-start",
         overflow: "hidden",
@@ -170,15 +170,15 @@ function ShellUser({
           width: 40,
           borderRadius: 14,
           overflow: "hidden",
-          border: "1px solid rgba(255,255,255,0.12)",
-          boxShadow: "0 16px 40px rgba(0,0,0,0.45)",
-          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(0,58,87,0.14)",
+          boxShadow: "0 16px 36px rgba(0,58,87,0.12)",
+          background: "rgba(0,58,87,0.09)",
           display: "grid",
           placeItems: "center",
           flex: "0 0 auto",
           fontWeight: 950,
           letterSpacing: -0.2,
-          color: "rgba(255,255,255,0.90)",
+          color: "#00324f",
         }}
       >
         {collapsed ? initials : <UserIcon size={18} />}
@@ -197,7 +197,7 @@ function ShellUser({
           >
             {userLabel}
           </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 800 }}>
+          <div style={{ fontSize: 12, color: "#6f8798", fontWeight: 800 }}>
             Operação • Produção
           </div>
         </div>
@@ -239,7 +239,7 @@ function AppShell() {
   const overlayStyle: React.CSSProperties = {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.55)",
+    background: "rgba(0,37,56,.18)",
     backdropFilter: "blur(6px)",
     zIndex: 9999,
     display: "flex",
@@ -251,9 +251,9 @@ function AppShell() {
   const modalStyle: React.CSSProperties = {
     width: "min(720px, 96vw)",
     borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "linear-gradient(180deg, rgba(17,24,39,0.92), rgba(2,6,23,0.92))",
-    boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
+    border: "1px solid rgba(0,58,87,0.14)",
+    background: "rgba(255,255,255,0.96)",
+    boxShadow: "0 30px 80px rgba(0,37,56,.18)",
     overflow: "hidden",
   };
 
@@ -263,7 +263,7 @@ function AppShell() {
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    borderBottom: "1px solid rgba(0,58,87,0.12)",
   };
 
   const modalBody: React.CSSProperties = {
@@ -275,9 +275,9 @@ function AppShell() {
   const modalBtn: React.CSSProperties = {
     padding: "10px 14px",
     borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(255,255,255,0.06)",
-    color: "white",
+    border: "1px solid rgba(0,58,87,0.18)",
+    background: "rgba(0,58,87,0.09)",
+    color: "#00324f",
     fontWeight: 700,
     cursor: "pointer",
   };
@@ -438,14 +438,14 @@ function AppShell() {
 
   const cardGlass: React.CSSProperties = {
     borderRadius: 22,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(14,18,22,0.78)",
-    boxShadow: "0 30px 60px rgba(0,0,0,0.55)",
+    border: "1px solid rgba(0,58,87,0.14)",
+    background: "rgba(255,255,255,0.94)",
+    boxShadow: "0 24px 60px rgba(0,58,87,0.12)",
     backdropFilter: "blur(14px)",
   };
 
   return (
-    <div style={{ position: "relative", minHeight: "100vh", background: "#0B0F14" }}>
+    <div style={{ position: "relative", minHeight: "100vh", background: "#eef6f8" }}>
       {/* ===== Fundo base liso ===== */}
       <div
         style={{
@@ -453,14 +453,14 @@ function AppShell() {
           inset: 0,
           pointerEvents: "none",
           zIndex: 0,
-          background: "#0B0F14",
+          background: "#eef6f8",
         }}
       />
 
       <style>{`
         .mp-navlink-active {
-          border-color: rgba(255,159,26,.22) !important;
-          background: rgba(255,159,26,.08) !important;
+          border-color: rgba(0,150,136,.28) !important;
+          background: rgba(0,150,136,.12) !important;
         }
 
         @media (min-width: 980px) {
@@ -488,13 +488,13 @@ function AppShell() {
             width: sideW,
             display: "none",
             padding: "8px 10px 8px 8px",
-            background: "rgba(5,8,12,0.98)",
-            borderRight: "1px solid rgba(255,255,255,0.06)",
+            background: "rgba(248,252,253,0.96)",
+            borderRight: "1px solid rgba(0,58,87,0.09)",
             position: "sticky",
             top: 0,
             height: "100vh",
             transition: "width .16s ease",
-            boxShadow: "inset -1px 0 0 rgba(255,255,255,0.03)",
+            boxShadow: "inset -1px 0 0 rgba(0,58,87,0.04)",
           }}
           className="mp-sidebar-desktop"
         >
@@ -541,7 +541,7 @@ function AppShell() {
                   objectPosition: "left center",
                   display: "block",
                   margin: sideCollapsed ? "0 auto" : "0",
-                  filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.6))",
+                  filter: "drop-shadow(0 10px 22px rgba(0,58,87,0.12))",
                 }}
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -557,10 +557,10 @@ function AppShell() {
                   height: 42,
                   width: 42,
                   borderRadius: 14,
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(0,58,87,0.09)",
+                  border: "1px solid rgba(0,58,87,0.14)",
                   cursor: "pointer",
-                  color: "white",
+                  color: "#00324f",
                   display: "grid",
                   placeItems: "center",
                   flex: "0 0 auto",
@@ -576,13 +576,13 @@ function AppShell() {
                   marginTop: 12,
                   marginBottom: 12,
                   height: 1,
-                  background: "linear-gradient(90deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04))",
-                  boxShadow: "0 1px 0 rgba(255,255,255,0.03)",
+                  background: "linear-gradient(90deg, rgba(0,58,87,0.18), rgba(0,58,87,0.05))",
+                  boxShadow: "0 1px 0 rgba(0,58,87,0.04)",
                   flex: "0 0 auto",
                 }}
               />
             ) : (
-              <div style={{ marginTop: 10, marginBottom: 8, height: 1, background: "rgba(255,255,255,0.06)" }} />
+              <div style={{ marginTop: 10, marginBottom: 8, height: 1, background: "rgba(0,58,87,0.09)" }} />
             )}
 
             {/* Área rolável do menu */}
@@ -601,10 +601,10 @@ function AppShell() {
                         style={({ isActive }) => ({
                           height: 52,
                           borderRadius: 16,
-                          border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
-                          background: isActive ? "rgba(255,159,26,.08)" : "transparent",
+                          border: "1px solid " + (isActive ? "rgba(0,150,136,.24)" : "transparent"),
+                          background: isActive ? "rgba(0,150,136,.12)" : "transparent",
                           textDecoration: "none",
-                          color: "white",
+                          color: "#00324f",
                           display: "grid",
                           placeItems: "center",
                           overflow: "hidden",
@@ -619,8 +619,8 @@ function AppShell() {
                             borderRadius: 14,
                             display: "grid",
                             placeItems: "center",
-                            background: "rgba(255,255,255,.06)",
-                            border: "1px solid rgba(255,255,255,.10)",
+                            background: "rgba(0,58,87,.06)",
+                            border: "1px solid rgba(0,58,87,.14)",
                           }}
                         >
                           <Icon size={18} />
@@ -641,10 +641,10 @@ function AppShell() {
                         gap: 10,
                         padding: "10px 10px",
                         borderRadius: 14,
-                        border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
-                        background: isActive ? "rgba(255,159,26,.08)" : "transparent",
+                        border: "1px solid " + (isActive ? "rgba(0,150,136,.24)" : "transparent"),
+                        background: isActive ? "rgba(0,150,136,.12)" : "transparent",
                         textDecoration: "none",
-                        color: "white",
+                        color: "#00324f",
                         overflow: "hidden",
                         flex: "0 0 auto",
                       })}
@@ -659,10 +659,10 @@ function AppShell() {
                               borderRadius: 12,
                               display: "grid",
                               placeItems: "center",
-                              background: isActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,.06)",
+                              background: isActive ? "rgba(0,150,136,.14)" : "rgba(0,58,87,.06)",
                               border:
                                 "1px solid " +
-                                (isActive ? "rgba(255,159,26,.20)" : "rgba(255,255,255,.10)"),
+                                (isActive ? "rgba(0,150,136,.28)" : "rgba(0,58,87,.14)"),
                               flex: "0 0 auto",
                             }}
                           >
@@ -673,7 +673,7 @@ function AppShell() {
                             <div
                               style={{
                                 fontWeight: 900,
-                                color: "rgba(255,255,255,.92)",
+                                color: "#00324f",
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -685,7 +685,7 @@ function AppShell() {
                               style={{
                                 fontSize: 11,
                                 fontWeight: 850,
-                                color: "rgba(255,255,255,.45)",
+                                color: "#648096",
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -707,7 +707,7 @@ function AppShell() {
             <div
               style={{
                 marginTop: 12,
-                borderTop: "1px solid rgba(255,255,255,0.10)",
+                borderTop: "1px solid rgba(0,58,87,0.14)",
                 paddingTop: 12,
                 flex: "0 0 auto",
               }}
@@ -722,7 +722,7 @@ function AppShell() {
                   background: "rgba(251,113,133,0.14)",
                   fontWeight: 950,
                   cursor: "pointer",
-                  color: "white",
+                  color: "#00324f",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -734,7 +734,7 @@ function AppShell() {
               </button>
 
               {!sideCollapsed ? (
-                <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
+                <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "#648096" }}>
                   v1
                 </div>
               ) : null}
@@ -749,7 +749,7 @@ function AppShell() {
               position: "fixed",
               inset: 0,
               zIndex: 120,
-              background: "rgba(0,0,0,.55)",
+              background: "rgba(0,37,56,.18)",
               backdropFilter: "blur(6px)",
             }}
             onClick={() => setMobileOpen(false)}
@@ -761,8 +761,8 @@ function AppShell() {
                 left: 0,
                 bottom: 0,
                 width: "min(320px, 88vw)",
-                background: "rgba(5,8,12,0.98)",
-                borderRight: "1px solid rgba(255,255,255,0.06)",
+                background: "rgba(248,252,253,0.96)",
+                borderRight: "1px solid rgba(0,58,87,0.09)",
                 boxShadow: "none",
                 padding: 14,
               }}
@@ -777,10 +777,10 @@ function AppShell() {
                       height: 42,
                       width: 42,
                       borderRadius: 14,
-                      background: "rgba(255,255,255,0.06)",
-                      border: "1px solid rgba(255,255,255,0.10)",
+                      background: "rgba(0,58,87,0.09)",
+                      border: "1px solid rgba(0,58,87,0.14)",
                       cursor: "pointer",
-                      color: "white",
+                      color: "#00324f",
                       display: "grid",
                       placeItems: "center",
                     }}
@@ -794,8 +794,8 @@ function AppShell() {
                     marginTop: 12,
                     marginBottom: 12,
                     height: 1,
-                    background: "linear-gradient(90deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04))",
-                    boxShadow: "0 1px 0 rgba(255,255,255,0.03)",
+                    background: "linear-gradient(90deg, rgba(0,58,87,0.18), rgba(0,58,87,0.05))",
+                    boxShadow: "0 1px 0 rgba(0,58,87,0.04)",
                     flex: "0 0 auto",
                   }}
                 />
@@ -807,7 +807,7 @@ function AppShell() {
                     fontSize: 11,
                     fontWeight: 950,
                     letterSpacing: 1,
-                    color: "rgba(255,255,255,.40)",
+                    color: "#7d92a2",
                     textTransform: "uppercase",
                   }}
                 >
@@ -830,10 +830,10 @@ function AppShell() {
                           gap: 10,
                           padding: "10px 10px",
                           borderRadius: 14,
-                          border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
-                          background: isActive ? "rgba(255,159,26,.08)" : "transparent",
+                          border: "1px solid " + (isActive ? "rgba(0,150,136,.24)" : "transparent"),
+                          background: isActive ? "rgba(0,150,136,.12)" : "transparent",
                           textDecoration: "none",
-                          color: "white",
+                          color: "#00324f",
                         })}
                       >
                         <span
@@ -844,16 +844,16 @@ function AppShell() {
                             borderRadius: 12,
                             display: "grid",
                             placeItems: "center",
-                            background: "rgba(255,255,255,.06)",
-                            border: "1px solid rgba(255,255,255,.10)",
+                            background: "rgba(0,58,87,.06)",
+                            border: "1px solid rgba(0,58,87,.14)",
                           }}
                         >
                           <Icon size={18} />
                           {i.to === "/avisos" && temAvisoSupervisor ? <NotificationDot size={10} /> : null}
                         </span>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
-                          <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
+                          <div style={{ fontWeight: 900, color: "#00324f" }}>{i.label}</div>
+                          <div style={{ fontSize: 11, fontWeight: 850, color: "#648096" }}>
                             {i.group || "—"}
                           </div>
                         </div>
@@ -863,7 +863,7 @@ function AppShell() {
                   </nav>
                 </div>
 
-                <div style={{ marginTop: 14, borderTop: "1px solid rgba(255,255,255,0.10)", paddingTop: 12, flex: "0 0 auto" }}>
+                <div style={{ marginTop: 14, borderTop: "1px solid rgba(0,58,87,0.14)", paddingTop: 12, flex: "0 0 auto" }}>
                   <button
                     onClick={handleLogout}
                     style={{
@@ -874,7 +874,7 @@ function AppShell() {
                       background: "rgba(251,113,133,0.14)",
                       fontWeight: 950,
                       cursor: "pointer",
-                      color: "white",
+                      color: "#00324f",
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -884,7 +884,7 @@ function AppShell() {
                     <LogOut size={18} /> Sair
                   </button>
 
-                  <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>
+                  <div style={{ marginTop: 10, fontSize: 12, fontWeight: 850, color: "#648096" }}>
                     v1
                   </div>
                 </div>
@@ -909,13 +909,13 @@ function AppShell() {
               height: 44,
               width: 44,
               borderRadius: 16,
-              background: "rgba(11,15,20,0.78)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              color: "white",
+              background: "rgba(255,255,255,0.86)",
+              border: "1px solid rgba(0,58,87,0.14)",
+              color: "#00324f",
               display: "none",
               placeItems: "center",
               backdropFilter: "blur(12px)",
-              boxShadow: "0 18px 50px rgba(0,0,0,0.55)",
+              boxShadow: "0 18px 50px rgba(0,37,56,.18)",
               cursor: "pointer",
             }}
           >
@@ -928,8 +928,8 @@ function AppShell() {
               top: 0,
               zIndex: 40,
               padding: 0,
-              background: "#0B0F14",
-              backdropFilter: "none",
+              background: "rgba(238,246,248,0.86)",
+              backdropFilter: "blur(12px)",
             }}
           >
             <div
@@ -940,10 +940,10 @@ function AppShell() {
                 justifyContent: "space-between",
                 gap: 12,
                 padding: "10px 18px",
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
-                borderRight: "1px solid rgba(255,255,255,0.03)",
-                background: "#0B0F14",
-                boxShadow: "none",
+                borderBottom: "1px solid rgba(0,58,87,0.09)",
+                borderRight: "1px solid rgba(0,58,87,0.04)",
+                background: "rgba(247,251,252,0.72)",
+                boxShadow: "0 16px 40px rgba(0,58,87,0.06)",
               }}
             >
               <div
@@ -953,7 +953,7 @@ function AppShell() {
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
-                  color: "rgba(255,255,255,0.92)",
+                  color: "#00324f",
                   fontSize: 14,
                   fontWeight: 900,
                   whiteSpace: "nowrap",
@@ -963,8 +963,8 @@ function AppShell() {
               >
                 {pageGroup ? (
                   <>
-                    <span style={{ color: "rgba(255,255,255,0.62)", fontWeight: 800 }}>{pageGroup}</span>
-                    <span style={{ color: "rgba(255,255,255,0.28)" }}>•</span>
+                    <span style={{ color: "#62798b", fontWeight: 800 }}>{pageGroup}</span>
+                    <span style={{ color: "#a8bdc9" }}>•</span>
                   </>
                 ) : null}
                 <span>{pageTitle}</span>
@@ -981,9 +981,9 @@ function AppShell() {
                       minWidth: 40,
                       padding: "0 12px",
                       borderRadius: 999,
-                      border: "1px solid " + (isGestaoVistaActive ? "rgba(255,159,26,.24)" : "rgba(255,255,255,0.10)"),
-                      background: isGestaoVistaActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,0.05)",
-                      color: isGestaoVistaActive ? "rgb(255, 176, 58)" : "white",
+                      border: "1px solid " + (isGestaoVistaActive ? "rgba(0,150,136,.28)" : "rgba(0,58,87,0.14)"),
+                      background: isGestaoVistaActive ? "rgba(0,150,136,.14)" : "rgba(0,58,87,0.06)",
+                      color: isGestaoVistaActive ? "#008f83" : "#00324f",
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1009,9 +1009,9 @@ function AppShell() {
                     height: 36,
                     width: 36,
                     borderRadius: 12,
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    background: "rgba(255,255,255,0.05)",
-                    color: "white",
+                    border: "1px solid rgba(0,58,87,0.14)",
+                    background: "rgba(0,58,87,0.06)",
+                    color: "#00324f",
                     display: "grid",
                     placeItems: "center",
                     cursor: "pointer",
@@ -1027,9 +1027,9 @@ function AppShell() {
                     minWidth: 0,
                     padding: "7px 12px",
                     borderRadius: 999,
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    background: "rgba(255,255,255,0.05)",
-                    color: "rgba(255,255,255,0.88)",
+                    border: "1px solid rgba(0,58,87,0.14)",
+                    background: "rgba(0,58,87,0.06)",
+                    color: "#00324f",
                     fontSize: 12,
                     fontWeight: 900,
                     whiteSpace: "nowrap",
@@ -1050,7 +1050,7 @@ function AppShell() {
               position: "relative",
               flex: 1,
               minWidth: 0,
-              padding: "14px 14px 16px 14px",
+              padding: "24px 24px 28px 24px",
               overflow: "hidden",
             }}
           >
@@ -1094,7 +1094,7 @@ function AppShell() {
                     borderRadius: 12,
                     border: "1px solid rgba(239,68,68,0.35)",
                     background: "rgba(239,68,68,0.10)",
-                    color: "rgba(255,255,255,0.92)",
+                    color: "#00324f",
                     fontSize: 13,
                     fontWeight: 700,
                   }}

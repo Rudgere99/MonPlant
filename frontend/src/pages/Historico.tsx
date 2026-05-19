@@ -76,7 +76,7 @@ function badgeStyle(kind: "ok" | "warn" | "muted" | "info" = "muted"): React.CSS
     fontWeight: 800,
     fontSize: 12,
     letterSpacing: 0.2,
-    border: "1px solid rgba(255,255,255,0.10)",
+    border: "1px solid rgba(0,58,87,0.13)",
     whiteSpace: "nowrap",
   };
 
@@ -109,8 +109,8 @@ function badgeStyle(kind: "ok" | "warn" | "muted" | "info" = "muted"): React.CSS
 
   return {
     ...base,
-    background: "rgba(255,255,255,0.06)",
-    color: "rgba(255,255,255,0.78)",
+    background: "rgba(255,255,255,0.76)",
+    color: "#2d5c73",
   };
 }
 

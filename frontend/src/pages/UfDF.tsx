@@ -171,13 +171,13 @@ function computeMonthAgg(month: string, days: number, rowsAllDays: StopRow[]): M
 
 const card: React.CSSProperties = {
   borderRadius: 22,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(14,18,22,0.78)",
+  border: "1px solid rgba(0,58,87,0.13)",
+  background: "rgba(255,255,255,0.90)",
   padding: 16,
 };
 
 const label: React.CSSProperties = {
-  color: "rgba(255,255,255,0.55)",
+  color: "#60798b",
   fontWeight: 900,
   fontSize: 12,
   letterSpacing: 0.2,
@@ -189,7 +189,7 @@ function Kpi({ title, value, sub }: { title: string; value: React.ReactNode; sub
     <div style={card}>
       <div style={label}>{title}</div>
       <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.4, marginTop: 6 }}>{value}</div>
-      {sub ? <div style={{ marginTop: 6, color: "rgba(255,255,255,0.70)", fontWeight: 800, fontSize: 13 }}>{sub}</div> : null}
+      {sub ? <div style={{ marginTop: 6, color: "#4d7285", fontWeight: 800, fontSize: 13 }}>{sub}</div> : null}
     </div>
   );
 }
@@ -277,7 +277,7 @@ export default function UfDF() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: -0.3 }}>UF / DF • {selectedPlantName}</div>
-          <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 800, marginTop: 4 }}>
+          <div style={{ color: "#5c7e8f", fontWeight: 800, marginTop: 4 }}>
             Base: paradas hora a hora • soma total do mês (independente do equipamento)
           </div>
         </div>
@@ -292,9 +292,9 @@ export default function UfDF() {
             disabled={!plants.length}
             style={{
               borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.10)",
-              background: "rgba(255,255,255,0.04)",
-              color: "rgba(255,255,255,0.92)",
+              border: "1px solid rgba(0,58,87,0.13)",
+              background: "rgba(255,255,255,0.66)",
+              color: "#00324f",
               padding: "10px 12px",
               fontWeight: 900,
               minWidth: 180,
@@ -315,9 +315,9 @@ export default function UfDF() {
             onChange={(e) => setMonth(e.target.value)}
             style={{
               borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.10)",
-              background: "rgba(255,255,255,0.04)",
-              color: "rgba(255,255,255,0.92)",
+              border: "1px solid rgba(0,58,87,0.13)",
+              background: "rgba(255,255,255,0.66)",
+              color: "#00324f",
               padding: "10px 12px",
               fontWeight: 900,
             }}
@@ -327,9 +327,9 @@ export default function UfDF() {
             disabled={busy || !plantId}
             style={{
               borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.10)",
-              background: "rgba(255,255,255,0.06)",
-              color: "rgba(255,255,255,0.92)",
+              border: "1px solid rgba(0,58,87,0.13)",
+              background: "rgba(255,255,255,0.76)",
+              color: "#00324f",
               padding: "10px 12px",
               fontWeight: 950,
               cursor: busy || !plantId ? "not-allowed" : "pointer",
@@ -343,13 +343,13 @@ export default function UfDF() {
       {err ? (
         <div style={{ marginTop: 12, ...card, borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)" }}>
           <div style={{ fontWeight: 950 }}>Falha ao carregar</div>
-          <div style={{ color: "rgba(255,255,255,0.75)", fontWeight: 800, marginTop: 6 }}>{err}</div>
+          <div style={{ color: "#355f75", fontWeight: 800, marginTop: 6 }}>{err}</div>
         </div>
       ) : null}
 
       {!agg ? (
         <div style={{ marginTop: 14, ...card }}>
-          <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900 }}>
+          <div style={{ color: "#4d7285", fontWeight: 900 }}>
             {busy ? "Carregando dados do mês…" : "Sem dados."}
           </div>
         </div>
@@ -408,12 +408,12 @@ export default function UfDF() {
 
           <div style={{ marginTop: 12, ...card }}>
             <div style={{ fontWeight: 950, letterSpacing: -0.2 }}>Resumo</div>
-            <div style={{ marginTop: 8, color: "rgba(255,255,255,0.75)", fontWeight: 800, lineHeight: 1.5 }}>
+            <div style={{ marginTop: 8, color: "#355f75", fontWeight: 800, lineHeight: 1.5 }}>
               <div><b>Total parado:</b> {fmt1(agg.totalH)} h</div>
               <div><b>PM (Manutenção):</b> {fmt1(agg.PM)} h (Corretiva + Preventiva)</div>
               <div><b>PO (Operacional):</b> {fmt1(agg.PO)} h (Operacional)</div>
               <div><b>RO:</b> {fmtPct((agg.UF * agg.DF) / 100)} (UF × DF)</div>
-              <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
+              <div style={{ marginTop: 6, color: "#55788a" }}>
                 Observação: este cálculo considera o total de paradas do mês <b>independente do equipamento</b>.
               </div>
             </div>

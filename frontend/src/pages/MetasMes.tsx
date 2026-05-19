@@ -346,14 +346,14 @@ export default function MetasMes() {
 
   const wrap: React.CSSProperties = {
     padding: 18,
-    color: "rgba(255,255,255,0.9)",
+    color: "#00324f",
   };
 
   const card: React.CSSProperties = {
     borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04))",
-    boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
+    border: "1px solid rgba(0,58,87,0.13)",
+    background: "linear-gradient(180deg, rgba(0,58,87,0.10), rgba(255,255,255,0.66))",
+    boxShadow: "0 18px 60px rgba(0,37,56,0.18)",
     padding: 16,
   };
 
@@ -361,29 +361,29 @@ export default function MetasMes() {
     textAlign: "left",
     fontSize: 12,
     fontWeight: 800,
-    color: "rgba(255,255,255,0.70)",
+    color: "#4d7285",
     padding: "10px 10px",
-    borderBottom: "1px solid rgba(255,255,255,0.10)",
+    borderBottom: "1px solid rgba(0,58,87,0.13)",
     position: "sticky",
     top: 0,
-    background: "rgba(10,12,16,0.96)",
+    background: "rgba(248,252,253,0.96)",
     zIndex: 1,
   };
 
   const td: React.CSSProperties = {
     padding: "8px 10px",
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
+    borderBottom: "1px solid rgba(0,58,87,0.10)",
     fontSize: 13,
-    color: "rgba(255,255,255,0.85)",
+    color: "#355f75",
   };
 
   const input: React.CSSProperties = {
     width: "100%",
     height: 34,
     borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(0,0,0,0.30)",
-    color: "rgba(255,255,255,0.92)",
+    border: "1px solid rgba(0,58,87,0.13)",
+    background: "rgba(255,255,255,0.78)",
+    color: "#00324f",
     outline: "none",
     padding: "0 10px",
   };
@@ -391,9 +391,9 @@ export default function MetasMes() {
   const btn: React.CSSProperties = {
     height: 36,
     borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(255,255,255,0.06)",
-    color: "rgba(255,255,255,0.92)",
+    border: "1px solid rgba(0,58,87,0.14)",
+    background: "rgba(255,255,255,0.76)",
+    color: "#00324f",
     fontWeight: 900,
     padding: "0 12px",
     cursor: "pointer",
@@ -439,9 +439,9 @@ export default function MetasMes() {
       borderRadius: 999,
       fontSize: 12,
       fontWeight: 900,
-      color: "rgba(255,255,255,0.78)",
-      background: "rgba(255,255,255,0.06)",
-      border: "1px solid rgba(255,255,255,0.10)",
+      color: "#2d5c73",
+      background: "rgba(255,255,255,0.76)",
+      border: "1px solid rgba(0,58,87,0.13)",
     };
   };
 
@@ -449,14 +449,14 @@ export default function MetasMes() {
     <div style={wrap}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.60)", marginBottom: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: "#60798b", marginBottom: 6 }}>
             Configurações • Metas do mês • Planta selecionada
           </div>
           <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: -0.3 }}>Metas por planta com redistribuição</div>
         </div>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <label style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>
+          <label style={{ fontSize: 12, color: "#5c7e8f", fontWeight: 800 }}>
             Planta&nbsp;
             <select
               value={plantId}
@@ -468,7 +468,7 @@ export default function MetasMes() {
             </select>
           </label>
 
-          <label style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>
+          <label style={{ fontSize: 12, color: "#5c7e8f", fontWeight: 800 }}>
             Mês&nbsp;
             <input
               type="month"
@@ -491,34 +491,34 @@ export default function MetasMes() {
       <div style={{ ...card, marginBottom: 12 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>Meta do mês</div>
+            <div style={{ fontSize: 12, color: "#5c7e8f", fontWeight: 800 }}>Meta do mês</div>
             <div style={{ fontSize: 24, fontWeight: 950 }}>{fmtBR0(totalMes)} t</div>
           </div>
 
           <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>Realizado dias fechados</div>
+            <div style={{ fontSize: 12, color: "#5c7e8f", fontWeight: 800 }}>Realizado dias fechados</div>
             <div style={{ fontSize: 24, fontWeight: 950 }}>{fmtBR0(totalActualClosed)} t</div>
           </div>
 
           <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>Saldo a redistribuir</div>
+            <div style={{ fontSize: 12, color: "#5c7e8f", fontWeight: 800 }}>Saldo a redistribuir</div>
             <div style={{ fontSize: 24, fontWeight: 950, color: carryGap > 0 ? "#fcd34d" : "#86efac" }}>
               {carryGap >= 0 ? "+" : ""}{fmtBR0(carryGap)} t
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>Meta aberta recalculada</div>
+            <div style={{ fontSize: 12, color: "#5c7e8f", fontWeight: 800 }}>Meta aberta recalculada</div>
             <div style={{ fontSize: 24, fontWeight: 950 }}>{fmtBR0(totalOpenAdjusted)} t</div>
           </div>
         </div>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14 }}>
-          <label style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>
+          <label style={{ fontSize: 12, color: "#5c7e8f", fontWeight: 800 }}>
             Preset meta (t)
             <input value={presetMeta} onChange={(e) => setPresetMeta(e.target.value)} style={{ ...input, width: 140 }} />
           </label>
-          <label style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>
+          <label style={{ fontSize: 12, color: "#5c7e8f", fontWeight: 800 }}>
             Desconto horas
             <input value={presetDiscount} onChange={(e) => setPresetDiscount(e.target.value)} style={{ ...input, width: 140 }} />
           </label>
@@ -540,7 +540,7 @@ export default function MetasMes() {
         <div style={{ ...card, padding: 0, overflow: "auto", maxHeight: "72vh" }}>
           <div style={{ padding: 16, paddingBottom: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 950 }}>Planejamento base</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.60)", fontWeight: 800, marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: "#60798b", fontWeight: 800, marginTop: 4 }}>
               Meta manual por dia e desconto de horas da planta selecionada.
             </div>
           </div>
@@ -589,7 +589,7 @@ export default function MetasMes() {
           <div style={{ padding: 16, paddingBottom: 0, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <div>
               <div style={{ fontSize: 18, fontWeight: 950 }}>Meta recalculada</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.60)", fontWeight: 800, marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: "#60798b", fontWeight: 800, marginTop: 4 }}>
                 Considera o realizado da planta selecionada e redistribui o saldo para os próximos dias.
               </div>
             </div>
@@ -626,12 +626,12 @@ export default function MetasMes() {
                           ? "#86efac"
                           : r.gap_ton < 0
                           ? "#fca5a5"
-                          : "rgba(255,255,255,0.85)",
+                          : "#355f75",
                     }}
                   >
                     {r.gap_ton > 0 ? "+" : ""}{fmtBR2(r.gap_ton)}
                   </td>
-                  <td style={{ ...td, fontWeight: 950, color: r.status === "aberto" ? "#93c5fd" : "rgba(255,255,255,0.78)" }}>
+                  <td style={{ ...td, fontWeight: 950, color: r.status === "aberto" ? "#93c5fd" : "#2d5c73" }}>
                     {fmtBR2(r.adjusted_meta)}
                   </td>
                   <td style={{ ...td, fontWeight: 950 }}>{fmtBR2(r.meta_h_adjusted)} t/h</td>
@@ -642,7 +642,7 @@ export default function MetasMes() {
         </div>
       </div>
 
-      <div style={{ marginTop: 10, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 700, lineHeight: 1.55 }}>
+      <div style={{ marginTop: 10, color: "#60798b", fontSize: 12, fontWeight: 700, lineHeight: 1.55 }}>
         A tabela da direita usa o realizado da produção diária para recalcular só os dias em aberto. O realizado diário vem da soma das linhas Ton/H da página Produção do dia da planta selecionada; por isso, quando um dia fecha acima ou abaixo da meta, o saldo é redistribuído automaticamente entre os próximos dias.
       </div>
     </div>
