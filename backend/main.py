@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field, EmailStr
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, List, Any, Dict
 from zoneinfo import ZoneInfo
-from abastecimento import router as abastecimento_router
 import os
 import base64
 import json
@@ -21,7 +20,6 @@ from db import get_conn
 from auth_dep import require_owner_id
 
 app = FastAPI(title="MonPlant API", version="1.0.0")
-app.include_router(abastecimento_router)
 
 
 # =========================
@@ -4930,4 +4928,3 @@ def api_close_notice(
     )
 
     return {"ok": True}
-
