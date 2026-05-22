@@ -121,8 +121,6 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/lancamento-paradas",
       "/statisticas",
       "/metas",
-      "/exportar",
-      "/historico",
       "/ufdf",
       "/desvio-producao",
       "/dashboard/gestao-vista-planta",

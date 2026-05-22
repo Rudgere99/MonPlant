@@ -14,9 +14,7 @@ type Tab =
   | "paradas"
   | "paradas-minutos"
   | "horimetros"
-  | "historico"
   | "metas"
-  | "exportar"
   | "configuracoes"
   | "contingencia"
   | "ultimos-7"
@@ -33,9 +31,7 @@ const MOBILE_NAV_ITEMS: Array<{ key: Tab; to: string; label: string }> = [
   { key: "paradas", to: "/m/paradas", label: "Paradas Horas" },
   { key: "paradas-minutos", to: "/m/lancamento-paradas", label: "Paradas Minutos" },
   { key: "horimetros", to: "/m/horimetros", label: "Horímetros" },
-  { key: "historico", to: "/m/historico", label: "Histórico" },
   { key: "metas", to: "/m/metas", label: "Metas" },
-  { key: "exportar", to: "/m/exportar", label: "Relatórios" },
   { key: "configuracoes", to: "/m/configuracoes", label: "Configurações" },
   { key: "contingencia", to: "/m/dashboard/producao-dia", label: "Contingência" },
   { key: "ultimos-7", to: "/m/dashboard/ultimos-7", label: "Últimos 7 dias" },
