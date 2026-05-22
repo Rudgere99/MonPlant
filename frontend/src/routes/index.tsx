@@ -248,6 +248,239 @@ export function AppRoutes() {
           </RequireAuth>
         }
       />
+      <Route
+        path="/m/metas"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Metas do mês" tab="metas">
+              <MetasMes />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/configuracoes"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Configurações" tab="configuracoes">
+              <Configuracoes />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/supervisores-planta"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Supervisores Planta" tab="configuracoes">
+              <SupervisoresPlanta />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/dashboard/producao-dia"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Contingência" tab="contingencia">
+              <PlantProductionDayView />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/dashboard/ultimos-7"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Últimos 7 dias" tab="ultimos-7">
+              <Last7DaysView />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/dev/logs"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Dev Logs" tab="dev-logs">
+              <DevLogs />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/dev/users"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Dev Usuários" tab="dev-users">
+              <DevUsers />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route path="/m/stats" element={<Navigate to="/m/statisticas" replace />} />
+
+      {/* Desktop */}
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <AppShell />
+          </RequireAuth>
+        }
+      >
+        <Route index element={<RoleIndexRedirect />} />
+
+        <Route
+          path="dashboard"
+          element={
+            <RequireRole>
+              <Dashboard />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="configuracoes"
+          element={
+            <RequireRole>
+              <Configuracoes />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="equipamentos"
+          element={
+            <RequireRole>
+              <Equipamentos />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="supervisores-planta"
+          element={
+            <RequireRole>
+              <SupervisoresPlanta />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="dashboard/producao-dia"
+          element={
+            <RequireRole>
+              <PlantProductionDayView />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="dashboard/ultimos-7"
+          element={
+            <RequireRole>
+              <Last7DaysView />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="dashboard/gestao-vista-planta"
+          element={
+            <RequireRole>
+              <GestaoVistaPlanta />
+            </RequireRole>
+          }
+        />
+
+        <Route
+          path="producao-planta"
+          element={
+            <RequireRole>
+              <PlantProduction />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="desvio-producao"
+          element={
+            <RequireRole>
+              <DesvioProducao />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="ritmo"
+          element={
+            <RequireRole>
+              <Ritmo />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="statisticas"
+          element={
+            <RequireRole>
+              <Statistics />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="ufdf"
+          element={
+            <RequireRole>
+              <UfDF />
+            </RequireRole>
+          }
+        />
+
+
+        <Route
+          path="paradas"
+          element={
+            <RequireRole>
+              <Paradas />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="lancamento-paradas"
+          element={
+            <RequireRole>
+              <LancamentoParadas />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="horimetros"
+          element={
+            <RequireRole>
+              <Horimetros />
+            </RequireRole>
+          }
+        />
+
+        <Route
+          path="metas"
+          element={
+            <RequireRole>
+              <MetasMes />
+            </RequireRole>
+          }
+        />
+
+        <Route
+          path="dev/logs"
+          element={
+            <RequireRole>
+              <DevLogs />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="dev/users"
+          element={
+            <RequireRole>
+              <DevUsers />
+            </RequireRole>
+          }
+        />
+      </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
