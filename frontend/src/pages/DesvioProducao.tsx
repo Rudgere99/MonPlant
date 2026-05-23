@@ -144,22 +144,22 @@ function getAccentColor(
   if (accent === "green") return "rgba(34,197,94,0.95)";
   if (accent === "red") return "rgba(248,113,113,0.95)";
   if (accent === "amber") return "rgba(250,204,21,0.96)";
-  return "rgba(255,255,255,0.94)";
+  return "#00324f";
 }
 
 const shellStyle: React.CSSProperties = {
   minHeight: "100vh",
   padding: 18,
-  color: "rgba(255,255,255,0.92)",
+  color: "#00324f",
   background:
-    "radial-gradient(1100px 700px at 18% 8%, rgba(250,204,21,0.08), transparent 55%), radial-gradient(900px 600px at 85% 18%, rgba(34,197,94,0.08), transparent 55%), radial-gradient(1000px 800px at 50% 110%, rgba(59,130,246,0.06), transparent 60%), #07090c",
+    "radial-gradient(1100px 700px at 18% 8%, rgba(250,204,21,0.08), transparent 55%), radial-gradient(900px 600px at 85% 18%, rgba(34,197,94,0.08), transparent 55%), radial-gradient(1000px 800px at 50% 110%, rgba(59,130,246,0.06), transparent 60%), #eef6f8",
 };
 
 const panelStyle: React.CSSProperties = {
   borderRadius: 22,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(14,18,22,0.76)",
-  boxShadow: "0 24px 70px rgba(0,0,0,0.50)",
+  border: "1px solid rgba(0,58,87,0.13)",
+  background: "rgba(255,255,255,0.90)",
+  boxShadow: "0 24px 70px rgba(0,58,87,0.12)",
   backdropFilter: "blur(12px)",
 };
 
@@ -167,9 +167,9 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   height: 52,
   borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.04)",
-  color: "rgba(255,255,255,0.92)",
+  border: "1px solid rgba(0,58,87,0.13)",
+  background: "rgba(255,255,255,0.66)",
+  color: "#00324f",
   padding: "0 14px",
   fontWeight: 900,
   fontSize: 18,
@@ -178,7 +178,7 @@ const inputStyle: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "rgba(255,255,255,0.58)",
+  color: "#6a8292",
   fontWeight: 900,
   marginBottom: 6,
 };
@@ -546,7 +546,7 @@ export default function DesvioProducao() {
                 value={sistemica === null ? "—" : fmtBR(sistemica)}
               />
               <div
-                style={{ height: 1, background: "rgba(255,255,255,0.08)" }}
+                style={{ height: 1, background: "rgba(0,58,87,0.10)" }}
               />
               <Line
                 label="Produção Real por Conchada"
@@ -568,7 +568,7 @@ export default function DesvioProducao() {
             <div
               style={{
                 marginTop: 16,
-                color: "rgba(255,255,255,0.60)",
+                color: "#60798b",
                 fontWeight: 850,
                 lineHeight: 1.6,
                 fontSize: 13,
@@ -688,28 +688,28 @@ export default function DesvioProducao() {
                     margin={{ top: 16, right: 22, left: 10, bottom: 8 }}
                   >
                     <CartesianGrid
-                      stroke="rgba(255,255,255,0.06)"
+                      stroke="rgba(255,255,255,0.76)"
                       strokeDasharray="3 3"
                     />
                     <XAxis
                       dataKey="produto"
                       tick={{
-                        fill: "rgba(255,255,255,0.60)",
+                        fill: "#60798b",
                         fontSize: 12,
                       }}
                     />
                     <YAxis
                       tick={{
-                        fill: "rgba(255,255,255,0.60)",
+                        fill: "#60798b",
                         fontSize: 12,
                       }}
                     />
                     <Tooltip
                       contentStyle={{
                         background: "rgba(5,7,10,0.92)",
-                        border: "1px solid rgba(255,255,255,0.12)",
+                        border: "1px solid rgba(0,58,87,0.14)",
                         borderRadius: 14,
-                        color: "white",
+                        color: "#00324f",
                       }}
                       formatter={(v: any) => [fmtBR(Number(v || 0), 2), "Ton"]}
                     />
@@ -757,7 +757,7 @@ function Header({
         <div
           style={{
             marginTop: 4,
-            color: "rgba(255,255,255,0.82)",
+            color: "#244f67",
             fontWeight: 900,
             fontSize: 14,
           }}
@@ -767,7 +767,7 @@ function Header({
         <div
           style={{
             marginTop: 4,
-            color: "rgba(255,255,255,0.62)",
+            color: "#60798b",
             fontWeight: 800,
           }}
         >
@@ -791,9 +791,9 @@ function Header({
           }}
           style={{
             borderRadius: 14,
-            border: "1px solid rgba(255,255,255,0.10)",
-            background: "rgba(255,255,255,0.05)",
-            color: "rgba(255,255,255,0.92)",
+            border: "1px solid rgba(0,58,87,0.13)",
+            background: "rgba(255,255,255,0.70)",
+            color: "#00324f",
             padding: "10px 14px",
             fontWeight: 900,
             minWidth: 220,
@@ -856,7 +856,7 @@ function SectionTitle({
         <div
           style={{
             marginTop: 4,
-            color: "rgba(255,255,255,0.58)",
+            color: "#6a8292",
             fontWeight: 800,
             fontSize: 12,
           }}
@@ -897,7 +897,7 @@ function ReadOnlyValue({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        background: "rgba(255,255,255,0.03)",
+        background: "rgba(255,255,255,0.58)",
       }}
     >
       <span>{value}</span>
@@ -905,7 +905,7 @@ function ReadOnlyValue({
         <span
           style={{
             fontSize: 12,
-            color: "rgba(255,255,255,0.50)",
+            color: "#7c94a5",
             fontWeight: 850,
           }}
         >
@@ -929,7 +929,7 @@ function MetricCard({
 }) {
   return (
     <SectionCard style={{ padding: 18 }}>
-      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 900 }}>
+      <div style={{ fontSize: 12, color: "#60798b", fontWeight: 900 }}>
         {title}
       </div>
       <div
@@ -947,7 +947,7 @@ function MetricCard({
         style={{
           marginTop: 6,
           fontSize: 12,
-          color: "rgba(255,255,255,0.58)",
+          color: "#6a8292",
           fontWeight: 850,
         }}
       >
@@ -970,16 +970,16 @@ function MiniInfoCard({
     <div
       style={{
         borderRadius: 16,
-        border: "1px solid rgba(255,255,255,0.08)",
-        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(0,58,87,0.10)",
+        background: "rgba(255,255,255,0.58)",
         padding: 12,
       }}
     >
-      <div style={{ color: "rgba(255,255,255,0.60)", fontSize: 12, fontWeight: 850 }}>
+      <div style={{ color: "#60798b", fontSize: 12, fontWeight: 850 }}>
         {title}
       </div>
       <div style={{ marginTop: 6, fontWeight: 950, fontSize: 18 }}>{top}</div>
-      <div style={{ marginTop: 2, color: "rgba(255,255,255,0.70)", fontWeight: 850, fontSize: 13 }}>
+      <div style={{ marginTop: 2, color: "#4d7285", fontWeight: 850, fontSize: 13 }}>
         {bottom}
       </div>
     </div>
@@ -1001,8 +1001,8 @@ function SplitInputCard({
     <div
       style={{
         borderRadius: 18,
-        border: "1px solid rgba(255,255,255,0.10)",
-        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(0,58,87,0.13)",
+        background: "rgba(255,255,255,0.58)",
         padding: 14,
       }}
     >
@@ -1023,8 +1023,8 @@ function SplitInputCard({
           marginTop: 6,
           height: 52,
           borderRadius: 14,
-          border: "1px solid rgba(255,255,255,0.10)",
-          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(0,58,87,0.13)",
+          background: "rgba(255,255,255,0.58)",
           display: "grid",
           placeItems: "center",
           fontSize: 22,
@@ -1074,7 +1074,7 @@ function StatusPill({
 const summaryBoxStyle: React.CSSProperties = {
   marginTop: 14,
   borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.10)",
+  border: "1px solid rgba(0,58,87,0.13)",
   background: "rgba(0,0,0,0.20)",
   padding: 16,
   display: "grid",
@@ -1092,7 +1092,7 @@ function Line({
   strong?: boolean;
   positive?: boolean;
 }) {
-  let color = "rgba(255,255,255,0.92)";
+  let color = "#00324f";
   if (typeof positive === "boolean") {
     color = positive
       ? "rgba(34,197,94,0.95)"
@@ -1108,7 +1108,7 @@ function Line({
         gap: 12,
       }}
     >
-      <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 850 }}>
+      <div style={{ color: "#5c7e8f", fontWeight: 850 }}>
         {label}
       </div>
       <div

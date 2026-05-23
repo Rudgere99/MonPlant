@@ -34,17 +34,17 @@ type AllocationPayload = {
 
 const card: React.CSSProperties = {
   borderRadius: 22,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(14,18,22,0.78)",
-  boxShadow: "0 18px 55px rgba(0,0,0,.22)",
+  border: "1px solid rgba(0,58,87,0.13)",
+  background: "rgba(255,255,255,0.90)",
+  boxShadow: "0 18px 55px rgba(0,58,87,.10)",
 };
 
 const input: React.CSSProperties = {
   width: "100%",
   borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.045)",
-  color: "rgba(255,255,255,0.92)",
+  border: "1px solid rgba(0,58,87,0.14)",
+  background: "rgba(255,255,255,0.78)",
+  color: "#00324f",
   padding: "11px 12px",
   outline: "none",
   fontWeight: 900,
@@ -53,7 +53,7 @@ const input: React.CSSProperties = {
 const label: React.CSSProperties = {
   display: "block",
   marginBottom: 7,
-  color: "rgba(255,255,255,0.58)",
+  color: "#6a8292",
   fontWeight: 950,
   fontSize: 12,
   letterSpacing: 0.3,
@@ -64,8 +64,8 @@ const button: React.CSSProperties = {
   border: 0,
   borderRadius: 14,
   padding: "11px 14px",
-  color: "#0b0f13",
-  background: "linear-gradient(135deg,#ff9f1a,#ffb84d)",
+  color: "#ffffff",
+  background: "linear-gradient(135deg,#009688,#009688)",
   fontWeight: 1000,
   cursor: "pointer",
   display: "inline-flex",
@@ -77,9 +77,9 @@ const button: React.CSSProperties = {
 
 const ghostButton: React.CSSProperties = {
   ...button,
-  color: "rgba(255,255,255,0.88)",
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.12)",
+  color: "#00324f",
+  background: "rgba(255,255,255,0.76)",
+  border: "1px solid rgba(0,58,87,0.14)",
 };
 
 function parseDecimal(v: string): number {
@@ -239,7 +239,7 @@ export default function Equipamentos() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
         <div>
           <div style={{ color: "rgba(255,255,255,.58)", fontWeight: 950, fontSize: 13 }}>MonPlant • Configurações</div>
-          <h1 style={{ margin: "6px 0 0", color: "white", fontSize: 28, letterSpacing: -0.6 }}>Equipamentos e Alocação</h1>
+          <h1 style={{ margin: "6px 0 0", color: "#00324f", fontSize: 28, letterSpacing: -0.6 }}>Equipamentos e Alocação</h1>
           <div style={{ marginTop: 8, color: "rgba(255,255,255,.62)", fontWeight: 750, maxWidth: 880 }}>
             Cadastre as escavadeiras, mantenha a tonelada da concha atualizada e vincule o equipamento à planta. A página Ritmo passa a buscar este valor automaticamente.
           </div>
@@ -251,16 +251,16 @@ export default function Equipamentos() {
       </div>
 
       {error ? <div style={{ ...card, padding: 14, color: "#ff6b6b", fontWeight: 950 }}>{error}</div> : null}
-      {ok ? <div style={{ ...card, padding: 14, color: "#ffb84d", fontWeight: 950 }}>{ok}</div> : null}
+      {ok ? <div style={{ ...card, padding: 14, color: "#009688", fontWeight: 950 }}>{ok}</div> : null}
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 420px) 1fr", gap: 16 }}>
         <div style={{ ...card, padding: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 14, background: "rgba(255,159,26,.14)", color: "#ffb84d", display: "grid", placeItems: "center" }}>
+            <div style={{ width: 42, height: 42, borderRadius: 14, background: "rgba(0,150,136,.14)", color: "#009688", display: "grid", placeItems: "center" }}>
               <Factory size={20} />
             </div>
             <div>
-              <div style={{ color: "white", fontWeight: 1000, fontSize: 17 }}>{editingId ? "Editar equipamento" : "Novo equipamento"}</div>
+              <div style={{ color: "#00324f", fontWeight: 1000, fontSize: 17 }}>{editingId ? "Editar equipamento" : "Novo equipamento"}</div>
               <div style={{ color: "rgba(255,255,255,.55)", fontWeight: 800, fontSize: 12 }}>Escavadeiras / concha</div>
             </div>
           </div>
@@ -302,10 +302,10 @@ export default function Equipamentos() {
         <div style={{ ...card, padding: 18 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
             <div>
-              <div style={{ color: "white", fontWeight: 1000, fontSize: 18 }}>Alocação por planta</div>
+              <div style={{ color: "#00324f", fontWeight: 1000, fontSize: 18 }}>Alocação por planta</div>
               <div style={{ color: "rgba(255,255,255,.55)", fontWeight: 800, fontSize: 12 }}>Define qual concha o Ritmo deve usar automaticamente</div>
             </div>
-            <Link2 size={20} color="#ffb84d" />
+            <Link2 size={20} color="#009688" />
           </div>
 
           <div style={{ display: "grid", gap: 10 }}>
@@ -315,7 +315,7 @@ export default function Equipamentos() {
               return (
                 <div key={p.id} style={{ border: "1px solid rgba(255,255,255,.09)", borderRadius: 18, padding: 14, display: "grid", gridTemplateColumns: "1fr minmax(220px, 360px)", gap: 14, alignItems: "center", background: "rgba(255,255,255,.035)" }}>
                   <div>
-                    <div style={{ color: "white", fontWeight: 1000 }}>{p.name}</div>
+                    <div style={{ color: "#00324f", fontWeight: 1000 }}>{p.name}</div>
                     <div style={{ color: "rgba(255,255,255,.55)", fontWeight: 800, fontSize: 12 }}>
                       {current ? `${current.tag} • ${fmtTon(current.bucket_ton)} t/conchada` : "Nenhum equipamento vinculado"}
                     </div>
@@ -340,7 +340,7 @@ export default function Equipamentos() {
       <div style={{ ...card, padding: 18 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
           <div>
-            <div style={{ color: "white", fontWeight: 1000, fontSize: 18 }}>Equipamentos cadastrados</div>
+            <div style={{ color: "#00324f", fontWeight: 1000, fontSize: 18 }}>Equipamentos cadastrados</div>
             <div style={{ color: "rgba(255,255,255,.55)", fontWeight: 800, fontSize: 12 }}>{equipments.length} equipamento(s)</div>
           </div>
         </div>
@@ -359,11 +359,11 @@ export default function Equipamentos() {
             <tbody>
               {equipments.map((e) => (
                 <tr key={e.id} style={{ background: "rgba(255,255,255,.04)" }}>
-                  <td style={{ padding: 12, borderRadius: "14px 0 0 14px", color: "white", fontWeight: 1000 }}>{e.tag}</td>
+                  <td style={{ padding: 12, borderRadius: "14px 0 0 14px", color: "#00324f", fontWeight: 1000 }}>{e.tag}</td>
                   <td style={{ padding: 12, color: "rgba(255,255,255,.78)", fontWeight: 850 }}>{e.equipment_type}</td>
-                  <td style={{ padding: 12, textAlign: "right", color: "#ffb84d", fontWeight: 1000 }}>{fmtTon(e.bucket_ton)} t</td>
+                  <td style={{ padding: 12, textAlign: "right", color: "#009688", fontWeight: 1000 }}>{fmtTon(e.bucket_ton)} t</td>
                   <td style={{ padding: 12, textAlign: "center" }}>
-                    <span style={{ borderRadius: 999, padding: "6px 10px", fontWeight: 950, fontSize: 12, color: e.is_active ? "#0b0f13" : "rgba(255,255,255,.7)", background: e.is_active ? "#ffb84d" : "rgba(255,255,255,.08)" }}>
+                    <span style={{ borderRadius: 999, padding: "6px 10px", fontWeight: 950, fontSize: 12, color: e.is_active ? "#0b0f13" : "rgba(255,255,255,.7)", background: e.is_active ? "#009688" : "rgba(255,255,255,.08)" }}>
                       {e.is_active ? "Ativo" : "Inativo"}
                     </span>
                   </td>

@@ -336,7 +336,7 @@ export default function Login() {
           padding: 0 12px;
           background: rgba(8,12,16,.38);
           border: 1px solid rgba(255,255,255,.08);
-          color: rgba(255,255,255,.68);
+          color: #60798b;
           font-size: 12px;
           font-weight: 700;
           border-radius: 12px;
@@ -468,7 +468,7 @@ export default function Login() {
           margin-bottom: 10px;
         }
         .mp-login-panel-title { font-size: 32px; font-weight: 950; margin-bottom: 6px; }
-        .mp-login-panel-sub { color: rgba(255,255,255,.68); font-size: 13px; line-height: 1.6; }
+        .mp-login-panel-sub { color: #60798b; font-size: 13px; line-height: 1.6; }
 
         .mp-login-error {
           padding: 10px 12px;
@@ -487,7 +487,7 @@ export default function Login() {
           position: absolute;
           left: 14px;
           opacity: .72;
-          color: rgba(255,255,255,0.78);
+          color: #2d5c73;
           pointer-events: none;
         }
 
@@ -511,11 +511,11 @@ export default function Login() {
           width: 36px;
           height: 36px;
           border-radius: 12px;
-          border: 1px solid rgba(255,255,255,0.10);
-          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(0,58,87,0.13);
+          background: rgba(255,255,255,0.76);
           display: grid;
           place-items: center;
-          color: rgba(255,255,255,0.85);
+          color: #355f75;
           cursor: pointer;
         }
         .mp-login-eye:hover { background: rgba(255,255,255,0.09); }
@@ -533,11 +533,11 @@ export default function Login() {
 
         .mp-login-secondary {
           height: 64px;
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.10);
-          color: rgba(255,255,255,0.92);
+          background: rgba(255,255,255,0.76);
+          border: 1px solid rgba(0,58,87,0.13);
+          color: #00324f;
         }
-        .mp-login-secondary:hover { background: rgba(255,255,255,0.08); }
+        .mp-login-secondary:hover { background: rgba(0,58,87,0.10); }
 
         .mp-login-check {
           display: flex;

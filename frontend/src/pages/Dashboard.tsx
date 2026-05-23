@@ -239,7 +239,7 @@ const BarValueLabel = (props: any) => {
       x={cx}
       y={cy}
       textAnchor="middle"
-      fill="rgba(255,255,255,0.9)"
+      fill="#00324f"
       fontSize={13}
       fontWeight={900}
     >
@@ -260,7 +260,7 @@ const FreqPointLabel = (props: any) => {
       x={cx}
       y={cy}
       textAnchor="middle"
-      fill="rgba(255,255,255,0.9)"
+      fill="#00324f"
       fontSize={13}
       fontWeight={900}
     >
@@ -292,34 +292,34 @@ function TooltipStopsHour({
     <div
       style={{
         background: "rgba(0,0,0,0.86)",
-        border: "1px solid rgba(255,255,255,0.12)",
+        border: "1px solid rgba(0,58,87,0.14)",
         borderRadius: 14,
-        boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
+        boxShadow: "0 18px 50px rgba(0,37,56,0.20)",
         padding: "10px 12px",
         maxWidth: 320,
       }}
     >
-      <div style={{ color: "rgba(255,255,255,0.90)", fontWeight: 950, marginBottom: 6 }}>
+      <div style={{ color: "#00324f", fontWeight: 950, marginBottom: 6 }}>
         {label}
       </div>
 
       {show.length ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {show.map((it, i) => (
-            <div key={i} style={{ fontSize: 12.5, lineHeight: 1.35, color: "rgba(255,255,255,0.82)" }}>
-              <b style={{ color: "rgba(255,255,255,0.92)" }}>{it.equipamento}</b>
+            <div key={i} style={{ fontSize: 12.5, lineHeight: 1.35, color: "#244f67" }}>
+              <b style={{ color: "#00324f" }}>{it.equipamento}</b>
               {" — "}
               {it.descricao || "Parada (sem descrição)"}
             </div>
           ))}
           {more > 0 ? (
-            <div style={{ fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
+            <div style={{ fontSize: 12, fontWeight: 850, color: "#60798b", marginTop: 2 }}>
               +{more} outras
             </div>
           ) : null}
         </div>
       ) : (
-        <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.55)", fontWeight: 850 }}>
+        <div style={{ fontSize: 12.5, color: "#60798b", fontWeight: 850 }}>
           Sem parada registrada neste horário
         </div>
       )}
@@ -353,12 +353,12 @@ const Last7PointLabel = (props: any) => {
 
   return (
     <g>
-      <line x1={cx0} y1={cy0 - 2} x2={cx0} y2={tickTop} stroke="rgba(255,255,255,0.45)" strokeWidth={1.2} />
+      <line x1={cx0} y1={cy0 - 2} x2={cx0} y2={tickTop} stroke="#8499a7" strokeWidth={1.2} />
       <text
         x={textX}
         y={textY}
         textAnchor="middle"
-        fill="rgba(255,255,255,0.90)"
+        fill="#00324f"
         fontSize={12}
         fontWeight={950}
       >
@@ -1006,14 +1006,14 @@ const EXPECTED_TON_H = metaHoraEsperada;
       ? "Todas as plantas"
       : plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
 
-  const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff9f1a" }], [pctMetaGauge]);
+  const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#009688" }], [pctMetaGauge]);
 
   /* ===================== styles ===================== */
   const cardBase: React.CSSProperties = {
     borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))",
-    boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
+    border: "1px solid rgba(0,58,87,0.13)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.76), rgba(255,255,255,0.58))",
+    boxShadow: "0 18px 60px rgba(0,37,56,0.18)",
     backdropFilter: "blur(10px)",
   };
 
@@ -1032,7 +1032,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
   };
 
   const subStyle: React.CSSProperties = {
-    color: "rgba(255,255,255,0.55)",
+    color: "#60798b",
     fontSize: 12,
     fontWeight: 700,
   };
@@ -1048,14 +1048,14 @@ const EXPECTED_TON_H = metaHoraEsperada;
   const smallPill: React.CSSProperties = {
     height: 36,
     borderRadius: 999,
-    border: "1px solid rgba(255,159,26,0.25)",
-    background: "rgba(255,159,26,0.10)",
+    border: "1px solid rgba(0,150,136,0.24)",
+    background: "rgba(0,150,136,0.12)",
     padding: "0 12px",
     display: "inline-flex",
     alignItems: "center",
     gap: 8,
     fontWeight: 900,
-    color: "rgba(255,255,255,0.88)",
+    color: "#00324f",
   };
 
   // ===== export modal styles =====
@@ -1063,7 +1063,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
     position: "fixed",
     inset: 0,
     zIndex: 200,
-    background: "rgba(0,0,0,0.65)",
+    background: "rgba(0,37,56,0.20)",
     backdropFilter: "blur(8px)",
     display: "grid",
     placeItems: "center",
@@ -1074,9 +1074,9 @@ const EXPECTED_TON_H = metaHoraEsperada;
     width: "min(1480px, 98vw)",
     maxHeight: "94vh",
     borderRadius: 22,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(14,18,22,0.86)",
-    boxShadow: "0 30px 90px rgba(0,0,0,0.70)",
+    border: "1px solid rgba(0,58,87,0.14)",
+    background: "rgba(255,255,255,0.94)",
+    boxShadow: "0 30px 90px rgba(0,58,87,0.16)",
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
@@ -1084,7 +1084,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
   const modalHeader: React.CSSProperties = {
     padding: 14,
-    borderBottom: "1px solid rgba(255,255,255,0.10)",
+    borderBottom: "1px solid rgba(0,58,87,0.13)",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1102,8 +1102,8 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
   const panel: React.CSSProperties = {
     borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(0,0,0,0.22)",
+    border: "1px solid rgba(0,58,87,0.13)",
+    background: "rgba(255,255,255,0.74)",
     padding: 12,
     minHeight: 0,
   };
@@ -1121,14 +1121,14 @@ const EXPECTED_TON_H = metaHoraEsperada;
               height: 38,
               minWidth: 148,
               borderRadius: 999,
-              border: "1px solid " + (rangeMode ? "rgba(255,159,26,0.35)" : "rgba(255,255,255,0.12)"),
-              background: rangeMode ? "rgba(255,159,26,0.12)" : "rgba(255,255,255,0.06)",
+              border: "1px solid " + (rangeMode ? "rgba(0,150,136,0.30)" : "rgba(0,58,87,0.14)"),
+              background: rangeMode ? "rgba(0,150,136,0.12)" : "rgba(255,255,255,0.76)",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "space-between",
               gap: 10,
               padding: "0 8px 0 12px",
-              color: "rgba(255,255,255,0.88)",
+              color: "#00324f",
               fontWeight: 900,
               cursor: "pointer",
             }}
@@ -1139,7 +1139,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                 width: 42,
                 height: 24,
                 borderRadius: 999,
-                background: rangeMode ? "rgba(255,159,26,0.22)" : "rgba(255,255,255,0.12)",
+                background: rangeMode ? "rgba(0,150,136,0.20)" : "rgba(0,58,87,0.14)",
                 position: "relative",
                 display: "inline-block",
               }}
@@ -1152,7 +1152,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                   width: 18,
                   height: 18,
                   borderRadius: "50%",
-                  background: rangeMode ? "#ff9f1a" : "rgba(255,255,255,0.82)",
+                  background: rangeMode ? "#009688" : "#244f67",
                   transition: "left .18s ease",
                 }}
               />
@@ -1231,9 +1231,9 @@ const EXPECTED_TON_H = metaHoraEsperada;
                         height: 34,
                         minWidth: 46,
                         borderRadius: 999,
-                        border: "1px solid " + (selected ? "rgba(255,159,26,0.50)" : "rgba(255,255,255,0.12)"),
-                        background: selected ? "rgba(255,159,26,0.18)" : "rgba(255,255,255,0.05)",
-                        color: selected ? "#ffb24a" : "rgba(255,255,255,0.78)",
+                        border: "1px solid " + (selected ? "rgba(0,150,136,0.44)" : "rgba(0,58,87,0.14)"),
+                        background: selected ? "rgba(0,150,136,0.18)" : "rgba(255,255,255,0.70)",
+                        color: selected ? "#ffb24a" : "#2d5c73",
                         fontWeight: 950,
                         cursor: "pointer",
                       }}
@@ -1250,9 +1250,9 @@ const EXPECTED_TON_H = metaHoraEsperada;
                     style={{
                       height: 34,
                       borderRadius: 999,
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      background: "rgba(255,255,255,0.04)",
-                      color: "rgba(255,255,255,0.70)",
+                      border: "1px solid rgba(0,58,87,0.14)",
+                      background: "rgba(255,255,255,0.66)",
+                      color: "#4d7285",
                       fontWeight: 900,
                       cursor: "pointer",
                       padding: "0 10px",
@@ -1281,7 +1281,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
         </div>
       </div>
 
-      <div style={{ marginTop: 8, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 800 }}>
+      <div style={{ marginTop: 8, color: "#60798b", fontSize: 12, fontWeight: 800 }}>
         Dashboard • {selectedPlantName} • {rangeMode ? periodSummaryText : brDate(day)} {err ? `• ${err}` : plantId === "all" ? "• consolidado" : rangeMode ? "• média por período" : "• tempo real"}
       </div>
 
@@ -1291,10 +1291,10 @@ const EXPECTED_TON_H = metaHoraEsperada;
           <div style={modalCard} onClick={(e) => e.stopPropagation()}>
             <div style={modalHeader}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 950, fontSize: 16, color: "rgba(255,255,255,0.92)" }}>
+                <div style={{ fontWeight: 950, fontSize: 16, color: "#00324f" }}>
                   Exportação • {brDate(day)}
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#60798b" }}>
                   Marque o que vai aparecer e clique em “Exportar JPEG”.
                 </div>
               </div>
@@ -1337,7 +1337,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             <div style={modalBody} className="mp-export-body">
               {/* left: selector */}
               <div style={{ ...panel, overflow: "auto", padding: 10 }}>
-                <div style={{ fontWeight: 950, marginBottom: 10, color: "rgba(255,255,255,0.9)", paddingLeft: 4 }}>
+                <div style={{ fontWeight: 950, marginBottom: 10, color: "#00324f", paddingLeft: 4 }}>
                   Selecionar
                 </div>
 
@@ -1354,12 +1354,12 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           width: 64,
                           height: 64,
                           borderRadius: 18,
-                          border: "1px solid " + (on ? "rgba(255,159,26,0.30)" : "rgba(255,255,255,0.10)"),
-                          background: on ? "rgba(255,159,26,0.12)" : "rgba(255,255,255,0.04)",
+                          border: "1px solid " + (on ? "rgba(0,150,136,0.28)" : "rgba(0,58,87,0.13)"),
+                          background: on ? "rgba(0,150,136,0.12)" : "rgba(255,255,255,0.66)",
                           display: "grid",
                           placeItems: "center",
                           cursor: "pointer",
-                          color: "rgba(255,255,255,0.92)",
+                          color: "#00324f",
                           padding: 0,
                         }}
                       >
@@ -1371,8 +1371,8 @@ const EXPECTED_TON_H = metaHoraEsperada;
                               borderRadius: 16,
                               display: "grid",
                               placeItems: "center",
-                              border: "1px solid " + (on ? "rgba(255,159,26,0.28)" : "rgba(255,255,255,0.10)"),
-                              background: on ? "rgba(255,159,26,0.10)" : "rgba(0,0,0,0.18)",
+                              border: "1px solid " + (on ? "rgba(0,150,136,0.26)" : "rgba(0,58,87,0.13)"),
+                              background: on ? "rgba(0,150,136,0.12)" : "rgba(0,0,0,0.18)",
                             }}
                           >
                             <Icon size={20} />
@@ -1383,7 +1383,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                   })}
                 </div>
 
-                <div style={{ marginTop: 12, fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.45)", padding: "0 4px" }}>
+                <div style={{ marginTop: 12, fontSize: 11, fontWeight: 800, color: "#8499a7", padding: "0 4px" }}>
                   Dica: passe o mouse para ver o nome.
                 </div>
               </div>
@@ -1394,17 +1394,17 @@ const EXPECTED_TON_H = metaHoraEsperada;
                   ref={exportRef}
                   style={{
                     borderRadius: 18,
-                    border: "1px solid rgba(255,255,255,0.10)",
+                    border: "1px solid rgba(0,58,87,0.13)",
                     background: "#0b0f14",
                     padding: 14,
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 950, fontSize: 16, color: "rgba(255,255,255,0.92)" }}>
+                      <div style={{ fontWeight: 950, fontSize: 16, color: "#00324f" }}>
                         MonPlant • Dashboard • {selectedPlantName}
                       </div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#60798b" }}>
                         {brDate(day)} • Exportação
                       </div>
                     </div>
@@ -1412,13 +1412,13 @@ const EXPECTED_TON_H = metaHoraEsperada;
                       style={{
                         height: 32,
                         borderRadius: 999,
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(0,58,87,0.14)",
+                        background: "rgba(255,255,255,0.76)",
                         padding: "0 12px",
                         display: "inline-flex",
                         alignItems: "center",
                         fontWeight: 900,
-                        color: "rgba(255,255,255,0.82)",
+                        color: "#244f67",
                       }}
                     >
                       {loading ? "Atualizando..." : err ? "Erro" : "Online"}
@@ -1433,20 +1433,20 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           <div>
                             <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
                             <div style={subStyle}>
-                               {rangeMode ? <>Média diária do filtro: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(rangeAvgDayTon)}</b> t</> : <>Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t</>}
+                               {rangeMode ? <>Média diária do filtro: <b style={{ color: "#00324f" }}>{fmtBR0(rangeAvgDayTon)}</b> t</> : <>Total do dia: <b style={{ color: "#00324f" }}>{fmtBR0(totalTonDay)}</b> t</>}
                             </div>
                           </div>
                           <span
                             style={{
                               height: 32,
                               borderRadius: 999,
-                              border: "1px solid rgba(255,255,255,0.12)",
-                              background: "rgba(255,255,255,0.06)",
+                              border: "1px solid rgba(0,58,87,0.14)",
+                              background: "rgba(255,255,255,0.76)",
                               padding: "0 12px",
                               display: "inline-flex",
                               alignItems: "center",
                               fontWeight: 900,
-                              color: "rgba(255,255,255,0.82)",
+                              color: "#244f67",
                             }}
                           >
                             {prodDay?.updated_at ? "Atualizado" : "—"}
@@ -1456,20 +1456,20 @@ const EXPECTED_TON_H = metaHoraEsperada;
                         <div style={{ height: mobile ? 300 : 420 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
-                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <CartesianGrid stroke="rgba(0,58,87,0.10)" strokeDasharray="3 3" />
+                              <XAxis dataKey="period" interval={0} tick={{ fill: "#60798b", fontSize: 11 }} />
                               <YAxis
                                 yAxisId="left"
                                 domain={tonDomain}
                                 tickFormatter={(v) => fmtBR0(Number(v) || 0)}
-                                tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                                tick={{ fill: "#60798b", fontSize: 12 }}
                               />
                               <YAxis
                                 yAxisId="right"
                                 orientation="right"
                                 domain={[0, 100]}
                                 tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
-                                tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                                tick={{ fill: "#60798b", fontSize: 12 }}
                               />
                               <Tooltip content={(p: any) => <TooltipStopsHour {...p} stopsMap={stopsByPeriod} />} />
 <Legend
@@ -1488,7 +1488,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                                 yAxisId="right"
                                 type="monotone"
                                 dataKey="freq"
-                                stroke="#ff9f1a"
+                                stroke="#009688"
                                 strokeWidth={3}
                                 dot={{ r: 4 }}
                                 activeDot={{ r: 5 }}
@@ -1513,13 +1513,13 @@ const EXPECTED_TON_H = metaHoraEsperada;
                             style={{
                               height: 32,
                               borderRadius: 999,
-                              border: "1px solid rgba(255,255,255,0.12)",
-                              background: "rgba(255,255,255,0.06)",
+                              border: "1px solid rgba(0,58,87,0.14)",
+                              background: "rgba(255,255,255,0.76)",
                               padding: "0 12px",
                               display: "inline-flex",
                               alignItems: "center",
                               fontWeight: 900,
-                              color: "rgba(255,255,255,0.82)",
+                              color: "#244f67",
                             }}
                           >
                             {fmtBR0(levelAvg)}%
@@ -1529,25 +1529,25 @@ const EXPECTED_TON_H = metaHoraEsperada;
                         <div style={{ height: mobile ? 160 : 190 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
-                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
-                              <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <CartesianGrid stroke="rgba(0,58,87,0.10)" strokeDasharray="3 3" />
+                              <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "#60798b", fontSize: 11 }} />
+                              <YAxis domain={[0, 100]} tick={{ fill: "#60798b", fontSize: 11 }} />
                               <Tooltip
                                 formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
                                 contentStyle={{
                                   background: "rgba(0,0,0,0.86)",
-                                  border: "1px solid rgba(255,255,255,0.12)",
+                                  border: "1px solid rgba(0,58,87,0.14)",
                                   borderRadius: 14,
                                 }}
-                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                                labelStyle={{ color: "#0f3f5a" }}
                               />
-                              <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a">
+                              <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#009688">
                                 <LabelList
                                   dataKey="freq"
                                   position="center"
                                   formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
                                   style={{
-                                    fill: "rgba(255,255,255,0.95)",
+                                    fill: "#00324f",
                                     fontWeight: 900,
                                     fontSize: 11,
                                     textShadow: "0 1px 2px rgba(0,0,0,.55)",
@@ -1574,7 +1574,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
-                              <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
+                              <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(0,58,87,0.10)" }} />
                             </RadialBarChart>
                           </ResponsiveContainer>
 
@@ -1586,7 +1586,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                                 +{fmtBR0(pctMetaOver)}% acima
                               </div>
                             ) : null}
-                            <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                            <div style={{ marginTop: 6, fontWeight: 900, color: "#0f3f5a" }}>
                               {fmtBR0(totalTonDay)} t
                             </div>
                           </div>
@@ -1607,13 +1607,13 @@ const EXPECTED_TON_H = metaHoraEsperada;
                               style={{
                                 height: 32,
                                 borderRadius: 999,
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                background: "rgba(255,255,255,0.06)",
+                                border: "1px solid rgba(0,58,87,0.14)",
+                                background: "rgba(255,255,255,0.76)",
                                 padding: "0 12px",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 fontWeight: 900,
-                                color: "rgba(255,255,255,0.82)",
+                                color: "#244f67",
                               }}
                             >
                               {fmtBR1(avgTonPerHour)} t/h
@@ -1633,13 +1633,13 @@ const EXPECTED_TON_H = metaHoraEsperada;
                                     ? "1px solid rgba(34,197,94,0.40)"
                                     : avgHourTrend.dir === "down"
                                       ? "1px solid rgba(239,68,68,0.40)"
-                                      : "1px solid rgba(255,255,255,0.12)",
+                                      : "1px solid rgba(0,58,87,0.14)",
                                 background:
                                   avgHourTrend.dir === "up"
                                     ? "rgba(34,197,94,0.14)"
                                     : avgHourTrend.dir === "down"
                                       ? "rgba(239,68,68,0.14)"
-                                      : "rgba(255,255,255,0.06)",
+                                      : "rgba(255,255,255,0.76)",
                                 padding: "0 10px",
                                 display: "inline-flex",
                                 alignItems: "center",
@@ -1650,7 +1650,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                                     ? "rgba(34,197,94,0.95)"
                                     : avgHourTrend.dir === "down"
                                       ? "rgba(239,68,68,0.95)"
-                                      : "rgba(255,255,255,0.75)",
+                                      : "#355f75",
                               }}
                             >
                               {avgHourTrend.dir === "up" ? (
@@ -1675,21 +1675,21 @@ const EXPECTED_TON_H = metaHoraEsperada;
                         <div style={{ height: mobile ? 160 : 190 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
-                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={3} tickMargin={6} angle={-35} textAnchor="end" height={24} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 9 }} />
+                              <CartesianGrid stroke="rgba(0,58,87,0.10)" strokeDasharray="3 3" />
+                              <XAxis dataKey="period" interval={3} tickMargin={6} angle={-35} textAnchor="end" height={24} tick={{ fill: "#60798b", fontSize: 9 }} />
                               <YAxis domain={miniTonDomain} hide />
                               <Tooltip
                                 formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
                                 contentStyle={{
                                   background: "rgba(0,0,0,0.86)",
-                                  border: "1px solid rgba(255,255,255,0.12)",
+                                  border: "1px solid rgba(0,58,87,0.14)",
                                   borderRadius: 14,
                                 }}
-                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                                labelStyle={{ color: "#0f3f5a" }}
                               />
-                              <ReferenceLine y={EXPECTED_TON_H} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeDasharray="6 6" />
+                              <ReferenceLine y={EXPECTED_TON_H} stroke="#9aadb8" strokeWidth={2} strokeDasharray="6 6" />
                               <ReferenceLine y={avgTonPerHour} stroke="#00CCFF" strokeWidth={2} strokeDasharray="4 4" />
-                              <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+                              <Area type="monotone" dataKey="ton" stroke="#009688" fill="rgba(0,150,136,0.14)" strokeWidth={2.5} />
                             </AreaChart>
                           </ResponsiveContainer>
                         </div>
@@ -1704,12 +1704,12 @@ const EXPECTED_TON_H = metaHoraEsperada;
                             justifyContent: "center",
                             fontSize: 12,
                             fontWeight: 900,
-                            color: "rgba(255,255,255,0.72)",
+                            color: "#456b7f",
                             flexWrap: "wrap",
                           }}
                         >
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ width: 18, borderTop: "2px dashed rgba(255,255,255,0.40)" }} />
+                            <span style={{ width: 18, borderTop: "2px dashed #8fa3b0" }} />
                             <span>Esperada: {fmtBR0(EXPECTED_TON_H)} t/h</span>
                           </div>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
@@ -1733,28 +1733,28 @@ const EXPECTED_TON_H = metaHoraEsperada;
                         <div style={{ height: mobile ? 150 : 180 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={last7Series} margin={{ top: 22, right: 26, left: 10, bottom: 0 }}>
-                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                              <CartesianGrid stroke="rgba(0,58,87,0.10)" strokeDasharray="3 3" />
                               <XAxis
                                 dataKey="day"
                                 interval={0}
                                 padding={{ left: 18, right: 18 }}
-                                tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                                tick={{ fill: "#60798b", fontSize: 12 }}
                               />
                               <YAxis hide />
                               <Tooltip
                                 formatter={(v: any) => fmtBR0(Number(v) || 0)}
                                 contentStyle={{
                                   background: "rgba(0,0,0,0.86)",
-                                  border: "1px solid rgba(255,255,255,0.12)",
+                                  border: "1px solid rgba(0,58,87,0.14)",
                                   borderRadius: 14,
                                 }}
-                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                                labelStyle={{ color: "#0f3f5a" }}
                               />
                               <Area
                                 type="monotone"
                                 dataKey="total"
-                                stroke="#ff9f1a"
-                                fill="rgba(255,159,26,0.14)"
+                                stroke="#009688"
+                                fill="rgba(0,150,136,0.14)"
                                 strokeWidth={2.5}
                                 dot={{ r: 3, strokeWidth: 2, fill: "rgba(7,9,13,0.92)" }}
                                 activeDot={{ r: 5 }}
@@ -1831,7 +1831,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                                 key={eq}
                                 style={{
                                   borderRadius: 16,
-                                  border: "1px solid rgba(255,255,255,0.10)",
+                                  border: "1px solid rgba(0,58,87,0.13)",
                                   background: "rgba(0,0,0,0.18)",
                                   padding: 12,
                                   display: "flex",
@@ -1846,28 +1846,28 @@ const EXPECTED_TON_H = metaHoraEsperada;
                                       width: 52,
                                       height: 34,
                                       borderRadius: 12,
-                                      border: "1px solid rgba(255,159,26,0.20)",
-                                      background: "rgba(255,159,26,0.10)",
+                                      border: "1px solid rgba(0,150,136,0.20)",
+                                      background: "rgba(0,150,136,0.12)",
                                       display: "flex",
                                       alignItems: "center",
                                       justifyContent: "center",
                                       fontSize: 12,
                                       fontWeight: 950,
-                                      color: "rgba(255,255,255,0.85)",
+                                      color: "#355f75",
                                     }}
                                   >
                                     {eq}
                                   </div>
                                   <div>
-                                    <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
+                                    <div style={{ fontWeight: 950, color: "#00324f" }}>
                                       {row ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}` : "—"}
                                     </div>
-                                    <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: "#60798b" }}>
                                       {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
                                     </div>
                                   </div>
                                 </div>
-                                <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,0.55)" }}>
+                                <div style={{ fontSize: 12, fontWeight: 900, color: "#60798b" }}>
                                   {row?.equipamento ?? ""}
                                 </div>
                               </div>
@@ -1904,20 +1904,20 @@ const EXPECTED_TON_H = metaHoraEsperada;
             <div>
               <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
               <div style={subStyle}>
-                 {rangeMode ? <>Média diária do filtro: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(rangeAvgDayTon)}</b> t</> : <>Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t</>}
+                 {rangeMode ? <>Média diária do filtro: <b style={{ color: "#00324f" }}>{fmtBR0(rangeAvgDayTon)}</b> t</> : <>Total do dia: <b style={{ color: "#00324f" }}>{fmtBR0(totalTonDay)}</b> t</>}
               </div>
             </div>
             <span
               style={{
                 height: 32,
                 borderRadius: 999,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(0,58,87,0.14)",
+                background: "rgba(255,255,255,0.76)",
                 padding: "0 12px",
                 display: "inline-flex",
                 alignItems: "center",
                 fontWeight: 900,
-                color: "rgba(255,255,255,0.82)",
+                color: "#244f67",
               }}
             >
               {prodDay?.updated_at ? "Atualizado" : "—"}
@@ -1927,20 +1927,20 @@ const EXPECTED_TON_H = metaHoraEsperada;
           <div style={{ height: mobile ? 300 : 420 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <CartesianGrid stroke="rgba(0,58,87,0.10)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={0} tick={{ fill: "#60798b", fontSize: 11 }} />
                 <YAxis
                   yAxisId="left"
                   domain={tonDomain}
                   tickFormatter={(v) => fmtBR0(Number(v) || 0)}
-                  tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                  tick={{ fill: "#60798b", fontSize: 12 }}
                 />
                 <YAxis
                   yAxisId="right"
                   orientation="right"
                   domain={[0, 100]}
                   tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
-                  tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                  tick={{ fill: "#60798b", fontSize: 12 }}
                 />
                 <Tooltip content={(p: any) => <TooltipStopsHour {...p} stopsMap={stopsByPeriod} />} />
 <Legend
@@ -1959,7 +1959,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                   yAxisId="right"
                   type="monotone"
                   dataKey="freq"
-                  stroke="#ff9f1a"
+                  stroke="#009688"
                   strokeWidth={3}
                   dot={{ r: 4 }}
                   activeDot={{ r: 5 }}
@@ -1992,13 +1992,13 @@ const EXPECTED_TON_H = metaHoraEsperada;
               style={{
                 height: 32,
                 borderRadius: 999,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(0,58,87,0.14)",
+                background: "rgba(255,255,255,0.76)",
                 padding: "0 12px",
                 display: "inline-flex",
                 alignItems: "center",
                 fontWeight: 900,
-                color: "rgba(255,255,255,0.82)",
+                color: "#244f67",
               }}
             >
               {fmtBR0(levelAvg)}%
@@ -2008,25 +2008,25 @@ const EXPECTED_TON_H = metaHoraEsperada;
           <div style={{ flex: 1, minHeight: 0, height: mobile ? 160 : undefined }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <CartesianGrid stroke="rgba(0,58,87,0.10)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "#60798b", fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tick={{ fill: "#60798b", fontSize: 11 }} />
                 <Tooltip
                   formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
                   contentStyle={{
                     background: "rgba(0,0,0,0.86)",
-                    border: "1px solid rgba(255,255,255,0.12)",
+                    border: "1px solid rgba(0,58,87,0.14)",
                     borderRadius: 14,
                   }}
-                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                  labelStyle={{ color: "#0f3f5a" }}
                 />
-                <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a">
+                <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#009688">
                   <LabelList
                     dataKey="freq"
                     position="center"
                     formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
                     style={{
-                      fill: "rgba(255,255,255,0.95)",
+                      fill: "#00324f",
                       fontWeight: 900,
                       fontSize: 12,
                       textShadow: "0 1px 2px rgba(0,0,0,.55)",
@@ -2080,7 +2080,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
               >
                 <div style={{ textAlign: "center" }}>
                   <div style={{ ...subStyle, marginTop: 0 }}>Produção realizada</div>
-                  <div style={{ marginTop: 8, fontSize: mobile ? 24 : 30, fontWeight: 950, color: "rgba(255,255,255,0.96)" }}>
+                  <div style={{ marginTop: 8, fontSize: mobile ? 24 : 30, fontWeight: 950, color: "#00324f" }}>
                     {fmtBR0(totalTonDay)} t
                   </div>
                 </div>
@@ -2088,7 +2088,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                 <div
                   style={{
                     textAlign: "center",
-                    borderLeft: "1px solid rgba(255,255,255,0.10)",
+                    borderLeft: "1px solid rgba(0,58,87,0.13)",
                     paddingLeft: 18,
                   }}
                 >
@@ -2103,7 +2103,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             <div style={{ height: mobile ? 160 : 190, position: "relative" }}>
               <ResponsiveContainer width="100%" height="100%">
                 <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
-                  <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
+                  <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(0,58,87,0.10)" }} />
                 </RadialBarChart>
               </ResponsiveContainer>
 
@@ -2115,7 +2115,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                     +{fmtBR0(pctMetaOver)}% acima
                   </div>
                 ) : null}
-                <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                <div style={{ marginTop: 6, fontWeight: 900, color: "#0f3f5a" }}>
                   {fmtBR0(totalTonDay)} t
                 </div>
               </div>
@@ -2145,13 +2145,13 @@ const EXPECTED_TON_H = metaHoraEsperada;
                 style={{
                   height: 32,
                   borderRadius: 999,
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(0,58,87,0.14)",
+                  background: "rgba(255,255,255,0.76)",
                   padding: "0 12px",
                   display: "inline-flex",
                   alignItems: "center",
                   fontWeight: 900,
-                  color: "rgba(255,255,255,0.82)",
+                  color: "#244f67",
                 }}
               >
                 {fmtBR1(avgTonPerHour)} t/h
@@ -2171,13 +2171,13 @@ const EXPECTED_TON_H = metaHoraEsperada;
                       ? "1px solid rgba(34,197,94,0.40)"
                       : avgHourTrend.dir === "down"
                         ? "1px solid rgba(239,68,68,0.40)"
-                        : "1px solid rgba(255,255,255,0.12)",
+                        : "1px solid rgba(0,58,87,0.14)",
                   background:
                     avgHourTrend.dir === "up"
                       ? "rgba(34,197,94,0.14)"
                       : avgHourTrend.dir === "down"
                         ? "rgba(239,68,68,0.14)"
-                        : "rgba(255,255,255,0.06)",
+                        : "rgba(255,255,255,0.76)",
                   padding: "0 10px",
                   display: "inline-flex",
                   alignItems: "center",
@@ -2188,7 +2188,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                       ? "rgba(34,197,94,0.95)"
                       : avgHourTrend.dir === "down"
                         ? "rgba(239,68,68,0.95)"
-                        : "rgba(255,255,255,0.75)",
+                        : "#355f75",
                 }}
               >
                 {avgHourTrend.dir === "up" ? (
@@ -2213,21 +2213,21 @@ const EXPECTED_TON_H = metaHoraEsperada;
           <div style={{ flex: 1, minHeight: 0, marginTop: 2 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={hourlySeries} margin={{ top: 6, right: 12, left: -10, bottom: -2 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="period" interval={2} tickMargin={10} angle={-35} textAnchor="end" height={34} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
+                <CartesianGrid stroke="rgba(0,58,87,0.10)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={2} tickMargin={10} angle={-35} textAnchor="end" height={34} tick={{ fill: "#60798b", fontSize: 10 }} />
                 <YAxis domain={miniTonDomain} hide />
                 <Tooltip
                   formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
                   contentStyle={{
                     background: "rgba(0,0,0,0.86)",
-                    border: "1px solid rgba(255,255,255,0.12)",
+                    border: "1px solid rgba(0,58,87,0.14)",
                     borderRadius: 14,
                   }}
-                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                  labelStyle={{ color: "#0f3f5a" }}
                 />
-                <ReferenceLine y={EXPECTED_TON_H} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeDasharray="6 6" />
+                <ReferenceLine y={EXPECTED_TON_H} stroke="#9aadb8" strokeWidth={2} strokeDasharray="6 6" />
                 <ReferenceLine y={avgTonPerHour} stroke="#00CCFF" strokeWidth={2} strokeDasharray="4 4" />
-                <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+                <Area type="monotone" dataKey="ton" stroke="#009688" fill="rgba(0,150,136,0.14)" strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -2242,12 +2242,12 @@ const EXPECTED_TON_H = metaHoraEsperada;
               justifyContent: "center",
               fontSize: 12,
               fontWeight: 900,
-              color: "rgba(255,255,255,0.72)",
+              color: "#456b7f",
               flexWrap: "wrap",
             }}
           >
             <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 18, borderTop: "2px dashed rgba(255,255,255,0.40)" }} />
+              <span style={{ width: 18, borderTop: "2px dashed #8fa3b0" }} />
               <span>Esperada: {fmtBR0(EXPECTED_TON_H)} t/h</span>
             </div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
@@ -2256,7 +2256,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </div>
           </div>
 
-          <div style={{ marginTop: 2, textAlign: "center", fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.45)", lineHeight: 1.1 }}>
+          <div style={{ marginTop: 2, textAlign: "center", fontSize: 10, fontWeight: 800, color: "#8499a7", lineHeight: 1.1 }}>
             Somente horas preenchidas (Ton/H &gt; 0).
           </div>
         </div>
@@ -2273,28 +2273,28 @@ const EXPECTED_TON_H = metaHoraEsperada;
           <div style={{ height: mobile ? 150 : 180 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={last7Series} margin={{ top: 22, right: 26, left: 10, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <CartesianGrid stroke="rgba(0,58,87,0.10)" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="day"
                   interval={0}
                   padding={{ left: 18, right: 18 }}
-                  tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                  tick={{ fill: "#60798b", fontSize: 12 }}
                 />
                 <YAxis hide />
                 <Tooltip
                   formatter={(v: any) => fmtBR0(Number(v) || 0)}
                   contentStyle={{
                     background: "rgba(0,0,0,0.86)",
-                    border: "1px solid rgba(255,255,255,0.12)",
+                    border: "1px solid rgba(0,58,87,0.14)",
                     borderRadius: 14,
                   }}
-                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                  labelStyle={{ color: "#0f3f5a" }}
                 />
                 <Area
                   type="monotone"
                   dataKey="total"
-                  stroke="#ff9f1a"
-                  fill="rgba(255,159,26,0.14)"
+                  stroke="#009688"
+                  fill="rgba(0,150,136,0.14)"
                   strokeWidth={2.5}
                   dot={{ r: 3, strokeWidth: 2, fill: "rgba(7,9,13,0.92)" }}
                   activeDot={{ r: 5 }}
@@ -2389,7 +2389,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                 key={eq}
                 style={{
                   borderRadius: 16,
-                  border: "1px solid rgba(255,255,255,0.10)",
+                  border: "1px solid rgba(0,58,87,0.13)",
                   background: "rgba(0,0,0,0.18)",
                   padding: 12,
                   display: "flex",
@@ -2404,23 +2404,23 @@ const EXPECTED_TON_H = metaHoraEsperada;
                       width: 52,
                       height: 34,
                       borderRadius: 12,
-                      border: "1px solid rgba(255,159,26,0.20)",
-                      background: "rgba(255,159,26,0.10)",
+                      border: "1px solid rgba(0,150,136,0.20)",
+                      background: "rgba(0,150,136,0.12)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       fontSize: 12,
                       fontWeight: 950,
-                      color: "rgba(255,255,255,0.85)",
+                      color: "#355f75",
                     }}
                   >
                     {eq}
                   </div>
                   <div>
-                    <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
+                    <div style={{ fontWeight: 950, color: "#00324f" }}>
                       {row ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}` : "—"}
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#60798b" }}>
                       {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
                     </div>
                   </div>
@@ -2459,7 +2459,7 @@ function MiniStat({
       role={onClick ? "button" : undefined}
       style={{
         borderRadius: 16,
-        border: "1px solid rgba(255,255,255,0.10)",
+        border: "1px solid rgba(0,58,87,0.13)",
         background: "rgba(0,0,0,0.18)",
         padding: 12,
         cursor: onClick ? "pointer" : "default",
@@ -2469,12 +2469,12 @@ function MiniStat({
       onMouseEnter={(e) => {
         if (!onClick) return;
         (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)";
-        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,159,26,0.22)";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(0,150,136,0.20)";
       }}
       onMouseLeave={(e) => {
         if (!onClick) return;
         (e.currentTarget as HTMLDivElement).style.transform = "translateY(0px)";
-        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,0.10)";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(0,58,87,0.13)";
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -2483,8 +2483,8 @@ function MiniStat({
             width: 34,
             height: 34,
             borderRadius: 12,
-            border: "1px solid rgba(255,159,26,0.20)",
-            background: "rgba(255,159,26,0.10)",
+            border: "1px solid rgba(0,150,136,0.20)",
+            background: "rgba(0,150,136,0.12)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2493,13 +2493,13 @@ function MiniStat({
         >
           {icon}
         </div>
-        <div style={{ fontWeight: 900, color: "rgba(255,255,255,0.78)", fontSize: 13 }}>{title}</div>
+        <div style={{ fontWeight: 900, color: "#2d5c73", fontSize: 13 }}>{title}</div>
       </div>
 
-      <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.01, color: "rgba(255,255,255,0.92)" }}>
+      <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.01, color: "#00324f" }}>
         {value}
       </div>
-      <div style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>{sub}</div>
+      <div style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: "#60798b" }}>{sub}</div>
     </div>
   );
 }

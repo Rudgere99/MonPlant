@@ -484,12 +484,12 @@ export default function SupervisoresPlanta() {
   };
 
   return (
-    <div style={{ minHeight: "100%", padding: 18, color: "white" }}>
+    <div style={{ minHeight: "100%", padding: 18, color: "#00324f" }}>
       <div style={{ display: "grid", gap: 16 }}>
         <section
           style={{
             borderRadius: 24,
-            border: "1px solid rgba(255,255,255,0.10)",
+            border: "1px solid rgba(0,58,87,0.13)",
             background: "linear-gradient(180deg, rgba(17,24,39,0.84), rgba(5,8,12,0.92))",
             boxShadow: "0 24px 70px rgba(0,0,0,0.42)",
             overflow: "hidden",
@@ -498,7 +498,7 @@ export default function SupervisoresPlanta() {
           <div
             style={{
               padding: "20px 22px",
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              borderBottom: "1px solid rgba(0,58,87,0.10)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -514,8 +514,8 @@ export default function SupervisoresPlanta() {
                   borderRadius: 18,
                   display: "grid",
                   placeItems: "center",
-                  background: "rgba(255,159,26,0.12)",
-                  border: "1px solid rgba(255,159,26,0.24)",
+                  background: "rgba(0,150,136,0.12)",
+                  border: "1px solid rgba(0,150,136,0.24)",
                   color: "#FFB547",
                 }}
               >
@@ -523,7 +523,7 @@ export default function SupervisoresPlanta() {
               </div>
               <div>
                 <h1 style={{ margin: 0, fontSize: 24, letterSpacing: -0.6 }}>Cadastro de Supervisores da Planta</h1>
-                <p style={{ margin: "5px 0 0", color: "rgba(255,255,255,0.58)", fontWeight: 700 }}>
+                <p style={{ margin: "5px 0 0", color: "#6a8292", fontWeight: 700 }}>
                   Base para vincular supervisor, empresa, planta de operação e letra do turno.
                 </p>
               </div>
@@ -535,9 +535,9 @@ export default function SupervisoresPlanta() {
               style={{
                 height: 40,
                 borderRadius: 13,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(255,255,255,0.06)",
-                color: "white",
+                border: "1px solid rgba(0,58,87,0.14)",
+                background: "rgba(255,255,255,0.76)",
+                color: "#00324f",
                 fontWeight: 900,
                 display: "inline-flex",
                 alignItems: "center",
@@ -562,7 +562,7 @@ export default function SupervisoresPlanta() {
         <section
           style={{
             borderRadius: 22,
-            border: "1px solid rgba(255,255,255,0.10)",
+            border: "1px solid rgba(0,58,87,0.13)",
             background: "rgba(10,14,20,0.82)",
             overflow: "hidden",
           }}
@@ -570,7 +570,7 @@ export default function SupervisoresPlanta() {
           <div
             style={{
               padding: 16,
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              borderBottom: "1px solid rgba(0,58,87,0.10)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -595,14 +595,14 @@ export default function SupervisoresPlanta() {
               </div>
               <div>
                 <h2 style={{ margin: 0, fontSize: 18 }}>Regra de Turno — Escala 2x2</h2>
-                <p style={{ margin: "4px 0 0", color: "rgba(255,255,255,0.50)", fontSize: 13, fontWeight: 750 }}>
+                <p style={{ margin: "4px 0 0", color: "#7c94a5", fontSize: 13, fontWeight: 750 }}>
                   Cadastre o marco da escala e o ciclo de 8 dias. O MonPlant calcula passado e futuro automaticamente.
                 </p>
               </div>
             </div>
             <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
               <span style={regraForm.ativo ? statusActive : statusInactive}>{regraForm.ativo ? "Regra ativa" : "Regra inativa"}</span>
-              <span style={{ ...statusInactive, color: "rgba(255,255,255,0.62)" }}>{turnoRegras.length} versão(ões)</span>
+              <span style={{ ...statusInactive, color: "#60798b" }}>{turnoRegras.length} versão(ões)</span>
               <button type="button" onClick={loadTurnoRegras} style={smallGhostButton}>
                 Recarregar
               </button>
@@ -679,8 +679,8 @@ export default function SupervisoresPlanta() {
                   gap: 10,
                   padding: "11px 12px",
                   borderRadius: 15,
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(0,58,87,0.13)",
+                  background: "rgba(255,255,255,0.66)",
                   cursor: "pointer",
                 }}
               >
@@ -719,10 +719,10 @@ export default function SupervisoresPlanta() {
                 }}
               >
                 <div>
-                  <div style={{ color: "rgba(255,255,255,0.48)", fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                  <div style={{ color: "#8095a3", fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: 0.6 }}>
                     Método adotado
                   </div>
-                  <p style={{ margin: "6px 0 0", color: "rgba(255,255,255,0.72)", fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>
+                  <p style={{ margin: "6px 0 0", color: "#456b7f", fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>
                     A data base marca o primeiro dia do Bloco 1. Cada bloco dura 2 dias. Ao terminar o Bloco 4, o ciclo volta
                     para o Bloco 1. Esse cálculo funciona para datas anteriores e posteriores à data base.
                   </p>
@@ -735,7 +735,7 @@ export default function SupervisoresPlanta() {
               <div style={{ overflowX: "auto", borderRadius: 18, border: "1px solid rgba(255,255,255,0.09)" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
                   <thead>
-                    <tr style={{ background: "rgba(255,255,255,0.04)" }}>
+                    <tr style={{ background: "rgba(255,255,255,0.66)" }}>
                       <Th>Data</Th>
                       <Th>Turno 01</Th>
                       <Th>Turno 02</Th>
@@ -744,7 +744,7 @@ export default function SupervisoresPlanta() {
                   </thead>
                   <tbody>
                     {previewRows.map((row) => (
-                      <tr key={row.dateKey} style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                      <tr key={row.dateKey} style={{ borderTop: "1px solid rgba(0,58,87,0.09)" }}>
                         <Td>{formatDateKeyPt(row.dateKey)}</Td>
                         <Td><span style={letterBadge}>{row.turno_01}</span></Td>
                         <Td><span style={letterBadge}>{row.turno_02}</span></Td>
@@ -763,7 +763,7 @@ export default function SupervisoresPlanta() {
             onSubmit={submit}
             style={{
               borderRadius: 22,
-              border: "1px solid rgba(255,255,255,0.10)",
+              border: "1px solid rgba(0,58,87,0.13)",
               background: "rgba(10,14,20,0.82)",
               padding: 18,
               display: "grid",
@@ -774,7 +774,7 @@ export default function SupervisoresPlanta() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: 18 }}>{editingId ? "Editar cadastro" : "Novo cadastro"}</h2>
-                <p style={{ margin: "4px 0 0", color: "rgba(255,255,255,0.48)", fontSize: 13, fontWeight: 700 }}>
+                <p style={{ margin: "4px 0 0", color: "#8095a3", fontSize: 13, fontWeight: 700 }}>
                   Preencha os dados operacionais do supervisor.
                 </p>
               </div>
@@ -827,9 +827,9 @@ export default function SupervisoresPlanta() {
                     style={{
                       height: 42,
                       borderRadius: 14,
-                      border: `1px solid ${form.letra_turno === letra ? "rgba(255,159,26,0.45)" : "rgba(255,255,255,0.12)"}`,
-                      background: form.letra_turno === letra ? "rgba(255,159,26,0.16)" : "rgba(255,255,255,0.05)",
-                      color: form.letra_turno === letra ? "#FFB547" : "rgba(255,255,255,0.82)",
+                      border: `1px solid ${form.letra_turno === letra ? "rgba(0,150,136,0.40)" : "rgba(0,58,87,0.14)"}`,
+                      background: form.letra_turno === letra ? "rgba(0,150,136,0.16)" : "rgba(255,255,255,0.70)",
+                      color: form.letra_turno === letra ? "#FFB547" : "#244f67",
                       fontWeight: 950,
                       cursor: "pointer",
                     }}
@@ -847,8 +847,8 @@ export default function SupervisoresPlanta() {
                 gap: 10,
                 padding: "11px 12px",
                 borderRadius: 15,
-                border: "1px solid rgba(255,255,255,0.10)",
-                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(0,58,87,0.13)",
+                background: "rgba(255,255,255,0.66)",
                 cursor: "pointer",
               }}
             >
@@ -869,9 +869,9 @@ export default function SupervisoresPlanta() {
               style={{
                 height: 46,
                 borderRadius: 15,
-                border: "1px solid rgba(255,159,26,0.30)",
-                background: "linear-gradient(180deg, rgba(255,159,26,0.95), rgba(231,126,22,0.92))",
-                color: "#111827",
+                border: "1px solid rgba(0,150,136,0.28)",
+                background: "linear-gradient(180deg, rgba(0,150,136,0.95), rgba(0,124,137,0.92))",
+                color: "#ffffff",
                 fontWeight: 950,
                 cursor: saving ? "not-allowed" : "pointer",
                 display: "inline-flex",
@@ -889,7 +889,7 @@ export default function SupervisoresPlanta() {
           <div
             style={{
               borderRadius: 22,
-              border: "1px solid rgba(255,255,255,0.10)",
+              border: "1px solid rgba(0,58,87,0.13)",
               background: "rgba(10,14,20,0.82)",
               overflow: "hidden",
               minWidth: 0,
@@ -898,7 +898,7 @@ export default function SupervisoresPlanta() {
             <div
               style={{
                 padding: 16,
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
+                borderBottom: "1px solid rgba(0,58,87,0.10)",
                 display: "grid",
                 gridTemplateColumns: "minmax(220px, 1fr) 160px 130px 150px",
                 gap: 10,
@@ -906,7 +906,7 @@ export default function SupervisoresPlanta() {
               }}
             >
               <div style={{ position: "relative" }}>
-                <Search size={16} style={{ position: "absolute", left: 12, top: 12, color: "rgba(255,255,255,0.44)" }} />
+                <Search size={16} style={{ position: "absolute", left: 12, top: 12, color: "#8499a7" }} />
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
@@ -946,7 +946,7 @@ export default function SupervisoresPlanta() {
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
                 <thead>
-                  <tr style={{ background: "rgba(255,255,255,0.04)" }}>
+                  <tr style={{ background: "rgba(255,255,255,0.66)" }}>
                     <Th>Supervisor</Th>
                     <Th>Empresa</Th>
                     <Th>Planta</Th>
@@ -967,7 +967,7 @@ export default function SupervisoresPlanta() {
                     </tr>
                   ) : (
                     filteredItems.map((item) => (
-                      <tr key={item.id} style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                      <tr key={item.id} style={{ borderTop: "1px solid rgba(0,58,87,0.09)" }}>
                         <Td>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <div
@@ -1025,7 +1025,7 @@ export default function SupervisoresPlanta() {
 function LetterSelect({ label, value, onChange }: { label: string; value: LetraTurno; onChange: (value: LetraTurno) => void }) {
   return (
     <div style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.48)", fontWeight: 900, textTransform: "uppercase" }}>{label}</span>
+      <span style={{ fontSize: 11, color: "#8095a3", fontWeight: 900, textTransform: "uppercase" }}>{label}</span>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
         {letras.map((letra) => (
           <button
@@ -1035,9 +1035,9 @@ function LetterSelect({ label, value, onChange }: { label: string; value: LetraT
             style={{
               height: 32,
               borderRadius: 11,
-              border: `1px solid ${value === letra ? "rgba(255,159,26,0.45)" : "rgba(255,255,255,0.12)"}`,
-              background: value === letra ? "rgba(255,159,26,0.16)" : "rgba(255,255,255,0.05)",
-              color: value === letra ? "#FFB547" : "rgba(255,255,255,0.82)",
+              border: `1px solid ${value === letra ? "rgba(0,150,136,0.40)" : "rgba(0,58,87,0.14)"}`,
+              background: value === letra ? "rgba(0,150,136,0.16)" : "rgba(255,255,255,0.70)",
+              color: value === letra ? "#FFB547" : "#244f67",
               fontWeight: 950,
               cursor: "pointer",
             }}
@@ -1060,10 +1060,10 @@ function Metric({ title, value, muted }: { title: string; value: React.ReactNode
         padding: 14,
       }}
     >
-      <div style={{ color: "rgba(255,255,255,0.48)", fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: 0.6 }}>
+      <div style={{ color: "#8095a3", fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: 0.6 }}>
         {title}
       </div>
-      <div style={{ marginTop: 6, fontSize: 24, fontWeight: 950, color: muted ? "rgba(255,255,255,0.62)" : "#FFB547" }}>{value}</div>
+      <div style={{ marginTop: 6, fontSize: 24, fontWeight: 950, color: muted ? "#60798b" : "#FFB547" }}>{value}</div>
     </div>
   );
 }
@@ -1071,7 +1071,7 @@ function Metric({ title, value, muted }: { title: string; value: React.ReactNode
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "grid", gap: 7 }}>
-      <span style={{ fontSize: 13, fontWeight: 900, color: "rgba(255,255,255,0.72)" }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 900, color: "#456b7f" }}>{label}</span>
       {children}
     </label>
   );
@@ -1098,23 +1098,23 @@ function Alert({ tone, text }: { tone: "success" | "error"; text: string }) {
 
 function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
   return (
-    <th style={{ textAlign: align, padding: "12px 14px", color: "rgba(255,255,255,0.50)", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.7 }}>
+    <th style={{ textAlign: align, padding: "12px 14px", color: "#7c94a5", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.7 }}>
       {children}
     </th>
   );
 }
 
 function Td({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
-  return <td style={{ textAlign: align, padding: "13px 14px", color: "rgba(255,255,255,0.82)", fontSize: 14 }}>{children}</td>;
+  return <td style={{ textAlign: align, padding: "13px 14px", color: "#244f67", fontSize: 14 }}>{children}</td>;
 }
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   height: 42,
   borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.11)",
-  background: "rgba(255,255,255,0.055)",
-  color: "white",
+  border: "1px solid rgba(0,58,87,0.13)",
+  background: "rgba(255,255,255,0.78)",
+  color: "#00324f",
   padding: "0 12px",
   outline: "none",
   fontWeight: 800,
@@ -1124,9 +1124,9 @@ const inputStyle: React.CSSProperties = {
 const primaryButtonStyle: React.CSSProperties = {
   height: 46,
   borderRadius: 15,
-  border: "1px solid rgba(255,159,26,0.30)",
-  background: "linear-gradient(180deg, rgba(255,159,26,0.95), rgba(231,126,22,0.92))",
-  color: "#111827",
+  border: "1px solid rgba(0,150,136,0.28)",
+  background: "linear-gradient(180deg, rgba(0,150,136,0.95), rgba(0,124,137,0.92))",
+  color: "#ffffff",
   fontWeight: 950,
   cursor: "pointer",
   display: "inline-flex",
@@ -1138,9 +1138,9 @@ const primaryButtonStyle: React.CSSProperties = {
 const smallGhostButton: React.CSSProperties = {
   height: 34,
   borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.05)",
-  color: "white",
+  border: "1px solid rgba(0,58,87,0.14)",
+  background: "rgba(255,255,255,0.70)",
+  color: "#00324f",
   fontWeight: 900,
   padding: "0 12px",
   cursor: "pointer",
@@ -1150,9 +1150,9 @@ const iconButton: React.CSSProperties = {
   height: 34,
   width: 34,
   borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.055)",
-  color: "white",
+  border: "1px solid rgba(0,58,87,0.14)",
+  background: "rgba(255,255,255,0.78)",
+  color: "#00324f",
   display: "inline-grid",
   placeItems: "center",
   cursor: "pointer",
@@ -1171,8 +1171,8 @@ const letterBadge: React.CSSProperties = {
   height: 30,
   minWidth: 34,
   borderRadius: 12,
-  background: "rgba(255,159,26,0.13)",
-  border: "1px solid rgba(255,159,26,0.26)",
+  background: "rgba(0,150,136,0.13)",
+  border: "1px solid rgba(0,150,136,0.24)",
   color: "#FFB547",
   fontWeight: 950,
 };
@@ -1192,13 +1192,13 @@ const statusActive: React.CSSProperties = {
 const statusInactive: React.CSSProperties = {
   ...statusActive,
   background: "rgba(148,163,184,0.08)",
-  color: "rgba(255,255,255,0.48)",
+  color: "#8095a3",
   border: "1px solid rgba(148,163,184,0.16)",
 };
 
 const emptyCellStyle: React.CSSProperties = {
   padding: 28,
   textAlign: "center",
-  color: "rgba(255,255,255,0.48)",
+  color: "#8095a3",
   fontWeight: 850,
 };

@@ -563,11 +563,12 @@ a { color: inherit; text-decoration: none; }
   height:42px;
   padding:0 12px;
   border-radius:14px;
-  border:1px solid rgba(255,255,255,0.10);
-  background: rgba(239,68,68,0.14);
-  color: rgba(255,255,255,0.92);
+  border:1px solid rgba(0,58,87,0.14);
+  background: rgba(239,68,68,0.10);
+  color: #00324f;
   font-weight: 900;
   font-size: 13px;
+}
 
   /* Dashboard charts: reduzir poluição no mobile */
 @media (max-width: 860px) {
@@ -610,13 +611,13 @@ a { color: inherit; text-decoration: none; }
   border-radius: 16px;
   font-weight: 900;
   font-size: 13px;
-  color: rgba(255,255,255,0.75);
+  color: #48677a;
   border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.04);
 }
 
 .mp-top-tab.is-active{
-  color: rgba(255,255,255,0.95);
+  color: #00324f;
   border-color: rgba(59,130,246,0.35);
   background: rgba(59,130,246,0.12);
 }
@@ -665,13 +666,13 @@ a { color: inherit; text-decoration: none; }
   font-weight: 900;
   font-size: 13px;
   line-height: 1;
-  color: rgba(255,255,255,0.75);
+  color: #48677a;
   border: 1px solid rgba(255,255,255,0.10);
   background: rgba(255,255,255,0.04);
 }
 
 .mp-top .mp-top-tabs-inline .mp-top-tab.is-active{
-  color: rgba(255,255,255,0.95);
+  color: #00324f;
   border-color: rgba(59,130,246,0.35);
   background: rgba(59,130,246,0.12);
 }
@@ -683,4 +684,143 @@ a { color: inherit; text-decoration: none; }
     border-radius: 14px;
     font-size: 12px;
   }
+}
+
+
+/* =========================
+   MonPlant • Prévia Trindade
+   ========================= */
+:root{
+  --bg: #eef6f8;
+  --panel: rgba(255,255,255,.88);
+  --panel2: rgba(248,252,253,.96);
+  --stroke: rgba(0,58,87,.13);
+  --stroke2: rgba(0,150,136,.28);
+  --text: #00324f;
+  --muted: #60798b;
+  --muted2: #7c94a5;
+  --brand: #009688;
+  --brand-strong: #007c89;
+  --brand2: rgba(0,150,136,.13);
+  --danger: #dc2626;
+  --warning: #b7791f;
+}
+
+html,
+body,
+#root{
+  background:
+    radial-gradient(900px 420px at 94% 0%, rgba(0,150,136,.12), transparent 62%),
+    linear-gradient(180deg, #f7fbfc 0%, #eef6f8 42%, #e8f2f5 100%);
+  color: var(--text);
+}
+
+input,
+select,
+textarea{
+  background: rgba(255,255,255,.92);
+  color: var(--text);
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+}
+
+input:focus,
+select:focus,
+textarea:focus{
+  border-color: rgba(0,150,136,.45);
+  box-shadow: 0 0 0 4px rgba(0,150,136,.10);
+}
+
+::-webkit-scrollbar-thumb { background: rgba(0,58,87,.14); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,58,87,.24); }
+
+.mp-page-title{
+  color: var(--text);
+  font-size: clamp(30px, 4vw, 42px);
+  letter-spacing: -1.1px;
+}
+
+.mp-page-sub{ color: var(--muted); }
+
+.mp-card{
+  background: rgba(255,255,255,.88) !important;
+  border: 1px solid var(--stroke) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 24px 60px rgba(0,58,87,.10) !important;
+  color: var(--text);
+}
+
+.mp-card-h{
+  border-bottom: 1px solid rgba(0,58,87,.10) !important;
+  color: var(--text);
+}
+
+.mp-chip{
+  background: rgba(0,150,136,.13);
+  border: 1px solid rgba(0,150,136,.18);
+  color: #008f83;
+}
+
+.mp-btn{
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.78);
+  color: var(--text);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(0,58,87,.07);
+}
+.mp-btn:hover{ background: #fff; border-color: rgba(0,150,136,.24); }
+.mp-btn-primary{
+  color: white;
+  border-color: transparent;
+  background: linear-gradient(135deg, #007c89, #009688);
+}
+.mp-btn-primary:hover{ background: linear-gradient(135deg, #006b78, #008f83); }
+.mp-btn-danger{
+  color: #b91c1c;
+  border-color: rgba(220,38,38,.18);
+  background: rgba(254,226,226,.72);
+}
+
+.mp-label{ color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.mp-input,
+.mp-textarea,
+.mp-select{
+  background: rgba(255,255,255,.90);
+  border: 1px solid var(--stroke);
+  color: var(--text);
+  border-radius: 14px;
+}
+.mp-input::placeholder,
+.mp-textarea::placeholder{ color: #8ca2b0; }
+.mp-input:focus,
+.mp-textarea:focus,
+.mp-select:focus{
+  border-color: rgba(0,150,136,.45);
+  box-shadow: 0 0 0 4px rgba(0,150,136,.10);
+}
+
+.mp-row{
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.70);
+  border-radius: 16px;
+}
+.mp-row:hover{ background: rgba(232,247,246,.78); }
+.mp-row .mp-faixa{ color: var(--text); }
+.mp-help{ color: var(--muted2); }
+
+.mp-top-tabs{
+  background: rgba(248,252,253,.86);
+  border-bottom: 1px solid var(--stroke);
+}
+.mp-top-tab,
+.mp-top .mp-top-tabs-inline .mp-top-tab{
+  color: #48677a;
+  border-color: rgba(0,58,87,.12);
+  background: rgba(255,255,255,.70);
+}
+.mp-top-tab.is-active,
+.mp-top .mp-top-tabs-inline .mp-top-tab.is-active{
+  color: #008f83;
+  border-color: rgba(0,150,136,.24);
+  background: rgba(0,150,136,.12);
 }

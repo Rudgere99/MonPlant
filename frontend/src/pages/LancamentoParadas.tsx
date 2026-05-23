@@ -165,13 +165,13 @@ function Dot({ color }: { color: string }) {
 
 const cardStyle: React.CSSProperties = {
   borderRadius: 22,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(14,18,22,0.78)",
+  border: "1px solid rgba(0,58,87,0.13)",
+  background: "rgba(255,255,255,0.90)",
   padding: 16,
 };
 
 const labelStyle: React.CSSProperties = {
-  color: "rgba(255,255,255,0.55)",
+  color: "#60798b",
   fontWeight: 900,
   fontSize: 12,
   letterSpacing: 0.2,
@@ -181,9 +181,9 @@ const labelStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: "100%",
   borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.04)",
-  color: "rgba(255,255,255,0.92)",
+  border: "1px solid rgba(0,58,87,0.13)",
+  background: "rgba(255,255,255,0.66)",
+  color: "#00324f",
   padding: "10px 12px",
   outline: "none",
   fontWeight: 800,
@@ -191,9 +191,9 @@ const inputStyle: React.CSSProperties = {
 
 const btnStyle: React.CSSProperties = {
   borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.06)",
-  color: "rgba(255,255,255,0.90)",
+  border: "1px solid rgba(0,58,87,0.14)",
+  background: "rgba(255,255,255,0.76)",
+  color: "#00324f",
   padding: "10px 12px",
   fontWeight: 900,
   cursor: "pointer",
@@ -485,7 +485,7 @@ export default function LancamentoParadas() {
         <div>
           <div
             style={{
-              color: "rgba(255,255,255,0.92)",
+              color: "#00324f",
               fontWeight: 980,
               fontSize: mobile ? 18 : 20,
             }}
@@ -494,7 +494,7 @@ export default function LancamentoParadas() {
           </div>
           <div
             style={{
-              color: "rgba(255,255,255,0.55)",
+              color: "#60798b",
               fontWeight: 800,
               marginTop: 2,
             }}
@@ -596,10 +596,10 @@ export default function LancamentoParadas() {
               width: mobile ? "100%" : undefined,
               background: periodMode
                 ? "rgba(249,115,22,0.18)"
-                : "rgba(255,255,255,0.06)",
+                : "rgba(255,255,255,0.76)",
               borderColor: periodMode
                 ? "rgba(249,115,22,0.45)"
-                : "rgba(255,255,255,0.12)",
+                : "rgba(0,58,87,0.14)",
             }}
           >
             {periodMode ? "Período ativo" : "Dia"}
@@ -647,12 +647,12 @@ export default function LancamentoParadas() {
           }}
         >
           <div>
-            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950 }}>
+            <div style={{ color: "#00324f", fontWeight: 950 }}>
               {chartTitle}
             </div>
             <div
               style={{
-                color: "rgba(255,255,255,0.55)",
+                color: "#60798b",
                 fontWeight: 800,
                 marginTop: 2,
               }}
@@ -670,21 +670,21 @@ export default function LancamentoParadas() {
               data={chartData}
               margin={{ top: 28, right: 16, left: 0, bottom: 6 }}
             >
-              <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+              <CartesianGrid stroke="rgba(0,58,87,0.10)" vertical={false} />
               <XAxis
                 dataKey="period"
                 tick={{
-                  fill: "rgba(255,255,255,0.62)",
+                  fill: "#60798b",
                   fontSize: mobile ? 9 : 11,
                   fontWeight: 800,
                 }}
                 interval={mobile ? 1 : 0}
-                axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                axisLine={{ stroke: "rgba(0,58,87,0.14)" }}
                 tickLine={false}
               />
               <YAxis
                 tick={{
-                  fill: "rgba(255,255,255,0.62)",
+                  fill: "#60798b",
                   fontSize: 11,
                   fontWeight: 800,
                 }}
@@ -695,7 +695,7 @@ export default function LancamentoParadas() {
               <Tooltip
                 contentStyle={{
                   background: "rgba(0,0,0,0.88)",
-                  border: "1px solid rgba(255,255,255,0.15)",
+                  border: "1px solid rgba(0,58,87,0.15)",
                   borderRadius: 12,
                 }}
                 formatter={(v: any) => [
@@ -721,7 +721,7 @@ export default function LancamentoParadas() {
                     Number(v || 0) > 0 ? fmtSmart(Number(v || 0)) : ""
                   }
                   style={{
-                    fill: "rgba(255,255,255,0.88)",
+                    fill: "#00324f",
                     fontWeight: 950,
                     fontSize: mobile ? 9 : 11,
                   }}
@@ -735,7 +735,7 @@ export default function LancamentoParadas() {
       <div style={cardStyle}>
         <div
           style={{
-            color: "rgba(255,255,255,0.92)",
+            color: "#00324f",
             fontWeight: 950,
             marginBottom: 10,
           }}
@@ -757,7 +757,7 @@ export default function LancamentoParadas() {
                 <thead>
                   <tr
                     style={{
-                      color: "rgba(255,255,255,0.55)",
+                      color: "#60798b",
                       fontWeight: 900,
                       fontSize: 12,
                     }}
@@ -786,12 +786,12 @@ export default function LancamentoParadas() {
                     return (
                       <tr
                         key={r.period}
-                        style={{ background: "rgba(255,255,255,0.04)" }}
+                        style={{ background: "rgba(255,255,255,0.66)" }}
                       >
                         <td
                           style={{
                             padding: "10px 10px",
-                            color: "rgba(255,255,255,0.85)",
+                            color: "#355f75",
                             fontWeight: 950,
                           }}
                         >
@@ -879,8 +879,8 @@ export default function LancamentoParadas() {
                   key={r.period}
                   style={{
                     borderRadius: 18,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(0,58,87,0.10)",
+                    background: "rgba(255,255,255,0.66)",
                     padding: 12,
                     display: "grid",
                     gap: 10,
@@ -896,7 +896,7 @@ export default function LancamentoParadas() {
                   >
                     <div
                       style={{
-                        color: "rgba(255,255,255,0.92)",
+                        color: "#00324f",
                         fontWeight: 950,
                       }}
                     >
@@ -907,7 +907,7 @@ export default function LancamentoParadas() {
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 6,
-                        color: "rgba(255,255,255,0.72)",
+                        color: "#456b7f",
                         fontWeight: 850,
                         fontSize: 12,
                       }}
@@ -989,7 +989,7 @@ export default function LancamentoParadas() {
         <div
           style={{
             marginTop: 10,
-            color: "rgba(255,255,255,0.55)",
+            color: "#60798b",
             fontWeight: 850,
             fontSize: 12,
           }}

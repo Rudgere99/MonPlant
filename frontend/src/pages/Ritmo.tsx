@@ -284,13 +284,13 @@ function buildSummaryMetrics(args: {
 
 const card: React.CSSProperties = {
   borderRadius: 22,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(14,18,22,0.78)",
+  border: "1px solid rgba(0,58,87,0.13)",
+  background: "rgba(255,255,255,0.90)",
   padding: 16,
 };
 
 const label: React.CSSProperties = {
-  color: "rgba(255,255,255,0.55)",
+  color: "#60798b",
   fontWeight: 900,
   fontSize: 12,
   letterSpacing: 0.2,
@@ -299,9 +299,9 @@ const label: React.CSSProperties = {
 
 const input: React.CSSProperties = {
   borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.04)",
-  color: "rgba(255,255,255,0.92)",
+  border: "1px solid rgba(0,58,87,0.13)",
+  background: "rgba(255,255,255,0.66)",
+  color: "#00324f",
   padding: "10px 12px",
   outline: "none",
   fontWeight: 900,
@@ -309,9 +309,9 @@ const input: React.CSSProperties = {
 
 const btn: React.CSSProperties = {
   borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.06)",
-  color: "rgba(255,255,255,0.92)",
+  border: "1px solid rgba(0,58,87,0.14)",
+  background: "rgba(255,255,255,0.76)",
+  color: "#00324f",
   padding: "10px 12px",
   fontWeight: 950,
   cursor: "pointer",
@@ -339,7 +339,7 @@ function HeroKPI(props: {
     green: "rgba(34,197,94,0.95)",
     yellow: "rgba(250,204,21,0.95)",
     red: "rgba(239,68,68,0.95)",
-    neutral: "rgba(255,255,255,0.12)",
+    neutral: "rgba(0,58,87,0.14)",
   };
 
   return (
@@ -347,7 +347,7 @@ function HeroKPI(props: {
       style={{
         ...card,
         gridColumn: `span ${mobileSpan}`,
-        borderColor: accent === "neutral" ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.14)",
+        borderColor: accent === "neutral" ? "rgba(0,58,87,0.13)" : "rgba(0,58,87,0.14)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -365,8 +365,8 @@ function HeroKPI(props: {
       />
       <div style={{ position: "relative" }}>
         <div style={label}>{title}</div>
-        <div style={{ color: accent === "neutral" ? "rgba(255,255,255,0.94)" : accentMap[accent], fontWeight: 980, fontSize: 30, marginTop: 6 }}>{value}</div>
-        {sub ? <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, marginTop: 2 }}>{sub}</div> : null}
+        <div style={{ color: accent === "neutral" ? "#00324f" : accentMap[accent], fontWeight: 980, fontSize: 30, marginTop: 6 }}>{value}</div>
+        {sub ? <div style={{ color: "#4d7285", fontWeight: 900, marginTop: 2 }}>{sub}</div> : null}
       </div>
     </div>
   );
@@ -397,9 +397,9 @@ function BigStatus(props: { kind: "green" | "yellow" | "red"; title: string; sub
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <div style={{ width: 16, height: 16, borderRadius: 99, background: map.fg, boxShadow: `0 0 0 8px ${map.bg}` }} />
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 990, fontSize: 18 }}>{props.title}</div>
+          <div style={{ color: "#00324f", fontWeight: 990, fontSize: 18 }}>{props.title}</div>
           {props.subtitle ? (
-            <div style={{ color: "rgba(255,255,255,0.72)", fontWeight: 900, fontSize: 13 }}>{props.subtitle}</div>
+            <div style={{ color: "#456b7f", fontWeight: 900, fontSize: 13 }}>{props.subtitle}</div>
           ) : null}
         </div>
       </div>
@@ -417,14 +417,14 @@ function BigStatus(props: { kind: "green" | "yellow" | "red"; title: string; sub
 
 const exportMiniCard: React.CSSProperties = {
   borderRadius: 26,
-  border: "1px solid rgba(255,255,255,0.12)",
+  border: "1px solid rgba(0,58,87,0.14)",
   background: "linear-gradient(180deg, rgba(18,22,26,0.98) 0%, rgba(10,14,18,0.98) 100%)",
   padding: 0,
   lineHeight: 1.55,
   display: "inline-block",
   width: "fit-content",
   maxWidth: 780,
-  boxShadow: "0 18px 46px rgba(0,0,0,0.55)",
+  boxShadow: "0 18px 46px rgba(0,37,56,0.18)",
   overflow: "hidden",
 };
 
@@ -451,7 +451,7 @@ const exportLineRow: React.CSSProperties = {
   gap: 14,
   fontWeight: 950,
   fontSize: 18,
-  color: "rgba(255,255,255,0.92)",
+  color: "#00324f",
 };
 
 const exportLabel: React.CSSProperties = {
@@ -465,7 +465,7 @@ const exportValue: React.CSSProperties = {
 
 const exportSep: React.CSSProperties = {
   height: 1,
-  background: "rgba(255,255,255,0.12)",
+  background: "rgba(0,58,87,0.14)",
   margin: "12px 0",
 };
 
@@ -492,8 +492,8 @@ const exportLogoBox: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   padding: 24,
-  borderLeft: "1px solid rgba(255,255,255,0.12)",
-  borderTop: "1px solid rgba(255,255,255,0.10)",
+  borderLeft: "1px solid rgba(0,58,87,0.14)",
+  borderTop: "1px solid rgba(0,58,87,0.13)",
   background: "linear-gradient(180deg, rgba(18,22,26,0.98) 0%, rgba(10,14,18,0.98) 100%)",
 };
 
@@ -949,8 +949,8 @@ export default function Ritmo() {
                 key={`${m.title}-${idx}`}
                 style={{
                   ...exportSummaryCell,
-                  borderRight: !mobile && !isRightCol ? "1px solid rgba(255,255,255,0.12)" : "none",
-                  borderBottom: isLastMobile ? "1px solid rgba(255,255,255,0.12)" : "none",
+                  borderRight: !mobile && !isRightCol ? "1px solid rgba(0,58,87,0.14)" : "none",
+                  borderBottom: isLastMobile ? "1px solid rgba(0,58,87,0.14)" : "none",
                 }}
               >
                 <div style={exportPlantStrip}>{m.title}</div>
@@ -964,10 +964,10 @@ export default function Ritmo() {
           style={{
             ...exportSummaryGrid,
             gridTemplateColumns: mobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
-            borderTop: "1px solid rgba(255,255,255,0.10)",
+            borderTop: "1px solid rgba(0,58,87,0.13)",
           }}
         >
-          <div style={{ ...exportSummaryCell, borderBottom: mobile ? "1px solid rgba(255,255,255,0.12)" : "none" }}>
+          <div style={{ ...exportSummaryCell, borderBottom: mobile ? "1px solid rgba(0,58,87,0.14)" : "none" }}>
             <div style={exportSummaryTotalTitle}>Acumulado das plantas</div>
             {renderSummaryBody(total)}
           </div>
@@ -975,7 +975,7 @@ export default function Ritmo() {
           <div
             style={{
               ...exportLogoBox,
-              borderLeft: mobile ? "none" : "1px solid rgba(255,255,255,0.12)",
+              borderLeft: mobile ? "none" : "1px solid rgba(0,58,87,0.14)",
             }}
           >
             <img src="/assets/logo-trindade.png" alt="Trindade" style={exportLogoImg} />
@@ -996,11 +996,11 @@ return (
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 990, fontSize: 20 }}>
+            <div style={{ color: "#00324f", fontWeight: 990, fontSize: 20 }}>
               Ritmo do Dia • {selectedPlantName}{plantId === "all" ? " • Consolidado" : ""}
             </div>
-            <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>
-              Dia: <span style={{ color: "rgba(255,255,255,0.92)" }}>{dayBR}</span>{" "}
+            <div style={{ color: "#5c7e8f", fontWeight: 900, fontSize: 13 }}>
+              Dia: <span style={{ color: "#00324f" }}>{dayBR}</span>{" "}
               <span style={{ opacity: 0.55 }}>•</span>{" "}
               <span style={{ opacity: 0.85 }}>{isClosedDay ? "Período encerrado" : "Dia em andamento"}</span>
             </div>
@@ -1039,7 +1039,7 @@ return (
                   minHeight: 41,
                   display: "flex",
                   alignItems: "center",
-                  color: rhythmEquipment?.equipment ? "#ffb84d" : "rgba(255,255,255,0.58)",
+                  color: rhythmEquipment?.equipment ? "#009688" : "#6a8292",
                 }}
               >
                 {plantId === "all"
@@ -1059,7 +1059,7 @@ return (
         {err ? (
           <div style={{ marginTop: 10, color: "rgba(239,68,68,0.95)", fontWeight: 900 }}>{err}</div>
         ) : loading ? (
-          <div style={{ marginTop: 10, color: "rgba(255,255,255,0.70)", fontWeight: 900 }}>Carregando…</div>
+          <div style={{ marginTop: 10, color: "#4d7285", fontWeight: 900 }}>Carregando…</div>
         ) : null}
       </div>
 
@@ -1099,9 +1099,9 @@ return (
       <div style={{ ...card, display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
           <div style={label}>Progresso da meta</div>
-          <div style={{ color: "rgba(255,255,255,0.85)", fontWeight: 950 }}>{metaDay ? fmtPct(progressPct, 1) : "—"}</div>
+          <div style={{ color: "#355f75", fontWeight: 950 }}>{metaDay ? fmtPct(progressPct, 1) : "—"}</div>
         </div>
-        <div style={{ height: 14, borderRadius: 99, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+        <div style={{ height: 14, borderRadius: 99, background: "rgba(0,58,87,0.10)", overflow: "hidden" }}>
           <div
             style={{
               width: `${progressPct}%`,
@@ -1124,29 +1124,29 @@ return (
       <div style={{ ...card }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
           <div>
-            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 16 }}>Ritmo acumulado</div>
-            <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>
+            <div style={{ color: "#00324f", fontWeight: 980, fontSize: 16 }}>Ritmo acumulado</div>
+            <div style={{ color: "#5c7e8f", fontWeight: 900, fontSize: 13 }}>
               Real x Linha ideal (meta distribuída por hora)
             </div>
           </div>
-          <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>
-            Último período: <b style={{ color: "rgba(255,255,255,0.92)" }}>{currPeriod || "—"}</b>
+          <div style={{ color: "#5c7e8f", fontWeight: 900, fontSize: 13 }}>
+            Último período: <b style={{ color: "#00324f" }}>{currPeriod || "—"}</b>
           </div>
         </div>
 
         <div style={{ height: 220, width: "100%", minWidth: 0, marginTop: 10 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={series} margin={{ top: 10, right: 14, left: 0, bottom: 0 }}>
-              <XAxis dataKey="hour" tick={{ fill: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }} />
-              <YAxis tick={{ fill: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }} width={48} />
+              <XAxis dataKey="hour" tick={{ fill: "#60798b", fontWeight: 900, fontSize: 12 }} />
+              <YAxis tick={{ fill: "#60798b", fontWeight: 900, fontSize: 12 }} width={48} />
               <Tooltip
                 formatter={(v: any) => tooltipFmt(v)}
                 labelFormatter={(l: any) => `Hora ${l}:00`}
                 contentStyle={{
-                  background: "rgba(14,18,22,0.98)",
-                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.98)",
+                  border: "1px solid rgba(0,58,87,0.14)",
                   borderRadius: 12,
-                  color: "rgba(255,255,255,0.92)",
+                  color: "#00324f",
                   fontWeight: 900,
                 }}
               />
@@ -1161,8 +1161,8 @@ return (
       <div style={grid12}>
         <div style={{ ...span(12), ...card }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 16 }}>Resumo</div>
-            <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>{dayBR}</div>
+            <div style={{ color: "#00324f", fontWeight: 980, fontSize: 16 }}>Resumo</div>
+            <div style={{ color: "#5c7e8f", fontWeight: 900, fontSize: 13 }}>{dayBR}</div>
           </div>
 
           <div
@@ -1182,7 +1182,7 @@ return (
               : renderSummaryCard(singleSummary, 0)}
           </div>
 
-          <div style={{ marginTop: 10, color: "rgba(255,255,255,0.60)", fontWeight: 900, fontSize: 12 }}>
+          <div style={{ marginTop: 10, color: "#60798b", fontWeight: 900, fontSize: 12 }}>
             * t/h (1 casa), toneladas (1), % (1).
           </div>
         </div>

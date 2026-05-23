@@ -95,11 +95,11 @@ type StatsMonth = {
 };
 
 const COLORS = {
-  bgCard: "rgba(14,18,22,0.78)",
-  stroke: "rgba(255,255,255,0.10)",
-  text: "rgba(255,255,255,0.92)",
-  sub: "rgba(255,255,255,0.55)",
-  orange: "#ff9f1a",
+  bgCard: "rgba(255,255,255,0.90)",
+  stroke: "rgba(0,58,87,0.13)",
+  text: "#00324f",
+  sub: "#60798b",
+  orange: "#009688",
   cyan: "#00d2ff",
   slate: "rgba(148,163,184,0.70)",
   green: "#22c55e",
@@ -293,7 +293,7 @@ function Card({
         borderRadius: 22,
         border: `1px solid ${COLORS.stroke}`,
         background: COLORS.bgCard,
-        boxShadow: "0 30px 60px rgba(0,0,0,0.55)",
+        boxShadow: "0 30px 60px rgba(0,37,56,0.18)",
         backdropFilter: "blur(14px)",
         padding: 14,
         position: "relative",
@@ -321,7 +321,7 @@ function StatusChip({ ok, label }: { ok: boolean; label: string }) {
         borderRadius: 999,
         border: `1px solid ${ok ? "rgba(34,197,94,0.28)" : "rgba(251,113,133,0.30)"}`,
         background: ok ? "rgba(34,197,94,0.14)" : "rgba(251,113,133,0.14)",
-        color: "white",
+        color: "#00324f",
         fontWeight: 980,
         display: "grid",
         placeItems: "center",
@@ -341,12 +341,12 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
   const barBase: React.CSSProperties = {
     width: "100%",
     borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.10)",
+    border: "1px solid rgba(0,58,87,0.13)",
     display: "grid",
     placeItems: "center",
     fontWeight: 980,
-    color: "rgba(255,255,255,0.96)",
-    textShadow: "0 2px 10px rgba(0,0,0,0.55)",
+    color: "#00324f",
+    textShadow: "0 2px 10px rgba(0,37,56,0.18)",
     padding: "0 10px",
     lineHeight: 1.05,
   };
@@ -357,7 +357,7 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
         borderRadius: 18,
         border: `1px solid ${COLORS.stroke}`,
         background: COLORS.bgCard,
-        boxShadow: "0 24px 50px rgba(0,0,0,0.55)",
+        boxShadow: "0 24px 50px rgba(0,37,56,0.18)",
         backdropFilter: "blur(14px)",
         padding: 14,
         position: "relative",
@@ -369,7 +369,7 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
         style={{
           position: "absolute",
           inset: -30,
-          background: `radial-gradient(600px 180px at 20% 20%, rgba(255,159,26,0.18), transparent 55%)`,
+          background: `radial-gradient(600px 180px at 20% 20%, rgba(0,150,136,0.18), transparent 55%)`,
           pointerEvents: "none",
         }}
       />
@@ -387,12 +387,12 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, fontSize: 12 }}>Produzido</div>
+            <div style={{ color: "#4d7285", fontWeight: 900, fontSize: 12 }}>Produzido</div>
             <div
               style={{
                 ...barBase,
                 height: `${leftH}%`,
-                background: "linear-gradient(180deg, rgba(255,159,26,0.96), rgba(255,159,26,0.55))",
+                background: "linear-gradient(180deg, rgba(0,150,136,0.96), rgba(0,124,137,0.55))",
               }}
             >
               <div style={{ fontSize: 22 }}>{fmtBR0(producedTon)} t</div>
@@ -405,12 +405,12 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
               height: "100%",
               justifySelf: "center",
               borderRadius: 999,
-              background: "rgba(255,255,255,0.10)",
+              background: "rgba(0,58,87,0.13)",
             }}
           />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ color: "rgba(255,255,255,0.70)", fontWeight: 900, fontSize: 12, textAlign: "right" }}>Meta</div>
+            <div style={{ color: "#4d7285", fontWeight: 900, fontSize: 12, textAlign: "right" }}>Meta</div>
             <div
               style={{
                 ...barBase,
@@ -449,7 +449,7 @@ function MetricCard({
         borderRadius: 18,
         border: `1px solid ${COLORS.stroke}`,
         background: COLORS.bgCard,
-        boxShadow: "0 24px 50px rgba(0,0,0,0.55)",
+        boxShadow: "0 24px 50px rgba(0,37,56,0.18)",
         backdropFilter: "blur(14px)",
         padding: 14,
         position: "relative",
@@ -502,8 +502,8 @@ function MiniLegend() {
     padding: "6px 10px",
     borderRadius: 999,
     border: `1px solid ${COLORS.stroke}`,
-    background: "rgba(255,255,255,0.04)",
-    color: "rgba(255,255,255,0.78)",
+    background: "rgba(255,255,255,0.66)",
+    color: "#2d5c73",
     fontWeight: 900,
     fontSize: 12,
     whiteSpace: "nowrap",
@@ -522,7 +522,7 @@ function MiniLegend() {
         {dot("rgba(251,113,133,0.95)")} Abaixo
       </div>
       <div style={itemStyle} title="Indicador em atenção">
-        {dot("rgba(255,159,26,0.95)")} Atenção
+        {dot("rgba(0,150,136,0.95)")} Atenção
       </div>
     </div>
   );
@@ -532,15 +532,15 @@ function SectionHeader({ icon, title, sub }: { icon: string; title: string; sub?
   return (
     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginTop: 4 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 980, color: "rgba(255,255,255,0.80)" }}>{icon}</div>
-        <div style={{ fontSize: 14, fontWeight: 980, color: "rgba(255,255,255,0.90)", letterSpacing: -0.2 }}>{title}</div>
+        <div style={{ fontSize: 14, fontWeight: 980, color: "#355f75" }}>{icon}</div>
+        <div style={{ fontSize: 14, fontWeight: 980, color: "#00324f", letterSpacing: -0.2 }}>{title}</div>
         {sub ? <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12, whiteSpace: "nowrap" }}>• {sub}</div> : null}
       </div>
       <div
         style={{
           height: 1,
           flex: 1,
-          background: "linear-gradient(90deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02))",
+          background: "linear-gradient(90deg, rgba(0,58,87,0.13), rgba(255,255,255,0.02))",
           marginTop: 8,
         }}
       />
@@ -549,7 +549,7 @@ function SectionHeader({ icon, title, sub }: { icon: string; title: string; sub?
 }
 
 function unitStyle() {
-  return { fontSize: 12, fontWeight: 950, color: "rgba(255,255,255,0.55)" } as const;
+  return { fontSize: 12, fontWeight: 950, color: "#60798b" } as const;
 }
 
 export default function Statistics() {
@@ -769,14 +769,14 @@ export default function Statistics() {
     });
   }, [dailySeries]);
 
-  const xTick = { fill: "rgba(255,255,255,0.55)", fontSize: 11 } as const;
-  const yTick = { fill: "rgba(255,255,255,0.55)", fontSize: 11 } as const;
+  const xTick = { fill: "#60798b", fontSize: 11 } as const;
+  const yTick = { fill: "#60798b", fontSize: 11 } as const;
 
   const tooltipStyle = {
     background: "rgba(5,7,10,0.92)",
-    border: "1px solid rgba(255,255,255,0.12)",
+    border: "1px solid rgba(0,58,87,0.14)",
     borderRadius: 14,
-    color: "white",
+    color: "#00324f",
     boxShadow: "0 18px 40px rgba(0,0,0,0.6)",
   } as const;
 
@@ -1049,7 +1049,7 @@ export default function Statistics() {
           borderRadius: 22,
           border: `1px solid ${COLORS.stroke}`,
           background: COLORS.bgCard,
-          boxShadow: "0 30px 60px rgba(0,0,0,0.55)",
+          boxShadow: "0 30px 60px rgba(0,37,56,0.18)",
           backdropFilter: "blur(14px)",
           padding: 16,
           display: "flex",
@@ -1077,9 +1077,9 @@ export default function Statistics() {
               style={{
                 height: 36,
                 borderRadius: 12,
-                border: "1px solid rgba(255,255,255,0.10)",
+                border: "1px solid rgba(0,58,87,0.13)",
                 background: "rgba(0,0,0,0.25)",
-                color: "white",
+                color: "#00324f",
                 padding: "0 12px",
                 fontWeight: 900,
                 outline: "none",
@@ -1105,16 +1105,16 @@ export default function Statistics() {
               style={{
                 height: 36,
                 borderRadius: 12,
-                border: "1px solid rgba(255,255,255,0.10)",
+                border: "1px solid rgba(0,58,87,0.13)",
                 background: "rgba(0,0,0,0.25)",
-                color: "white",
+                color: "#00324f",
                 padding: "0 12px",
                 fontWeight: 900,
                 outline: "none",
               }}
             />
             <div style={{ color: COLORS.sub, fontWeight: 850 }}>•</div>
-            <div style={{ color: "rgba(255,255,255,0.85)", fontWeight: 950 }}>{monthLabel}</div>
+            <div style={{ color: "#355f75", fontWeight: 950 }}>{monthLabel}</div>
           </div>
         </div>
 
@@ -1126,7 +1126,7 @@ export default function Statistics() {
               borderRadius: 999,
               border: `1px solid ${okAtt ? "rgba(34,197,94,0.28)" : "rgba(251,113,133,0.30)"}`,
               background: okAtt ? "rgba(34,197,94,0.14)" : "rgba(251,113,133,0.14)",
-              color: "white",
+              color: "#00324f",
               fontWeight: 950,
               display: "grid",
               placeItems: "center",
@@ -1143,9 +1143,9 @@ export default function Statistics() {
               height: 34,
               padding: "0 12px",
               borderRadius: 999,
-              border: "1px solid rgba(255,255,255,0.10)",
-              background: "rgba(255,255,255,0.06)",
-              color: "rgba(255,255,255,0.85)",
+              border: "1px solid rgba(0,58,87,0.13)",
+              background: "rgba(255,255,255,0.76)",
+              color: "#355f75",
               fontWeight: 950,
               display: "grid",
               placeItems: "center",
@@ -1172,7 +1172,7 @@ export default function Statistics() {
             borderRadius: 22,
             border: `1px solid ${COLORS.stroke}`,
             background: COLORS.bgCard,
-            boxShadow: "0 30px 60px rgba(0,0,0,0.55)",
+            boxShadow: "0 30px 60px rgba(0,37,56,0.18)",
             backdropFilter: "blur(14px)",
             padding: 16,
             position: "relative",
@@ -1254,7 +1254,7 @@ export default function Statistics() {
                   setDailyModalOpen(true);
                 }}
               >
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                <CartesianGrid stroke="rgba(255,255,255,0.76)" strokeDasharray="3 3" />
                 <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={18} angle={-30} textAnchor="end" height={54} tick={xTick} />
                 <YAxis tick={yTick} />
                 <Tooltip content={<DailyTooltip />} />
@@ -1267,7 +1267,7 @@ export default function Statistics() {
             </ResponsiveContainer>
           </div>
 
-          <div style={{ marginTop: 8, color: "rgba(255,255,255,0.50)", fontSize: 11, fontWeight: 850 }}>
+          <div style={{ marginTop: 8, color: "#7c94a5", fontSize: 11, fontWeight: 850 }}>
             Dica: clique no gráfico para abrir o detalhamento do mês.
           </div>
 
@@ -1309,9 +1309,9 @@ export default function Statistics() {
                   height: 34,
                   padding: "0 14px",
                   borderRadius: 999,
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "white",
+                  border: "1px solid rgba(0,58,87,0.13)",
+                  background: "rgba(255,255,255,0.76)",
+                  color: "#00324f",
                   fontWeight: 900,
                   cursor: "pointer",
                 }}
@@ -1383,7 +1383,7 @@ export default function Statistics() {
                         />
                         <div
                           style={{
-                            color: "rgba(255,255,255,0.80)",
+                            color: "#355f75",
                             fontWeight: 950,
                             fontSize: 12,
                             whiteSpace: "nowrap",
@@ -1396,7 +1396,7 @@ export default function Statistics() {
                         </div>
                       </div>
 
-                      <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, whiteSpace: "nowrap" }}>
+                      <div style={{ color: "#00324f", fontWeight: 980, whiteSpace: "nowrap" }}>
                         {fmtBR0(it.value)}t
                       </div>
                     </div>
@@ -1418,7 +1418,7 @@ export default function Statistics() {
             <div style={{ height: 300, minHeight: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={letterSplit} margin={{ top: 20, right: 12, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                  <CartesianGrid stroke="rgba(255,255,255,0.76)" strokeDasharray="3 3" />
                   <XAxis dataKey="name" tick={xTick as any} />
                   <YAxis tick={yTick as any} />
                   <Tooltip
@@ -1494,9 +1494,9 @@ export default function Statistics() {
                           flex: "0 0 auto",
                         }}
                       />
-                      <div style={{ color: "rgba(255,255,255,0.85)", fontWeight: 950, fontSize: 12 }}>{it.name}</div>
+                      <div style={{ color: "#355f75", fontWeight: 950, fontSize: 12 }}>{it.name}</div>
                     </div>
-                    <div style={{ marginTop: 8, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 22 }}>
+                    <div style={{ marginTop: 8, color: "#00324f", fontWeight: 980, fontSize: 22 }}>
                       {fmtBR0(it.value)}t
                     </div>
                     <div style={{ marginTop: 4, color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>
@@ -1528,9 +1528,9 @@ export default function Statistics() {
                   style={{
                     width: "min(1320px, 98vw)",
                     borderRadius: 22,
-                    border: "1px solid rgba(255,255,255,0.10)",
+                    border: "1px solid rgba(0,58,87,0.13)",
                     background: "rgba(10,12,14,0.72)",
-                    boxShadow: "0 40px 90px rgba(0,0,0,0.70)",
+                    boxShadow: "0 40px 90px rgba(0,58,87,0.16)",
                     overflow: "hidden",
                   }}
                   onClick={(e) => e.stopPropagation()}
@@ -1538,7 +1538,7 @@ export default function Statistics() {
                   <div
                     style={{
                       padding: 14,
-                      borderBottom: "1px solid rgba(255,255,255,0.10)",
+                      borderBottom: "1px solid rgba(0,58,87,0.13)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
@@ -1546,10 +1546,10 @@ export default function Statistics() {
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 980, fontSize: 16, color: "rgba(255,255,255,0.92)", letterSpacing: -0.2 }}>
+                      <div style={{ fontWeight: 980, fontSize: 16, color: "#00324f", letterSpacing: -0.2 }}>
                         Produção diária do mês
                       </div>
-                      <div style={{ marginTop: 2, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                      <div style={{ marginTop: 2, fontSize: 12, fontWeight: 800, color: "#60798b" }}>
                         Barras (diário) • Tooltip mostra acumulado • ou Linha.
                       </div>
                     </div>
@@ -1579,8 +1579,8 @@ export default function Statistics() {
                     <div
                       style={{
                         borderRadius: 18,
-                        border: "1px solid rgba(255,255,255,0.10)",
-                        background: "rgba(0,0,0,0.22)",
+                        border: "1px solid rgba(0,58,87,0.13)",
+                        background: "rgba(255,255,255,0.74)",
                         padding: 12,
                       }}
                     >
@@ -1588,7 +1588,7 @@ export default function Statistics() {
                         <ResponsiveContainer width="100%" height="100%">
                           {dailyModalMode === "bar" ? (
                             <BarChart data={dailyModalData} margin={{ top: 22, right: 18, left: 0, bottom: 8 }}>
-                              <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                              <CartesianGrid stroke="rgba(255,255,255,0.76)" strokeDasharray="3 3" />
                               <XAxis dataKey="day" interval={0} minTickGap={0} angle={-40} textAnchor="end" height={66} tick={xTick as any} />
                               <YAxis tick={yTick as any} />
                               <Tooltip
@@ -1607,13 +1607,13 @@ export default function Statistics() {
                                   dataKey="produced"
                                   position="top"
                                   formatter={(v: any) => fmtBR0(Number(v || 0))}
-                                  style={{ fill: "rgba(255,255,255,0.80)", fontWeight: 900, fontSize: 11 }}
+                                  style={{ fill: "#355f75", fontWeight: 900, fontSize: 11 }}
                                 />
                               </Bar>
                             </BarChart>
                           ) : (
                             <LineChart data={dailyModalData} margin={{ top: 16, right: 22, left: 0, bottom: 8 }}>
-                              <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                              <CartesianGrid stroke="rgba(255,255,255,0.76)" strokeDasharray="3 3" />
                               <XAxis dataKey="day" interval={0} minTickGap={0} angle={-40} textAnchor="end" height={66} tick={xTick as any} />
                               <YAxis tick={yTick as any} />
                               <Tooltip contentStyle={tooltipStyle} />
@@ -1633,15 +1633,15 @@ export default function Statistics() {
                           gap: 10,
                         }}
                       >
-                        <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(0,0,0,0.18)", padding: 12 }}>
-                          <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Meta do mês</div>
-                          <div style={{ marginTop: 6, fontWeight: 980, fontSize: 22, color: "rgba(255,255,255,0.92)" }}>
+                        <div style={{ borderRadius: 16, border: "1px solid rgba(0,58,87,0.13)", background: "rgba(0,0,0,0.18)", padding: 12 }}>
+                          <div style={{ color: "#60798b", fontWeight: 900, fontSize: 12 }}>Meta do mês</div>
+                          <div style={{ marginTop: 6, fontWeight: 980, fontSize: 22, color: "#00324f" }}>
                             {fmtBR0(Number(data?.meta_month_ton || 0))} t
                           </div>
                         </div>
-                        <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(0,0,0,0.18)", padding: 12 }}>
-                          <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Produzido</div>
-                          <div style={{ marginTop: 6, fontWeight: 980, fontSize: 22, color: "rgba(255,255,255,0.92)" }}>
+                        <div style={{ borderRadius: 16, border: "1px solid rgba(0,58,87,0.13)", background: "rgba(0,0,0,0.18)", padding: 12 }}>
+                          <div style={{ color: "#60798b", fontWeight: 900, fontSize: 12 }}>Produzido</div>
+                          <div style={{ marginTop: 6, fontWeight: 980, fontSize: 22, color: "#00324f" }}>
                             {fmtBR0(Number(data?.produced_month_ton || 0))} t
                           </div>
                         </div>
