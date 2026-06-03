@@ -426,19 +426,17 @@ export default function LancamentoParadas() {
     () => [
       "BT-01",
       "BT-02",
-      "BR-03",
       "PN-01",
       "PN-02",
       "EH-08",
       "EH-04",
-      "TC-11",
       "Peneiras",
       "Todos",
     ],
     [],
   );
 
-  const stopTypes = useMemo(() => ["Operacional", "Preventiva", "Corretiva", "Mecânica", "Elétrica"], []);
+  const stopTypes = useMemo(() => ["Corretiva", "Preventiva", "Operacional"], []);
 
   const productionByPeriod = useMemo(() => {
     const map: Record<string, PlantProductionRow> = {};
