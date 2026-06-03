@@ -58,8 +58,8 @@ type PlantInfo = {
 
 type PlantProductionRow = {
   period: string;
-  ton?: number | null;
-  freq?: number | null;
+  ton?: number | string | null;
+  freq?: number | string | null;
 };
 
 type PlantProductionPayload = {
