@@ -32,6 +32,22 @@ type AllocationPayload = {
   equipment: null | Equipment;
 };
 
+type PlantProductionEquipment = {
+  id: number;
+  tag: string;
+  plant_id: number;
+  plant_name?: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type ProductionEquipmentPayload = {
+  tag: string;
+  plant_id: number;
+  is_active?: boolean;
+};
+
 const card: React.CSSProperties = {
   borderRadius: 22,
   border: "1px solid rgba(255,255,255,0.10)",
@@ -94,20 +110,52 @@ function fmtTon(v: number) {
   });
 }
 
+function safeUpper(v: string) {
+  return String(v || "").trim().toUpperCase();
+}
+
 export default function Equipamentos() {
   const [equipments, setEquipments] = useState<Equipment[]>([]);
   const [plants, setPlants] = useState<PlantInfo[]>([]);
   const [allocations, setAllocations] = useState<Record<number, AllocationPayload>>({});
+
+  // Cadastro usado pelo Ritmo.
   const [tag, setTag] = useState("");
   const [bucketTon, setBucketTon] = useState("");
   const [equipmentType, setEquipmentType] = useState("escavadeira");
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  // Novo módulo: equipamentos da Produção de Planta / Paradas Minutos.
+  const [prodEquipments, setProdEquipments] = useState<PlantProductionEquipment[]>([]);
+  const [prodTag, setProdTag] = useState("");
+  const [prodPlantId, setProdPlantId] = useState<number | "">("");
+  const [prodEditingId, setProdEditingId] = useState<number | null>(null);
+  const [prodEndpointReady, setProdEndpointReady] = useState(true);
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
   const activeEquipments = useMemo(() => equipments.filter((e) => e.is_active), [equipments]);
+  const activeProdEquipments = useMemo(() => prodEquipments.filter((e) => e.is_active), [prodEquipments]);
+
+  function plantNameById(plantId: number | null | undefined) {
+    const p = plants.find((x) => x.id === Number(plantId));
+    return p?.name || `Planta ${plantId || ""}`;
+  }
+
+  async function loadProductionEquipments() {
+    try {
+      const rows = await apiFetch<PlantProductionEquipment[]>("/api/plant-equipments?include_inactive=true");
+      setProdEquipments(Array.isArray(rows) ? rows : []);
+      setProdEndpointReady(true);
+    } catch {
+      // O front fica pronto, mas o backend precisa ser entregue no próximo passo.
+      setProdEndpointReady(false);
+      setProdEquipments([]);
+    }
+  }
 
   async function loadAll() {
     setLoading(true);
@@ -121,6 +169,10 @@ export default function Equipamentos() {
       const plantList = Array.isArray(pls) ? pls : [];
       setPlants(plantList);
 
+      if (!prodPlantId && plantList.length) {
+        setProdPlantId(plantList[0].id);
+      }
+
       const entries = await Promise.all(
         plantList.map(async (p) => {
           try {
@@ -132,6 +184,8 @@ export default function Equipamentos() {
         })
       );
       setAllocations(Object.fromEntries(entries));
+
+      await loadProductionEquipments();
     } catch (e: any) {
       setError(e?.message || "Erro ao carregar equipamentos.");
     } finally {
@@ -141,6 +195,7 @@ export default function Equipamentos() {
 
   useEffect(() => {
     loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function resetForm() {
@@ -148,6 +203,12 @@ export default function Equipamentos() {
     setTag("");
     setBucketTon("");
     setEquipmentType("escavadeira");
+  }
+
+  function resetProductionForm() {
+    setProdEditingId(null);
+    setProdTag("");
+    setProdPlantId(plants[0]?.id || "");
   }
 
   function startEdit(e: Equipment) {
@@ -158,6 +219,67 @@ export default function Equipamentos() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function startEditProductionEquipment(e: PlantProductionEquipment) {
+    setProdEditingId(e.id);
+    setProdTag(e.tag);
+    setProdPlantId(Number(e.plant_id));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function saveProductionEquipment() {
+    setSaving(true);
+    setError(null);
+    setOk(null);
+    try {
+      const payload: ProductionEquipmentPayload = {
+        tag: safeUpper(prodTag),
+        plant_id: Number(prodPlantId),
+        is_active: true,
+      };
+
+      if (!payload.tag) throw new Error("Informe a TAG do equipamento.");
+      if (!payload.plant_id || payload.plant_id <= 0) throw new Error("Selecione a planta do equipamento.");
+
+      if (prodEditingId) {
+        await apiFetch(`/api/plant-equipments/${prodEditingId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        setOk("Equipamento da produção atualizado com sucesso.");
+      } else {
+        await apiFetch("/api/plant-equipments", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        setOk("Equipamento da produção cadastrado com sucesso.");
+      }
+
+      resetProductionForm();
+      await loadProductionEquipments();
+    } catch (e: any) {
+      setError(e?.message || "Erro ao salvar equipamento da produção.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeProductionEquipment(e: PlantProductionEquipment) {
+    if (!window.confirm(`Deseja inativar a TAG ${e.tag} da ${plantNameById(e.plant_id)}?`)) return;
+
+    setSaving(true);
+    setError(null);
+    setOk(null);
+    try {
+      await apiFetch(`/api/plant-equipments/${e.id}`, { method: "DELETE" });
+      setOk("Equipamento da produção inativado.");
+      await loadProductionEquipments();
+    } catch (err: any) {
+      setError(err?.message || "Erro ao inativar equipamento da produção.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveEquipment() {
     setSaving(true);
     setError(null);
@@ -165,7 +287,7 @@ export default function Equipamentos() {
     try {
       const payload = {
         equipment_type: equipmentType || "escavadeira",
-        tag: tag.trim().toUpperCase(),
+        tag: safeUpper(tag),
         bucket_ton: parseDecimal(bucketTon),
         is_active: true,
       };
@@ -239,9 +361,9 @@ export default function Equipamentos() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
         <div>
           <div style={{ color: "rgba(255,255,255,.58)", fontWeight: 950, fontSize: 13 }}>MonPlant • Configurações</div>
-          <h1 style={{ margin: "6px 0 0", color: "white", fontSize: 28, letterSpacing: -0.6 }}>Equipamentos e Alocação</h1>
-          <div style={{ marginTop: 8, color: "rgba(255,255,255,.62)", fontWeight: 750, maxWidth: 880 }}>
-            Cadastre as escavadeiras, mantenha a tonelada da concha atualizada e vincule o equipamento à planta. A página Ritmo passa a buscar este valor automaticamente.
+          <h1 style={{ margin: "6px 0 0", color: "white", fontSize: 28, letterSpacing: -0.6 }}>Equipamentos</h1>
+          <div style={{ marginTop: 8, color: "rgba(255,255,255,.62)", fontWeight: 750, maxWidth: 980 }}>
+            Cadastre os equipamentos da produção de planta por TAG e planta. Depois, a tela Paradas Minutos poderá buscar estes equipamentos automaticamente, sem lista fixa no código.
           </div>
         </div>
 
@@ -253,6 +375,121 @@ export default function Equipamentos() {
       {error ? <div style={{ ...card, padding: 14, color: "#ff6b6b", fontWeight: 950 }}>{error}</div> : null}
       {ok ? <div style={{ ...card, padding: 14, color: "#ffb84d", fontWeight: 950 }}>{ok}</div> : null}
 
+      <div style={{ ...card, padding: 18, borderColor: "rgba(255,159,26,.28)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
+          <div>
+            <div style={{ color: "white", fontWeight: 1000, fontSize: 19 }}>Equipamentos da Produção de Planta</div>
+            <div style={{ color: "rgba(255,255,255,.58)", fontWeight: 850, fontSize: 12, marginTop: 4 }}>
+              Cadastro que será usado pela tela Paradas Minutos. Informe somente a TAG e a planta à qual o equipamento pertence.
+            </div>
+          </div>
+          <span style={{ borderRadius: 999, padding: "7px 11px", fontWeight: 1000, fontSize: 12, color: "#0b0f13", background: "#ffb84d" }}>
+            Novo módulo
+          </span>
+        </div>
+
+        {!prodEndpointReady ? (
+          <div style={{ marginBottom: 14, borderRadius: 16, border: "1px solid rgba(255,184,77,.35)", background: "rgba(255,159,26,.08)", color: "#ffcf8a", padding: 12, fontWeight: 850 }}>
+            Front preparado. Falta ativar no backend os endpoints <b>/api/plant-equipments</b>. Podemos fazer essa parte no próximo passo.
+          </div>
+        ) : null}
+
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 260px) minmax(220px, 320px) auto", gap: 12, alignItems: "end", marginBottom: 18 }}>
+          <div>
+            <label style={label}>TAG</label>
+            <input
+              style={input}
+              value={prodTag}
+              onChange={(e) => setProdTag(e.target.value.toUpperCase())}
+              placeholder="Ex.: PN-02"
+              disabled={saving}
+            />
+          </div>
+
+          <div>
+            <label style={label}>Planta</label>
+            <select
+              style={input}
+              value={prodPlantId}
+              onChange={(e) => setProdPlantId(e.target.value ? Number(e.target.value) : "")}
+              disabled={saving}
+            >
+              <option value="">Selecione</option>
+              {plants.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button style={button} onClick={saveProductionEquipment} disabled={saving || !prodEndpointReady}>
+              {prodEditingId ? <Save size={16} /> : <Plus size={16} />}
+              {prodEditingId ? "Salvar alteração" : "Adicionar TAG"}
+            </button>
+            {prodEditingId ? (
+              <button style={ghostButton} onClick={resetProductionForm} disabled={saving}>
+                Cancelar
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 8px" }}>
+            <thead>
+              <tr style={{ color: "rgba(255,255,255,.55)", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.3 }}>
+                <th style={{ textAlign: "left", padding: "0 12px" }}>TAG</th>
+                <th style={{ textAlign: "left", padding: "0 12px" }}>Planta</th>
+                <th style={{ textAlign: "center", padding: "0 12px" }}>Status</th>
+                <th style={{ textAlign: "right", padding: "0 12px" }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {prodEquipments.map((e) => (
+                <tr key={e.id} style={{ background: "rgba(255,255,255,.04)" }}>
+                  <td style={{ padding: 12, borderRadius: "14px 0 0 14px", color: "white", fontWeight: 1000 }}>{e.tag}</td>
+                  <td style={{ padding: 12, color: "rgba(255,255,255,.78)", fontWeight: 850 }}>
+                    {e.plant_name || plantNameById(e.plant_id)}
+                  </td>
+                  <td style={{ padding: 12, textAlign: "center" }}>
+                    <span style={{ borderRadius: 999, padding: "6px 10px", fontWeight: 950, fontSize: 12, color: e.is_active ? "#0b0f13" : "rgba(255,255,255,.7)", background: e.is_active ? "#ffb84d" : "rgba(255,255,255,.08)" }}>
+                      {e.is_active ? "Ativo" : "Inativo"}
+                    </span>
+                  </td>
+                  <td style={{ padding: 12, borderRadius: "0 14px 14px 0", textAlign: "right" }}>
+                    <div style={{ display: "inline-flex", gap: 8 }}>
+                      <button style={ghostButton} onClick={() => startEditProductionEquipment(e)} disabled={saving}>
+                        Editar
+                      </button>
+                      {e.is_active ? (
+                        <button style={{ ...ghostButton, color: "#ff6b6b" }} onClick={() => removeProductionEquipment(e)} disabled={saving}>
+                          <Trash2 size={15} /> Inativar
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!prodEquipments.length ? (
+                <tr>
+                  <td colSpan={4} style={{ padding: 22, textAlign: "center", color: "rgba(255,255,255,.55)", fontWeight: 850 }}>
+                    {loading ? "Carregando..." : prodEndpointReady ? "Nenhum equipamento de produção cadastrado." : "Backend ainda não ativado para este módulo."}
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+
+        {activeProdEquipments.length ? (
+          <div style={{ marginTop: 10, color: "rgba(255,255,255,.55)", fontWeight: 850, fontSize: 12 }}>
+            {activeProdEquipments.length} TAG(s) ativa(s) disponíveis para puxar na tela Paradas Minutos.
+          </div>
+        ) : null}
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 420px) 1fr", gap: 16 }}>
         <div style={{ ...card, padding: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
@@ -260,7 +497,7 @@ export default function Equipamentos() {
               <Factory size={20} />
             </div>
             <div>
-              <div style={{ color: "white", fontWeight: 1000, fontSize: 17 }}>{editingId ? "Editar equipamento" : "Novo equipamento"}</div>
+              <div style={{ color: "white", fontWeight: 1000, fontSize: 17 }}>{editingId ? "Editar equipamento do Ritmo" : "Novo equipamento do Ritmo"}</div>
               <div style={{ color: "rgba(255,255,255,.55)", fontWeight: 800, fontSize: 12 }}>Escavadeiras / concha</div>
             </div>
           </div>
@@ -302,7 +539,7 @@ export default function Equipamentos() {
         <div style={{ ...card, padding: 18 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
             <div>
-              <div style={{ color: "white", fontWeight: 1000, fontSize: 18 }}>Alocação por planta</div>
+              <div style={{ color: "white", fontWeight: 1000, fontSize: 18 }}>Alocação por planta para Ritmo</div>
               <div style={{ color: "rgba(255,255,255,.55)", fontWeight: 800, fontSize: 12 }}>Define qual concha o Ritmo deve usar automaticamente</div>
             </div>
             <Link2 size={20} color="#ffb84d" />
@@ -340,7 +577,7 @@ export default function Equipamentos() {
       <div style={{ ...card, padding: 18 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
           <div>
-            <div style={{ color: "white", fontWeight: 1000, fontSize: 18 }}>Equipamentos cadastrados</div>
+            <div style={{ color: "white", fontWeight: 1000, fontSize: 18 }}>Equipamentos do Ritmo cadastrados</div>
             <div style={{ color: "rgba(255,255,255,.55)", fontWeight: 800, fontSize: 12 }}>{equipments.length} equipamento(s)</div>
           </div>
         </div>
