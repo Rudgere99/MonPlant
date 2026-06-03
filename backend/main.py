@@ -185,6 +185,62 @@ def ensure_supervisor_planta_tables():
     )
 
 
+
+def ensure_plant_production_equipment_tables():
+    """Garante a tabela de equipamentos da produção de planta.
+
+    Esta tabela é separada de public.bv_equipments, que segue usada para
+    equipamentos do Ritmo/conchada. Aqui ficam os TAGs utilizados nas telas
+    de Produção de Planta e Paradas Minutos.
+    """
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS public.bv_plant_production_equipments (
+                    id BIGSERIAL PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    plant_id INTEGER NOT NULL,
+                    tag TEXT NOT NULL,
+                    description TEXT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute("ALTER TABLE public.bv_plant_production_equipments ADD COLUMN IF NOT EXISTS owner_id TEXT;")
+            cur.execute("ALTER TABLE public.bv_plant_production_equipments ADD COLUMN IF NOT EXISTS plant_id INTEGER;")
+            cur.execute("ALTER TABLE public.bv_plant_production_equipments ADD COLUMN IF NOT EXISTS tag TEXT;")
+            cur.execute("ALTER TABLE public.bv_plant_production_equipments ADD COLUMN IF NOT EXISTS description TEXT;")
+            cur.execute("ALTER TABLE public.bv_plant_production_equipments ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;")
+            cur.execute("ALTER TABLE public.bv_plant_production_equipments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();")
+            cur.execute("ALTER TABLE public.bv_plant_production_equipments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();")
+
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_bv_plant_production_equipments_owner_plant_tag
+                ON public.bv_plant_production_equipments (owner_id, plant_id, UPPER(tag));
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_bv_plant_production_equipments_owner_plant
+                ON public.bv_plant_production_equipments (owner_id, plant_id);
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_bv_plant_production_equipments_active
+                ON public.bv_plant_production_equipments (owner_id, plant_id, is_active);
+                """
+            )
+            conn.commit()
+    except Exception:
+        # Não derruba a API por DDL.
+        return
+
+
 def _supervisor_table_columns() -> set[str]:
     """Retorna colunas existentes na tabela de supervisores, sem derrubar a API."""
     try:
@@ -215,6 +271,7 @@ def _startup_bootstrap():
     ensure_supervisor_planta_tables()
     ensure_plant_production_over_columns()
     ensure_stops_launch_tables()
+    ensure_plant_production_equipment_tables()
 
 # =========================
 # CORS
@@ -788,6 +845,20 @@ class EquipmentUpdateIn(BaseModel):
 
 class EquipmentAllocationIn(BaseModel):
     equipment_id: Optional[int] = None
+
+
+class PlantProductionEquipmentIn(BaseModel):
+    plant_id: int
+    tag: str
+    description: Optional[str] = None
+    is_active: bool = True
+
+
+class PlantProductionEquipmentUpdateIn(BaseModel):
+    plant_id: Optional[int] = None
+    tag: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 class StopIn(BaseModel):
@@ -1906,6 +1977,255 @@ def get_rhythm_equipment(
     """Endpoint dedicado ao Ritmo: retorna a escavadeira vinculada à planta e sua t/conchada."""
     plant_id = _validate_plant_id(plant_id)
     return _get_equipment_allocation(owner_id, plant_id)
+
+
+def _plant_production_equipment_out(r: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": int(r["id"]),
+        "owner_id": r.get("owner_id"),
+        "plant_id": int(r.get("plant_id") or 0),
+        "tag": r.get("tag") or "",
+        "description": r.get("description") or "",
+        "is_active": bool(r.get("is_active")),
+        "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+        "updated_at": r["updated_at"].isoformat() if r.get("updated_at") else None,
+    }
+
+
+@app.get("/api/plants/{plant_id}/plant-production-equipments")
+def list_plant_production_equipments_by_plant(
+    plant_id: int,
+    include_inactive: bool = Query(False),
+    owner_id: str = Depends(require_owner_id),
+):
+    """Lista TAGs de equipamentos cadastrados para uso em Produção de Planta/Paradas Minutos."""
+    plant_id = _validate_plant_id(plant_id)
+    ensure_plant_production_equipment_tables()
+
+    args: List[Any] = [owner_id, plant_id]
+    where = "where owner_id=%s and plant_id=%s"
+    if not include_inactive:
+        where += " and is_active=true"
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            select id, owner_id, plant_id, tag, description, is_active, created_at, updated_at
+            from public.bv_plant_production_equipments
+            {where}
+            order by is_active desc, tag asc
+            """,
+            tuple(args),
+        )
+        rows = cur.fetchall() or []
+
+    return [_plant_production_equipment_out(r) for r in rows]
+
+
+@app.get("/api/plant-production-equipments")
+def list_plant_production_equipments(
+    plant_id: Optional[int] = Query(None),
+    include_inactive: bool = Query(False),
+    owner_id: str = Depends(require_owner_id),
+):
+    """Lista os equipamentos da produção de planta. Pode filtrar por plant_id."""
+    ensure_plant_production_equipment_tables()
+
+    where = "where owner_id=%s"
+    args: List[Any] = [owner_id]
+
+    if plant_id is not None:
+        plant_id = _validate_plant_id(plant_id)
+        where += " and plant_id=%s"
+        args.append(int(plant_id))
+
+    if not include_inactive:
+        where += " and is_active=true"
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            select id, owner_id, plant_id, tag, description, is_active, created_at, updated_at
+            from public.bv_plant_production_equipments
+            {where}
+            order by plant_id asc, is_active desc, tag asc
+            """,
+            tuple(args),
+        )
+        rows = cur.fetchall() or []
+
+    return [_plant_production_equipment_out(r) for r in rows]
+
+
+@app.post("/api/plant-production-equipments")
+def create_plant_production_equipment(
+    body: PlantProductionEquipmentIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    """Cria TAG de equipamento vinculado a uma planta."""
+    ensure_plant_production_equipment_tables()
+
+    plant_id = _validate_plant_id(body.plant_id)
+    tag = (body.tag or "").strip().upper()
+    description = (body.description or "").strip() or None
+
+    if not tag:
+        raise HTTPException(status_code=400, detail="TAG é obrigatória")
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into public.bv_plant_production_equipments(
+                    owner_id, plant_id, tag, description, is_active, updated_at
+                )
+                values (%s,%s,%s,%s,%s,now())
+                returning id, owner_id, plant_id, tag, description, is_active, created_at, updated_at
+                """,
+                (owner_id, plant_id, tag, description, bool(body.is_active)),
+            )
+            row = cur.fetchone()
+            conn.commit()
+    except Exception as e:
+        msg = str(e).lower()
+        if "unique" in msg or "duplicate" in msg:
+            raise HTTPException(status_code=400, detail="Já existe equipamento com esta TAG para esta planta")
+        raise
+
+    log_action(
+        action="CREATE_PLANT_PRODUCTION_EQUIPMENT",
+        request=request,
+        user_id=user_id,
+        entity="bv_plant_production_equipments",
+        entity_id=str(row["id"]),
+        payload={"owner_id": owner_id, "plant_id": plant_id, "tag": tag},
+    )
+
+    return {"ok": True, **_plant_production_equipment_out(row)}
+
+
+@app.put("/api/plant-production-equipments/{equipment_id}")
+def update_plant_production_equipment(
+    equipment_id: int,
+    body: PlantProductionEquipmentUpdateIn,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    """Atualiza TAG/planta/descrição/status do equipamento de produção de planta."""
+    ensure_plant_production_equipment_tables()
+
+    fields = []
+    values: List[Any] = []
+
+    if body.plant_id is not None:
+        plant_id = _validate_plant_id(body.plant_id)
+        fields.append("plant_id=%s")
+        values.append(plant_id)
+
+    if body.tag is not None:
+        tag = (body.tag or "").strip().upper()
+        if not tag:
+            raise HTTPException(status_code=400, detail="TAG é obrigatória")
+        fields.append("tag=%s")
+        values.append(tag)
+
+    if body.description is not None:
+        description = (body.description or "").strip() or None
+        fields.append("description=%s")
+        values.append(description)
+
+    if body.is_active is not None:
+        fields.append("is_active=%s")
+        values.append(bool(body.is_active))
+
+    if not fields:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+
+    fields.append("updated_at=now()")
+    values.extend([owner_id, int(equipment_id)])
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                update public.bv_plant_production_equipments
+                set {', '.join(fields)}
+                where owner_id=%s and id=%s
+                returning id, owner_id, plant_id, tag, description, is_active, created_at, updated_at
+                """,
+                tuple(values),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Equipamento não encontrado")
+            conn.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        msg = str(e).lower()
+        if "unique" in msg or "duplicate" in msg:
+            raise HTTPException(status_code=400, detail="Já existe equipamento com esta TAG para esta planta")
+        raise
+
+    log_action(
+        action="UPDATE_PLANT_PRODUCTION_EQUIPMENT",
+        request=request,
+        user_id=user_id,
+        entity="bv_plant_production_equipments",
+        entity_id=str(equipment_id),
+        payload=body.model_dump(exclude_none=True),
+    )
+
+    return {"ok": True, **_plant_production_equipment_out(row)}
+
+
+@app.delete("/api/plant-production-equipments/{equipment_id}")
+def delete_plant_production_equipment(
+    equipment_id: int,
+    request: Request,
+    owner_id: str = Depends(require_owner_id),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    """Inativa o equipamento para preservar histórico."""
+    ensure_plant_production_equipment_tables()
+
+    user_payload = get_optional_user(authorization)
+    user_id = user_payload.get("uid") if user_payload else None
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            update public.bv_plant_production_equipments
+            set is_active=false, updated_at=now()
+            where owner_id=%s and id=%s
+            returning id, owner_id, plant_id, tag, description, is_active, created_at, updated_at
+            """,
+            (owner_id, int(equipment_id)),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Equipamento não encontrado")
+        conn.commit()
+
+    log_action(
+        action="DELETE_PLANT_PRODUCTION_EQUIPMENT",
+        request=request,
+        user_id=user_id,
+        entity="bv_plant_production_equipments",
+        entity_id=str(equipment_id),
+        payload={"owner_id": owner_id, "soft_delete": True},
+    )
+
+    return {"ok": True, **_plant_production_equipment_out(row)}
 
 
 # =========================
