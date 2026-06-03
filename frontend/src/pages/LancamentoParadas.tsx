@@ -189,6 +189,19 @@ function fmtSmart(n: number) {
   });
 }
 
+function parseBRNumber(v: any): number {
+  if (v === null || v === undefined || v === "") return NaN;
+  if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
+  const raw = String(v).trim();
+  if (!raw) return NaN;
+  const normalized = raw
+    .replace(/\s/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : NaN;
+}
+
 function normalizePeriodLaunch(p: string | null | undefined): string {
   const raw = String(p || "").trim();
   const m1 = raw.match(/^(\d{2})-(\d{2})$/);
@@ -455,25 +468,33 @@ export default function LancamentoParadas() {
     return map;
   }, [productionRows]);
 
-  const expectedTonPerHour = useMemo(() => {
-    const metaTon = Number(goalDay?.meta_ton ?? 0);
-    const discount = Number(goalDay?.discount_hours ?? 2);
+  const expectedSource = useMemo(() => {
+    const metaTon = parseBRNumber(goalDay?.meta_ton);
+    const discountRaw = parseBRNumber(goalDay?.discount_hours);
+    const discount = Number.isFinite(discountRaw) ? discountRaw : 2;
     const productiveHours = Math.max(0, 22 - discount);
 
-    if (!Number.isFinite(metaTon) || metaTon <= 0) return 0;
-    if (!Number.isFinite(productiveHours) || productiveHours <= 0) return 0;
+    const expected =
+      Number.isFinite(metaTon) && metaTon > 0 && Number.isFinite(productiveHours) && productiveHours > 0
+        ? metaTon / productiveHours
+        : 0;
 
-    return metaTon / productiveHours;
+    return {
+      metaTon: Number.isFinite(metaTon) ? metaTon : 0,
+      discountHours: discount,
+      productiveHours,
+      expectedTonPerHour: expected,
+      loaded: Boolean(goalDay),
+    };
   }, [goalDay]);
+
+  const expectedTonPerHour = expectedSource.expectedTonPerHour;
 
   function producedTonForPeriod(period: string): number | null {
     const p = productionByPeriod[normalizePeriodLaunch(period)];
     if (!p) return null;
 
-    const tonRaw = p.ton;
-    if (tonRaw === null || tonRaw === undefined || tonRaw === "") return 0;
-
-    const ton = Number(tonRaw);
+    const ton = parseBRNumber(p.ton);
     return Number.isFinite(ton) ? ton : null;
   }
 
@@ -483,7 +504,9 @@ export default function LancamentoParadas() {
     const ton = producedTonForPeriod(period);
     if (ton === null) return false;
 
-    return ton < expectedTonPerHour;
+    // Mesma referência visual do card Média/Hora do Dashboard: compara a Ton/H da faixa
+    // com a linha "Esperada". Linhas sem produção lançada não entram nessa regra.
+    return ton > 0 && ton < expectedTonPerHour;
   }
 
   function isShortStop(row?: StopRow): boolean {
@@ -917,7 +940,7 @@ export default function LancamentoParadas() {
       ? `Liberado: produção ${fmtSmart(produced || 0)} t/h abaixo do esperado ${fmtSmart(expectedTonPerHour)} t/h e parada menor que 15 min.`
       : lowPeriod
         ? "Bloqueado: baixa produção identificada, mas a justificativa só libera para paradas menores que 15 minutos."
-        : "Bloqueado: a produção horária não está abaixo do esperado.";
+        : "Bloqueado: produção da hora não está abaixo da linha Esperada do Dashboard.";
 
     return (
       <>
@@ -1478,7 +1501,7 @@ export default function LancamentoParadas() {
               ? "Carregando..."
               : msg
                 ? msg
-                : `Lance paradas por hora com cálculo de simultaneidade. • ${selectedPlantName} • Esperado: ${fmtSmart(expectedTonPerHour)} t/h`}
+                : `Lance paradas por hora com cálculo de simultaneidade. • ${selectedPlantName} • Esperado: ${fmtSmart(expectedTonPerHour)} t/h • Meta: ${fmtSmart(expectedSource.metaTon)} t • Horas base: ${fmtSmart(expectedSource.productiveHours)}h`}
           </div>
         </div>
 
