@@ -20,6 +20,7 @@ import { useIsMobile } from "../mobile/useIsMobile";
  * - Inclui justificativa_baixa_producao liberada automaticamente quando o período
  *   estiver sinalizado como baixa produção pela produção horária.
  * - Calcula total líquido por horário: soma bruta - minutos coincidentes.
+ * - Save protegido contra travamento: timeout e sem reload automático após PUT.
  *
  * Endpoints:
  *   GET  /api/plants/{plant_id}/stops-launch?day=YYYY-MM-DD
@@ -88,13 +89,41 @@ function authHeaders(): HeadersInit {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 20000): Promise<Response> {
+  const controller = new AbortController();
+  const id = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error("Tempo limite excedido ao comunicar com o servidor. Verifique se o backend está ativo e tente novamente.");
+    }
+    throw e;
+  } finally {
+    window.clearTimeout(id);
+  }
+}
+
+async function readErrorMessage(r: Response): Promise<string> {
+  const text = await r.text().catch(() => "");
+  if (!text) return `HTTP ${r.status}`;
+  try {
+    const data = JSON.parse(text);
+    if (typeof data?.detail === "string") return data.detail;
+    if (Array.isArray(data?.detail)) return data.detail.map((x: any) => x?.msg || JSON.stringify(x)).join(" | ");
+    if (typeof data?.message === "string") return data.message;
+  } catch {
+    // mantém texto puro
+  }
+  return text;
+}
+
 async function apiGet<T>(path: string): Promise<T> {
-  const r = await fetch(`${API_BASE}${path}`, {
+  const r = await fetchWithTimeout(`${API_BASE}${path}`, {
     headers: { ...authHeaders() },
   });
   if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(t || `HTTP ${r.status}`);
+    throw new Error(await readErrorMessage(r));
   }
   return (await r.json()) as T;
 }
@@ -523,14 +552,13 @@ export default function LancamentoParadas() {
 
   async function loadOneDay(targetDay: string): Promise<StopRow[]> {
     if (!plantId) return [];
-    const r = await fetch(
+    const r = await fetchWithTimeout(
       `${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(targetDay)}`,
       { headers: { ...authHeaders() } },
     );
     if (r.status === 404) return [];
     if (!r.ok) {
-      const t = await r.text().catch(() => "");
-      throw new Error(t || `HTTP ${r.status}`);
+      throw new Error(await readErrorMessage(r));
     }
     const data = (await r.json()) as StopDayPayload;
     return normalizeRowsFromApi(data.rows || []);
@@ -610,6 +638,25 @@ export default function LancamentoParadas() {
     return out;
   }
 
+  function validateRowsToSave(rowsToValidate: StopRow[]): string | null {
+    for (const r of rowsToValidate) {
+      if (rowIsBlank(r)) continue;
+      const p = normalizePeriodLaunch(r.period);
+      const ini = String(r.hora_inicial || "").trim();
+      const fim = String(r.hora_final || "").trim();
+      if ((ini && !fim) || (!ini && fim)) {
+        return `Preencha hora inicial e hora final juntas no período ${p}.`;
+      }
+      if (ini && fim) {
+        const calculated = intervalDurationMinutes(ini, fim);
+        if (calculated <= 0) {
+          return `Horário inválido no período ${p}. Verifique hora inicial e final.`;
+        }
+      }
+    }
+    return null;
+  }
+
   async function save() {
     if (!API_BASE) {
       setMsg("VITE_API_BASE não configurado.");
@@ -626,25 +673,42 @@ export default function LancamentoParadas() {
       }
 
       const normalized = prepareRowsToSave();
+      const validation = validateRowsToSave(normalized);
+      if (validation) {
+        setMsg(validation);
+        return;
+      }
+
       const body: StopDayPayload = { day, rows: normalized };
 
-      const r = await fetch(
+      const r = await fetchWithTimeout(
         `${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(day)}`,
         {
           method: "PUT",
           headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify(body),
         },
+        25000,
       );
 
       if (!r.ok) {
-        const t = await r.text().catch(() => "");
-        throw new Error(t || `HTTP ${r.status}`);
+        throw new Error(await readErrorMessage(r));
       }
 
-      setMsg("Salvo com sucesso.");
+      let rowsSaved: number | null = null;
+      try {
+        const data = await r.json();
+        rowsSaved = typeof data?.rows_saved === "number" ? data.rows_saved : null;
+      } catch {
+        rowsSaved = null;
+      }
+
+      setMsg(rowsSaved !== null ? `Salvo com sucesso. ${rowsSaved} linha(s) registrada(s).` : "Salvo com sucesso.");
       setDirty(false);
-      await load();
+
+      // Não força reload aqui. O reload após salvar pode deixar o botão preso em "Salvando..."
+      // quando o backend demora em responder o GET. O usuário pode clicar em Atualizar se quiser recarregar do banco.
+      setRows(normalized);
     } catch (e: any) {
       setMsg(e?.message || "Erro ao salvar");
     } finally {
@@ -1399,6 +1463,7 @@ export default function LancamentoParadas() {
           </button>
 
           <button
+            type="button"
             onClick={periodMode ? loadPeriod : load}
             style={{ ...btnStyle, width: mobile ? "100%" : undefined }}
             disabled={loading || !plantId}
@@ -1407,6 +1472,7 @@ export default function LancamentoParadas() {
           </button>
 
           <button
+            type="button"
             onClick={save}
             style={{ ...orangeBtnStyle, width: mobile ? "100%" : undefined }}
             disabled={saving || loading || !plantId || periodMode}
