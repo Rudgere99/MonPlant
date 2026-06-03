@@ -17,8 +17,9 @@ import { useIsMobile } from "../mobile/useIsMobile";
  * Ajustado para o novo modelo:
  * - Permite mais de uma parada na mesma faixa horária.
  * - Inclui hora_inicial e hora_final para cálculo de simultaneidade/sobreposição.
- * - Inclui justificativa_baixa_producao liberada automaticamente quando o período
- *   estiver sinalizado como baixa produção pela produção horária.
+ * - Inclui justificativa_baixa_producao bloqueada por regra:
+ *   libera somente se a produção horária ficar abaixo do esperado
+ *   e a parada da linha for menor que 15 minutos.
  * - Calcula total líquido por horário: soma bruta - minutos coincidentes.
  * - Save protegido contra travamento: timeout e sem reload automático após PUT.
  *
@@ -65,6 +66,12 @@ type PlantProductionPayload = {
   day: string;
   plant_id?: number;
   rows?: PlantProductionRow[];
+};
+
+type GoalDayPayload = {
+  day: string;
+  meta_ton?: number | null;
+  discount_hours?: number | null;
 };
 
 type PeriodCalc = {
@@ -414,6 +421,7 @@ export default function LancamentoParadas() {
   const [plantId, setPlantId] = useState<number | null>(null);
   const [expandedPeriod, setExpandedPeriod] = useState<string | null>("07-08");
   const [productionRows, setProductionRows] = useState<PlantProductionRow[]>([]);
+  const [goalDay, setGoalDay] = useState<GoalDayPayload | null>(null);
 
   const [rows, setRows] = useState<StopRow[]>(periods.map((p) => blankRow(p, 1)));
 
@@ -447,19 +455,48 @@ export default function LancamentoParadas() {
     return map;
   }, [productionRows]);
 
-  function isLowProductionPeriod(period: string, row?: StopRow): boolean {
-    if (String(row?.justificativa_baixa_producao || "").trim()) return true;
+  const expectedTonPerHour = useMemo(() => {
+    const metaTon = Number(goalDay?.meta_ton ?? 0);
+    const discount = Number(goalDay?.discount_hours ?? 2);
+    const productiveHours = Math.max(0, 22 - discount);
+
+    if (!Number.isFinite(metaTon) || metaTon <= 0) return 0;
+    if (!Number.isFinite(productiveHours) || productiveHours <= 0) return 0;
+
+    return metaTon / productiveHours;
+  }, [goalDay]);
+
+  function producedTonForPeriod(period: string): number | null {
     const p = productionByPeriod[normalizePeriodLaunch(period)];
-    if (!p) return false;
+    if (!p) return null;
 
-    const freq = Number(p.freq ?? NaN);
-    if (Number.isFinite(freq)) return freq > 0 && freq < 100;
+    const tonRaw = p.ton;
+    if (tonRaw === null || tonRaw === undefined || tonRaw === "") return 0;
 
-    // Fallback conservador: se existir produção horária carregada com zero e a linha tiver parada, libera.
-    const ton = Number(p.ton ?? NaN);
-    if (Number.isFinite(ton)) return ton <= 0;
+    const ton = Number(tonRaw);
+    return Number.isFinite(ton) ? ton : null;
+  }
 
-    return false;
+  function isLowProductionPeriod(period: string): boolean {
+    if (expectedTonPerHour <= 0) return false;
+
+    const ton = producedTonForPeriod(period);
+    if (ton === null) return false;
+
+    return ton < expectedTonPerHour;
+  }
+
+  function isShortStop(row?: StopRow): boolean {
+    const minutes = clamp60(Number(row?.minutos || 0));
+    return minutes > 0 && minutes < 15;
+  }
+
+  function canJustifyLowProduction(period: string, row?: StopRow): boolean {
+    return isLowProductionPeriod(period) && isShortStop(row);
+  }
+
+  function needsLowProductionJustification(period: string, row?: StopRow): boolean {
+    return canJustifyLowProduction(period, row) && !String(row?.justificativa_baixa_producao || "").trim();
   }
 
   function rowsForPeriod(period: string): StopRow[] {
@@ -504,6 +541,17 @@ export default function LancamentoParadas() {
       return Array.isArray(data.rows) ? data.rows : [];
     } catch {
       return [];
+    }
+  }
+
+  async function loadGoal(targetDay: string): Promise<GoalDayPayload | null> {
+    if (!plantId) return null;
+    try {
+      return await apiGet<GoalDayPayload>(
+        `/api/plants/${plantId}/goals/day/${encodeURIComponent(targetDay)}`,
+      );
+    } catch {
+      return null;
     }
   }
 
@@ -574,12 +622,14 @@ export default function LancamentoParadas() {
       if (!plantId) {
         setRows(periods.map((p) => blankRow(p, 1)));
         setProductionRows([]);
+        setGoalDay(null);
         return;
       }
 
-      const [dayRows, prodRows] = await Promise.all([loadOneDay(day), loadProduction(day)]);
+      const [dayRows, prodRows, goal] = await Promise.all([loadOneDay(day), loadProduction(day), loadGoal(day)]);
       setRows(dayRows.length ? dayRows : periods.map((p) => blankRow(p, 1)));
       setProductionRows(prodRows);
+      setGoalDay(goal);
       setDirty(false);
     } catch (e: any) {
       setMsg(e?.message || "Erro ao carregar");
@@ -629,7 +679,9 @@ export default function LancamentoParadas() {
           minutos: clamp60(Number(r.minutos || 0)),
           hora_inicial: String(r.hora_inicial || "").slice(0, 5),
           hora_final: String(r.hora_final || "").slice(0, 5),
-          justificativa_baixa_producao: String(r.justificativa_baixa_producao || "").trim(),
+          justificativa_baixa_producao: canJustifyLowProduction(period, r)
+            ? String(r.justificativa_baixa_producao || "").trim()
+            : "",
         });
       });
     }
@@ -650,6 +702,11 @@ export default function LancamentoParadas() {
         if (calculated <= 0) {
           return `Horário inválido no período ${p}. Verifique hora inicial e final.`;
         }
+      }
+
+      if (needsLowProductionJustification(p, r)) {
+        const produced = producedTonForPeriod(p);
+        return `Justifique a baixa produção no período ${p}. Produzido: ${fmtSmart(produced || 0)} t/h; esperado: ${fmtSmart(expectedTonPerHour)} t/h; parada menor que 15 min.`;
       }
     }
     return null;
@@ -852,7 +909,15 @@ export default function LancamentoParadas() {
 
   function renderRowInputs(r: StopRow, period: string, ordem: number, compact = false) {
     const c = colorForType(r.tipo_parada);
-    const low = isLowProductionPeriod(period, r);
+    const lowPeriod = isLowProductionPeriod(period);
+    const canJustify = canJustifyLowProduction(period, r);
+    const needsJustification = needsLowProductionJustification(period, r);
+    const produced = producedTonForPeriod(period);
+    const justificationTitle = canJustify
+      ? `Liberado: produção ${fmtSmart(produced || 0)} t/h abaixo do esperado ${fmtSmart(expectedTonPerHour)} t/h e parada menor que 15 min.`
+      : lowPeriod
+        ? "Bloqueado: baixa produção identificada, mas a justificativa só libera para paradas menores que 15 minutos."
+        : "Bloqueado: a produção horária não está abaixo do esperado.";
 
     return (
       <>
@@ -936,26 +1001,40 @@ export default function LancamentoParadas() {
 
         <div>
           {compact ? <div style={labelStyle}>Justificativa baixa produção</div> : null}
-          <input
-            style={(low ? inputStyle : inputDisabledStyle) as React.CSSProperties}
-            value={r.justificativa_baixa_producao || ""}
-            disabled={!low}
-            onChange={(e) =>
-              updateRowByPeriod(period, ordem, {
-                justificativa_baixa_producao: e.target.value,
-              })
-            }
-            placeholder={
-              low
-                ? "Ex.: baixa alimentação, falta de ROM, oscilação..."
-                : "Bloqueado: sem baixa produção automática"
-            }
-            title={
-              low
-                ? "Campo liberado por baixa produção automática no horário"
-                : "Este campo libera automaticamente quando a produção horária indicar baixa produção"
-            }
-          />
+          <div style={{ display: "grid", gap: 4 }}>
+            <input
+              style={
+                (canJustify
+                  ? {
+                      ...inputStyle,
+                      borderColor: needsJustification ? "rgba(239,68,68,0.95)" : "rgba(34,197,94,0.55)",
+                      background: needsJustification ? "rgba(127,29,29,0.22)" : "rgba(22,101,52,0.10)",
+                      boxShadow: needsJustification ? "0 0 0 1px rgba(239,68,68,0.35)" : "none",
+                    }
+                  : inputDisabledStyle) as React.CSSProperties
+              }
+              value={canJustify ? r.justificativa_baixa_producao || "" : ""}
+              disabled={!canJustify}
+              onChange={(e) =>
+                updateRowByPeriod(period, ordem, {
+                  justificativa_baixa_producao: e.target.value,
+                })
+              }
+              placeholder={
+                canJustify
+                  ? "Obrigatório: justificar baixa produção"
+                  : lowPeriod
+                    ? "Bloqueado: parada precisa ser menor que 15 min"
+                    : "Bloqueado: produção ≥ esperado"
+              }
+              title={justificationTitle}
+            />
+            {needsJustification ? (
+              <div style={{ color: "#FCA5A5", fontWeight: 950, fontSize: 10 }}>
+                Obrigatório justificar
+              </div>
+            ) : null}
+          </div>
         </div>
       </>
     );
@@ -1091,6 +1170,7 @@ export default function LancamentoParadas() {
               const first = periodItems[0] || blankRow(period, 1);
               const hasMultiple = periodItems.length > 1;
               const hasData = periodItems.some((r) => !rowIsBlank(r));
+              const periodNeedsJustification = periodItems.some((r) => needsLowProductionJustification(period, r));
 
               if (!isExpanded) {
                 return (
@@ -1103,8 +1183,16 @@ export default function LancamentoParadas() {
                       alignItems: "center",
                       padding: "10px",
                       borderRadius: 12,
-                      background: hasData ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.035)",
-                      border: hasMultiple ? "1px solid rgba(59,130,246,0.28)" : "1px solid transparent",
+                      background: periodNeedsJustification
+                        ? "rgba(127,29,29,0.22)"
+                        : hasData
+                          ? "rgba(255,255,255,0.055)"
+                          : "rgba(255,255,255,0.035)",
+                      border: periodNeedsJustification
+                        ? "1px solid rgba(239,68,68,0.55)"
+                        : hasMultiple
+                          ? "1px solid rgba(59,130,246,0.28)"
+                          : "1px solid transparent",
                     }}
                   >
                     <button
@@ -1145,8 +1233,10 @@ export default function LancamentoParadas() {
                   key={period}
                   style={{
                     borderRadius: 18,
-                    border: "1px solid rgba(59,130,246,0.28)",
-                    background: "linear-gradient(180deg, rgba(15,23,42,0.72), rgba(2,6,12,0.38))",
+                    border: periodNeedsJustification ? "1px solid rgba(239,68,68,0.62)" : "1px solid rgba(59,130,246,0.28)",
+                    background: periodNeedsJustification
+                      ? "linear-gradient(180deg, rgba(127,29,29,0.20), rgba(2,6,12,0.38))"
+                      : "linear-gradient(180deg, rgba(15,23,42,0.72), rgba(2,6,12,0.38))",
                     boxShadow: "inset 3px 0 0 rgba(59,130,246,0.75)",
                     padding: 12,
                   }}
@@ -1195,6 +1285,7 @@ export default function LancamentoParadas() {
                       <span>Coincidência: {fmtSmart(calc.overlap)}</span>
                       <span>|</span>
                       <span style={{ color: "#86EFAC" }}>Total líquido: {fmtSmart(calc.net)} min / 60 min ●</span>
+                      {periodNeedsJustification ? <span style={{ color: "#FCA5A5" }}>Baixa produção: justificar</span> : null}
                     </div>
                   </div>
 
@@ -1233,7 +1324,7 @@ export default function LancamentoParadas() {
                             alignItems: "center",
                             padding: "8px 10px",
                             borderRadius: 12,
-                            background: "rgba(0,0,0,0.20)",
+                            background: needsLowProductionJustification(period, r) ? "rgba(127,29,29,0.20)" : "rgba(0,0,0,0.20)",
                           }}
                         >
                           <div style={{ color: "rgba(255,255,255,0.90)", fontWeight: 980 }}>
@@ -1387,7 +1478,7 @@ export default function LancamentoParadas() {
               ? "Carregando..."
               : msg
                 ? msg
-                : `Lance paradas por hora com cálculo de simultaneidade. • ${selectedPlantName}`}
+                : `Lance paradas por hora com cálculo de simultaneidade. • ${selectedPlantName} • Esperado: ${fmtSmart(expectedTonPerHour)} t/h`}
           </div>
         </div>
 
@@ -1586,7 +1677,7 @@ export default function LancamentoParadas() {
             }}
           >
             <div>
-              Validação automática por faixa horária. Sobreposições são abatidas pelo intervalo de hora inicial/final.
+              Justificativa só libera quando a produção da hora fica abaixo do esperado e a parada da linha é menor que 15 minutos. Sobreposições são abatidas por hora inicial/final.
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button type="button" onClick={clearChanges} style={btnStyle} disabled={loading || saving || periodMode}>
