@@ -12,26 +12,37 @@ import {
 import { useIsMobile } from "../mobile/useIsMobile";
 
 /**
- * Operação • Lançamento de Paradas
- * - Lança paradas por hora (máx. 60 min por faixa).
- * - Mobile: lista em cards por hora (mais legível no celular).
- * - Desktop: mantém tabela.
+ * Operação • Paradas Minutos
+ *
+ * Ajustado para o novo modelo:
+ * - Permite mais de uma parada na mesma faixa horária.
+ * - Inclui hora_inicial e hora_final para cálculo de simultaneidade/sobreposição.
+ * - Inclui justificativa_baixa_producao liberada automaticamente quando o período
+ *   estiver sinalizado como baixa produção pela produção horária.
+ * - Calcula total líquido por horário: soma bruta - minutos coincidentes.
  *
  * Endpoints:
- *   GET  /api/stops-launch?day=YYYY-MM-DD
- *   PUT  /api/stops-launch?day=YYYY-MM-DD
+ *   GET  /api/plants/{plant_id}/stops-launch?day=YYYY-MM-DD
+ *   PUT  /api/plants/{plant_id}/stops-launch?day=YYYY-MM-DD
+ *   GET  /api/plants/{plant_id}/plant-production/{day}
  */
 
 type StopRow = {
+  id?: number;
   period: string;
+  ordem?: number;
   equipamento: string;
   tipo_parada: string;
   descricao: string;
   minutos: number;
+  hora_inicial?: string;
+  hora_final?: string;
+  justificativa_baixa_producao?: string;
 };
 
 type StopDayPayload = {
   day: string;
+  obs?: string | null;
   rows: StopRow[];
 };
 
@@ -41,6 +52,25 @@ type PlantInfo = {
   name: string;
   description?: string | null;
   is_active?: boolean;
+};
+
+type PlantProductionRow = {
+  period: string;
+  ton?: number | null;
+  freq?: number | null;
+};
+
+type PlantProductionPayload = {
+  day: string;
+  plant_id?: number;
+  rows?: PlantProductionRow[];
+};
+
+type PeriodCalc = {
+  gross: number;
+  overlap: number;
+  net: number;
+  hasTimedRows: boolean;
 };
 
 /* helpers */
@@ -76,9 +106,11 @@ function isoTodayLocal(): string {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
+
 function makePeriods24(): string[] {
   const res: string[] = [];
   for (let h = 0; h < 24; h++) {
@@ -87,12 +119,14 @@ function makePeriods24(): string[] {
   }
   return res;
 }
+
 function addDaysISO(iso: string, days: number): string {
   const [y, m, d] = iso.split("-").map(Number);
   const dt = new Date(y, (m || 1) - 1, d || 1);
   dt.setDate(dt.getDate() + days);
   return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
 }
+
 function daysBetweenInclusive(start: string, end: string): string[] {
   if (!start || !end) return [];
   const a = start <= end ? start : end;
@@ -106,14 +140,9 @@ function daysBetweenInclusive(start: string, end: string): string[] {
   }
   return out;
 }
+
 function clamp60(n: number) {
-  return Math.max(0, Math.min(60, n));
-}
-function fmt1(n: number) {
-  return (Number(n) || 0).toLocaleString("pt-BR", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
+  return Math.max(0, Math.min(60, Number.isFinite(Number(n)) ? Number(n) : 0));
 }
 
 function fmtSmart(n: number) {
@@ -122,6 +151,133 @@ function fmtSmart(n: number) {
     minimumFractionDigits: value % 1 === 0 ? 0 : 1,
     maximumFractionDigits: 1,
   });
+}
+
+function normalizePeriodLaunch(p: string | null | undefined): string {
+  const raw = String(p || "").trim();
+  const m1 = raw.match(/^(\d{2})-(\d{2})$/);
+  if (m1) return `${m1[1]}-${m1[2]}`;
+
+  const m2 = raw.replace(/\s+/g, "").match(/^(\d{2}):?\d{0,2}-(\d{2}):?\d{0,2}$/);
+  if (m2) return `${m2[1]}-${m2[2]}`;
+
+  return raw;
+}
+
+function timeToMinutes(t?: string | null): number | null {
+  const s = String(t || "").trim();
+  const m = s.match(/^(\d{2}):(\d{2})(?::\d{2})?$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 60 + min;
+}
+
+function minutesToTime(total: number): string {
+  const v = ((Math.round(total) % 1440) + 1440) % 1440;
+  const h = Math.floor(v / 60);
+  const m = v % 60;
+  return `${pad2(h)}:${pad2(m)}`;
+}
+
+function periodStartMinute(period: string): number {
+  const p = normalizePeriodLaunch(period);
+  const m = p.match(/^(\d{2})-(\d{2})$/);
+  if (!m) return 0;
+  return Number(m[1]) * 60;
+}
+
+function intervalDurationMinutes(start?: string, end?: string): number {
+  const a = timeToMinutes(start);
+  const b = timeToMinutes(end);
+  if (a === null || b === null) return 0;
+  let diff = b - a;
+  if (diff < 0) diff += 1440;
+  return clamp60(diff);
+}
+
+function normalizeIntervalForPeriod(row: StopRow): [number, number] | null {
+  const a = timeToMinutes(row.hora_inicial);
+  const b = timeToMinutes(row.hora_final);
+  if (a === null || b === null) return null;
+
+  const base = periodStartMinute(row.period);
+  let start = a;
+  let end = b;
+
+  // Ajuste para faixas que cruzam meia-noite ou apontamentos como 23:50 -> 00:00.
+  if (start < base - 120) start += 1440;
+  if (end <= start) end += 1440;
+
+  return [start, end];
+}
+
+function calculatePeriod(rows: StopRow[]): PeriodCalc {
+  const active = rows.filter((r) => clamp60(Number(r.minutos || 0)) > 0);
+  const intervals = active
+    .map(normalizeIntervalForPeriod)
+    .filter(Boolean) as [number, number][];
+
+  const hasTimedRows = intervals.length > 0;
+  const gross = active.reduce((s, r) => {
+    const timed = intervalDurationMinutes(r.hora_inicial, r.hora_final);
+    return s + clamp60(timed || Number(r.minutos || 0));
+  }, 0);
+
+  if (!hasTimedRows) {
+    const netNoTime = clamp60(gross);
+    return { gross, overlap: Math.max(0, gross - netNoTime), net: netNoTime, hasTimedRows };
+  }
+
+  intervals.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const item of intervals) {
+    const last = merged[merged.length - 1];
+    if (!last || item[0] > last[1]) {
+      merged.push([...item]);
+    } else {
+      last[1] = Math.max(last[1], item[1]);
+    }
+  }
+
+  const union = merged.reduce((s, [a, b]) => s + Math.max(0, b - a), 0);
+  const net = clamp60(union);
+  const overlap = Math.max(0, gross - net);
+  return { gross, overlap, net, hasTimedRows };
+}
+
+function blankRow(period: string, ordem = 1): StopRow {
+  return {
+    period,
+    ordem,
+    equipamento: "",
+    tipo_parada: "",
+    descricao: "",
+    minutos: 0,
+    hora_inicial: "",
+    hora_final: "",
+    justificativa_baixa_producao: "",
+  };
+}
+
+function rowIsBlank(r: StopRow): boolean {
+  return (
+    !String(r.equipamento || "").trim() &&
+    !String(r.tipo_parada || "").trim() &&
+    !String(r.descricao || "").trim() &&
+    !String(r.hora_inicial || "").trim() &&
+    !String(r.hora_final || "").trim() &&
+    !String(r.justificativa_baixa_producao || "").trim() &&
+    clamp60(Number(r.minutos || 0)) === 0
+  );
+}
+
+function sortRows(a: StopRow, b: StopRow) {
+  const pa = normalizePeriodLaunch(a.period);
+  const pb = normalizePeriodLaunch(b.period);
+  if (pa !== pb) return pa.localeCompare(pb);
+  return Number(a.ordem || 1) - Number(b.ordem || 1);
 }
 
 /* colors */
@@ -138,6 +294,7 @@ function normType(s: any) {
     .toLowerCase()
     .replace(/\s+/g, " ");
 }
+
 function colorForType(type: any) {
   const t = normType(type);
   if (t.includes("corret")) return TYPE_COLORS.Corretiva;
@@ -158,6 +315,7 @@ function Dot({ color }: { color: string }) {
         background: color,
         display: "inline-block",
         boxShadow: "0 0 0 2px rgba(0,0,0,0.45)",
+        flex: "0 0 auto",
       }}
     />
   );
@@ -189,6 +347,13 @@ const inputStyle: React.CSSProperties = {
   fontWeight: 800,
 };
 
+const inputDisabledStyle: React.CSSProperties = {
+  ...inputStyle,
+  opacity: 0.58,
+  cursor: "not-allowed",
+  background: "rgba(255,255,255,0.025)",
+};
+
 const btnStyle: React.CSSProperties = {
   borderRadius: 14,
   border: "1px solid rgba(255,255,255,0.12)",
@@ -197,6 +362,14 @@ const btnStyle: React.CSSProperties = {
   padding: "10px 12px",
   fontWeight: 900,
   cursor: "pointer",
+};
+
+const orangeBtnStyle: React.CSSProperties = {
+  ...btnStyle,
+  background: "linear-gradient(135deg, rgba(245,158,11,0.98), rgba(249,115,22,0.94))",
+  borderColor: "rgba(249,115,22,0.55)",
+  color: "#160C04",
+  boxShadow: "0 12px 30px rgba(249,115,22,0.18)",
 };
 
 export default function LancamentoParadas() {
@@ -210,38 +383,70 @@ export default function LancamentoParadas() {
   const [periodRows, setPeriodRows] = useState<StopRow[]>([]);
   const [plants, setPlants] = useState<PlantInfo[]>([]);
   const [plantId, setPlantId] = useState<number | null>(null);
+  const [expandedPeriod, setExpandedPeriod] = useState<string | null>("07-08");
+  const [productionRows, setProductionRows] = useState<PlantProductionRow[]>([]);
 
-  const [rows, setRows] = useState<StopRow[]>(
-    periods.map((p) => ({
-      period: p,
-      equipamento: "",
-      tipo_parada: "",
-      descricao: "",
-      minutos: 0,
-    })),
-  );
+  const [rows, setRows] = useState<StopRow[]>(periods.map((p) => blankRow(p, 1)));
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [dirty, setDirty] = useState(false);
 
   const equipmentOptions = useMemo(
     () => [
       "BT-01",
       "BT-02",
+      "BR-03",
       "PN-01",
       "PN-02",
       "EH-08",
       "EH-04",
+      "TC-11",
       "Peneiras",
       "Todos",
     ],
     [],
   );
-  const stopTypes = useMemo(
-    () => ["Operacional", "Preventiva", "Corretiva"],
-    [],
-  );
+
+  const stopTypes = useMemo(() => ["Operacional", "Preventiva", "Corretiva", "Mecânica", "Elétrica"], []);
+
+  const productionByPeriod = useMemo(() => {
+    const map: Record<string, PlantProductionRow> = {};
+    for (const r of productionRows || []) {
+      const p = normalizePeriodLaunch(r.period);
+      if (p) map[p] = r;
+    }
+    return map;
+  }, [productionRows]);
+
+  function isLowProductionPeriod(period: string, row?: StopRow): boolean {
+    if (String(row?.justificativa_baixa_producao || "").trim()) return true;
+    const p = productionByPeriod[normalizePeriodLaunch(period)];
+    if (!p) return false;
+
+    const freq = Number(p.freq ?? NaN);
+    if (Number.isFinite(freq)) return freq > 0 && freq < 100;
+
+    // Fallback conservador: se existir produção horária carregada com zero e a linha tiver parada, libera.
+    const ton = Number(p.ton ?? NaN);
+    if (Number.isFinite(ton)) return ton <= 0;
+
+    return false;
+  }
+
+  function rowsForPeriod(period: string): StopRow[] {
+    const p = normalizePeriodLaunch(period);
+    const found = rows.filter((r) => normalizePeriodLaunch(r.period) === p).sort(sortRows);
+    return found.length ? found : [blankRow(p, 1)];
+  }
+
+  function groupedRowsForView(): { period: string; rows: StopRow[]; calc: PeriodCalc }[] {
+    return periods.map((period) => {
+      const items = rowsForPeriod(period);
+      return { period, rows: items, calc: calculatePeriod(items) };
+    });
+  }
 
   async function loadPlants() {
     if (!API_BASE) {
@@ -253,8 +458,7 @@ export default function LancamentoParadas() {
       const list = Array.isArray(data) ? data : [];
       setPlants(list);
       setPlantId((current) => {
-        if (current && list.some((x) => Number(x.id) === Number(current)))
-          return current;
+        if (current && list.some((x) => Number(x.id) === Number(current))) return current;
         return list.length ? Number(list[0].id) : null;
       });
     } catch (e: any) {
@@ -264,13 +468,64 @@ export default function LancamentoParadas() {
     }
   }
 
+  async function loadProduction(targetDay: string) {
+    if (!plantId) return [];
+    try {
+      const data = await apiGet<PlantProductionPayload>(
+        `/api/plants/${plantId}/plant-production/${encodeURIComponent(targetDay)}`,
+      );
+      return Array.isArray(data.rows) ? data.rows : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function normalizeRowsFromApi(rawRows: any[]): StopRow[] {
+    const normalized: StopRow[] = (rawRows || [])
+      .map((x: any, idx: number) => {
+        const period = normalizePeriodLaunch(String(x.period || ""));
+        if (!period) return null;
+        return {
+          id: x.id ? Number(x.id) : undefined,
+          period,
+          ordem: Number(x.ordem ?? x.order ?? idx + 1) || idx + 1,
+          equipamento: x.equipamento ?? x.equipment ?? "",
+          tipo_parada: x.tipo_parada ?? x.stop_type ?? "",
+          descricao: x.descricao ?? x.description ?? "",
+          minutos: clamp60(Number(x.minutos ?? x.minutes ?? 0)),
+          hora_inicial: String(x.hora_inicial ?? x.start_time ?? "").slice(0, 5),
+          hora_final: String(x.hora_final ?? x.end_time ?? "").slice(0, 5),
+          justificativa_baixa_producao:
+            x.justificativa_baixa_producao ?? x.low_production_reason ?? "",
+        } as StopRow;
+      })
+      .filter(Boolean) as StopRow[];
+
+    const byPeriod: Record<string, StopRow[]> = {};
+    for (const r of normalized) {
+      const p = normalizePeriodLaunch(r.period);
+      if (!byPeriod[p]) byPeriod[p] = [];
+      byPeriod[p].push(r);
+    }
+
+    const out: StopRow[] = [];
+    for (const p of periods) {
+      const list = (byPeriod[p] || []).sort(sortRows);
+      if (!list.length) {
+        out.push(blankRow(p, 1));
+      } else {
+        list.forEach((r, idx) => out.push({ ...r, period: p, ordem: idx + 1 }));
+      }
+    }
+
+    return out;
+  }
+
   async function loadOneDay(targetDay: string): Promise<StopRow[]> {
     if (!plantId) return [];
     const r = await fetch(
       `${API_BASE}/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(targetDay)}`,
-      {
-        headers: { ...authHeaders() },
-      },
+      { headers: { ...authHeaders() } },
     );
     if (r.status === 404) return [];
     if (!r.ok) {
@@ -278,13 +533,7 @@ export default function LancamentoParadas() {
       throw new Error(t || `HTTP ${r.status}`);
     }
     const data = (await r.json()) as StopDayPayload;
-    return (data.rows || []).map((x: any) => ({
-      period: String(x.period || ""),
-      equipamento: x.equipamento ?? x.equipment ?? "",
-      tipo_parada: x.tipo_parada ?? x.stop_type ?? "",
-      descricao: x.descricao ?? x.description ?? "",
-      minutos: clamp60(Number(x.minutos ?? x.minutes ?? 0)),
-    }));
+    return normalizeRowsFromApi(data.rows || []);
   }
 
   async function load() {
@@ -297,35 +546,15 @@ export default function LancamentoParadas() {
 
     try {
       if (!plantId) {
-        setRows(
-          periods.map((p) => ({
-            period: p,
-            equipamento: "",
-            tipo_parada: "",
-            descricao: "",
-            minutos: 0,
-          })),
-        );
-        setLoading(false);
+        setRows(periods.map((p) => blankRow(p, 1)));
+        setProductionRows([]);
         return;
       }
 
-      const dayRows = await loadOneDay(day);
-      const map: Record<string, StopRow> = {};
-      for (const x of dayRows) {
-        const p = x.period;
-        map[p] = x;
-      }
-
-      setRows(
-        periods.map((p) => ({
-          period: p,
-          equipamento: map[p]?.equipamento ?? "",
-          tipo_parada: map[p]?.tipo_parada ?? "",
-          descricao: map[p]?.descricao ?? "",
-          minutos: clamp60(Number(map[p]?.minutos ?? 0)),
-        })),
-      );
+      const [dayRows, prodRows] = await Promise.all([loadOneDay(day), loadProduction(day)]);
+      setRows(dayRows.length ? dayRows : periods.map((p) => blankRow(p, 1)));
+      setProductionRows(prodRows);
+      setDirty(false);
     } catch (e: any) {
       setMsg(e?.message || "Erro ao carregar");
     } finally {
@@ -348,7 +577,7 @@ export default function LancamentoParadas() {
     try {
       const days = daysBetweenInclusive(startDay, endDay);
       const all = (await Promise.all(days.map((d) => loadOneDay(d)))).flat();
-      setPeriodRows(all);
+      setPeriodRows(all.filter((r) => !rowIsBlank(r)));
       setMsg(`Período carregado: ${days.length} dia(s).`);
     } catch (e: any) {
       setPeriodRows([]);
@@ -356,6 +585,29 @@ export default function LancamentoParadas() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function prepareRowsToSave(): StopRow[] {
+    const out: StopRow[] = [];
+    for (const period of periods) {
+      const list = rowsForPeriod(period).filter((r) => !rowIsBlank(r));
+      if (!list.length) {
+        out.push(blankRow(period, 1));
+        continue;
+      }
+      list.forEach((r, idx) => {
+        out.push({
+          ...r,
+          period,
+          ordem: idx + 1,
+          minutos: clamp60(Number(r.minutos || 0)),
+          hora_inicial: String(r.hora_inicial || "").slice(0, 5),
+          hora_final: String(r.hora_final || "").slice(0, 5),
+          justificativa_baixa_producao: String(r.justificativa_baixa_producao || "").trim(),
+        });
+      });
+    }
+    return out;
   }
 
   async function save() {
@@ -373,11 +625,7 @@ export default function LancamentoParadas() {
         return;
       }
 
-      const normalized = rows.map((r) => ({
-        ...r,
-        minutos: clamp60(Number(r.minutos || 0)),
-      }));
-
+      const normalized = prepareRowsToSave();
       const body: StopDayPayload = { day, rows: normalized };
 
       const r = await fetch(
@@ -395,6 +643,7 @@ export default function LancamentoParadas() {
       }
 
       setMsg("Salvo com sucesso.");
+      setDirty(false);
       await load();
     } catch (e: any) {
       setMsg(e?.message || "Erro ao salvar");
@@ -432,17 +681,15 @@ export default function LancamentoParadas() {
       ? "Quantidade de paradas por hora"
       : periodMode
         ? "Horas paradas por hora"
-        : "Minutos parados por hora";
+        : "Minutos líquidos parados por hora";
 
   const chartData = useMemo(() => {
     return periods.map((p) => {
       const items = activeChartRows.filter(
-        (r) => r.period === p && clamp60(Number(r.minutos || 0)) > 0,
+        (r) => normalizePeriodLaunch(r.period) === p && clamp60(Number(r.minutos || 0)) > 0,
       );
-      const minutes = items.reduce(
-        (s, r) => s + clamp60(Number(r.minutos || 0)),
-        0,
-      );
+      const calc = calculatePeriod(items);
+      const minutes = calc.net;
       const hours = minutes / 60;
       const count = items.length;
 
@@ -461,12 +708,599 @@ export default function LancamentoParadas() {
     [chartData],
   );
 
-  function updateRow(idx: number, patch: Partial<StopRow>) {
-    setRows((prev) => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], ...patch };
+  const totalDayCalc = useMemo(() => {
+    const all = groupedRowsForView().reduce(
+      (acc, g) => {
+        acc.gross += g.calc.gross;
+        acc.overlap += g.calc.overlap;
+        acc.net += g.calc.net;
+        return acc;
+      },
+      { gross: 0, overlap: 0, net: 0 },
+    );
+    return all;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
+
+  function setRowsAndDirty(updater: (prev: StopRow[]) => StopRow[]) {
+    setRows((prev) => updater(prev));
+    setDirty(true);
+  }
+
+  function updateRowByPeriod(period: string, ordem: number, patch: Partial<StopRow>) {
+    const p = normalizePeriodLaunch(period);
+    setRowsAndDirty((prev) =>
+      prev.map((r) => {
+        if (normalizePeriodLaunch(r.period) !== p || Number(r.ordem || 1) !== ordem) return r;
+        const next = { ...r, ...patch };
+
+        if (patch.hora_inicial !== undefined || patch.hora_final !== undefined) {
+          const minutesFromTime = intervalDurationMinutes(
+            patch.hora_inicial !== undefined ? patch.hora_inicial : next.hora_inicial,
+            patch.hora_final !== undefined ? patch.hora_final : next.hora_final,
+          );
+          if (minutesFromTime > 0) next.minutos = minutesFromTime;
+        }
+
+        return next;
+      }),
+    );
+  }
+
+  function addStop(period: string) {
+    const p = normalizePeriodLaunch(period);
+    const existing = rowsForPeriod(p);
+    const onlyBlank = existing.length === 1 && rowIsBlank(existing[0]);
+    const nextOrder = onlyBlank ? 1 : existing.length + 1;
+
+    setRowsAndDirty((prev) => {
+      const withoutBlank = onlyBlank
+        ? prev.filter((r) => !(normalizePeriodLaunch(r.period) === p && rowIsBlank(r)))
+        : prev;
+      const next = [...withoutBlank, blankRow(p, nextOrder)].sort(sortRows);
       return next;
     });
+    setExpandedPeriod(p);
+  }
+
+  function removeStop(period: string, ordem: number) {
+    const p = normalizePeriodLaunch(period);
+    setRowsAndDirty((prev) => {
+      const remaining = prev.filter(
+        (r) => !(normalizePeriodLaunch(r.period) === p && Number(r.ordem || 1) === ordem),
+      );
+      const same = remaining.filter((r) => normalizePeriodLaunch(r.period) === p).sort(sortRows);
+      if (!same.length) {
+        return [...remaining, blankRow(p, 1)].sort(sortRows);
+      }
+      let ord = 0;
+      return remaining
+        .map((r) => {
+          if (normalizePeriodLaunch(r.period) !== p) return r;
+          ord += 1;
+          return { ...r, ordem: ord };
+        })
+        .sort(sortRows);
+    });
+  }
+
+  function clearChanges() {
+    load();
+  }
+
+  function renderRowInputs(r: StopRow, period: string, ordem: number, compact = false) {
+    const c = colorForType(r.tipo_parada);
+    const low = isLowProductionPeriod(period, r);
+
+    return (
+      <>
+        <div>
+          {compact ? <div style={labelStyle}>Equipamento</div> : null}
+          <select
+            style={inputStyle as any}
+            value={r.equipamento}
+            onChange={(e) => updateRowByPeriod(period, ordem, { equipamento: e.target.value })}
+          >
+            <option value="">—</option>
+            {equipmentOptions.map((x) => (
+              <option key={x} value={x}>
+                {x}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          {compact ? <div style={labelStyle}>Tipo</div> : null}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Dot color={c} />
+            <select
+              style={inputStyle as any}
+              value={r.tipo_parada}
+              onChange={(e) => updateRowByPeriod(period, ordem, { tipo_parada: e.target.value })}
+            >
+              <option value="">—</option>
+              {stopTypes.map((x) => (
+                <option key={x} value={x}>
+                  {x}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          {compact ? <div style={labelStyle}>Descrição</div> : null}
+          <input
+            style={inputStyle}
+            value={r.descricao}
+            onChange={(e) => updateRowByPeriod(period, ordem, { descricao: e.target.value })}
+            placeholder="Ex.: troca de correia / limpeza / ajuste / etc."
+          />
+        </div>
+
+        <div>
+          {compact ? <div style={labelStyle}>Minutos</div> : null}
+          <input
+            style={inputStyle}
+            type="number"
+            min={0}
+            max={60}
+            value={String(r.minutos ?? 0)}
+            onChange={(e) => updateRowByPeriod(period, ordem, { minutos: clamp60(Number(e.target.value) || 0) })}
+            placeholder="0-60"
+          />
+        </div>
+
+        <div>
+          {compact ? <div style={labelStyle}>Hora inicial</div> : null}
+          <input
+            style={inputStyle}
+            type="time"
+            value={r.hora_inicial || ""}
+            onChange={(e) => updateRowByPeriod(period, ordem, { hora_inicial: e.target.value })}
+          />
+        </div>
+
+        <div>
+          {compact ? <div style={labelStyle}>Hora final</div> : null}
+          <input
+            style={inputStyle}
+            type="time"
+            value={r.hora_final || ""}
+            onChange={(e) => updateRowByPeriod(period, ordem, { hora_final: e.target.value })}
+          />
+        </div>
+
+        <div>
+          {compact ? <div style={labelStyle}>Justificativa baixa produção</div> : null}
+          <input
+            style={(low ? inputStyle : inputDisabledStyle) as React.CSSProperties}
+            value={r.justificativa_baixa_producao || ""}
+            disabled={!low}
+            onChange={(e) =>
+              updateRowByPeriod(period, ordem, {
+                justificativa_baixa_producao: e.target.value,
+              })
+            }
+            placeholder={
+              low
+                ? "Ex.: baixa alimentação, falta de ROM, oscilação..."
+                : "Bloqueado: sem baixa produção automática"
+            }
+            title={
+              low
+                ? "Campo liberado por baixa produção automática no horário"
+                : "Este campo libera automaticamente quando a produção horária indicar baixa produção"
+            }
+          />
+        </div>
+      </>
+    );
+  }
+
+  function renderRulesCard() {
+    return (
+      <div
+        style={{
+          ...cardStyle,
+          alignSelf: "start",
+          position: mobile ? undefined : "sticky",
+          top: 12,
+          background: "rgba(10,14,18,0.88)",
+        }}
+      >
+        <div style={{ color: "rgba(255,255,255,0.94)", fontWeight: 980, fontSize: 16 }}>
+          Regras de cálculo no horário
+        </div>
+
+        <div style={{ display: "grid", gap: 14, marginTop: 16 }}>
+          {[
+            ["+", "#22C55E", "Somar minutos quando as paradas forem em minutos diferentes."],
+            ["−", "#F59E0B", "Abater minutos coincidentes quando houver sobreposição no mesmo horário."],
+            ["⌚", "#3B82F6", "Total líquido do horário não pode ultrapassar 60 minutos."],
+          ].map(([icon, color, text]) => (
+            <div key={String(text)} style={{ display: "grid", gridTemplateColumns: "28px 1fr", gap: 10 }}>
+              <div
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 999,
+                  border: `2px solid ${color}`,
+                  display: "grid",
+                  placeItems: "center",
+                  color,
+                  fontWeight: 950,
+                  fontSize: 13,
+                }}
+              >
+                {icon}
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.72)", fontWeight: 800, lineHeight: 1.35 }}>
+                {text}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "18px 0" }} />
+
+        <div style={{ color: "rgba(255,255,255,0.90)", fontWeight: 950 }}>Exemplo prático</div>
+        <div style={{ display: "grid", gap: 12, marginTop: 12, fontSize: 12, fontWeight: 900 }}>
+          <div>
+            <div style={{ color: "#22C55E", textAlign: "center" }}>Parada A: 15 min</div>
+            <div style={{ display: "grid", gridTemplateColumns: "42px 1fr 42px", alignItems: "center", gap: 4 }}>
+              <span style={{ color: "rgba(255,255,255,0.72)" }}>07:00</span>
+              <span style={{ height: 7, borderRadius: 999, background: "rgba(34,197,94,0.6)", border: "1px solid #22C55E" }} />
+              <span style={{ color: "rgba(255,255,255,0.72)" }}>07:15</span>
+            </div>
+          </div>
+          <div>
+            <div style={{ color: "#3B82F6", textAlign: "center" }}>Parada B: 10 min</div>
+            <div style={{ display: "grid", gridTemplateColumns: "42px 1fr 42px", alignItems: "center", gap: 4 }}>
+              <span style={{ color: "rgba(255,255,255,0.72)" }}>07:05</span>
+              <span style={{ height: 7, borderRadius: 999, background: "rgba(59,130,246,0.6)", border: "1px solid #3B82F6" }} />
+              <span style={{ color: "rgba(255,255,255,0.72)" }}>07:15</span>
+            </div>
+          </div>
+          <div>
+            <div style={{ color: "#F59E0B", textAlign: "center" }}>Coincidência: 10 min</div>
+            <div style={{ display: "grid", gridTemplateColumns: "42px 1fr 42px", alignItems: "center", gap: 4 }}>
+              <span style={{ color: "rgba(255,255,255,0.72)" }}>07:05</span>
+              <span style={{ height: 7, borderRadius: 999, background: "rgba(245,158,11,0.55)", border: "1px solid #F59E0B" }} />
+              <span style={{ color: "rgba(255,255,255,0.72)" }}>07:15</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ height: 1, background: "rgba(255,255,255,0.10)", margin: "18px 0" }} />
+        <div style={{ display: "grid", gap: 8, color: "rgba(255,255,255,0.74)", fontWeight: 850 }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Parada A:</span>
+            <b>15 min</b>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Parada B:</span>
+            <b>10 min</b>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Coincidência:</span>
+            <b>-10 min</b>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, color: "#86EFAC", fontWeight: 980, fontSize: 16 }}>
+            <span>Total líquido:</span>
+            <span>15 min</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderDesktopTable() {
+    const groups = groupedRowsForView();
+    return (
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth: 1240 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "72px 145px 160px 1fr 88px 98px 98px 220px 56px",
+              gap: 10,
+              padding: "0 10px 8px",
+              color: "rgba(255,255,255,0.55)",
+              fontWeight: 950,
+              fontSize: 12,
+            }}
+          >
+            <div>Hora</div>
+            <div>Equipamento</div>
+            <div>Tipo</div>
+            <div>Descrição</div>
+            <div>Minutos (0–60)</div>
+            <div>Hora inicial</div>
+            <div>Hora final</div>
+            <div>Justificativa baixa produção</div>
+            <div>Ações</div>
+          </div>
+
+          <div style={{ display: "grid", gap: 8 }}>
+            {groups.map(({ period, rows: periodItems, calc }) => {
+              const isExpanded = expandedPeriod === period;
+              const first = periodItems[0] || blankRow(period, 1);
+              const hasMultiple = periodItems.length > 1;
+              const hasData = periodItems.some((r) => !rowIsBlank(r));
+
+              if (!isExpanded) {
+                return (
+                  <div
+                    key={period}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "72px 145px 160px 1fr 88px 98px 98px 220px 56px",
+                      gap: 10,
+                      alignItems: "center",
+                      padding: "10px",
+                      borderRadius: 12,
+                      background: hasData ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.035)",
+                      border: hasMultiple ? "1px solid rgba(59,130,246,0.28)" : "1px solid transparent",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setExpandedPeriod(period)}
+                      style={{
+                        border: 0,
+                        background: "transparent",
+                        color: hasMultiple ? "#60A5FA" : "rgba(255,255,255,0.88)",
+                        fontWeight: 980,
+                        textAlign: "left",
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                      title="Abrir lançamentos do horário"
+                    >
+                      {period} {hasMultiple ? "▾" : ""}
+                    </button>
+
+                    {renderRowInputs(first, period, Number(first.ordem || 1))}
+
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <button
+                        type="button"
+                        onClick={() => addStop(period)}
+                        style={{ ...btnStyle, padding: "8px 10px" }}
+                        title="Adicionar outra parada neste horário"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={period}
+                  style={{
+                    borderRadius: 18,
+                    border: "1px solid rgba(59,130,246,0.28)",
+                    background: "linear-gradient(180deg, rgba(15,23,42,0.72), rgba(2,6,12,0.38))",
+                    boxShadow: "inset 3px 0 0 rgba(59,130,246,0.75)",
+                    padding: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "72px 1fr auto",
+                      gap: 12,
+                      alignItems: "center",
+                      marginBottom: 12,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setExpandedPeriod(null)}
+                      style={{
+                        border: 0,
+                        background: "transparent",
+                        color: "#93C5FD",
+                        fontWeight: 980,
+                        textAlign: "left",
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                    >
+                      {period} ⌃
+                    </button>
+                    <div style={{ color: "rgba(255,255,255,0.76)", fontWeight: 850 }}>
+                      Registre uma ou mais paradas neste horário
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        color: "rgba(255,255,255,0.76)",
+                        fontWeight: 900,
+                        fontSize: 12,
+                        flexWrap: "wrap",
+                        justifyContent: "flex-end",
+                      }}
+                    >
+                      <span>Soma dos minutos: {fmtSmart(calc.gross)}</span>
+                      <span>|</span>
+                      <span>Coincidência: {fmtSmart(calc.overlap)}</span>
+                      <span>|</span>
+                      <span style={{ color: "#86EFAC" }}>Total líquido: {fmtSmart(calc.net)} min / 60 min ●</span>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "38px 145px 160px 1fr 88px 98px 98px 220px 56px",
+                      gap: 10,
+                      padding: "0 10px 8px",
+                      color: "rgba(255,255,255,0.55)",
+                      fontWeight: 950,
+                      fontSize: 12,
+                    }}
+                  >
+                    <div>#</div>
+                    <div>Equipamento</div>
+                    <div>Tipo</div>
+                    <div>Descrição</div>
+                    <div>Minutos</div>
+                    <div>Hora inicial</div>
+                    <div>Hora final</div>
+                    <div>Justificativa baixa produção</div>
+                    <div>Ações</div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {periodItems.map((r, idx) => {
+                      const ordem = Number(r.ordem || idx + 1);
+                      return (
+                        <div
+                          key={`${period}-${ordem}`}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "38px 145px 160px 1fr 88px 98px 98px 220px 56px",
+                            gap: 10,
+                            alignItems: "center",
+                            padding: "8px 10px",
+                            borderRadius: 12,
+                            background: "rgba(0,0,0,0.20)",
+                          }}
+                        >
+                          <div style={{ color: "rgba(255,255,255,0.90)", fontWeight: 980 }}>
+                            {String.fromCharCode(65 + idx)}
+                          </div>
+                          {renderRowInputs(r, period, ordem)}
+                          <button
+                            type="button"
+                            onClick={() => removeStop(period, ordem)}
+                            style={{
+                              ...btnStyle,
+                              padding: "8px 10px",
+                              color: "#FCA5A5",
+                              borderColor: "rgba(239,68,68,0.35)",
+                            }}
+                            title="Excluir esta parada"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => addStop(period)}
+                    style={{
+                      ...btnStyle,
+                      width: "100%",
+                      marginTop: 10,
+                      borderStyle: "dashed",
+                      color: "#93C5FD",
+                      background: "rgba(59,130,246,0.06)",
+                    }}
+                  >
+                    + Adicionar outra parada
+                  </button>
+
+                  <div
+                    style={{
+                      marginTop: 10,
+                      color: "rgba(255,255,255,0.55)",
+                      fontWeight: 850,
+                      fontSize: 12,
+                    }}
+                  >
+                    ⓘ Soma dos minutos das paradas diferentes menos a coincidência detectada por hora inicial/final = total líquido do horário.
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderMobileCards() {
+    return (
+      <div style={{ display: "grid", gap: 10 }}>
+        {groupedRowsForView().map(({ period, rows: periodItems, calc }) => (
+          <div
+            key={period}
+            style={{
+              borderRadius: 18,
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.04)",
+              padding: 12,
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setExpandedPeriod(expandedPeriod === period ? null : period)}
+                style={{ border: 0, background: "transparent", color: "rgba(255,255,255,0.92)", fontWeight: 980, padding: 0 }}
+              >
+                {period} {expandedPeriod === period ? "⌃" : "▾"}
+              </button>
+              <div style={{ color: "#86EFAC", fontWeight: 950, fontSize: 12 }}>
+                Líquido: {fmtSmart(calc.net)} min
+              </div>
+            </div>
+
+            {(expandedPeriod === period ? periodItems : [periodItems[0]]).map((r, idx) => {
+              const ordem = Number(r.ordem || idx + 1);
+              return (
+                <div
+                  key={`${period}-${ordem}`}
+                  style={{
+                    borderRadius: 16,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "rgba(0,0,0,0.18)",
+                    padding: 10,
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ color: "rgba(255,255,255,0.78)", fontWeight: 950 }}>
+                    Parada {String.fromCharCode(65 + idx)}
+                  </div>
+                  {renderRowInputs(r, period, ordem, true)}
+                  <button
+                    type="button"
+                    onClick={() => removeStop(period, ordem)}
+                    style={{ ...btnStyle, color: "#FCA5A5", borderColor: "rgba(239,68,68,0.35)" }}
+                  >
+                    Excluir parada
+                  </button>
+                </div>
+              );
+            })}
+
+            <button type="button" onClick={() => addStop(period)} style={{ ...btnStyle, color: "#93C5FD", borderStyle: "dashed" }}>
+              + Adicionar outra parada
+            </button>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -483,36 +1317,22 @@ export default function LancamentoParadas() {
         }}
       >
         <div>
-          <div
-            style={{
-              color: "rgba(255,255,255,0.92)",
-              fontWeight: 980,
-              fontSize: mobile ? 18 : 20,
-            }}
-          >
-            Lançamento de Paradas
+          <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: mobile ? 18 : 20 }}>
+            Lançamento de Paradas Minutos
           </div>
-          <div
-            style={{
-              color: "rgba(255,255,255,0.55)",
-              fontWeight: 800,
-              marginTop: 2,
-            }}
-          >
+          <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
             {loading
               ? "Carregando..."
               : msg
                 ? msg
-                : `Lance paradas por hora (máx. 60 min por faixa). • ${selectedPlantName}`}
+                : `Lance paradas por hora com cálculo de simultaneidade. • ${selectedPlantName}`}
           </div>
         </div>
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: mobile
-              ? "1fr"
-              : "auto auto auto auto auto auto",
+            gridTemplateColumns: mobile ? "1fr" : "auto auto auto auto auto auto",
             gap: 10,
             alignItems: "end",
             width: mobile ? "100%" : undefined,
@@ -522,15 +1342,11 @@ export default function LancamentoParadas() {
             <div style={labelStyle}>Planta</div>
             <select
               value={plantId ?? ""}
-              onChange={(e) =>
-                setPlantId(e.target.value ? Number(e.target.value) : null)
-              }
+              onChange={(e) => setPlantId(e.target.value ? Number(e.target.value) : null)}
               style={inputStyle as any}
               disabled={plants.length === 0}
             >
-              {plants.length === 0 ? (
-                <option value="">Sem plantas</option>
-              ) : null}
+              {plants.length === 0 ? <option value="">Sem plantas</option> : null}
               {plants.map((x) => (
                 <option key={x.id} value={x.id}>
                   {x.name}
@@ -542,32 +1358,17 @@ export default function LancamentoParadas() {
           {!periodMode ? (
             <div>
               <div style={labelStyle}>Dia</div>
-              <input
-                type="date"
-                value={day}
-                onChange={(e) => setDay(e.target.value)}
-                style={inputStyle as any}
-              />
+              <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={inputStyle as any} />
             </div>
           ) : (
             <>
               <div>
                 <div style={labelStyle}>Início</div>
-                <input
-                  type="date"
-                  value={startDay}
-                  onChange={(e) => setStartDay(e.target.value)}
-                  style={inputStyle as any}
-                />
+                <input type="date" value={startDay} onChange={(e) => setStartDay(e.target.value)} style={inputStyle as any} />
               </div>
               <div>
                 <div style={labelStyle}>Fim</div>
-                <input
-                  type="date"
-                  value={endDay}
-                  onChange={(e) => setEndDay(e.target.value)}
-                  style={inputStyle as any}
-                />
+                <input type="date" value={endDay} onChange={(e) => setEndDay(e.target.value)} style={inputStyle as any} />
               </div>
             </>
           )}
@@ -576,14 +1377,10 @@ export default function LancamentoParadas() {
             <div style={labelStyle}>Visualizar</div>
             <select
               value={metricMode}
-              onChange={(e) =>
-                setMetricMode(e.target.value as "minutes" | "count")
-              }
+              onChange={(e) => setMetricMode(e.target.value as "minutes" | "count")}
               style={inputStyle as any}
             >
-              <option value="minutes">
-                {periodMode ? "Horas paradas/hora" : "Minutos parados/hora"}
-              </option>
+              <option value="minutes">{periodMode ? "Horas líquidas/hora" : "Minutos líquidos/hora"}</option>
               <option value="count">Qtd. de paradas/hora</option>
             </select>
           </div>
@@ -594,12 +1391,8 @@ export default function LancamentoParadas() {
             style={{
               ...btnStyle,
               width: mobile ? "100%" : undefined,
-              background: periodMode
-                ? "rgba(249,115,22,0.18)"
-                : "rgba(255,255,255,0.06)",
-              borderColor: periodMode
-                ? "rgba(249,115,22,0.45)"
-                : "rgba(255,255,255,0.12)",
+              background: periodMode ? "rgba(249,115,22,0.18)" : "rgba(255,255,255,0.06)",
+              borderColor: periodMode ? "rgba(249,115,22,0.45)" : "rgba(255,255,255,0.12)",
             }}
           >
             {periodMode ? "Período ativo" : "Dia"}
@@ -615,27 +1408,15 @@ export default function LancamentoParadas() {
 
           <button
             onClick={save}
-            style={{
-              ...btnStyle,
-              width: mobile ? "100%" : undefined,
-              background: "rgba(16,185,129,0.16)",
-              borderColor: "rgba(16,185,129,0.35)",
-            }}
+            style={{ ...orangeBtnStyle, width: mobile ? "100%" : undefined }}
             disabled={saving || loading || !plantId || periodMode}
           >
-            {saving ? "Salvando..." : "Salvar"}
+            {saving ? "Salvando..." : "Salvar lançamentos"}
           </button>
         </div>
       </div>
 
-      <div
-        style={{
-          ...cardStyle,
-          display: "grid",
-          gridTemplateColumns: "1fr",
-          gap: 10,
-        }}
-      >
+      <div style={{ ...cardStyle, display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
         <div
           style={{
             display: "flex",
@@ -647,47 +1428,28 @@ export default function LancamentoParadas() {
           }}
         >
           <div>
-            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950 }}>
-              {chartTitle}
-            </div>
-            <div
-              style={{
-                color: "rgba(255,255,255,0.55)",
-                fontWeight: 800,
-                marginTop: 2,
-              }}
-            >
+            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950 }}>{chartTitle}</div>
+            <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 800, marginTop: 2 }}>
               {periodMode
                 ? `Período: ${startDay} até ${endDay} • Total: ${fmtSmart(chartTotal)} ${chartUnit}`
-                : `Dia: ${day} • Total: ${fmtSmart(chartTotal)} ${chartUnit}`}
+                : `Dia: ${day} • Total líquido: ${fmtSmart(totalDayCalc.net)} min • Coincidência: ${fmtSmart(totalDayCalc.overlap)} min`}
             </div>
           </div>
         </div>
 
-        <div style={{ height: mobile ? 300 : 380 }}>
+        <div style={{ height: mobile ? 300 : 340 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              margin={{ top: 28, right: 16, left: 0, bottom: 6 }}
-            >
+            <BarChart data={chartData} margin={{ top: 28, right: 16, left: 0, bottom: 6 }}>
               <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
               <XAxis
                 dataKey="period"
-                tick={{
-                  fill: "rgba(255,255,255,0.62)",
-                  fontSize: mobile ? 9 : 11,
-                  fontWeight: 800,
-                }}
+                tick={{ fill: "rgba(255,255,255,0.62)", fontSize: mobile ? 9 : 11, fontWeight: 800 }}
                 interval={mobile ? 1 : 0}
                 axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
                 tickLine={false}
               />
               <YAxis
-                tick={{
-                  fill: "rgba(255,255,255,0.62)",
-                  fontSize: 11,
-                  fontWeight: 800,
-                }}
+                tick={{ fill: "rgba(255,255,255,0.62)", fontSize: 11, fontWeight: 800 }}
                 axisLine={false}
                 tickLine={false}
                 allowDecimals={periodMode && metricMode === "minutes"}
@@ -700,31 +1462,16 @@ export default function LancamentoParadas() {
                 }}
                 formatter={(v: any) => [
                   `${fmtSmart(Number(v || 0))} ${chartUnit}`,
-                  metricMode === "count"
-                    ? "Paradas"
-                    : periodMode
-                      ? "Horas"
-                      : "Minutos",
+                  metricMode === "count" ? "Paradas" : periodMode ? "Horas" : "Minutos líquidos",
                 ]}
                 labelFormatter={(l: any) => `Hora ${String(l || "")}`}
               />
-              <Bar
-                dataKey="value"
-                fill="#16C8F3"
-                radius={[10, 10, 0, 0]}
-                maxBarSize={42}
-              >
+              <Bar dataKey="value" fill="#16C8F3" radius={[10, 10, 0, 0]} maxBarSize={42}>
                 <LabelList
                   dataKey="value"
                   position="top"
-                  formatter={(v: any) =>
-                    Number(v || 0) > 0 ? fmtSmart(Number(v || 0)) : ""
-                  }
-                  style={{
-                    fill: "rgba(255,255,255,0.88)",
-                    fontWeight: 950,
-                    fontSize: mobile ? 9 : 11,
-                  }}
+                  formatter={(v: any) => (Number(v || 0) > 0 ? fmtSmart(Number(v || 0)) : "")}
+                  style={{ fill: "rgba(255,255,255,0.88)", fontWeight: 950, fontSize: mobile ? 9 : 11 }}
                 />
               </Bar>
             </BarChart>
@@ -732,270 +1479,63 @@ export default function LancamentoParadas() {
         </div>
       </div>
 
-      <div style={cardStyle}>
-        <div
-          style={{
-            color: "rgba(255,255,255,0.92)",
-            fontWeight: 950,
-            marginBottom: 10,
-          }}
-        >
-          Lançamento por hora (00-01 … 23-00)
-        </div>
-
-        {!mobile ? (
-          <>
-            <div style={{ overflowX: "auto" }}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "separate",
-                  borderSpacing: "0 10px",
-                  minWidth: 920,
-                }}
-              >
-                <thead>
-                  <tr
-                    style={{
-                      color: "rgba(255,255,255,0.55)",
-                      fontWeight: 900,
-                      fontSize: 12,
-                    }}
-                  >
-                    <th style={{ textAlign: "left", padding: "0 10px" }}>
-                      Hora
-                    </th>
-                    <th style={{ textAlign: "left", padding: "0 10px" }}>
-                      Equipamento
-                    </th>
-                    <th style={{ textAlign: "left", padding: "0 10px" }}>
-                      Tipo
-                    </th>
-                    <th style={{ textAlign: "left", padding: "0 10px" }}>
-                      Descrição
-                    </th>
-                    <th style={{ textAlign: "left", padding: "0 10px" }}>
-                      Minutos (0–60)
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {rows.map((r, idx) => {
-                    const c = colorForType(r.tipo_parada);
-                    return (
-                      <tr
-                        key={r.period}
-                        style={{ background: "rgba(255,255,255,0.04)" }}
-                      >
-                        <td
-                          style={{
-                            padding: "10px 10px",
-                            color: "rgba(255,255,255,0.85)",
-                            fontWeight: 950,
-                          }}
-                        >
-                          {r.period}
-                        </td>
-                        <td style={{ padding: "10px 10px" }}>
-                          <select
-                            style={inputStyle}
-                            value={r.equipamento}
-                            onChange={(e) =>
-                              updateRow(idx, { equipamento: e.target.value })
-                            }
-                          >
-                            <option value="">—</option>
-                            {equipmentOptions.map((x) => (
-                              <option key={x} value={x}>
-                                {x}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td style={{ padding: "10px 10px" }}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 10,
-                            }}
-                          >
-                            <Dot color={c} />
-                            <select
-                              style={inputStyle}
-                              value={r.tipo_parada}
-                              onChange={(e) =>
-                                updateRow(idx, { tipo_parada: e.target.value })
-                              }
-                            >
-                              <option value="">—</option>
-                              {stopTypes.map((x) => (
-                                <option key={x} value={x}>
-                                  {x}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </td>
-                        <td style={{ padding: "10px 10px" }}>
-                          <input
-                            style={inputStyle}
-                            value={r.descricao}
-                            onChange={(e) =>
-                              updateRow(idx, { descricao: e.target.value })
-                            }
-                            placeholder="Ex.: troca de correia / limpeza / ajuste / etc."
-                          />
-                        </td>
-                        <td style={{ padding: "10px 10px" }}>
-                          <input
-                            style={inputStyle}
-                            type="number"
-                            min={0}
-                            max={60}
-                            value={String(r.minutos ?? 0)}
-                            onChange={(e) =>
-                              updateRow(idx, {
-                                minutos: clamp60(Number(e.target.value) || 0),
-                              })
-                            }
-                            placeholder="0-60"
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: mobile ? "1fr" : "minmax(0, 1fr) 300px",
+          gap: 14,
+          alignItems: "start",
+        }}
+      >
+        <div style={cardStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+              marginBottom: 10,
+            }}
+          >
+            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 950 }}>
+              Lançamento por hora (00-01 … 23-00)
             </div>
-          </>
-        ) : (
-          <div style={{ display: "grid", gap: 10 }}>
-            {rows.map((r, idx) => {
-              const c = colorForType(r.tipo_parada);
-              return (
-                <div
-                  key={r.period}
-                  style={{
-                    borderRadius: 18,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(255,255,255,0.04)",
-                    padding: 12,
-                    display: "grid",
-                    gap: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
-                    <div
-                      style={{
-                        color: "rgba(255,255,255,0.92)",
-                        fontWeight: 950,
-                      }}
-                    >
-                      {r.period}
-                    </div>
-                    <div
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        color: "rgba(255,255,255,0.72)",
-                        fontWeight: 850,
-                        fontSize: 12,
-                      }}
-                    >
-                      <Dot color={c} /> {r.tipo_parada || "—"}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={labelStyle}>Equipamento</div>
-                    <select
-                      style={inputStyle}
-                      value={r.equipamento}
-                      onChange={(e) =>
-                        updateRow(idx, { equipamento: e.target.value })
-                      }
-                    >
-                      <option value="">—</option>
-                      {equipmentOptions.map((x) => (
-                        <option key={x} value={x}>
-                          {x}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <div style={labelStyle}>Tipo</div>
-                    <select
-                      style={inputStyle}
-                      value={r.tipo_parada}
-                      onChange={(e) =>
-                        updateRow(idx, { tipo_parada: e.target.value })
-                      }
-                    >
-                      <option value="">—</option>
-                      {stopTypes.map((x) => (
-                        <option key={x} value={x}>
-                          {x}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <div style={labelStyle}>Descrição</div>
-                    <input
-                      style={inputStyle}
-                      value={r.descricao}
-                      onChange={(e) =>
-                        updateRow(idx, { descricao: e.target.value })
-                      }
-                      placeholder="Ex.: troca de correia / limpeza / ajuste / etc."
-                    />
-                  </div>
-
-                  <div>
-                    <div style={labelStyle}>Minutos (0-60)</div>
-                    <input
-                      style={inputStyle}
-                      type="number"
-                      min={0}
-                      max={60}
-                      value={String(r.minutos ?? 0)}
-                      onChange={(e) =>
-                        updateRow(idx, {
-                          minutos: clamp60(Number(e.target.value) || 0),
-                        })
-                      }
-                      placeholder="0-60"
-                    />
-                  </div>
-                </div>
-              );
-            })}
+            <div style={{ color: dirty ? "#FBBF24" : "rgba(255,255,255,0.45)", fontWeight: 900, fontSize: 12 }}>
+              {dirty ? "● Alterações não salvas" : "✓ Sem alterações pendentes"}
+            </div>
           </div>
-        )}
 
-        <div
-          style={{
-            marginTop: 10,
-            color: "rgba(255,255,255,0.55)",
-            fontWeight: 850,
-            fontSize: 12,
-          }}
-        >
-          Obs.: o campo minutos é limitado em <b>60</b> por faixa horária.
+          {!mobile ? renderDesktopTable() : renderMobileCards()}
+
+          <div
+            style={{
+              marginTop: 14,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+              color: "rgba(255,255,255,0.55)",
+              fontWeight: 850,
+              fontSize: 12,
+            }}
+          >
+            <div>
+              Validação automática por faixa horária. Sobreposições são abatidas pelo intervalo de hora inicial/final.
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" onClick={clearChanges} style={btnStyle} disabled={loading || saving || periodMode}>
+                Limpar alterações
+              </button>
+              <button type="button" onClick={save} style={orangeBtnStyle} disabled={saving || loading || !plantId || periodMode}>
+                {saving ? "Salvando..." : "Salvar lançamentos"}
+              </button>
+            </div>
+          </div>
         </div>
+
+        {renderRulesCard()}
       </div>
     </div>
   );
