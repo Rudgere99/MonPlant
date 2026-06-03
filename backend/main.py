@@ -214,6 +214,7 @@ def _startup_bootstrap():
     ensure_user_permission_columns()
     ensure_supervisor_planta_tables()
     ensure_plant_production_over_columns()
+    ensure_stops_launch_tables()
 
 # =========================
 # CORS
@@ -702,9 +703,20 @@ class StopLaunchRowIn(BaseModel):
     descricao: Optional[str] = ""
     minutos: int = 0
 
+    # Novo modelo de Paradas Minutos:
+    # - permite mais de uma parada no mesmo period;
+    # - usa hora inicial/final para identificar simultaneidade/sobreposição;
+    # - justificativa é preenchida pelo front somente quando a baixa produção horária for detectada.
+    id: Optional[int] = None
+    ordem: Optional[int] = None
+    hora_inicial: Optional[str] = None
+    hora_final: Optional[str] = None
+    justificativa_baixa_producao: Optional[str] = ""
+
 
 class StopLaunchDayUpsert(BaseModel):
     day: date
+    obs: Optional[str] = None
     rows: List[StopLaunchRowIn] = Field(default_factory=list)
 
 
@@ -3731,30 +3743,92 @@ def stats_month_by_plant(
 # =========================
 # Lançamento de Paradas (SEPARADO) - schema bv_launch
 # Endpoints:
-#   GET /api/stops-launch?day=YYYY-MM-DD                (legado)
-#   PUT /api/stops-launch?day=YYYY-MM-DD                (legado)
+#   GET /api/stops-launch?day=YYYY-MM-DD                (legado = planta 1 / compatibilidade)
+#   PUT /api/stops-launch?day=YYYY-MM-DD                (legado = planta 1 / compatibilidade)
 #   GET /api/plants/{plant_id}/stops-launch?day=...     (multi-planta)
 #   PUT /api/plants/{plant_id}/stops-launch?day=...     (multi-planta)
+#
+# Modelo revisado:
+#   - permite múltiplas paradas no mesmo period (ex.: 07-08 com linhas A/B/C);
+#   - usa hora_inicial/hora_final para calcular simultaneidade dentro da mesma planta;
+#   - justificativa_baixa_producao é campo separado e pode ser bloqueado/liberado pelo front
+#     conforme detecção automática da baixa produção horária.
 # =========================
 
-class StopLaunchRow(BaseModel):
-    period: str = Field(..., description="Faixa horária ex: 07-08 ou 23-00")
+def ensure_stops_launch_tables():
+    """Garante/migra as tabelas de Paradas Minutos no schema bv_launch."""
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute("CREATE SCHEMA IF NOT EXISTS bv_launch;")
 
-    # Aceita tanto o payload antigo (equipment/stop_type/description/minutes)
-    # quanto o payload do front (equipamento/tipo_parada/descricao/minutos)
-    equipment: Optional[str] = Field(None, alias="equipamento")
-    stop_type: Optional[str] = Field(None, alias="tipo_parada")
-    description: Optional[str] = Field(None, alias="descricao")
-    minutes: int = Field(0, ge=0, le=60, alias="minutos")
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS bv_launch.stops_day (
+                  id BIGSERIAL PRIMARY KEY,
+                  owner_id TEXT NOT NULL,
+                  day DATE NOT NULL,
+                  plant_id INTEGER NOT NULL DEFAULT 1,
+                  obs TEXT NULL,
+                  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute("ALTER TABLE bv_launch.stops_day ADD COLUMN IF NOT EXISTS plant_id INTEGER;")
+            cur.execute("UPDATE bv_launch.stops_day SET plant_id = 1 WHERE plant_id IS NULL;")
+            cur.execute("ALTER TABLE bv_launch.stops_day ALTER COLUMN plant_id SET DEFAULT 1;")
+            cur.execute("ALTER TABLE bv_launch.stops_day ALTER COLUMN plant_id SET NOT NULL;")
+            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_stops_day_owner_day_plant ON bv_launch.stops_day(owner_id, day, plant_id);")
 
-    class Config:
-        allow_population_by_field_name = True
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS bv_launch.stops_rows (
+                  id BIGSERIAL PRIMARY KEY,
+                  day_id BIGINT NOT NULL REFERENCES bv_launch.stops_day(id) ON DELETE CASCADE,
+                  period TEXT NOT NULL,
+                  equipment TEXT NULL,
+                  stop_type TEXT NULL,
+                  description TEXT NULL,
+                  minutes INTEGER NOT NULL DEFAULT 0,
+                  hora_inicial TIME NULL,
+                  hora_final TIME NULL,
+                  justificativa_baixa_producao TEXT NULL,
+                  ordem INTEGER NOT NULL DEFAULT 1,
+                  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute("ALTER TABLE bv_launch.stops_rows ADD COLUMN IF NOT EXISTS hora_inicial TIME;")
+            cur.execute("ALTER TABLE bv_launch.stops_rows ADD COLUMN IF NOT EXISTS hora_final TIME;")
+            cur.execute("ALTER TABLE bv_launch.stops_rows ADD COLUMN IF NOT EXISTS justificativa_baixa_producao TEXT;")
+            cur.execute("ALTER TABLE bv_launch.stops_rows ADD COLUMN IF NOT EXISTS ordem INTEGER DEFAULT 1;")
+            cur.execute("UPDATE bv_launch.stops_rows SET ordem = 1 WHERE ordem IS NULL;")
+            cur.execute("ALTER TABLE bv_launch.stops_rows ALTER COLUMN ordem SET DEFAULT 1;")
+            cur.execute("ALTER TABLE bv_launch.stops_rows ALTER COLUMN ordem SET NOT NULL;")
 
+            # A constraint antiga 'hora_final > hora_inicial' quebra o período 23-00.
+            # A validação completa fica no backend/front, pois precisa considerar virada de dia.
+            cur.execute("ALTER TABLE bv_launch.stops_rows DROP CONSTRAINT IF EXISTS chk_stops_rows_horas_validas;")
+            cur.execute("ALTER TABLE bv_launch.stops_rows DROP CONSTRAINT IF EXISTS chk_stops_rows_horas_preenchidas_juntas;")
+            cur.execute(
+                """
+                ALTER TABLE bv_launch.stops_rows
+                ADD CONSTRAINT chk_stops_rows_horas_preenchidas_juntas
+                CHECK (
+                    (hora_inicial IS NULL AND hora_final IS NULL)
+                    OR
+                    (hora_inicial IS NOT NULL AND hora_final IS NOT NULL)
+                );
+                """
+            )
 
-class StopLaunchPayload(BaseModel):
-    day: date
-    obs: Optional[str] = None
-    rows: List[StopLaunchRow] = Field(default_factory=list)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_stops_rows_day_period_ordem ON bv_launch.stops_rows(day_id, period, ordem);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_stops_rows_day_period_horas ON bv_launch.stops_rows(day_id, period, hora_inicial, hora_final);")
+            conn.commit()
+    except Exception:
+        # Não derruba a API se a migração falhar; as rotas continuarão tentando operar.
+        return
+
 
 def _clamp_0_60(v: int) -> int:
     try:
@@ -3767,105 +3841,228 @@ def _clamp_0_60(v: int) -> int:
         return 60
     return n
 
-def _row_is_empty(r: StopLaunchRow) -> bool:
-    # Linha vazia = nada preenchido (minutes=0 e campos em branco)
-    if _clamp_0_60(r.minutes) > 0:
-        return False
-    if (r.description or "").strip():
-        return False
-    if (r.stop_type or "").strip():
-        return False
-    if (r.equipment or "").strip():
-        return False
-    return True
+
+def _normalize_launch_time(v: Any) -> Optional[str]:
+    """Normaliza HH:MM/HH:MM:SS para HH:MM; retorna None para vazio."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s or s in {"-", "—", "--:--", "__:__"}:
+        return None
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})(?::\d{2})?", s)
+    if not m:
+        raise HTTPException(status_code=400, detail=f"Hora inválida: {s}. Use HH:MM.")
+    h = int(m.group(1))
+    mm = int(m.group(2))
+    if h < 0 or h > 23 or mm < 0 or mm > 59:
+        raise HTTPException(status_code=400, detail=f"Hora inválida: {s}. Use HH:MM.")
+    return f"{h:02d}:{mm:02d}"
 
 
-@app.get("/api/plants/{plant_id}/stops-launch")
-def get_stops_launch_by_plant(
-    plant_id: int,
-    day: date = Query(...),
-    owner_id: str = Depends(require_owner_id),
-):
-    """
-    Lê lançamentos de paradas (manual) no schema bv_launch por planta.
-    Requer plant_id em bv_launch.stops_day.
-    """
+def _fmt_time(v: Any) -> str:
+    if v is None:
+        return ""
+    if hasattr(v, "strftime"):
+        return v.strftime("%H:%M")
+    s = str(v).strip()
+    if not s:
+        return ""
+    return s[:5]
+
+
+def _period_start_hour_launch(period: str) -> Optional[int]:
+    p = normalize_period_launch(period)
+    if not p:
+        return None
+    try:
+        return int(p.split("-", 1)[0])
+    except Exception:
+        return None
+
+
+def _time_to_minutes_for_period(period: str, hhmm: str) -> Optional[int]:
+    """Converte uma hora HH:MM para minuto absoluto dentro da faixa horária, tratando 23-00."""
+    t = _normalize_launch_time(hhmm)
+    if not t:
+        return None
+    h, m = map(int, t.split(":"))
+    total = h * 60 + m
+    start_h = _period_start_hour_launch(period)
+    if start_h is None:
+        return total
+    start_total = start_h * 60
+    # Se a faixa inicia no fim do dia e a hora está após meia-noite, joga para o dia seguinte.
+    if total < start_total:
+        total += 24 * 60
+    return total
+
+
+def _calc_period_overlap_summary(rows: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Calcula minutos brutos, coincidência e total líquido por união dos intervalos."""
+    bruto = 0
+    intervals: List[tuple[int, int]] = []
+
+    for r in rows:
+        minutes = _clamp_0_60(int(r.get("minutos") or 0))
+        bruto += minutes
+        period = str(r.get("period") or "")
+        hi = r.get("hora_inicial")
+        hf = r.get("hora_final")
+        if hi and hf:
+            a = _time_to_minutes_for_period(period, str(hi))
+            b = _time_to_minutes_for_period(period, str(hf))
+            if a is not None and b is not None:
+                if b <= a:
+                    b += 24 * 60
+                intervals.append((a, b))
+
+    if not intervals:
+        liquido = min(60, bruto)
+        return {"minutos_brutos": bruto, "coincidencia": max(0, bruto - liquido), "minutos_liquidos": liquido}
+
+    intervals.sort()
+    union = 0
+    cur_a, cur_b = intervals[0]
+    for a, b in intervals[1:]:
+        if a <= cur_b:
+            cur_b = max(cur_b, b)
+        else:
+            union += max(0, cur_b - cur_a)
+            cur_a, cur_b = a, b
+    union += max(0, cur_b - cur_a)
+    liquido = min(60, union)
+    coincidencia = max(0, bruto - liquido)
+    return {"minutos_brutos": bruto, "coincidencia": coincidencia, "minutos_liquidos": liquido}
+
+
+def _build_stops_launch_summaries(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, int]]:
+    by_period: Dict[str, List[Dict[str, Any]]] = {}
+    for r in rows:
+        by_period.setdefault(str(r.get("period") or ""), []).append(r)
+    return {period: _calc_period_overlap_summary(items) for period, items in by_period.items() if period}
+
+
+def _row_to_stops_launch_out(r: Any) -> Dict[str, Any]:
+    if isinstance(r, dict):
+        row_id = r.get("id")
+        period = r.get("period")
+        equipment = r.get("equipment")
+        stop_type = r.get("stop_type")
+        description = r.get("description")
+        minutes = r.get("minutes")
+        hora_inicial = r.get("hora_inicial")
+        hora_final = r.get("hora_final")
+        justificativa = r.get("justificativa_baixa_producao")
+        ordem = r.get("ordem")
+    else:
+        row_id, period, equipment, stop_type, description, minutes, hora_inicial, hora_final, justificativa, ordem = r
+
+    return {
+        "id": int(row_id) if row_id is not None else None,
+        "period": period,
+        "ordem": int(ordem or 1),
+        "equipamento": equipment or "",
+        "tipo_parada": stop_type or "",
+        "descricao": description or "",
+        "minutos": int(minutes or 0),
+        "hora_inicial": _fmt_time(hora_inicial),
+        "hora_final": _fmt_time(hora_final),
+        "justificativa_baixa_producao": justificativa or "",
+    }
+
+
+def _normalize_stops_launch_rows(rows: List[StopLaunchRowIn]) -> List[tuple]:
+    """Normaliza payload para INSERT. Gera ordem sequencial por period quando não vier do front."""
+    normalized_rows = []
+    counters: Dict[str, int] = {}
+
+    for r in rows or []:
+        p = normalize_period_launch(str(r.period).strip())
+        if not p:
+            continue
+
+        counters[p] = counters.get(p, 0) + 1
+        ordem = int(r.ordem or counters[p])
+        if ordem <= 0:
+            ordem = counters[p]
+
+        hi = _normalize_launch_time(r.hora_inicial)
+        hf = _normalize_launch_time(r.hora_final)
+
+        normalized_rows.append(
+            (
+                p,
+                ordem,
+                (r.equipamento or "").strip() or None,
+                (r.tipo_parada or "").strip() or None,
+                (r.descricao or "").strip() or None,
+                _clamp_0_60(int(r.minutos or 0)),
+                hi,
+                hf,
+                (r.justificativa_baixa_producao or "").strip() or None,
+            )
+        )
+
+    return normalized_rows
+
+
+def _get_stops_launch_payload(*, owner_id: str, day: date, plant_id: Optional[int] = None) -> Dict[str, Any]:
+    ensure_stops_launch_tables()
+    where_plant = "AND plant_id = %s" if plant_id is not None else ""
+    args: List[Any] = [owner_id, day]
+    if plant_id is not None:
+        args.append(int(plant_id))
+
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                SELECT id, obs
+                f"""
+                SELECT id, obs, plant_id
                 FROM bv_launch.stops_day
-                WHERE owner_id = %s AND day = %s AND plant_id = %s
+                WHERE owner_id = %s AND day = %s {where_plant}
+                ORDER BY plant_id ASC
+                LIMIT 1
                 """,
-                (owner_id, day, plant_id),
+                tuple(args),
             )
             row = cur.fetchone()
             if not row:
-                return {"day": day.isoformat(), "plant_id": plant_id, "obs": "", "rows": []}
+                base = {"day": day.isoformat(), "obs": "", "rows": [], "summaries": {}}
+                if plant_id is not None:
+                    base["plant_id"] = plant_id
+                return base
 
             day_id = row["id"] if isinstance(row, dict) else row[0]
             obs = (row.get("obs") if isinstance(row, dict) else row[1]) or ""
+            db_plant_id = row.get("plant_id") if isinstance(row, dict) else row[2]
 
             cur.execute(
                 """
-                SELECT period, equipment, stop_type, description, minutes
+                SELECT id, period, equipment, stop_type, description, minutes,
+                       hora_inicial, hora_final, justificativa_baixa_producao, ordem
                 FROM bv_launch.stops_rows
                 WHERE day_id = %s
-                ORDER BY period
+                ORDER BY period ASC, ordem ASC, id ASC
                 """,
                 (day_id,),
             )
             fetched = cur.fetchall() or []
 
-    rows = []
-    for r in fetched:
-        period = r.get("period") if isinstance(r, dict) else r[0]
-        equipment = r.get("equipment") if isinstance(r, dict) else r[1]
-        stop_type = r.get("stop_type") if isinstance(r, dict) else r[2]
-        description = r.get("description") if isinstance(r, dict) else r[3]
-        minutes = r.get("minutes") if isinstance(r, dict) else r[4]
-        rows.append(
-            {
-                "period": period,
-                "equipamento": equipment or "",
-                "tipo_parada": stop_type or "",
-                "descricao": description or "",
-                "minutos": int(minutes or 0),
-            }
-        )
-
-    return {"day": day.isoformat(), "plant_id": plant_id, "obs": obs, "rows": rows}
+    rows = [_row_to_stops_launch_out(r) for r in fetched]
+    out = {"day": day.isoformat(), "obs": obs, "rows": rows, "summaries": _build_stops_launch_summaries(rows)}
+    if plant_id is not None:
+        out["plant_id"] = plant_id
+    else:
+        out["plant_id"] = int(db_plant_id or 1)
+    return out
 
 
-@app.put("/api/plants/{plant_id}/stops-launch")
-def put_stops_launch_by_plant(
-    plant_id: int,
-    payload: StopLaunchDayUpsert,
-    day: date = Query(...),
-    owner_id: str = Depends(require_owner_id),
-):
-    """
-    Salva lançamentos de paradas (manual) no schema bv_launch por planta.
-    Requer unique(owner_id, day, plant_id) em bv_launch.stops_day.
-    """
+def _put_stops_launch_payload(*, owner_id: str, day: date, payload: StopLaunchDayUpsert, plant_id: int) -> Dict[str, Any]:
+    ensure_stops_launch_tables()
     if payload.day != day:
-        payload = StopLaunchDayUpsert(day=day, rows=payload.rows)
+        payload = StopLaunchDayUpsert(day=day, obs=payload.obs, rows=payload.rows)
 
-    normalized_rows = []
-    for r in payload.rows or []:
-        p = normalize_period_launch(str(r.period).strip())
-        if not p:
-            continue
-        normalized_rows.append(
-            (
-                p,
-                (r.equipamento or "").strip() or None,
-                (r.tipo_parada or "").strip() or None,
-                (r.descricao or "").strip() or None,
-                _clamp_0_60(int(r.minutos or 0)),
-            )
-        )
+    normalized_rows = _normalize_stops_launch_rows(payload.rows)
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -3877,29 +4074,74 @@ def put_stops_launch_by_plant(
                 DO UPDATE SET obs = EXCLUDED.obs, updated_at = now()
                 RETURNING id
                 """,
-                (owner_id, day, plant_id, None),
+                (owner_id, day, int(plant_id), payload.obs),
             )
             row = cur.fetchone()
             day_id = row["id"] if isinstance(row, dict) else row[0]
 
+            # Substitui todas as linhas da planta/dia. Esse modelo combina com o front salvando a tela inteira.
             cur.execute("DELETE FROM bv_launch.stops_rows WHERE day_id = %s", (day_id,))
 
             if normalized_rows:
                 cur.executemany(
                     """
                     INSERT INTO bv_launch.stops_rows
-                    (day_id, period, equipment, stop_type, description, minutes)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    (day_id, period, ordem, equipment, stop_type, description, minutes,
+                     hora_inicial, hora_final, justificativa_baixa_producao)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s::time, %s::time, %s)
                     """,
                     [
-                        (day_id, period, equipment, stop_type, description, minutes)
-                        for (period, equipment, stop_type, description, minutes) in normalized_rows
+                        (day_id, period, ordem, equipment, stop_type, description, minutes, hi, hf, justificativa)
+                        for (period, ordem, equipment, stop_type, description, minutes, hi, hf, justificativa) in normalized_rows
                     ],
                 )
 
         conn.commit()
 
-    return {"ok": True, "day": day.isoformat(), "plant_id": plant_id, "rows_saved": len(normalized_rows)}
+    # Monta summaries com o mesmo payload enviado, sem precisar reler do banco.
+    rows_out = []
+    for period, ordem, equipment, stop_type, description, minutes, hi, hf, justificativa in normalized_rows:
+        rows_out.append(
+            {
+                "id": None,
+                "period": period,
+                "ordem": ordem,
+                "equipamento": equipment or "",
+                "tipo_parada": stop_type or "",
+                "descricao": description or "",
+                "minutos": int(minutes or 0),
+                "hora_inicial": hi or "",
+                "hora_final": hf or "",
+                "justificativa_baixa_producao": justificativa or "",
+            }
+        )
+
+    return {
+        "ok": True,
+        "day": day.isoformat(),
+        "plant_id": int(plant_id),
+        "rows_saved": len(normalized_rows),
+        "summaries": _build_stops_launch_summaries(rows_out),
+    }
+
+
+@app.get("/api/plants/{plant_id}/stops-launch")
+def get_stops_launch_by_plant(
+    plant_id: int,
+    day: date = Query(...),
+    owner_id: str = Depends(require_owner_id),
+):
+    return _get_stops_launch_payload(owner_id=owner_id, day=day, plant_id=plant_id)
+
+
+@app.put("/api/plants/{plant_id}/stops-launch")
+def put_stops_launch_by_plant(
+    plant_id: int,
+    payload: StopLaunchDayUpsert,
+    day: date = Query(...),
+    owner_id: str = Depends(require_owner_id),
+):
+    return _put_stops_launch_payload(owner_id=owner_id, day=day, payload=payload, plant_id=plant_id)
 
 
 @app.get("/api/stops-launch")
@@ -3907,57 +4149,8 @@ def get_stops_launch(
     day: date = Query(...),
     owner_id: str = Depends(require_owner_id),
 ):
-    """
-    Lê lançamentos de paradas (manual) no schema bv_launch.
-    Retorna chaves em PT-BR para o front:
-      - equipamento, tipo_parada, descricao, minutos
-    """
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, obs
-                FROM bv_launch.stops_day
-                WHERE owner_id = %s AND day = %s
-                """,
-                (owner_id, day),
-            )
-            row = cur.fetchone()
-            if not row:
-                return {"day": day.isoformat(), "obs": "", "rows": []}
-
-            day_id = row["id"] if isinstance(row, dict) else row[0]
-            obs = (row.get("obs") if isinstance(row, dict) else row[1]) or ""
-
-            cur.execute(
-                """
-                SELECT period, equipment, stop_type, description, minutes
-                FROM bv_launch.stops_rows
-                WHERE day_id = %s
-                ORDER BY period
-                """,
-                (day_id,),
-            )
-            fetched = cur.fetchall() or []
-
-    rows = []
-    for r in fetched:
-        period = r.get("period") if isinstance(r, dict) else r[0]
-        equipment = r.get("equipment") if isinstance(r, dict) else r[1]
-        stop_type = r.get("stop_type") if isinstance(r, dict) else r[2]
-        description = r.get("description") if isinstance(r, dict) else r[3]
-        minutes = r.get("minutes") if isinstance(r, dict) else r[4]
-        rows.append(
-            {
-                "period": period,
-                "equipamento": equipment or "",
-                "tipo_parada": stop_type or "",
-                "descricao": description or "",
-                "minutos": int(minutes or 0),
-            }
-        )
-
-    return {"day": day.isoformat(), "obs": obs, "rows": rows}
+    # Endpoint legado: usa a primeira/planta padrão para compatibilidade.
+    return _get_stops_launch_payload(owner_id=owner_id, day=day, plant_id=None)
 
 
 @app.put("/api/stops-launch")
@@ -3966,67 +4159,8 @@ def put_stops_launch(
     day: date = Query(...),
     owner_id: str = Depends(require_owner_id),
 ):
-    """
-    Salva lançamentos de paradas (manual) no schema bv_launch.
-
-    - Aceita payload em PT-BR (equipamento/tipo_parada/descricao/minutos)
-    - Salva TODAS as linhas recebidas (inclusive zeradas), para ficar "fixo" no front
-    - Mantém 'day' também na query para compatibilidade com o front
-    """
-    # tolerância: day da query é a fonte de verdade
-    if payload.day != day:
-        payload = StopLaunchDayUpsert(day=day, rows=payload.rows)
-
-    normalized_rows = []
-    for r in payload.rows or []:
-        p = normalize_period_launch(str(r.period).strip())
-        if not p:
-            continue
-        normalized_rows.append(
-            (
-                p,
-                (r.equipamento or "").strip() or None,
-                (r.tipo_parada or "").strip() or None,
-                (r.descricao or "").strip() or None,
-                _clamp_0_60(int(r.minutos or 0)),
-            )
-        )
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            # UPSERT do dia
-            cur.execute(
-                """
-                INSERT INTO bv_launch.stops_day (owner_id, day, obs)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (owner_id, day)
-                DO UPDATE SET obs = EXCLUDED.obs, updated_at = now()
-                RETURNING id
-                """,
-                (owner_id, day, None),
-            )
-            row = cur.fetchone()
-            day_id = row["id"] if isinstance(row, dict) else row[0]
-
-            # Substitui todas as rows do dia
-            cur.execute("DELETE FROM bv_launch.stops_rows WHERE day_id = %s", (day_id,))
-
-            if normalized_rows:
-                cur.executemany(
-                    """
-                    INSERT INTO bv_launch.stops_rows
-                    (day_id, period, equipment, stop_type, description, minutes)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """,
-                    [
-                        (day_id, period, equipment, stop_type, description, minutes)
-                        for (period, equipment, stop_type, description, minutes) in normalized_rows
-                    ],
-                )
-
-        conn.commit()
-
-    return {"ok": True, "day": day.isoformat(), "rows_saved": len(normalized_rows)}
+    # Endpoint legado: salva como Planta 1.
+    return _put_stops_launch_payload(owner_id=owner_id, day=day, payload=payload, plant_id=1)
 
 
 # =========================
@@ -4127,58 +4261,61 @@ def get_aggregate_stops_launch(
 ):
     """
     Consolida lançamentos de paradas (bv_launch) de TODAS as plantas no dia.
-    Soma minutos por período/tipo/equipamento/descrição.
+
+    Retorna linhas detalhadas para não perder múltiplas paradas no mesmo horário.
+    O cálculo de simultaneidade deve ser analisado por planta/period, por isso também
+    retorna summaries_by_plant_period.
     """
+    ensure_stops_launch_tables()
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select sd.id, sd.obs
+            select sd.id, sd.obs, sd.plant_id
             from bv_launch.stops_day sd
             where sd.owner_id=%s and sd.day=%s
+            order by sd.plant_id asc
             """,
             (owner_id, day),
         )
         day_rows = cur.fetchall() or []
 
         if not day_rows:
-            return {"day": day.isoformat(), "scope": "all", "obs": "", "rows": []}
+            return {"day": day.isoformat(), "scope": "all", "obs": "", "rows": [], "summaries_by_plant_period": {}}
 
         day_ids = [r["id"] for r in day_rows]
+        plant_by_day_id = {int(r["id"]): int(r.get("plant_id") or 1) for r in day_rows}
         obs_list = [str(r.get("obs") or "").strip() for r in day_rows if str(r.get("obs") or "").strip()]
 
         cur.execute(
             """
-            select period,
-                   coalesce(equipment,'') as equipment,
-                   coalesce(stop_type,'') as stop_type,
-                   coalesce(description,'') as description,
-                   coalesce(sum(coalesce(minutes,0)),0) as minutes
+            select day_id, id, period, equipment, stop_type, description, minutes,
+                   hora_inicial, hora_final, justificativa_baixa_producao, ordem
             from bv_launch.stops_rows
             where day_id = any(%s)
-            group by period, equipment, stop_type, description
-            order by period, equipment, stop_type, description
+            order by day_id, period, ordem, id
             """,
             (day_ids,),
         )
         rows = cur.fetchall() or []
 
     out = []
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
     for r in rows:
-        out.append(
-            {
-                "period": r["period"],
-                "equipamento": r["equipment"] or "",
-                "tipo_parada": r["stop_type"] or "",
-                "descricao": r["description"] or "",
-                "minutos": int(r["minutes"] or 0),
-            }
-        )
+        item = _row_to_stops_launch_out(r)
+        day_id = int(r["day_id"])
+        plant_id = plant_by_day_id.get(day_id, 1)
+        item["plant_id"] = plant_id
+        out.append(item)
+        grouped.setdefault(f"plant_{plant_id}::{item['period']}", []).append(item)
+
+    summaries = {key: _calc_period_overlap_summary(items) for key, items in grouped.items()}
 
     return {
         "day": day.isoformat(),
         "scope": "all",
         "obs": " | ".join(obs_list),
         "rows": out,
+        "summaries_by_plant_period": summaries,
     }
 
 
