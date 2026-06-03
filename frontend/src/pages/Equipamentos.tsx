@@ -147,7 +147,7 @@ export default function Equipamentos() {
 
   async function loadProductionEquipments() {
     try {
-      const rows = await apiFetch<PlantProductionEquipment[]>("/api/plant-equipments?include_inactive=true");
+      const rows = await apiFetch<PlantProductionEquipment[]>("/api/plant-production-equipments?include_inactive=true");
       setProdEquipments(Array.isArray(rows) ? rows : []);
       setProdEndpointReady(true);
     } catch {
@@ -241,13 +241,13 @@ export default function Equipamentos() {
       if (!payload.plant_id || payload.plant_id <= 0) throw new Error("Selecione a planta do equipamento.");
 
       if (prodEditingId) {
-        await apiFetch(`/api/plant-equipments/${prodEditingId}`, {
+        await apiFetch(`/api/plant-production-equipments/${prodEditingId}`, {
           method: "PUT",
           body: JSON.stringify(payload),
         });
         setOk("Equipamento da produção atualizado com sucesso.");
       } else {
-        await apiFetch("/api/plant-equipments", {
+        await apiFetch("/api/plant-production-equipments", {
           method: "POST",
           body: JSON.stringify(payload),
         });
@@ -270,7 +270,7 @@ export default function Equipamentos() {
     setError(null);
     setOk(null);
     try {
-      await apiFetch(`/api/plant-equipments/${e.id}`, { method: "DELETE" });
+      await apiFetch(`/api/plant-production-equipments/${e.id}`, { method: "DELETE" });
       setOk("Equipamento da produção inativado.");
       await loadProductionEquipments();
     } catch (err: any) {
@@ -390,7 +390,7 @@ export default function Equipamentos() {
 
         {!prodEndpointReady ? (
           <div style={{ marginBottom: 14, borderRadius: 16, border: "1px solid rgba(255,184,77,.35)", background: "rgba(255,159,26,.08)", color: "#ffcf8a", padding: 12, fontWeight: 850 }}>
-            Front preparado. Falta ativar no backend os endpoints <b>/api/plant-equipments</b>. Podemos fazer essa parte no próximo passo.
+            Front preparado. Não foi possível conectar aos endpoints <b>/api/plant-production-equipments</b>. Confira se o backend ajustado foi publicado no Railway.
           </div>
         ) : null}
 
