@@ -1482,7 +1482,7 @@ export default function LancamentoParadas() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: mobile ? "1fr" : "minmax(0, 1fr) 300px",
+          gridTemplateColumns: "1fr",
           gap: 14,
           alignItems: "start",
         }}
@@ -1534,8 +1534,6 @@ export default function LancamentoParadas() {
             </div>
           </div>
         </div>
-
-        {renderRulesCard()}
       </div>
     </div>
   );
