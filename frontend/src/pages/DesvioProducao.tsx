@@ -149,7 +149,9 @@ function getAccentColor(
 
 const shellStyle: React.CSSProperties = {
   minHeight: "100vh",
+  width: "100%",
   padding: 18,
+  boxSizing: "border-box",
   color: "rgba(255,255,255,0.92)",
   background:
     "radial-gradient(1100px 700px at 18% 8%, rgba(250,204,21,0.08), transparent 55%), radial-gradient(900px 600px at 85% 18%, rgba(34,197,94,0.08), transparent 55%), radial-gradient(1000px 800px at 50% 110%, rgba(59,130,246,0.06), transparent 60%), #07090c",
@@ -407,7 +409,7 @@ export default function DesvioProducao() {
 
   return (
     <div style={shellStyle}>
-      <div style={{ maxWidth: 1320, margin: "0 auto" }}>
+      <div style={{ width: "100%", maxWidth: "none", margin: 0, boxSizing: "border-box" }}>
         <Header
           splitOpen={splitOpen}
           onToggleSplit={() => setSplitOpen((v) => !v)}
@@ -522,7 +524,7 @@ export default function DesvioProducao() {
           style={{
             marginTop: 16,
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
+            gridTemplateColumns: "minmax(0, 1.25fr) minmax(0, 0.75fr)",
             gap: 14,
           }}
         >
@@ -839,7 +841,7 @@ function SectionCard({
   children: React.ReactNode;
   style?: React.CSSProperties;
 }) {
-  return <div style={{ ...panelStyle, ...style }}>{children}</div>;
+  return <div style={{ ...panelStyle, minWidth: 0, ...style }}>{children}</div>;
 }
 
 function SectionTitle({
