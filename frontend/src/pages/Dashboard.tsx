@@ -1039,11 +1039,10 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
   const topBar: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: mobile ? "1fr" : "minmax(0, 1fr) auto",
+    gridTemplateColumns: mobile ? "1fr" : "1fr auto auto auto",
     gap: 12,
     alignItems: "center",
     marginTop: 10,
-    width: "100%",
   };
 
   const smallPill: React.CSSProperties = {
@@ -1111,7 +1110,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
   return (
     <div
-      className="mp-container mp-dashboard-full"
+      className="mp-container mp-dashboard-wide"
       style={{
         width: "100%",
         maxWidth: "none",
@@ -1121,28 +1120,17 @@ const EXPECTED_TON_H = metaHoraEsperada;
       }}
     >
       <style>{`
-        .mp-dashboard-full {
+        .mp-dashboard-wide {
           width: 100% !important;
           max-width: none !important;
           margin-left: 0 !important;
           margin-right: 0 !important;
         }
-        .mp-dashboard-full, .mp-dashboard-full * {
+        .mp-dashboard-wide, .mp-dashboard-wide * {
           box-sizing: border-box;
         }
-        .mp-dashboard-full .recharts-wrapper,
-        .mp-dashboard-full .recharts-responsive-container {
-          width: 100% !important;
-          max-width: none !important;
-        }
-        @media (min-width: 1280px) {
-          .mp-dashboard-full {
-            padding-left: 18px !important;
-            padding-right: 18px !important;
-          }
-        }
         @media (max-width: 980px) {
-          .mp-dashboard-full {
+          .mp-dashboard-wide {
             padding-bottom: 80px !important;
           }
         }
@@ -1462,10 +1450,10 @@ const EXPECTED_TON_H = metaHoraEsperada;
                     </div>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(12, minmax(0, 1fr))", gap: 14, alignItems: "start" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(12, minmax(0, 1fr))", gap: 14, alignItems: "start", width: "100%" }}>
                     {/* PRODUÇÃO HORÁRIA (grande) */}
                     {exportSel.prod_horaria ? (
-                      <div style={{ ...cardBase, padding: 16, gridColumn: "span 12", minWidth: 0 }}>
+                      <div style={{ ...cardBase, padding: 16, gridColumn: "span 12" }}>
                         <div style={headerStyle}>
                           <div>
                             <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
@@ -1490,7 +1478,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           </span>
                         </div>
 
-                        <div style={{ height: mobile ? 300 : "min(46vh, 460px)" }}>
+                        <div style={{ height: mobile ? 300 : 420 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -1854,7 +1842,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                     {/* HORÍMETROS */}
                     {exportSel.horimetros_top ? (
                       !rangeMode ? (
-                        <div style={{ ...cardBase, padding: 14, gridColumn: "span 12", minWidth: 0 }}>
+                        <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
                           <div style={headerStyle}>
                             <div>
                               <div style={titleStyle}>Horímetros</div>
@@ -1931,7 +1919,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
       ) : null}
 
       {/* ===================== MAIN DASHBOARD GRID (MESMO FORMATO DO EXPORT) ===================== */}
-      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(12, minmax(0, 1fr))", gap: mobile ? 12 : 16, alignItems: "start", width: "100%" }}>
+      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(12, minmax(0, 1fr))", gap: 14, alignItems: "start", width: "100%" }}>
         {/* PRODUÇÃO HORÁRIA (12 col) */}
         <div
           style={{ ...cardBase, padding: 16, gridColumn: "span 12", cursor: "pointer", minWidth: 0 }}
@@ -1961,7 +1949,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </span>
           </div>
 
-          <div style={{ height: mobile ? 300 : "min(46vh, 460px)" }}>
+          <div style={{ height: mobile ? 300 : 420 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
@@ -2301,7 +2289,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
         </div>
 
         {/* ÚLTIMOS 7 DIAS (6 col) */}
-        <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6", minWidth: 0, cursor: "pointer" }} onClick={() => nav("/last7days")}>
+        <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6", cursor: "pointer" }} onClick={() => nav("/last7days")}>
           <div style={headerStyle}>
             <div>
               <div style={titleStyle}>{rangeMode ? "Totais do período" : "Últimos 7 dias"}</div>
@@ -2347,7 +2335,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
         </div>
 
         {/* HOJE (6 col) */}
-        <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6", minWidth: 0 }}>
+        <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6" }}>
           <div style={headerStyle}>
             <div>
               <div style={titleStyle}>{rangeMode ? "Período" : "Hoje"}</div>
@@ -2411,7 +2399,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
         {/* HORÍMETROS (12 col) */}
         {!rangeMode ? (
-        <div style={{ ...cardBase, padding: 14, gridColumn: "span 12", minWidth: 0 }}>
+        <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
           <div style={headerStyle}>
             <div>
               <div style={titleStyle}>Horímetros</div>
