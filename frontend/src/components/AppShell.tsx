@@ -10,14 +10,12 @@ import {
   Timer,
   PauseCircle,
   Calculator,
-  FileSpreadsheet,
   Logs,
   Users,
   LogOut,
   Menu,
   X,
   ChevronRight,
-  History,
   ChevronsLeft,
   ChevronsRight,
   User as UserIcon,
@@ -56,9 +54,7 @@ const nav: NavItem[] = [
   { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
 
 
-  { to: "/historico", label: "Histórico", icon: History, group: "Operação" },
-  { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
-  { to: "/exportar", label: "Relatórios", icon: FileSpreadsheet, group: "Utilitários" },
+  { to: "/metas", label: "Metas do mês", icon: BarChart3, group: "Configurações" },
 ];
 
 

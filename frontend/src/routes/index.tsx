@@ -23,9 +23,7 @@ import SupervisoresPlanta from "../pages/SupervisoresPlanta";
 import Horimetros from "../pages/Horimetros";
 import Paradas from "../pages/Paradas";
 import LancamentoParadas from "../pages/LancamentoParadas";
-import Exportar from "../pages/Exportar";
 import MetasMes from "../pages/MetasMes";
-import Historico from "../pages/Historico";
 
 import DevLogs from "../pages/Devlogs";
 import DevUsers from "../pages/DevUsers";
@@ -83,9 +81,7 @@ function MobileWrap({
     | "paradas"
     | "paradas-minutos"
     | "horimetros"
-    | "historico"
     | "metas"
-    | "exportar"
     | "configuracoes"
     | "contingencia"
     | "ultimos-7"
@@ -253,31 +249,11 @@ export function AppRoutes() {
         }
       />
       <Route
-        path="/m/historico"
-        element={
-          <RequireAuth>
-            <MobileWrap title="Histórico" tab="historico">
-              <Historico />
-            </MobileWrap>
-          </RequireAuth>
-        }
-      />
-      <Route
         path="/m/metas"
         element={
           <RequireAuth>
             <MobileWrap title="Metas do mês" tab="metas">
               <MetasMes />
-            </MobileWrap>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/m/exportar"
-        element={
-          <RequireAuth>
-            <MobileWrap title="Relatórios" tab="exportar">
-              <Exportar />
             </MobileWrap>
           </RequireAuth>
         }
@@ -480,26 +456,10 @@ export function AppRoutes() {
         />
 
         <Route
-          path="exportar"
-          element={
-            <RequireRole>
-              <Exportar />
-            </RequireRole>
-          }
-        />
-        <Route
           path="metas"
           element={
             <RequireRole>
               <MetasMes />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="historico"
-          element={
-            <RequireRole>
-              <Historico />
             </RequireRole>
           }
         />
