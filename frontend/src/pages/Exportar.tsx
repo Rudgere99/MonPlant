@@ -430,10 +430,12 @@ function PreviewTable({ data, loading }: { data: PreviewData | null; loading: bo
   if (!data) {
     return (
       <div style={{ padding: 28, textAlign: "center", color: "rgba(255,255,255,.58)" }}>
-        Clique em <b>Pré-visualizar</b> para ver como o relatório será exibido antes da exportação.
+        Selecione uma aba para carregar a prévia do relatório.
       </div>
     );
   }
+
+  const tableMinWidth = data.columns.reduce((sum, col) => sum + (col.width || 130), 0);
 
   return (
     <>
@@ -453,7 +455,7 @@ function PreviewTable({ data, loading }: { data: PreviewData | null; loading: bo
           background: "rgba(7,10,18,.45)",
         }}
       >
-        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 1160 }}>
+        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: tableMinWidth }}>
           <thead>
             <tr style={{ background: "rgba(255,255,255,.035)" }}>
               {data.columns.map((col) => (
@@ -1332,6 +1334,12 @@ export default function Exportar() {
     setMsg("✅ Análise técnica aberta. No diálogo de impressão, escolha 'Salvar como PDF'.");
   }
 
+  const tabs = [
+    { key: "producao", label: "Produção" },
+    { key: "horimetros", label: "Horímetros" },
+    { key: "paradas", label: "Paradas" },
+  ] as const;
+
   return (
     <div style={{ padding: 18 }}>
       <div
@@ -1340,15 +1348,14 @@ export default function Exportar() {
           borderRadius: 24,
           overflow: "hidden",
           border: "1px solid rgba(255,255,255,.08)",
-          background:
-            "radial-gradient(circle at top right, rgba(59,130,246,.10), transparent 24%), linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
+          background: "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
           boxShadow: "0 20px 60px rgba(0,0,0,.22)",
         }}
       >
         <div
           className="mp-card-h"
           style={{
-            padding: "18px 18px 8px 18px",
+            padding: 18,
             borderBottom: "1px solid rgba(255,255,255,.06)",
             display: "flex",
             alignItems: "center",
@@ -1358,43 +1365,50 @@ export default function Exportar() {
           }}
         >
           <div>
-            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: 0.2 }}>Central de Relatórios</div>
+            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: 0.2 }}>Relatórios</div>
             <div style={{ marginTop: 4, color: "rgba(255,255,255,.58)", fontSize: 13 }}>
-              Escolha Produção, Horímetros ou Paradas na gaveta do AppShell e confira a prévia simples antes de exportar.
+              Selecione uma aba para visualizar somente as informações do relatório escolhido.
             </div>
           </div>
-
-          <ToneBadge tone="info">MonPlant • Exportação Assistida</ToneBadge>
+          <ToneBadge tone="muted">{periodLabel}</ToneBadge>
         </div>
 
-        <div className="mp-card-b" style={{ padding: 18 }}>          <div
+        <div className="mp-card-b" style={{ padding: 18 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              marginBottom: 16,
+            }}
+          >
+            {tabs.map((item) => {
+              const active = reportMode === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={active ? "mp-btn mp-btn-primary" : "mp-btn"}
+                  onClick={() => navigate(`/exportar?tipo=${item.key}`)}
+                  disabled={previewBusy}
+                  style={{ minHeight: 44, borderRadius: 14, fontWeight: 950 }}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div
             style={{
               borderRadius: 20,
               border: "1px solid rgba(255,255,255,.08)",
               background: "rgba(7,10,18,.42)",
               padding: 16,
               boxShadow: "inset 0 1px 0 rgba(255,255,255,.02)",
+              marginBottom: 16,
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
-                flexWrap: "wrap",
-                marginBottom: 14,
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>1. Defina o período</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
-                  O usuário primeiro escolhe o intervalo, depois pré-visualiza o relatório e por fim exporta.
-                </div>
-              </div>
-              <ToneBadge tone="muted">{periodLabel}</ToneBadge>
-            </div>
-
             <div
               style={{
                 display: "grid",
@@ -1404,168 +1418,16 @@ export default function Exportar() {
             >
               <div>
                 <div className="mp-label" style={{ marginBottom: 6 }}>Data inicial</div>
-                <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={busy || previewBusy} />
+                <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={previewBusy} />
               </div>
               <div>
                 <div className="mp-label" style={{ marginBottom: 6 }}>Data final</div>
-                <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={busy || previewBusy} />
+                <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={previewBusy} />
               </div>
             </div>
           </div>
 
-          <div style={{ height: 14 }} />
-
-          <div
-            style={{
-              borderRadius: 20,
-              border: "1px solid rgba(255,255,255,.08)",
-              background: "rgba(7,10,18,.42)",
-              padding: 16,
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,.02)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>2. Filtros e pesquisa (padrão MonPlant)</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
-                  Os filtros abaixo impactam a prévia, a exportação do Excel filtrado e a análise técnica.
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 10 }}>
-              <input className="mp-input" placeholder="Pesquisa geral..." value={filters.pesquisa} onChange={(e) => setFilters((f) => ({ ...f, pesquisa: e.target.value }))} />
-              <input className="mp-input" placeholder="Equipamento" value={filters.equipamento} onChange={(e) => setFilters((f) => ({ ...f, equipamento: e.target.value }))} />
-              <input className="mp-input" placeholder="Planta / área" value={filters.planta} onChange={(e) => setFilters((f) => ({ ...f, planta: e.target.value }))} />
-              <input className="mp-input" placeholder="Material" value={filters.material} onChange={(e) => setFilters((f) => ({ ...f, material: e.target.value }))} />
-              <input className="mp-input" placeholder="Origem" value={filters.origem} onChange={(e) => setFilters((f) => ({ ...f, origem: e.target.value }))} />
-              <input className="mp-input" placeholder="Destino" value={filters.destino} onChange={(e) => setFilters((f) => ({ ...f, destino: e.target.value }))} />
-              <input className="mp-input" placeholder="Letra" value={filters.letra} onChange={(e) => setFilters((f) => ({ ...f, letra: e.target.value }))} />
-              <select className="mp-select" value={filters.turno} onChange={(e) => setFilters((f) => ({ ...f, turno: e.target.value }))}>
-                <option value="">Turno: todos</option>
-                <option value="1">Turno 1</option>
-                <option value="2">Turno 2</option>
-              </select>
-              <select className="mp-select" value={selectedPlantId} onChange={(e) => setSelectedPlantId(e.target.value)}>
-                <option value="">Produção: todas as plantas</option>
-                {plants.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div style={{ height: 14 }} />
-
-          <div
-            style={{
-              borderRadius: 20,
-              border: "1px solid rgba(255,255,255,.08)",
-              background: "rgba(7,10,18,.42)",
-              padding: 16,
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,.02)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>3. Relatório selecionado</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
-                  Use a gaveta de Relatórios no menu lateral para alternar entre Produção, Horímetros e Paradas.
-                </div>
-              </div>
-              <ToneBadge tone="muted">{lastFile ? `Último arquivo: ${lastFile}` : "Prévia automática"}</ToneBadge>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {[
-                { key: "producao", label: "Produção", help: "Dia • horário • valor da hora" },
-                { key: "horimetros", label: "Horímetros", help: "Dia • equipamento • inicial/final • planta" },
-                { key: "paradas", label: "Paradas", help: "Dia • equipamento • H.I/H.F • tempo • descrição" },
-              ].map((item) => {
-                const active = reportMode === item.key;
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={active ? "mp-btn mp-btn-primary" : "mp-btn"}
-                    onClick={() => navigate(`/exportar?tipo=${item.key}`)}
-                    disabled={busy || previewBusy}
-                    style={{ minHeight: 46, borderRadius: 14, fontWeight: 950 }}
-                  >
-                    {item.label}
-                    <span style={{ display: "block", marginTop: 2, fontSize: 11, fontWeight: 800, opacity: .68 }}>{item.help}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {msg ? (
-              <div
-                style={{
-                  marginTop: 14,
-                  borderRadius: 14,
-                  border: msg.startsWith("✅") ? "1px solid rgba(34,197,94,.25)" : "1px solid rgba(239,68,68,.25)",
-                  background: msg.startsWith("✅") ? "rgba(34,197,94,.10)" : "rgba(239,68,68,.10)",
-                  padding: 12,
-                  color: "rgba(255,255,255,.92)",
-                }}
-              >
-                {msg}
-              </div>
-            ) : null}
-          </div>
-
-          <div style={{ height: 14 }} />
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="mp-btn mp-btn-primary" onClick={handleExportFilteredExcel} disabled={busy || previewBusy}>
-              Exportar Excel (somente o filtrado)
-            </button>
-            <button className="mp-btn" onClick={handleTechAnalysisPdf} disabled={busy || previewBusy}>
-              Gerar análise técnica (PDF)
-            </button>
-          </div>
-
-          <div style={{ height: 14 }} />
-
-          <div
-            className="mp-card"
-            style={{
-              borderRadius: 24,
-              overflow: "hidden",
-              border: "1px solid rgba(255,255,255,.08)",
-              background: "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
-              boxShadow: "0 20px 60px rgba(0,0,0,.20)",
-            }}
-          >
-            <div
-              className="mp-card-h"
-              style={{
-                padding: 18,
-                borderBottom: "1px solid rgba(255,255,255,.06)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
-                flexWrap: "wrap",
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 18 }}>4. Pré-visualização do relatório</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
-                  O usuário vê no site o que será exportado. A tabela abaixo mostra os primeiros registros reais do relatório.
-                </div>
-              </div>
-              <ToneBadge tone={previewMode === "paradas" ? "warn" : previewMode === "horimetros" ? "info" : "ok"}>
-                {previewMode === "paradas" ? "Prévia Paradas" : previewMode === "horimetros" ? "Prévia Horímetros" : "Prévia Produção"}
-              </ToneBadge>
-            </div>
-
-            <div className="mp-card-b" style={{ padding: 18 }}>
-              <PreviewTable data={previewData} loading={previewBusy} />
-            </div>
-          </div>
+          <PreviewTable data={previewData} loading={previewBusy} />
         </div>
       </div>
     </div>

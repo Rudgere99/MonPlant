@@ -1126,7 +1126,7 @@ function AppShell() {
                 </div>
 
                 <div style={{ marginTop: "auto", color: "rgba(255,255,255,.48)", fontSize: 12, fontWeight: 800, lineHeight: 1.5 }}>
-                  A prévia abre direto no formato selecionado para facilitar conferência antes de exportar.
+                  A prévia abre direto no formato selecionado para facilitar a conferência.
                 </div>
               </div>
             </aside>
