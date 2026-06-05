@@ -528,6 +528,7 @@ const BASE_PREVIEW_COLUMNS: PreviewColumn[] = [
 
 const PARADAS_PREVIEW_COLUMNS: PreviewColumn[] = [
   { key: "dia", label: "Dia", width: 120 },
+  { key: "planta", label: "Planta", width: 180 },
   { key: "equipamento", label: "Equipamento", width: 170 },
   { key: "hi", label: "H.I", width: 110 },
   { key: "hf", label: "H.F", width: 110 },
@@ -748,6 +749,8 @@ export default function Exportar() {
     const rows = stops
       .map((s) => {
         const day = String(pick(s, ["__day", "day", "data_turno", "data", "shift_day"]) || "").slice(0, 10);
+        const plantId = pick(s, ["plant_id", "planta_id", "plantId"]);
+        const plantName = plants.find((p) => String(p.id) === String(plantId))?.name || (plantId ? `Planta ${plantId}` : "-");
         const equip = String(pick(s, ["equipamento", "equipment", "eq", "tag", "planta"]) || "");
         const descricao = String(pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "");
         const hi = shortTime(pick(s, ["hora_inicial", "hora_inicio", "hr_inicio", "time_ini", "hora_ini"]));
@@ -756,17 +759,19 @@ export default function Exportar() {
 
         return {
           dia: day ? fmtDate(day) : "-",
+          planta: plantName,
           equipamento: equip || "-",
           hi: hi || "-",
           hf: hf || "-",
           tempo: Number.isFinite(minutos) ? `${fmtNum(minutos, 0)} min` : "-",
           descricao: descricao || "-",
-          __sort: `${day} ${hi} ${String(pick(s, ["ordem"]) || "")}`,
+          __sort: `${day} ${plantName} ${hi} ${String(pick(s, ["ordem"]) || "")}`,
         };
       })
       .filter((row) => {
-        const merged = `${row.dia} ${row.equipamento} ${row.hi} ${row.hf} ${row.tempo} ${row.descricao}`;
+        const merged = `${row.dia} ${row.planta} ${row.equipamento} ${row.hi} ${row.hf} ${row.tempo} ${row.descricao}`;
         return (
+          containsText(row.planta, filters.planta) &&
           containsText(row.equipamento, filters.equipamento) &&
           containsText(row.descricao, filters.material) &&
           containsText(row.descricao, filters.letra) &&
