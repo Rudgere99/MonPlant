@@ -78,7 +78,6 @@ function MobileWrap({
     | "ritmo"
     | "stats"
     | "ufdf"
-    | "paradas"
     | "paradas-minutos"
     | "horimetros"
     | "metas"
