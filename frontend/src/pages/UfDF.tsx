@@ -2,11 +2,19 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useIsMobile } from "../mobile/useIsMobile";
 
 type StopRow = {
+  id?: number | null;
   period: string;
   equipamento: string;
   tipo_parada: string;
   descricao: string;
   minutos: number;
+  hora_inicial?: string | null;
+  hora_final?: string | null;
+  ordem?: number | null;
+  plant_id?: number | null;
+
+  // preenchido localmente para cálculo mensal
+  _day?: string;
 };
 
 type StopDayPayload = { day: string; rows: StopRow[] };
@@ -47,6 +55,149 @@ function classTipo(tipo: string) {
   if (t.includes("prevent")) return "Preventiva";
   if (t.includes("operac")) return "Operacional";
   return "";
+}
+
+function periodStartHour(period: string): number | null {
+  const p = String(period || "").trim();
+  const m = p.match(/^(\d{2})(?::\d{2})?-(\d{2})(?::\d{2})?$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  return Number.isFinite(h) && h >= 0 && h <= 23 ? h : null;
+}
+
+function parseHHMM(v: any): { h: number; m: number } | null {
+  const s = String(v || "").trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(mm)) return null;
+  if (h < 0 || h > 23 || mm < 0 || mm > 59) return null;
+  return { h, m: mm };
+}
+
+function timeToAbsMinute(period: string, hhmm: any): number | null {
+  const t = parseHHMM(hhmm);
+  if (!t) return null;
+
+  let total = t.h * 60 + t.m;
+  const startH = periodStartHour(period);
+  if (startH === null) return total;
+
+  const startTotal = startH * 60;
+
+  // Trata períodos de virada, ex.: 23-00 com 00:10.
+  if (total < startTotal) total += 24 * 60;
+
+  return total;
+}
+
+function addMinutesToBucket(bucket: Record<string, number>, tipo: string, minutes: number) {
+  const k = classTipo(tipo);
+  if (!k) return;
+  bucket[k] = (bucket[k] || 0) + minutes;
+}
+
+function pickTypeForCoincidentMinute(types: Set<string>): string {
+  // Para UF/DF, o mesmo minuto não pode contar duas vezes.
+  // Se houver manutenção e operacional simultâneas, prioriza manutenção.
+  if (types.has("Corretiva")) return "Corretiva";
+  if (types.has("Preventiva")) return "Preventiva";
+  if (types.has("Operacional")) return "Operacional";
+  return "";
+}
+
+function liquidMinutesByTypeForGroup(rows: StopRow[]) {
+  const byTypeMin: Record<string, number> = {
+    Corretiva: 0,
+    Preventiva: 0,
+    Operacional: 0,
+  };
+
+  let totalMin = 0;
+  let usedTimedCalculation = false;
+
+  // Mapa minuto -> tipos presentes naquele minuto.
+  // Assim paradas simultâneas na mesma planta/faixa horária contam apenas uma vez.
+  const minuteTypes = new Map<number, Set<string>>();
+  let fallbackUntimedMin = 0;
+  const fallbackUntimedByType: Record<string, number> = {
+    Corretiva: 0,
+    Preventiva: 0,
+    Operacional: 0,
+  };
+
+  for (const r of rows) {
+    const minutes = clamp60(r.minutos);
+    if (minutes <= 0) continue;
+
+    const ini = timeToAbsMinute(r.period, r.hora_inicial);
+    const fimRaw = timeToAbsMinute(r.period, r.hora_final);
+    const tipo = classTipo(r.tipo_parada);
+
+    if (ini !== null && fimRaw !== null) {
+      let fim = fimRaw;
+      if (fim <= ini) fim += 24 * 60;
+
+      // Limita o intervalo a 60 minutos para preservar a regra da faixa horária.
+      const end = Math.min(fim, ini + 60);
+
+      if (end > ini) {
+        usedTimedCalculation = true;
+        for (let minute = ini; minute < end; minute++) {
+          if (!minuteTypes.has(minute)) minuteTypes.set(minute, new Set<string>());
+          if (tipo) minuteTypes.get(minute)!.add(tipo);
+        }
+        continue;
+      }
+    }
+
+    // Fallback para registros antigos sem hora inicial/final.
+    // Sem horário detalhado não dá para saber coincidência; considera o minuto informado.
+    fallbackUntimedMin += minutes;
+    if (tipo) fallbackUntimedByType[tipo] = (fallbackUntimedByType[tipo] || 0) + minutes;
+  }
+
+  if (usedTimedCalculation) {
+    for (const types of minuteTypes.values()) {
+      totalMin += 1;
+      const chosen = pickTypeForCoincidentMinute(types);
+      if (chosen) byTypeMin[chosen] = (byTypeMin[chosen] || 0) + 1;
+    }
+
+    // Registros sem hora continuam entrando, mas nunca deixam o horário passar de 60 min.
+    const available = Math.max(0, 60 - totalMin);
+    const fallbackToUse = Math.min(available, fallbackUntimedMin);
+    if (fallbackToUse > 0 && fallbackUntimedMin > 0) {
+      totalMin += fallbackToUse;
+
+      // Distribui proporcionalmente por tipo no fallback.
+      for (const k of ["Corretiva", "Preventiva", "Operacional"]) {
+        const raw = fallbackUntimedByType[k] || 0;
+        if (raw > 0) byTypeMin[k] = (byTypeMin[k] || 0) + (raw / fallbackUntimedMin) * fallbackToUse;
+      }
+    }
+
+    return { totalMin, byTypeMin };
+  }
+
+  // Sem horários lançados: comportamento legado, com trava de 60 min por faixa.
+  for (const r of rows) {
+    const minutes = clamp60(r.minutos);
+    if (minutes <= 0) continue;
+    totalMin += minutes;
+    addMinutesToBucket(byTypeMin, r.tipo_parada, minutes);
+  }
+
+  if (totalMin > 60) {
+    const factor = 60 / totalMin;
+    totalMin = 60;
+    for (const k of ["Corretiva", "Preventiva", "Operacional"]) {
+      byTypeMin[k] = (byTypeMin[k] || 0) * factor;
+    }
+  }
+
+  return { totalMin, byTypeMin };
 }
 
 function fmt1(n: number) {
@@ -131,11 +282,29 @@ function computeMonthAgg(month: string, days: number, rowsAllDays: StopRow[]): M
 
   let totalMin = 0;
 
+  // Agrupa por dia + planta + faixa horária.
+  // Dentro de cada grupo, calcula a união dos intervalos por hora_inicial/hora_final.
+  const groups = new Map<string, StopRow[]>();
+
   for (const r of rowsAllDays) {
-    const m = clamp60(r.minutos);
-    totalMin += m;
-    const k = classTipo(r.tipo_parada);
-    byTypeMin[k] = (byTypeMin[k] || 0) + m;
+    const period = String(r.period || "").trim();
+    if (!period) continue;
+
+    const dayKey = r._day || "sem-dia";
+    const plantKey = r.plant_id != null ? String(r.plant_id) : "plant";
+    const key = `${dayKey}::${plantKey}::${period}`;
+
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+
+  for (const rows of groups.values()) {
+    const liquid = liquidMinutesByTypeForGroup(rows);
+    totalMin += liquid.totalMin;
+
+    for (const k of ["Corretiva", "Preventiva", "Operacional"]) {
+      byTypeMin[k] = (byTypeMin[k] || 0) + (liquid.byTypeMin[k] || 0);
+    }
   }
 
   const totalH = totalMin / 60;
@@ -240,7 +409,7 @@ export default function UfDF() {
         daysList.map((d) => fetchStopsDay(selectedPlantId, d).catch(() => ({ day: d, rows: [] as StopRow[] })))
       );
 
-      const allRows = payloads.flatMap((p) => p.rows || []);
+      const allRows = payloads.flatMap((p) => (p.rows || []).map((r) => ({ ...r, _day: p.day })));
       const computed = computeMonthAgg(m, days, allRows);
       setAgg(computed);
     } catch (e: any) {
@@ -278,7 +447,7 @@ export default function UfDF() {
         <div>
           <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: -0.3 }}>UF / DF • {selectedPlantName}</div>
           <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 800, marginTop: 4 }}>
-            Base: paradas hora a hora • soma total do mês (independente do equipamento)
+            Base: paradas hora a hora • tempo líquido do mês, abatendo coincidências por planta e horário
           </div>
         </div>
 
@@ -369,7 +538,7 @@ export default function UfDF() {
                   />
                 </div>
                 <div style={{ gridColumn: "span 4" }}>
-                  <Kpi title="Horas Parada" value={`${fmt1(agg.totalH)} h`} sub="Soma das paradas" />
+                  <Kpi title="Horas Parada" value={`${fmt1(agg.totalH)} h`} sub="Tempo líquido das paradas" />
                 </div>
               </div>
             </div>
@@ -414,7 +583,7 @@ export default function UfDF() {
               <div><b>PO (Operacional):</b> {fmt1(agg.PO)} h (Operacional)</div>
               <div><b>RO:</b> {fmtPct((agg.UF * agg.DF) / 100)} (UF × DF)</div>
               <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
-                Observação: este cálculo considera o total de paradas do mês <b>independente do equipamento</b>.
+                Observação: este cálculo considera somente o <b>tempo líquido</b> das paradas por planta e faixa horária, abatendo coincidências por hora inicial/final.
               </div>
             </div>
           </div>
