@@ -19,7 +19,7 @@ import { useIsMobile } from "../mobile/useIsMobile";
  * - Inclui hora_inicial e hora_final para cálculo de simultaneidade/sobreposição.
  * - Inclui justificativa_baixa_producao bloqueada por regra:
  *   libera somente se a produção horária ficar abaixo do esperado
- *   e não houver parada lançada OU a parada da linha for menor que 15 minutos.
+ *   e o TOTAL LÍQUIDO do período for menor que 15 minutos.
  * - Calcula total líquido por horário: soma bruta - minutos coincidentes.
  * - Save protegido contra travamento: timeout e sem reload automático após PUT.
  *
@@ -509,21 +509,21 @@ export default function LancamentoParadas() {
     return ton > 0 && ton < expectedTonPerHour;
   }
 
-  function hasNoStopLaunched(row?: StopRow): boolean {
-    const minutes = clamp60(Number(row?.minutos || 0));
-    return minutes === 0;
+  function periodLiquidMinutes(period: string): number {
+    const p = normalizePeriodLaunch(period);
+    return calculatePeriod(rowsForPeriod(p)).net;
   }
 
-  function isShortStop(row?: StopRow): boolean {
-    const minutes = clamp60(Number(row?.minutos || 0));
-    return minutes > 0 && minutes < 15;
+
+  function isPeriodBelowJustificationLimit(period: string): boolean {
+    // Regra operacional revisada:
+    // considera o TOTAL LÍQUIDO da faixa horária após abater simultaneidades.
+    // Se o total líquido for 15 min ou mais, a parada já justifica a baixa produção.
+    return periodLiquidMinutes(period) < 15;
   }
 
-  function canJustifyLowProduction(period: string, row?: StopRow): boolean {
-    // Regra operacional:
-    // libera justificativa quando a produção da faixa está abaixo do esperado
-    // e não há parada lançada OU a parada lançada é menor que 15 minutos.
-    return isLowProductionPeriod(period) && (hasNoStopLaunched(row) || isShortStop(row));
+  function canJustifyLowProduction(period: string, _row?: StopRow): boolean {
+    return isLowProductionPeriod(period) && isPeriodBelowJustificationLimit(period);
   }
 
   function needsLowProductionJustification(period: string, row?: StopRow): boolean {
@@ -720,39 +720,25 @@ export default function LancamentoParadas() {
   }
 
   function validateRowsToSave(rowsToValidate: StopRow[]): string | null {
-    for (const period of periods) {
-      const p = normalizePeriodLaunch(period);
-      const periodRows = rowsToValidate.filter((r) => normalizePeriodLaunch(r.period) === p);
-      const meaningfulRows = periodRows.filter((r) => !rowIsBlank(r));
-
-      // Regra baixa produção sem parada:
-      // se a produção da hora ficou abaixo do esperado e não existe nenhuma parada preenchida,
-      // é obrigatório registrar uma justificativa mesmo com minutos = 0.
-      if (isLowProductionPeriod(p) && !meaningfulRows.length) {
-        const produced = producedTonForPeriod(p);
-        return `Justifique a baixa produção no período ${p}. Produzido: ${fmtSmart(produced || 0)} t/h; esperado: ${fmtSmart(expectedTonPerHour)} t/h; sem parada lançada.`;
+    for (const r of rowsToValidate) {
+      if (rowIsBlank(r)) continue;
+      const p = normalizePeriodLaunch(r.period);
+      const ini = String(r.hora_inicial || "").trim();
+      const fim = String(r.hora_final || "").trim();
+      if ((ini && !fim) || (!ini && fim)) {
+        return `Preencha hora inicial e hora final juntas no período ${p}.`;
+      }
+      if (ini && fim) {
+        const calculated = intervalDurationMinutes(ini, fim);
+        if (calculated <= 0) {
+          return `Horário inválido no período ${p}. Verifique hora inicial e final.`;
+        }
       }
 
-      for (const r of meaningfulRows) {
-        const ini = String(r.hora_inicial || "").trim();
-        const fim = String(r.hora_final || "").trim();
-
-        if ((ini && !fim) || (!ini && fim)) {
-          return `Preencha hora inicial e hora final juntas no período ${p}.`;
-        }
-
-        if (ini && fim) {
-          const calculated = intervalDurationMinutes(ini, fim);
-          if (calculated <= 0) {
-            return `Horário inválido no período ${p}. Verifique hora inicial e final.`;
-          }
-        }
-
-        if (needsLowProductionJustification(p, r)) {
-          const produced = producedTonForPeriod(p);
-          const reason = hasNoStopLaunched(r) ? "sem parada lançada" : "parada menor que 15 min";
-          return `Justifique a baixa produção no período ${p}. Produzido: ${fmtSmart(produced || 0)} t/h; esperado: ${fmtSmart(expectedTonPerHour)} t/h; ${reason}.`;
-        }
+      if (needsLowProductionJustification(p, r)) {
+        const produced = producedTonForPeriod(p);
+        const netPeriod = periodLiquidMinutes(p);
+        return `Justifique a baixa produção no período ${p}. Produzido: ${fmtSmart(produced || 0)} t/h; esperado: ${fmtSmart(expectedTonPerHour)} t/h; total líquido do horário: ${fmtSmart(netPeriod)} min (< 15 min).`;
       }
     }
     return null;
@@ -811,8 +797,7 @@ export default function LancamentoParadas() {
       // quando o backend demora em responder o GET. O usuário pode clicar em Atualizar se quiser recarregar do banco.
       setRows(normalized);
     } catch (e: any) {
-      const detail = e?.name === "AbortError" ? "Tempo limite excedido ao salvar." : e?.message;
-      setMsg(detail || "Erro ao salvar. Verifique os campos obrigatórios e tente novamente.");
+      setMsg(e?.message || "Erro ao salvar");
     } finally {
       setSaving(false);
     }
@@ -960,13 +945,11 @@ export default function LancamentoParadas() {
     const canJustify = canJustifyLowProduction(period, r);
     const needsJustification = needsLowProductionJustification(period, r);
     const produced = producedTonForPeriod(period);
-    const noStopLaunched = hasNoStopLaunched(r);
+    const netPeriod = periodLiquidMinutes(period);
     const justificationTitle = canJustify
-      ? noStopLaunched
-        ? `Liberado: produção ${fmtSmart(produced || 0)} t/h abaixo do esperado ${fmtSmart(expectedTonPerHour)} t/h e sem parada lançada.`
-        : `Liberado: produção ${fmtSmart(produced || 0)} t/h abaixo do esperado ${fmtSmart(expectedTonPerHour)} t/h e parada menor que 15 min.`
+      ? `Liberado: produção ${fmtSmart(produced || 0)} t/h abaixo do esperado ${fmtSmart(expectedTonPerHour)} t/h e total líquido do horário ${fmtSmart(netPeriod)} min (< 15 min).`
       : lowPeriod
-        ? "Bloqueado: baixa produção identificada, mas a justificativa só libera quando não há parada lançada ou quando a parada é menor que 15 minutos."
+        ? `Bloqueado: baixa produção identificada, mas o total líquido do horário é ${fmtSmart(netPeriod)} min (>= 15 min).`
         : "Bloqueado: produção da hora não está abaixo da linha Esperada do Dashboard.";
 
     return (
@@ -1074,7 +1057,7 @@ export default function LancamentoParadas() {
                 canJustify
                   ? "Obrigatório: justificar baixa produção"
                   : lowPeriod
-                    ? "Bloqueado: só libera sem parada ou parada < 15 min"
+                    ? "Bloqueado: total líquido ≥ 15 min"
                     : "Bloqueado: produção ≥ esperado"
               }
               title={justificationTitle}
@@ -1727,7 +1710,7 @@ export default function LancamentoParadas() {
             }}
           >
             <div>
-              Justificativa só libera quando a produção da hora fica abaixo do esperado e a parada da linha é menor que 15 minutos. Sobreposições são abatidas por hora inicial/final.
+              Justificativa só libera quando a produção da hora fica abaixo do esperado e o total líquido do horário for menor que 15 minutos. Sobreposições são abatidas por hora inicial/final.
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button type="button" onClick={clearChanges} style={btnStyle} disabled={loading || saving || periodMode}>
