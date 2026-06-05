@@ -291,15 +291,56 @@ export default function Horimetros() {
   }
 
   return (
-    <div className="mp-container">
+    <div className="mp-container horimetros-page">
       <style>{`
-        .mp-page-grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:14px; }
-        .mp-col-span-12{ grid-column: span 12 / span 12; }
-        .mp-col-span-7{ grid-column: span 7 / span 7; }
-        .mp-col-span-5{ grid-column: span 5 / span 5; }
-        @media (max-width: 980px){
-          .mp-page-grid{ grid-template-columns: 1fr; }
-          .mp-col-span-12,.mp-col-span-7,.mp-col-span-5{ grid-column: span 1 / span 1 !important; }
+        .horimetros-page{
+          width:100% !important;
+          max-width:none !important;
+          margin:0 !important;
+          padding:0 !important;
+        }
+        .horimetros-page *{ box-sizing:border-box; }
+        .horimetros-page .mp-page-grid{
+          width:100%;
+          max-width:none;
+          display:grid;
+          grid-template-columns: repeat(12, minmax(0, 1fr));
+          gap:16px;
+          align-items:start;
+        }
+        .horimetros-page .mp-col-span-12{ grid-column: span 12 / span 12; min-width:0; }
+        .horimetros-page .mp-col-span-8{ grid-column: span 8 / span 8; min-width:0; }
+        .horimetros-page .mp-col-span-4{ grid-column: span 4 / span 4; min-width:0; }
+        .horimetros-page .mp-col-span-7{ grid-column: span 8 / span 8; min-width:0; }
+        .horimetros-page .mp-col-span-5{ grid-column: span 4 / span 4; min-width:0; }
+        .horimetros-page .mp-card{ min-width:0; width:100%; }
+        .horimetros-page .mp-card-b{ min-width:0; }
+        .horimetros-page .hor-kpi-grid{
+          display:grid;
+          gap:12px;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        }
+        .horimetros-page .hor-main-table-wrap{
+          width:100%;
+          overflow-x:auto;
+        }
+        .horimetros-page .hor-actions-row{
+          display:flex;
+          gap:10px;
+          align-items:end;
+          justify-content:flex-end;
+          flex-wrap:wrap;
+        }
+        @media (max-width: 1180px){
+          .horimetros-page .mp-col-span-7,
+          .horimetros-page .mp-col-span-8,
+          .horimetros-page .mp-col-span-5,
+          .horimetros-page .mp-col-span-4{ grid-column: span 12 / span 12 !important; }
+        }
+        @media (max-width: 720px){
+          .horimetros-page .mp-page-title{ font-size:28px; }
+          .horimetros-page .hor-actions-row{ justify-content:stretch; }
+          .horimetros-page .hor-actions-row > *{ flex:1 1 100%; }
         }
       `}</style>
 
@@ -312,7 +353,7 @@ export default function Horimetros() {
               <div className="mp-page-sub">Histórico + filtros + lançamento (Inicial / Final) • {selectedPlantName} • permitido lançar qualquer data</div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+            <div className="hor-actions-row">
               <div style={{ minWidth: 220 }}>
                 <div className="mp-label">Planta</div>
                 <select
@@ -353,7 +394,7 @@ export default function Horimetros() {
               <span className="mp-help">Mostra o último registro (Final) encontrado</span>
             </div>
             <div className="mp-card-b">
-              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+              <div className="hor-kpi-grid">
                 {EQUIPAMENTOS.map((eq) => {
                   const r = lastByEq?.[eq] || null;
                   return (
@@ -388,7 +429,7 @@ export default function Horimetros() {
               <span className="mp-help">Exclusão remove do Postgres</span>
             </div>
 
-            <div className="mp-card-b" style={{ overflowX: "auto" }}>
+            <div className="mp-card-b hor-main-table-wrap">
               <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
                 <thead>
                   <tr>
