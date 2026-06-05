@@ -720,25 +720,39 @@ export default function LancamentoParadas() {
   }
 
   function validateRowsToSave(rowsToValidate: StopRow[]): string | null {
-    for (const r of rowsToValidate) {
-      if (rowIsBlank(r)) continue;
-      const p = normalizePeriodLaunch(r.period);
-      const ini = String(r.hora_inicial || "").trim();
-      const fim = String(r.hora_final || "").trim();
-      if ((ini && !fim) || (!ini && fim)) {
-        return `Preencha hora inicial e hora final juntas no período ${p}.`;
-      }
-      if (ini && fim) {
-        const calculated = intervalDurationMinutes(ini, fim);
-        if (calculated <= 0) {
-          return `Horário inválido no período ${p}. Verifique hora inicial e final.`;
-        }
+    for (const period of periods) {
+      const p = normalizePeriodLaunch(period);
+      const periodRows = rowsToValidate.filter((r) => normalizePeriodLaunch(r.period) === p);
+      const meaningfulRows = periodRows.filter((r) => !rowIsBlank(r));
+
+      // Regra baixa produção sem parada:
+      // se a produção da hora ficou abaixo do esperado e não existe nenhuma parada preenchida,
+      // é obrigatório registrar uma justificativa mesmo com minutos = 0.
+      if (isLowProductionPeriod(p) && !meaningfulRows.length) {
+        const produced = producedTonForPeriod(p);
+        return `Justifique a baixa produção no período ${p}. Produzido: ${fmtSmart(produced || 0)} t/h; esperado: ${fmtSmart(expectedTonPerHour)} t/h; sem parada lançada.`;
       }
 
-      if (needsLowProductionJustification(p, r)) {
-        const produced = producedTonForPeriod(p);
-        const reason = hasNoStopLaunched(r) ? "sem parada lançada" : "parada menor que 15 min";
-        return `Justifique a baixa produção no período ${p}. Produzido: ${fmtSmart(produced || 0)} t/h; esperado: ${fmtSmart(expectedTonPerHour)} t/h; ${reason}.`;
+      for (const r of meaningfulRows) {
+        const ini = String(r.hora_inicial || "").trim();
+        const fim = String(r.hora_final || "").trim();
+
+        if ((ini && !fim) || (!ini && fim)) {
+          return `Preencha hora inicial e hora final juntas no período ${p}.`;
+        }
+
+        if (ini && fim) {
+          const calculated = intervalDurationMinutes(ini, fim);
+          if (calculated <= 0) {
+            return `Horário inválido no período ${p}. Verifique hora inicial e final.`;
+          }
+        }
+
+        if (needsLowProductionJustification(p, r)) {
+          const produced = producedTonForPeriod(p);
+          const reason = hasNoStopLaunched(r) ? "sem parada lançada" : "parada menor que 15 min";
+          return `Justifique a baixa produção no período ${p}. Produzido: ${fmtSmart(produced || 0)} t/h; esperado: ${fmtSmart(expectedTonPerHour)} t/h; ${reason}.`;
+        }
       }
     }
     return null;
@@ -797,7 +811,8 @@ export default function LancamentoParadas() {
       // quando o backend demora em responder o GET. O usuário pode clicar em Atualizar se quiser recarregar do banco.
       setRows(normalized);
     } catch (e: any) {
-      setMsg(e?.message || "Erro ao salvar");
+      const detail = e?.name === "AbortError" ? "Tempo limite excedido ao salvar." : e?.message;
+      setMsg(detail || "Erro ao salvar. Verifique os campos obrigatórios e tente novamente.");
     } finally {
       setSaving(false);
     }
