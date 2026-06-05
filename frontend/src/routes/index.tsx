@@ -21,11 +21,9 @@ import Equipamentos from "../pages/Equipamentos";
 import SupervisoresPlanta from "../pages/SupervisoresPlanta";
 
 import Horimetros from "../pages/Horimetros";
-import Paradas from "../pages/Paradas";
 import LancamentoParadas from "../pages/LancamentoParadas";
 import Exportar from "../pages/Exportar";
 import MetasMes from "../pages/MetasMes";
-import Historico from "../pages/Historico";
 
 import DevLogs from "../pages/Devlogs";
 import DevUsers from "../pages/DevUsers";
@@ -80,10 +78,8 @@ function MobileWrap({
     | "ritmo"
     | "stats"
     | "ufdf"
-    | "paradas"
     | "paradas-minutos"
     | "horimetros"
-    | "historico"
     | "metas"
     | "exportar"
     | "configuracoes"
@@ -223,16 +219,6 @@ export function AppRoutes() {
         }
       />
       <Route
-        path="/m/paradas"
-        element={
-          <RequireAuth>
-            <MobileWrap title="Paradas Horas" tab="paradas">
-              <Paradas />
-            </MobileWrap>
-          </RequireAuth>
-        }
-      />
-      <Route
         path="/m/lancamento-paradas"
         element={
           <RequireAuth>
@@ -248,16 +234,6 @@ export function AppRoutes() {
           <RequireAuth>
             <MobileWrap title="Horímetros" tab="horimetros">
               <Horimetros />
-            </MobileWrap>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/m/historico"
-        element={
-          <RequireAuth>
-            <MobileWrap title="Histórico" tab="historico">
-              <Historico />
             </MobileWrap>
           </RequireAuth>
         }
@@ -455,14 +431,6 @@ export function AppRoutes() {
 
 
         <Route
-          path="paradas"
-          element={
-            <RequireRole>
-              <Paradas />
-            </RequireRole>
-          }
-        />
-        <Route
           path="lancamento-paradas"
           element={
             <RequireRole>
@@ -492,14 +460,6 @@ export function AppRoutes() {
           element={
             <RequireRole>
               <MetasMes />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="historico"
-          element={
-            <RequireRole>
-              <Historico />
             </RequireRole>
           }
         />

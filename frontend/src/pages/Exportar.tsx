@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import * as XLSX from "xlsx";
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE || "";
@@ -9,7 +10,8 @@ type StopItem = any;
 type HoriItem = any;
 type PlantInfo = { id: number; code: string; name: string };
 type ExportMode = "base" | "paradas";
-type PreviewMode = "base" | "paradas" | "producao";
+type PreviewMode = "base" | "paradas" | "producao" | "horimetros";
+type ReportMode = "producao" | "horimetros" | "paradas";
 
 type PreviewColumn = {
   key: string;
@@ -294,6 +296,17 @@ function joinDateTime(dateStr: any, hourStr: any) {
   return `${d} ${h}`;
 }
 
+
+function shortTime(v: any) {
+  const raw = String(v || "").trim();
+  if (!raw) return "";
+  const simple = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (simple) return `${simple[1].padStart(2, "0")}:${simple[2]}`;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 function normalizeText(v: any) {
   return String(v || "")
     .normalize("NFD")
@@ -417,10 +430,12 @@ function PreviewTable({ data, loading }: { data: PreviewData | null; loading: bo
   if (!data) {
     return (
       <div style={{ padding: 28, textAlign: "center", color: "rgba(255,255,255,.58)" }}>
-        Clique em <b>Pré-visualizar</b> para ver como o relatório será exibido antes da exportação.
+        Selecione uma aba para carregar a prévia do relatório.
       </div>
     );
   }
+
+  const tableMinWidth = data.columns.reduce((sum, col) => sum + (col.width || 130), 0);
 
   return (
     <>
@@ -440,7 +455,7 @@ function PreviewTable({ data, loading }: { data: PreviewData | null; loading: bo
           background: "rgba(7,10,18,.45)",
         }}
       >
-        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 1160 }}>
+        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: tableMinWidth }}>
           <thead>
             <tr style={{ background: "rgba(255,255,255,.035)" }}>
               {data.columns.map((col) => (
@@ -512,28 +527,39 @@ const BASE_PREVIEW_COLUMNS: PreviewColumn[] = [
 ];
 
 const PARADAS_PREVIEW_COLUMNS: PreviewColumn[] = [
-  { key: "dia", label: "Dia", width: 110 },
-  { key: "equipamento", label: "Equipamento", width: 150 },
-  { key: "inicio", label: "Início", width: 150 },
-  { key: "fim", label: "Fim", width: 150 },
-  { key: "tipo", label: "Tipo", width: 130 },
-  { key: "atividade", label: "Atividade", width: 180 },
-  { key: "descricao", label: "Descrição", width: 260 },
-  { key: "horas", label: "Tempo (h)", width: 110 },
-  { key: "classificacao", label: "Classificação", width: 130 },
-  { key: "planta", label: "Área/Planta", width: 180 },
+  { key: "dia", label: "Dia", width: 120 },
+  { key: "planta", label: "Planta", width: 180 },
+  { key: "equipamento", label: "Equipamento", width: 170 },
+  { key: "hi", label: "H.I", width: 110 },
+  { key: "hf", label: "H.F", width: 110 },
+  { key: "tempo", label: "Tempo parado", width: 140 },
+  { key: "descricao", label: "Descrição", width: 360 },
+];
+
+const HORIMETROS_PREVIEW_COLUMNS: PreviewColumn[] = [
+  { key: "dia", label: "Dia", width: 120 },
+  { key: "equipamento", label: "Equipamento", width: 170 },
+  { key: "horimetro_inicial", label: "Horímetro inicial", width: 170 },
+  { key: "horimetro_final", label: "Horímetro final", width: 160 },
+  { key: "planta", label: "Planta", width: 220 },
 ];
 
 const PRODUCAO_PREVIEW_COLUMNS: PreviewColumn[] = [
-  { key: "planta", label: "Planta", width: 170 },
   { key: "dia", label: "Dia", width: 120 },
-  { key: "turno", label: "Turno", width: 90 },
-  { key: "producao", label: "Produção (t)", width: 140 },
-  { key: "periodos", label: "Períodos com lançamento", width: 180 },
-  { key: "observacao", label: "Observação", width: 260 },
+  { key: "horario", label: "Horário", width: 150 },
+  { key: "valor_hora", label: "Valor da hora", width: 160 },
 ];
 
+function parseReportMode(search: string): ReportMode {
+  const raw = new URLSearchParams(search).get("tipo") || "producao";
+  if (raw === "horimetros" || raw === "paradas" || raw === "producao") return raw;
+  return "producao";
+}
+
 export default function Exportar() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const reportMode = useMemo(() => parseReportMode(location.search), [location.search]);
   const today = useMemo(() => ymd(new Date()), []);
   const [fromDay, setFromDay] = useState(today);
   const [toDay, setToDay] = useState(today);
@@ -542,7 +568,7 @@ export default function Exportar() {
   const [msg, setMsg] = useState<string>("");
   const [lastFile, setLastFile] = useState<string>("");
   const [lastMode, setLastMode] = useState<ExportMode | null>(null);
-  const [previewMode, setPreviewMode] = useState<PreviewMode>("base");
+  const [previewMode, setPreviewMode] = useState<PreviewMode>(reportMode);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [plants, setPlants] = useState<PlantInfo[]>([]);
   const [selectedPlantId, setSelectedPlantId] = useState<string>("");
@@ -715,43 +741,38 @@ export default function Exportar() {
     const stops: any[] = [];
     for (const d of daysInput) {
       try {
-        const st = await apiGet<any[]>(`/api/stops?day=${d}`);
-        for (const s of st || []) stops.push(s);
+        const payload = await apiGet<{ day?: string; rows?: any[] }>(`/api/aggregate/stops-launch?day=${d}`);
+        for (const item of payload?.rows || []) stops.push({ ...item, __day: payload?.day || d });
       } catch {}
     }
 
     const rows = stops
       .map((s) => {
-        const day = String(pick(s, ["day", "data_turno", "data", "shift_day"]) || "").slice(0, 10);
+        const day = String(pick(s, ["__day", "day", "data_turno", "data", "shift_day"]) || "").slice(0, 10);
+        const plantId = pick(s, ["plant_id", "planta_id", "plantId"]);
+        const plantName = plants.find((p) => String(p.id) === String(plantId))?.name || (plantId ? `Planta ${plantId}` : "-");
         const equip = String(pick(s, ["equipamento", "equipment", "eq", "tag", "planta"]) || "");
-        const eqNormNoHyphen = normEq(equip);
-        const planta = eqToPlanta(eqNormNoHyphen) || "-";
-        const tipo = String(pick(s, ["tipo", "tipo_parada", "stop_type", "type"]) || "");
-        const atividade = String(pick(s, ["atividade", "activity"]) || "");
         const descricao = String(pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "");
-        const horas = stopDurationHours(s);
-        const classificacao = classifyMaintenanceType(s) || "-";
+        const hi = shortTime(pick(s, ["hora_inicial", "hora_inicio", "hr_inicio", "time_ini", "hora_ini"]));
+        const hf = shortTime(pick(s, ["hora_final", "hora_fim", "hr_fim", "time_end", "hora_end"]));
+        const minutos = Number(pick(s, ["minutos", "minutes", "tempo_min", "duration_min"]) ?? NaN);
 
         return {
           dia: day ? fmtDate(day) : "-",
+          planta: plantName,
           equipamento: equip || "-",
-          inicio: joinDateTime(pick(s, ["data_inicio", "dt_inicio", "data_ini", "day_ini"]), pick(s, ["hora_inicio", "hr_inicio", "time_ini", "hora_ini"])),
-          fim: joinDateTime(pick(s, ["data_fim", "dt_fim", "data_end", "day_fim"]), pick(s, ["hora_fim", "hr_fim", "time_end", "hora_end"])),
-          tipo: tipo || "-",
-          atividade: atividade || "-",
+          hi: hi || "-",
+          hf: hf || "-",
+          tempo: Number.isFinite(minutos) ? `${fmtNum(minutos, 0)} min` : "-",
           descricao: descricao || "-",
-          horas: fmtNum(horas, 2),
-          classificacao,
-          planta,
-          __sort: String(pick(s, ["created_at"]) || ""),
+          __sort: `${day} ${plantName} ${hi} ${String(pick(s, ["ordem"]) || "")}`,
         };
       })
       .filter((row) => {
-        const merged = `${row.equipamento} ${row.tipo} ${row.atividade} ${row.descricao} ${row.planta}`;
+        const merged = `${row.dia} ${row.planta} ${row.equipamento} ${row.hi} ${row.hf} ${row.tempo} ${row.descricao}`;
         return (
-          (!filters.turno || containsText(row.inicio, ` ${filters.turno}:`) || containsText(row.fim, ` ${filters.turno}:`)) &&
-          containsText(row.equipamento, filters.equipamento) &&
           containsText(row.planta, filters.planta) &&
+          containsText(row.equipamento, filters.equipamento) &&
           containsText(row.descricao, filters.material) &&
           containsText(row.descricao, filters.letra) &&
           containsText(merged, filters.pesquisa)
@@ -760,10 +781,57 @@ export default function Exportar() {
       .sort((a, b) => String(b.__sort || "").localeCompare(String(a.__sort || "")));
 
     return {
-      title: "Pré-visualização • Relatório de Paradas",
-      subtitle: "Lançamentos de paradas e manutenção que serão exportados no modelo resumido/detalhado.",
+      title: "Paradas",
+      subtitle: "Dados puxados da API de Paradas Minutos.",
       columns: PARADAS_PREVIEW_COLUMNS,
-      rows: rows.slice(0, 30).map(({ __sort, ...rest }) => rest),
+      rows: rows.slice(0, 50).map(({ __sort, ...rest }) => rest),
+      total: rows.length,
+    };
+  }
+
+  async function buildHorimetrosPreview(daysInput: string[]): Promise<PreviewData> {
+    const horimetros: any[] = [];
+    for (const d of daysInput) {
+      try {
+        const rows = await apiGet<any[]>(`/api/horimetros?day=${d}&limit=2000`);
+        for (const item of rows || []) horimetros.push(item);
+      } catch {}
+    }
+
+    const rows = horimetros
+      .map((h) => {
+        const day = String(pick(h, ["day", "data", "data_turno"]) || "").slice(0, 10);
+        const equip = String(pick(h, ["equipamento", "equipment", "eq", "tag"]) || "");
+        const eqNormNoHyphen = normEq(equip);
+        const plantaRaw = pick(h, ["planta", "plant", "area", "plant_name"]);
+        const planta = String(plantaRaw || eqToPlanta(eqNormNoHyphen) || "");
+        const ini = Number(pick(h, ["horimetro_ini", "ini", "inicial", "start"]) ?? NaN);
+        const fim = Number(pick(h, ["horimetro_fim", "fim", "final", "end"]) ?? NaN);
+
+        return {
+          dia: day ? fmtDate(day) : "-",
+          equipamento: equip || "-",
+          horimetro_inicial: Number.isFinite(ini) ? fmtNum(ini, 0) : "-",
+          horimetro_final: Number.isFinite(fim) ? fmtNum(fim, 0) : "-",
+          planta: planta || "-",
+          __sort: `${day} ${equip}`,
+        };
+      })
+      .filter((row) => {
+        const merged = `${row.dia} ${row.equipamento} ${row.horimetro_inicial} ${row.horimetro_final} ${row.planta}`;
+        return (
+          containsText(row.equipamento, filters.equipamento) &&
+          containsText(row.planta, filters.planta) &&
+          containsText(merged, filters.pesquisa)
+        );
+      })
+      .sort((a, b) => String(a.__sort || "").localeCompare(String(b.__sort || "")));
+
+    return {
+      title: "Horímetros",
+      subtitle: "Dia, equipamento, horímetro inicial, horímetro final e planta.",
+      columns: HORIMETROS_PREVIEW_COLUMNS,
+      rows: rows.slice(0, 50).map(({ __sort, ...rest }) => rest),
       total: rows.length,
     };
   }
@@ -772,56 +840,57 @@ export default function Exportar() {
     const targetPlants = selectedPlantId
       ? plants.filter((p) => String(p.id) === selectedPlantId)
       : plants;
-    const rows: Record<string, any>[] = [];
+    const byDayHour = new Map<string, { day: string; horario: string; total: number }>();
 
-    for (const p of targetPlants) {
+    const collect = (d: string, pd: PlantDay) => {
+      for (const r of pd.rows || []) {
+        const ton = Number((r as any)?.ton) || 0;
+        if (!ton) continue;
+        const horario = String((r as any)?.period || "").trim() || "-";
+        const key = `${d}|${horario}`;
+        const current = byDayHour.get(key) || { day: d, horario, total: 0 };
+        current.total += ton;
+        byDayHour.set(key, current);
+      }
+    };
+
+    if (targetPlants.length) {
+      for (const p of targetPlants) {
+        for (const d of daysInput) {
+          try {
+            const pd = await apiGet<PlantDay>(`/api/plants/${p.id}/plant-production/${d}`);
+            collect(d, pd);
+          } catch {}
+        }
+      }
+    } else {
       for (const d of daysInput) {
         try {
-          const pd = await apiGet<PlantDay>(`/api/plants/${p.id}/plant-production/${d}`);
-          let t1 = 0;
-          let t2 = 0;
-          let usedPeriods = 0;
-          for (const r of pd.rows || []) {
-            const ton = Number((r as any)?.ton) || 0;
-            if (!ton) continue;
-            usedPeriods++;
-            const h = periodStartHour((r as any)?.period);
-            if (h === null) continue;
-            if (turnoByHour(h) === 1) t1 += ton;
-            else t2 += ton;
-          }
-          const pushTurno = (turno: "1" | "2", value: number) => {
-            if (!value) return;
-            rows.push({
-              planta: p.name || p.code,
-              dia: fmtDate(d),
-              turno,
-              producao: fmtNum(value, 2),
-              periodos: usedPeriods,
-              observacao: pd.obs || "-",
-            });
-          };
-          pushTurno("1", t1);
-          pushTurno("2", t2);
+          const pd = await apiGet<PlantDay>(`/api/plant-production/${d}`);
+          collect(d, pd);
         } catch {}
       }
     }
 
-    const filtered = rows.filter((row) => {
-      const merged = `${row.planta} ${row.dia} ${row.turno} ${row.observacao}`;
-      return (
-        (!filters.turno || String(row.turno) === String(filters.turno)) &&
-        containsText(row.planta, filters.planta) &&
-        containsText(merged, filters.pesquisa)
-      );
-    });
+    const rows = Array.from(byDayHour.values())
+      .map((row) => ({
+        dia: fmtDate(row.day),
+        horario: row.horario,
+        valor_hora: fmtNum(Math.round(row.total * 100) / 100, 2),
+        __sort: `${row.day} ${String(periodStartHour(row.horario) ?? 99).padStart(2, "0")} ${row.horario}`,
+      }))
+      .filter((row) => {
+        const merged = `${row.dia} ${row.horario} ${row.valor_hora}`;
+        return containsText(merged, filters.pesquisa);
+      })
+      .sort((a, b) => String(a.__sort || "").localeCompare(String(b.__sort || "")));
 
     return {
-      title: "Pré-visualização • Produção por Planta",
-      subtitle: "Totais por turno/planta, respeitando os filtros aplicados.",
+      title: "Produção",
+      subtitle: "Dia, horário e valor da hora.",
       columns: PRODUCAO_PREVIEW_COLUMNS,
-      rows: filtered.slice(0, 30),
-      total: filtered.length,
+      rows: rows.slice(0, 50).map(({ __sort, ...rest }) => rest),
+      total: rows.length,
     };
   }
 
@@ -837,7 +906,9 @@ export default function Exportar() {
           ? await buildBasePreview(d)
           : mode === "paradas"
             ? await buildParadasPreview(d)
-            : await buildProducaoPreview(d);
+            : mode === "horimetros"
+              ? await buildHorimetrosPreview(d)
+              : await buildProducaoPreview(d);
       setPreviewData(data);
     } catch (e: any) {
       setPreviewData(null);
@@ -846,6 +917,11 @@ export default function Exportar() {
       setPreviewBusy(false);
     }
   }
+
+  useEffect(() => {
+    handlePreview(reportMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportMode, fromDay, toDay, selectedPlantId, plants.length, filters]);
 
   async function handleExport() {
     setMsg("");
@@ -1263,6 +1339,12 @@ export default function Exportar() {
     setMsg("✅ Análise técnica aberta. No diálogo de impressão, escolha 'Salvar como PDF'.");
   }
 
+  const tabs = [
+    { key: "producao", label: "Produção" },
+    { key: "horimetros", label: "Horímetros" },
+    { key: "paradas", label: "Paradas" },
+  ] as const;
+
   return (
     <div style={{ padding: 18 }}>
       <div
@@ -1271,15 +1353,14 @@ export default function Exportar() {
           borderRadius: 24,
           overflow: "hidden",
           border: "1px solid rgba(255,255,255,.08)",
-          background:
-            "radial-gradient(circle at top right, rgba(59,130,246,.10), transparent 24%), linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
+          background: "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
           boxShadow: "0 20px 60px rgba(0,0,0,.22)",
         }}
       >
         <div
           className="mp-card-h"
           style={{
-            padding: "18px 18px 8px 18px",
+            padding: 18,
             borderBottom: "1px solid rgba(255,255,255,.06)",
             display: "flex",
             alignItems: "center",
@@ -1289,43 +1370,50 @@ export default function Exportar() {
           }}
         >
           <div>
-            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: 0.2 }}>Central de Exportação</div>
+            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: 0.2 }}>Relatórios</div>
             <div style={{ marginTop: 4, color: "rgba(255,255,255,.58)", fontSize: 13 }}>
-              Visualize o relatório no site antes de gerar o Excel e exporte somente quando estiver tudo conferido.
+              Selecione uma aba para visualizar somente as informações do relatório escolhido.
             </div>
           </div>
-
-          <ToneBadge tone="info">MonPlant • Exportação Assistida</ToneBadge>
+          <ToneBadge tone="muted">{periodLabel}</ToneBadge>
         </div>
 
-        <div className="mp-card-b" style={{ padding: 18 }}>          <div
+        <div className="mp-card-b" style={{ padding: 18 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              marginBottom: 16,
+            }}
+          >
+            {tabs.map((item) => {
+              const active = reportMode === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={active ? "mp-btn mp-btn-primary" : "mp-btn"}
+                  onClick={() => navigate(`/exportar?tipo=${item.key}`)}
+                  disabled={previewBusy}
+                  style={{ minHeight: 44, borderRadius: 14, fontWeight: 950 }}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div
             style={{
               borderRadius: 20,
               border: "1px solid rgba(255,255,255,.08)",
               background: "rgba(7,10,18,.42)",
               padding: 16,
               boxShadow: "inset 0 1px 0 rgba(255,255,255,.02)",
+              marginBottom: 16,
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
-                flexWrap: "wrap",
-                marginBottom: 14,
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>1. Defina o período</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
-                  O usuário primeiro escolhe o intervalo, depois pré-visualiza o relatório e por fim exporta.
-                </div>
-              </div>
-              <ToneBadge tone="muted">{periodLabel}</ToneBadge>
-            </div>
-
             <div
               style={{
                 display: "grid",
@@ -1335,186 +1423,16 @@ export default function Exportar() {
             >
               <div>
                 <div className="mp-label" style={{ marginBottom: 6 }}>Data inicial</div>
-                <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={busy || previewBusy} />
+                <input className="mp-input" type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} disabled={previewBusy} />
               </div>
               <div>
                 <div className="mp-label" style={{ marginBottom: 6 }}>Data final</div>
-                <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={busy || previewBusy} />
+                <input className="mp-input" type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} disabled={previewBusy} />
               </div>
             </div>
           </div>
 
-          <div style={{ height: 14 }} />
-
-          <div
-            style={{
-              borderRadius: 20,
-              border: "1px solid rgba(255,255,255,.08)",
-              background: "rgba(7,10,18,.42)",
-              padding: 16,
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,.02)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>2. Filtros e pesquisa (padrão MonPlant)</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
-                  Os filtros abaixo impactam a prévia, a exportação do Excel filtrado e a análise técnica.
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 10 }}>
-              <input className="mp-input" placeholder="Pesquisa geral..." value={filters.pesquisa} onChange={(e) => setFilters((f) => ({ ...f, pesquisa: e.target.value }))} />
-              <input className="mp-input" placeholder="Equipamento" value={filters.equipamento} onChange={(e) => setFilters((f) => ({ ...f, equipamento: e.target.value }))} />
-              <input className="mp-input" placeholder="Planta / área" value={filters.planta} onChange={(e) => setFilters((f) => ({ ...f, planta: e.target.value }))} />
-              <input className="mp-input" placeholder="Material" value={filters.material} onChange={(e) => setFilters((f) => ({ ...f, material: e.target.value }))} />
-              <input className="mp-input" placeholder="Origem" value={filters.origem} onChange={(e) => setFilters((f) => ({ ...f, origem: e.target.value }))} />
-              <input className="mp-input" placeholder="Destino" value={filters.destino} onChange={(e) => setFilters((f) => ({ ...f, destino: e.target.value }))} />
-              <input className="mp-input" placeholder="Letra" value={filters.letra} onChange={(e) => setFilters((f) => ({ ...f, letra: e.target.value }))} />
-              <select className="mp-select" value={filters.turno} onChange={(e) => setFilters((f) => ({ ...f, turno: e.target.value }))}>
-                <option value="">Turno: todos</option>
-                <option value="1">Turno 1</option>
-                <option value="2">Turno 2</option>
-              </select>
-              <select className="mp-select" value={selectedPlantId} onChange={(e) => setSelectedPlantId(e.target.value)}>
-                <option value="">Produção: todas as plantas</option>
-                {plants.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div style={{ height: 14 }} />
-
-          <div
-            style={{
-              borderRadius: 20,
-              border: "1px solid rgba(255,255,255,.08)",
-              background: "rgba(7,10,18,.42)",
-              padding: 16,
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,.02)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>3. Escolha o tipo de relatório</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
-                  Cada modo tem sua própria prévia e sua própria exportação.
-                </div>
-              </div>
-              <ToneBadge tone="muted">{lastFile ? `Último arquivo: ${lastFile}` : "Pré-visualize antes de exportar"}</ToneBadge>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-                gap: 12,
-              }}
-            >
-              <ActionCard
-                title="Relatório base da planta"
-                description="Prévia com horímetros consolidados e produção do período. Exporta usando o template public/BASE_PLANTA.xlsx."
-                buttonText={busy && lastMode === "base" ? "Gerando..." : "Exportar Excel Base"}
-                secondaryText="Pré-visualizar Base"
-                buttonTone="primary"
-                disabled={busy || previewBusy}
-                onPreview={() => handlePreview("base")}
-                onExport={handleExport}
-              />
-
-              <ActionCard
-                title="Relatório de paradas"
-                description="Prévia dos lançamentos de parada/manutenção com tempo, tipo e descrição. Exporta usando public/MODELO_PARADAS.xlsx."
-                buttonText={busy && lastMode === "paradas" ? "Gerando..." : "Exportar Excel Paradas"}
-                secondaryText="Pré-visualizar Paradas"
-                buttonTone="secondary"
-                disabled={busy || previewBusy}
-                onPreview={() => handlePreview("paradas")}
-                onExport={handleExportModeloParadas}
-              />
-
-              <ActionCard
-                title="Produção por planta"
-                description="Consolida produção por turno/planta para análise gerencial e exportação por filtro."
-                buttonText="Prévia Produção"
-                secondaryText="Pré-visualizar Produção"
-                buttonTone="primary"
-                disabled={busy || previewBusy}
-                onPreview={() => handlePreview("producao")}
-                onExport={() => handlePreview("producao")}
-              />
-            </div>
-
-            {msg ? (
-              <div
-                style={{
-                  marginTop: 14,
-                  borderRadius: 14,
-                  border: msg.startsWith("✅") ? "1px solid rgba(34,197,94,.25)" : "1px solid rgba(239,68,68,.25)",
-                  background: msg.startsWith("✅") ? "rgba(34,197,94,.10)" : "rgba(239,68,68,.10)",
-                  padding: 12,
-                  color: "rgba(255,255,255,.92)",
-                }}
-              >
-                {msg}
-              </div>
-            ) : null}
-          </div>
-
-          <div style={{ height: 14 }} />
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="mp-btn mp-btn-primary" onClick={handleExportFilteredExcel} disabled={busy || previewBusy}>
-              Exportar Excel (somente o filtrado)
-            </button>
-            <button className="mp-btn" onClick={handleTechAnalysisPdf} disabled={busy || previewBusy}>
-              Gerar análise técnica (PDF)
-            </button>
-          </div>
-
-          <div style={{ height: 14 }} />
-
-          <div
-            className="mp-card"
-            style={{
-              borderRadius: 24,
-              overflow: "hidden",
-              border: "1px solid rgba(255,255,255,.08)",
-              background: "linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015))",
-              boxShadow: "0 20px 60px rgba(0,0,0,.20)",
-            }}
-          >
-            <div
-              className="mp-card-h"
-              style={{
-                padding: 18,
-                borderBottom: "1px solid rgba(255,255,255,.06)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
-                flexWrap: "wrap",
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 18 }}>4. Pré-visualização do relatório</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.52)", marginTop: 4 }}>
-                  O usuário vê no site o que será exportado. A tabela abaixo mostra os primeiros registros reais do relatório.
-                </div>
-              </div>
-              <ToneBadge tone={previewMode === "base" ? "info" : previewMode === "paradas" ? "warn" : "ok"}>
-                {previewMode === "base" ? "Prévia Base" : previewMode === "paradas" ? "Prévia Paradas" : "Prévia Produção"}
-              </ToneBadge>
-            </div>
-
-            <div className="mp-card-b" style={{ padding: 18 }}>
-              <PreviewTable data={previewData} loading={previewBusy} />
-            </div>
-          </div>
+          <PreviewTable data={previewData} loading={previewBusy} />
         </div>
       </div>
     </div>

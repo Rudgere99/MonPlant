@@ -17,7 +17,6 @@ import {
   Menu,
   X,
   ChevronRight,
-  History,
   ChevronsLeft,
   ChevronsRight,
   User as UserIcon,
@@ -51,14 +50,18 @@ const nav: NavItem[] = [
   // ===== APP =====
   { to: "/producao-planta", label: "Produção Planta", icon: Factory, group: "Produção" },
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
-  { to: "/paradas", label: "Paradas Horas", icon: PauseCircle, group: "Operação" },
   { to: "/lancamento-paradas", label: "Paradas Minutos", icon: PauseCircle, group: "Operação" },
   { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
 
 
-  { to: "/historico", label: "Histórico", icon: History, group: "Operação" },
   { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
   { to: "/exportar", label: "Relatórios", icon: FileSpreadsheet, group: "Utilitários" },
+];
+
+const reportOptions = [
+  { to: "/exportar?tipo=producao", label: "Produção", description: "Dia, horário e valor da hora", icon: Factory },
+  { to: "/exportar?tipo=horimetros", label: "Horímetros", description: "Dia, equipamento, inicial/final e planta", icon: Timer },
+  { to: "/exportar?tipo=paradas", label: "Paradas", description: "Dia, equipamento, H.I, H.F, tempo e descrição", icon: PauseCircle },
 ];
 
 
@@ -367,6 +370,7 @@ function AppShell() {
 
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const [sideCollapsed, setSideCollapsed] = useState(false);
 
   const pageTitle = useMemo(() => getTitleFromPath(location.pathname), [location.pathname]);
@@ -400,6 +404,10 @@ function AppShell() {
     const interval = window.setInterval(loadActiveNotices, 60000);
     return () => window.clearInterval(interval);
   }, [token, isGestaoVistaUser, loadActiveNotices]);
+
+  React.useEffect(() => {
+    setReportsOpen(false);
+  }, [location.pathname, location.search]);
 
 
 
@@ -585,6 +593,92 @@ function AppShell() {
               <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {sidebarNavItems.map((i) => {
                   const Icon = i.icon;
+                  const isReportsItem = i.to === "/exportar";
+                  const reportsActive = location.pathname === "/exportar" || location.pathname.startsWith("/exportar/");
+
+                  if (isReportsItem && sideCollapsed) {
+                    return (
+                      <button
+                        key={i.to}
+                        type="button"
+                        onClick={() => setReportsOpen(true)}
+                        title={i.label}
+                        style={{
+                          height: 52,
+                          borderRadius: 16,
+                          border: "1px solid " + (reportsActive ? "rgba(255,159,26,.18)" : "transparent"),
+                          background: reportsActive ? "rgba(255,159,26,.08)" : "transparent",
+                          color: "white",
+                          display: "grid",
+                          placeItems: "center",
+                          overflow: "hidden",
+                          flex: "0 0 auto",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <span
+                          style={{
+                            position: "relative",
+                            height: 40,
+                            width: 40,
+                            borderRadius: 14,
+                            display: "grid",
+                            placeItems: "center",
+                            background: "rgba(255,255,255,.06)",
+                            border: "1px solid rgba(255,255,255,.10)",
+                          }}
+                        >
+                          <Icon size={18} />
+                        </span>
+                      </button>
+                    );
+                  }
+
+                  if (isReportsItem) {
+                    return (
+                      <button
+                        key={i.to}
+                        type="button"
+                        onClick={() => setReportsOpen(true)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "10px 10px",
+                          borderRadius: 14,
+                          border: "1px solid " + (reportsActive ? "rgba(255,159,26,.18)" : "transparent"),
+                          background: reportsActive ? "rgba(255,159,26,.08)" : "transparent",
+                          color: "white",
+                          overflow: "hidden",
+                          flex: "0 0 auto",
+                          cursor: "pointer",
+                          width: "100%",
+                          textAlign: "left",
+                        }}
+                      >
+                        <span
+                          style={{
+                            position: "relative",
+                            height: 36,
+                            width: 36,
+                            borderRadius: 12,
+                            display: "grid",
+                            placeItems: "center",
+                            background: reportsActive ? "rgba(255,159,26,.12)" : "rgba(255,255,255,.06)",
+                            border: "1px solid " + (reportsActive ? "rgba(255,159,26,.20)" : "rgba(255,255,255,.10)"),
+                            flex: "0 0 auto",
+                          }}
+                        >
+                          <Icon size={18} />
+                        </span>
+                        <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
+                          <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{i.label}</div>
+                          <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{i.group || "—"}</div>
+                        </div>
+                        <ChevronRight size={16} style={{ opacity: 0.9, flex: "0 0 auto" }} />
+                      </button>
+                    );
+                  }
 
                   if (sideCollapsed) {
                     return (
@@ -813,6 +907,49 @@ function AppShell() {
                   <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {sidebarNavItems.map((i) => {
                     const Icon = i.icon;
+                    const isReportsItem = i.to === "/exportar";
+                    const reportsActive = location.pathname === "/exportar" || location.pathname.startsWith("/exportar/");
+                    if (isReportsItem) {
+                      return (
+                        <button
+                          key={i.to}
+                          type="button"
+                          onClick={() => { setMobileOpen(false); setReportsOpen(true); }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "10px 10px",
+                            borderRadius: 14,
+                            border: "1px solid " + (reportsActive ? "rgba(255,159,26,.18)" : "transparent"),
+                            background: reportsActive ? "rgba(255,159,26,.08)" : "transparent",
+                            color: "white",
+                            cursor: "pointer",
+                            width: "100%",
+                            textAlign: "left",
+                          }}
+                        >
+                          <span
+                            style={{
+                              position: "relative",
+                              height: 36,
+                              width: 36,
+                              borderRadius: 12,
+                              display: "grid",
+                              placeItems: "center",
+                              background: "rgba(255,255,255,.06)",
+                              border: "1px solid rgba(255,255,255,.10)",
+                            }}
+                          >
+                            <Icon size={18} />
+                          </span>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontWeight: 900, color: "rgba(255,255,255,.92)" }}>{i.label}</div>
+                            <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(255,255,255,.45)" }}>{i.group || "—"}</div>
+                          </div>
+                        </button>
+                      );
+                    }
                     return (
                       <NavLink
                         key={i.to}
@@ -885,6 +1022,111 @@ function AppShell() {
                 </div>
               </div>
             </div>
+          </div>
+        ) : null}
+
+        {/* ===== Gaveta de Relatórios ===== */}
+        {reportsOpen ? (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 130,
+              background: "rgba(0,0,0,.52)",
+              backdropFilter: "blur(6px)",
+            }}
+            onClick={() => setReportsOpen(false)}
+          >
+            <aside
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                width: "min(380px, 92vw)",
+                background: "linear-gradient(180deg, rgba(11,15,20,.99), rgba(5,8,12,.99))",
+                borderLeft: "1px solid rgba(255,255,255,0.10)",
+                boxShadow: "-30px 0 80px rgba(0,0,0,.55)",
+                padding: 18,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 950, color: "rgba(255,255,255,.46)", textTransform: "uppercase", letterSpacing: 1 }}>Relatórios</div>
+                    <div style={{ marginTop: 4, fontSize: 22, fontWeight: 950, color: "white", letterSpacing: -0.4 }}>Escolha uma opção</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReportsOpen(false)}
+                    aria-label="Fechar relatórios"
+                    style={{
+                      height: 42,
+                      width: 42,
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      cursor: "pointer",
+                      color: "white",
+                      display: "grid",
+                      placeItems: "center",
+                    }}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 18, display: "grid", gap: 12 }}>
+                  {reportOptions.map((option) => {
+                    const OptionIcon = option.icon;
+                    const active = location.pathname === "/exportar" && location.search.includes(option.to.split("?")[1] || "");
+                    return (
+                      <Link
+                        key={option.to}
+                        to={option.to}
+                        onClick={() => setReportsOpen(false)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 14,
+                          padding: 16,
+                          borderRadius: 18,
+                          border: "1px solid " + (active ? "rgba(16,185,129,.36)" : "rgba(255,255,255,.10)"),
+                          background: active ? "rgba(16,185,129,.13)" : "rgba(255,255,255,.045)",
+                          textDecoration: "none",
+                          color: "white",
+                        }}
+                      >
+                        <span
+                          style={{
+                            height: 46,
+                            width: 46,
+                            borderRadius: 16,
+                            display: "grid",
+                            placeItems: "center",
+                            background: active ? "rgba(16,185,129,.16)" : "rgba(255,255,255,.07)",
+                            border: "1px solid rgba(255,255,255,.12)",
+                            flex: "0 0 auto",
+                          }}
+                        >
+                          <OptionIcon size={20} />
+                        </span>
+                        <span style={{ minWidth: 0, flex: 1 }}>
+                          <span style={{ display: "block", fontWeight: 950, fontSize: 17 }}>{option.label}</span>
+                          <span style={{ display: "block", marginTop: 4, color: "rgba(255,255,255,.56)", fontWeight: 750, fontSize: 12 }}>{option.description}</span>
+                        </span>
+                        <ChevronRight size={18} style={{ opacity: .65 }} />
+                      </Link>
+                    );
+                  })}
+                </div>
+
+                <div style={{ marginTop: "auto", color: "rgba(255,255,255,.48)", fontSize: 12, fontWeight: 800, lineHeight: 1.5 }}>
+                  A prévia abre direto no formato selecionado para facilitar a conferência.
+                </div>
+              </div>
+            </aside>
           </div>
         ) : null}
 
