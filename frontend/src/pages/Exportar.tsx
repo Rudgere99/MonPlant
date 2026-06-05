@@ -740,28 +740,28 @@ export default function Exportar() {
     const stops: any[] = [];
     for (const d of daysInput) {
       try {
-        const st = await apiGet<any[]>(`/api/stops?day=${d}`);
-        for (const item of st || []) stops.push(item);
+        const payload = await apiGet<{ day?: string; rows?: any[] }>(`/api/aggregate/stops-launch?day=${d}`);
+        for (const item of payload?.rows || []) stops.push({ ...item, __day: payload?.day || d });
       } catch {}
     }
 
     const rows = stops
       .map((s) => {
-        const day = String(pick(s, ["day", "data_turno", "data", "shift_day"]) || "").slice(0, 10);
+        const day = String(pick(s, ["__day", "day", "data_turno", "data", "shift_day"]) || "").slice(0, 10);
         const equip = String(pick(s, ["equipamento", "equipment", "eq", "tag", "planta"]) || "");
         const descricao = String(pick(s, ["descricao", "descricao_detalhada", "detail", "detalhe", "obs"]) || "");
-        const hi = shortTime(pick(s, ["hora_inicio", "hr_inicio", "time_ini", "hora_ini"])) || shortTime(pick(s, ["start_at", "inicio", "start", "dt_inicio", "data_inicio"]));
-        const hf = shortTime(pick(s, ["hora_fim", "hr_fim", "time_end", "hora_end"])) || shortTime(pick(s, ["end_at", "fim", "end", "dt_fim", "data_fim"]));
-        const tempo = stopDurationHours(s);
+        const hi = shortTime(pick(s, ["hora_inicial", "hora_inicio", "hr_inicio", "time_ini", "hora_ini"]));
+        const hf = shortTime(pick(s, ["hora_final", "hora_fim", "hr_fim", "time_end", "hora_end"]));
+        const minutos = Number(pick(s, ["minutos", "minutes", "tempo_min", "duration_min"]) ?? NaN);
 
         return {
           dia: day ? fmtDate(day) : "-",
           equipamento: equip || "-",
           hi: hi || "-",
           hf: hf || "-",
-          tempo: `${fmtNum(tempo, 2)} h`,
+          tempo: Number.isFinite(minutos) ? `${fmtNum(minutos, 0)} min` : "-",
           descricao: descricao || "-",
-          __sort: `${day} ${hi}`,
+          __sort: `${day} ${hi} ${String(pick(s, ["ordem"]) || "")}`,
         };
       })
       .filter((row) => {
@@ -777,7 +777,7 @@ export default function Exportar() {
 
     return {
       title: "Paradas",
-      subtitle: "Dia, equipamento, H.I, H.F, tempo parado e descrição.",
+      subtitle: "Dados puxados da API de Paradas Minutos.",
       columns: PARADAS_PREVIEW_COLUMNS,
       rows: rows.slice(0, 50).map(({ __sort, ...rest }) => rest),
       total: rows.length,
