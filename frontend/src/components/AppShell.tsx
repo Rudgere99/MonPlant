@@ -17,7 +17,6 @@ import {
   Menu,
   X,
   ChevronRight,
-  History,
   ChevronsLeft,
   ChevronsRight,
   User as UserIcon,
@@ -51,12 +50,10 @@ const nav: NavItem[] = [
   // ===== APP =====
   { to: "/producao-planta", label: "Produção Planta", icon: Factory, group: "Produção" },
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
-  { to: "/paradas", label: "Paradas Horas", icon: PauseCircle, group: "Operação" },
   { to: "/lancamento-paradas", label: "Paradas Minutos", icon: PauseCircle, group: "Operação" },
   { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
 
 
-  { to: "/historico", label: "Histórico", icon: History, group: "Operação" },
   { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
   { to: "/exportar", label: "Relatórios", icon: FileSpreadsheet, group: "Utilitários" },
 ];

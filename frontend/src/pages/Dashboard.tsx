@@ -2344,8 +2344,8 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
             {!rangeMode ? (
               <div style={{ display: "flex", gap: 10 }}>
-                <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/paradas")}>
-                  Abrir Paradas
+                <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/lancamento-paradas")}>
+                  Abrir Paradas Minutos
                 </button>
                 <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
                   Abrir Horímetros
@@ -2368,14 +2368,14 @@ const EXPECTED_TON_H = metaHoraEsperada;
                   title="Última Parada"
                   value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
                   sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
-                  onClick={() => nav("/paradas")}
+                  onClick={() => nav("/lancamento-paradas")}
                 />
                 <MiniStat
                   icon="📌"
                   title="Total de Paradas"
                   value={String(totalStops)}
                   sub={`Dia ${brDate(day)}`}
-                  onClick={() => nav("/paradas")}
+                  onClick={() => nav("/lancamento-paradas")}
                 />
                 <MiniStat
                   icon="⏱"

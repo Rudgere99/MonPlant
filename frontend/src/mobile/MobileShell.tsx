@@ -11,10 +11,8 @@ type Tab =
   | "ritmo"
   | "stats"
   | "ufdf"
-  | "paradas"
   | "paradas-minutos"
   | "horimetros"
-  | "historico"
   | "metas"
   | "exportar"
   | "configuracoes"
@@ -30,10 +28,8 @@ const MOBILE_NAV_ITEMS: Array<{ key: Tab; to: string; label: string }> = [
   { key: "ritmo", to: "/m/ritmo", label: "Ritmo" },
   { key: "stats", to: "/m/statisticas", label: "Estatísticas" },
   { key: "ufdf", to: "/m/ufdf", label: "UF/DF" },
-  { key: "paradas", to: "/m/paradas", label: "Paradas Horas" },
   { key: "paradas-minutos", to: "/m/lancamento-paradas", label: "Paradas Minutos" },
   { key: "horimetros", to: "/m/horimetros", label: "Horímetros" },
-  { key: "historico", to: "/m/historico", label: "Histórico" },
   { key: "metas", to: "/m/metas", label: "Metas" },
   { key: "exportar", to: "/m/exportar", label: "Relatórios" },
   { key: "configuracoes", to: "/m/configuracoes", label: "Configurações" },
