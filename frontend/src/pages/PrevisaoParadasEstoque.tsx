@@ -12,6 +12,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -90,7 +91,7 @@ type ResumoMensal = {
 
 const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(
   /\/+$/,
-  ""
+  "",
 );
 
 const CHART_AZUL = "#0ea5e9";
@@ -106,7 +107,10 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function buscarJsonComTimeout<T>(url: string, timeoutMs = 20000): Promise<T> {
+async function buscarJsonComTimeout<T>(
+  url: string,
+  timeoutMs = 20000,
+): Promise<T> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
@@ -280,6 +284,14 @@ function formatarToneladas(valor: number) {
   });
 }
 
+function formatarLabelGrafico(valor: any) {
+  const numero = Number(valor || 0);
+  return numero.toLocaleString("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
 function formatarDataHora(data?: string | null) {
   if (!data) return "-";
 
@@ -323,7 +335,10 @@ function listarDiasPeriodo(inicio: string, fim: string) {
   const dataInicial = new Date(`${inicio}T00:00:00`);
   const dataFinal = new Date(`${fim}T00:00:00`);
 
-  if (Number.isNaN(dataInicial.getTime()) || Number.isNaN(dataFinal.getTime())) {
+  if (
+    Number.isNaN(dataInicial.getTime()) ||
+    Number.isNaN(dataFinal.getTime())
+  ) {
     return dias;
   }
 
@@ -342,7 +357,8 @@ function transformarLinhaAgregada(day: string, row: AggregateStopRow): Parada {
   const minutos = Number(row.minutos ?? row.minutes ?? 0);
   const inicio =
     criarDataHora(day, row.hora_inicial) || periodoParaInicio(day, row.period);
-  const fim = criarDataHora(day, row.hora_final) || adicionarMinutos(inicio, minutos);
+  const fim =
+    criarDataHora(day, row.hora_final) || adicionarMinutos(inicio, minutos);
 
   return {
     id: row.id || `${day}-${row.plant_id || 1}-${row.period}-${row.ordem || 1}`,
@@ -373,7 +389,9 @@ function obterNomeMes(chave: string) {
   if (chave === "Sem data") return "Sem data";
   const [ano, mes] = chave.split("-").map(Number);
   const data = new Date(ano, mes - 1, 1);
-  return data.toLocaleDateString("pt-BR", { month: "long" }).replace(/^./, (c) => c.toUpperCase());
+  return data
+    .toLocaleDateString("pt-BR", { month: "long" })
+    .replace(/^./, (c) => c.toUpperCase());
 }
 
 function obterPeriodoAnalise(inicio: string, fim: string) {
@@ -436,7 +454,7 @@ function ehParadaEstoque(parada: Parada) {
   const texto = normalizarTexto(obterObservacaoCompleta(parada));
 
   return palavrasChaveEstoque.some((palavra) =>
-    texto.includes(normalizarTexto(palavra))
+    texto.includes(normalizarTexto(palavra)),
   );
 }
 
@@ -468,15 +486,15 @@ export default function PrevisaoParadasEstoque() {
       const respostas = await Promise.all(
         dias.map((day) =>
           buscarJsonComTimeout<AggregateStopsPayload>(
-            `${API_BASE}/api/aggregate/stops-launch?day=${encodeURIComponent(day)}`
-          )
-        )
+            `${API_BASE}/api/aggregate/stops-launch?day=${encodeURIComponent(day)}`,
+          ),
+        ),
       );
 
       const paradasAgregadas = respostas.flatMap((payload) =>
         (payload.rows || []).map((row) =>
-          transformarLinhaAgregada(payload.day, row)
-        )
+          transformarLinhaAgregada(payload.day, row),
+        ),
       );
 
       setParadas(paradasAgregadas);
@@ -491,7 +509,7 @@ export default function PrevisaoParadasEstoque() {
   const paradasFiltradas = useMemo(() => {
     return paradas.filter((parada) => {
       const plantaNormalizada = obterPlantaNormalizada(
-        parada.planta || parada.unidade || parada.equipamento
+        parada.planta || parada.unidade || parada.equipamento,
       );
 
       const passaPlanta =
@@ -512,7 +530,7 @@ export default function PrevisaoParadasEstoque() {
       const minutos = obterDuracaoMinutos(parada);
       const horas = minutos / 60;
       const plantaNormalizada = obterPlantaNormalizada(
-        parada.planta || parada.unidade || parada.equipamento
+        parada.planta || parada.unidade || parada.equipamento,
       );
       const metaHora = metaHoraPorPlanta[plantaNormalizada] || 0;
 
@@ -525,8 +543,8 @@ export default function PrevisaoParadasEstoque() {
       1,
       Math.ceil(
         (new Date(dataFim).getTime() - new Date(dataInicio).getTime()) /
-          86400000
-      ) + 1
+          86400000,
+      ) + 1,
     );
 
     const mediaHorasParadasDia = totalHoras / diasPeriodo;
@@ -553,7 +571,7 @@ export default function PrevisaoParadasEstoque() {
       const minutos = obterDuracaoMinutos(parada);
       const horas = minutos / 60;
       const plantaNormalizada = obterPlantaNormalizada(
-        parada.planta || parada.unidade || parada.equipamento
+        parada.planta || parada.unidade || parada.equipamento,
       );
       const metaHora = metaHoraPorPlanta[plantaNormalizada] || 0;
       const toneladas = horas * metaHora;
@@ -574,7 +592,9 @@ export default function PrevisaoParadasEstoque() {
       mapa.set(chave, atual);
     });
 
-    return Array.from(mapa.values()).sort((a, b) => a.chave.localeCompare(b.chave));
+    return Array.from(mapa.values()).sort((a, b) =>
+      a.chave.localeCompare(b.chave),
+    );
   }, [paradasFiltradas]);
 
   const rankingCausas = useMemo(() => {
@@ -588,7 +608,7 @@ export default function PrevisaoParadasEstoque() {
       const minutos = obterDuracaoMinutos(parada);
       const horas = minutos / 60;
       const plantaNormalizada = obterPlantaNormalizada(
-        parada.planta || parada.unidade || parada.equipamento
+        parada.planta || parada.unidade || parada.equipamento,
       );
       const toneladas = horas * (metaHoraPorPlanta[plantaNormalizada] || 0);
 
@@ -652,7 +672,8 @@ export default function PrevisaoParadasEstoque() {
                     MonPlant • Estoque
                   </p>
                   <h1 className="mt-2 max-w-4xl text-3xl font-black leading-tight tracking-tight text-sky-100 md:text-5xl">
-                    Relatório de Horas de Paradas Operacionais da Planta e Toneladas Perdidas
+                    Relatório de Horas de Paradas Operacionais da Planta e
+                    Toneladas Perdidas
                   </h1>
                   <p className="mt-3 text-lg font-extrabold text-emerald-400">
                     Análise mensal — {obterPeriodoAnalise(dataInicio, dataFim)}
@@ -712,8 +733,16 @@ export default function PrevisaoParadasEstoque() {
 
             <CardIndicador
               titulo="Maior Impacto"
-              valor={maiorImpacto ? `${maiorImpacto.mes} — ${formatarDecimal(maiorImpacto.horas)} h` : "Sem dados"}
-              subtitulo={maiorImpacto ? `${formatarDecimal(maiorImpacto.toneladas)} t perdidas` : "Aguardando lançamentos"}
+              valor={
+                maiorImpacto
+                  ? `${maiorImpacto.mes} — ${formatarDecimal(maiorImpacto.horas)} h`
+                  : "Sem dados"
+              }
+              subtitulo={
+                maiorImpacto
+                  ? `${formatarDecimal(maiorImpacto.toneladas)} t perdidas`
+                  : "Aguardando lançamentos"
+              }
               icone={<BarChart3 size={34} />}
               variante="azul"
             />
@@ -726,12 +755,30 @@ export default function PrevisaoParadasEstoque() {
               cor="azul"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={resumoMensal} margin={{ top: 24, right: 22, bottom: 10, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
-                  <XAxis dataKey="mes" stroke="#cbd5e1" tick={{ fontSize: 12 }} />
+                <BarChart
+                  data={resumoMensal}
+                  margin={{ top: 24, right: 22, bottom: 10, left: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(148,163,184,0.18)"
+                  />
+                  <XAxis
+                    dataKey="mes"
+                    stroke="#cbd5e1"
+                    tick={{ fontSize: 12 }}
+                  />
                   <YAxis stroke="#cbd5e1" />
                   <Tooltip content={<GraficoTooltip unidade="h" />} />
                   <Bar dataKey="horas" name="Horas" radius={[8, 8, 0, 0]}>
+                    <LabelList
+                      dataKey="horas"
+                      position="top"
+                      formatter={formatarLabelGrafico}
+                      fill="#bae6fd"
+                      fontSize={13}
+                      fontWeight={900}
+                    />
                     {resumoMensal.map((_, index) => (
                       <Cell key={index} fill={CHART_AZUL} />
                     ))}
@@ -746,12 +793,34 @@ export default function PrevisaoParadasEstoque() {
               cor="verde"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={resumoMensal} margin={{ top: 24, right: 22, bottom: 10, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
-                  <XAxis dataKey="mes" stroke="#cbd5e1" tick={{ fontSize: 12 }} />
+                <BarChart
+                  data={resumoMensal}
+                  margin={{ top: 24, right: 22, bottom: 10, left: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(148,163,184,0.18)"
+                  />
+                  <XAxis
+                    dataKey="mes"
+                    stroke="#cbd5e1"
+                    tick={{ fontSize: 12 }}
+                  />
                   <YAxis stroke="#cbd5e1" />
                   <Tooltip content={<GraficoTooltip unidade="t" />} />
-                  <Bar dataKey="toneladas" name="Toneladas" radius={[8, 8, 0, 0]}>
+                  <Bar
+                    dataKey="toneladas"
+                    name="Toneladas"
+                    radius={[8, 8, 0, 0]}
+                  >
+                    <LabelList
+                      dataKey="toneladas"
+                      position="top"
+                      formatter={formatarLabelGrafico}
+                      fill="#a7f3d0"
+                      fontSize={13}
+                      fontWeight={900}
+                    />
                     {resumoMensal.map((_, index) => (
                       <Cell key={index} fill={CHART_VERDE} />
                     ))}
@@ -772,9 +841,13 @@ export default function PrevisaoParadasEstoque() {
                   <thead>
                     <tr className="border-b border-white/10 bg-white/[0.03] text-sky-100">
                       <th className="px-4 py-3 text-left">Mês</th>
-                      <th className="px-4 py-3 text-right">Horas de Paradas Operacionais da Planta</th>
+                      <th className="px-4 py-3 text-right">
+                        Horas de Paradas Operacionais da Planta
+                      </th>
                       <th className="px-4 py-3 text-right">Produção Horária</th>
-                      <th className="px-4 py-3 text-right">Perda em Toneladas</th>
+                      <th className="px-4 py-3 text-right">
+                        Perda em Toneladas
+                      </th>
                       <th className="px-4 py-3 text-right">Eventos</th>
                     </tr>
                   </thead>
@@ -782,24 +855,43 @@ export default function PrevisaoParadasEstoque() {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-zinc-400">
+                        <td
+                          colSpan={5}
+                          className="px-4 py-8 text-center text-zinc-400"
+                        >
                           Carregando paradas de estoque...
                         </td>
                       </tr>
                     ) : resumoMensal.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-zinc-400">
+                        <td
+                          colSpan={5}
+                          className="px-4 py-8 text-center text-zinc-400"
+                        >
                           Nenhuma parada de estoque encontrada no período.
                         </td>
                       </tr>
                     ) : (
                       resumoMensal.map((item) => (
-                        <tr key={item.chave} className="border-b border-white/10 hover:bg-white/[0.04]">
-                          <td className="px-4 py-3 font-black text-sky-100">{item.mes}</td>
-                          <td className="px-4 py-3 text-right">{formatarDecimal(item.horas)} h</td>
-                          <td className="px-4 py-3 text-right">{formatarDecimal(item.mediaProducao)} t/h</td>
-                          <td className="px-4 py-3 text-right font-bold text-emerald-300">{formatarDecimal(item.toneladas)} t</td>
-                          <td className="px-4 py-3 text-right">{item.eventos}</td>
+                        <tr
+                          key={item.chave}
+                          className="border-b border-white/10 hover:bg-white/[0.04]"
+                        >
+                          <td className="px-4 py-3 font-black text-sky-100">
+                            {item.mes}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {formatarDecimal(item.horas)} h
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {formatarDecimal(item.mediaProducao)} t/h
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-emerald-300">
+                            {formatarDecimal(item.toneladas)} t
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {item.eventos}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -816,9 +908,13 @@ export default function PrevisaoParadasEstoque() {
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3">
                   <div className="rounded-2xl bg-black/25 p-4">
-                    <p className="text-xs text-zinc-400">Horas previstas / 30 dias</p>
+                    <p className="text-xs text-zinc-400">
+                      Horas previstas / 30 dias
+                    </p>
                     <p className="mt-2 text-2xl font-black text-orange-200">
-                      {formatarHoras(Math.round(dadosCalculados.previsaoHorasMes * 60))}
+                      {formatarHoras(
+                        Math.round(dadosCalculados.previsaoHorasMes * 60),
+                      )}
                     </p>
                   </div>
                   <div className="rounded-2xl bg-black/25 p-4">
@@ -829,24 +925,36 @@ export default function PrevisaoParadasEstoque() {
                   </div>
                 </div>
                 <p className="mt-4 text-sm leading-relaxed text-zinc-300">
-                  Projeção calculada pela média diária do período filtrado, mantendo a taxa atual de perdas por restrição de estoque.
+                  Projeção calculada pela média diária do período filtrado,
+                  mantendo a taxa atual de perdas por restrição de estoque.
                 </p>
               </div>
 
               <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-black text-sky-100">Causas identificadas</h2>
+                  <h2 className="text-lg font-black text-sky-100">
+                    Causas identificadas
+                  </h2>
                   <PackageX className="text-emerald-400" />
                 </div>
                 <div className="space-y-3">
                   {rankingCausas.length === 0 ? (
-                    <p className="text-sm text-zinc-400">Sem causas classificadas no período.</p>
+                    <p className="text-sm text-zinc-400">
+                      Sem causas classificadas no período.
+                    </p>
                   ) : (
                     rankingCausas.slice(0, 5).map((item) => (
-                      <div key={item.causa} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <div
+                        key={item.causa}
+                        className="rounded-2xl border border-white/10 bg-black/20 p-3"
+                      >
                         <div className="flex items-center justify-between gap-3">
-                          <span className="font-bold text-zinc-100">{item.causa}</span>
-                          <span className="text-sm font-black text-emerald-300">{formatarDecimal(item.horas)} h</span>
+                          <span className="font-bold text-zinc-100">
+                            {item.causa}
+                          </span>
+                          <span className="text-sm font-black text-emerald-300">
+                            {formatarDecimal(item.horas)} h
+                          </span>
                         </div>
                         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
                           <div
@@ -855,14 +963,16 @@ export default function PrevisaoParadasEstoque() {
                               width: `${Math.min(
                                 100,
                                 dadosCalculados.totalHoras > 0
-                                  ? (item.horas / dadosCalculados.totalHoras) * 100
-                                  : 0
+                                  ? (item.horas / dadosCalculados.totalHoras) *
+                                      100
+                                  : 0,
                               )}%`,
                             }}
                           />
                         </div>
                         <p className="mt-2 text-xs text-zinc-400">
-                          {item.eventos} evento(s) • {formatarToneladas(item.toneladas)} t perdidas
+                          {item.eventos} evento(s) •{" "}
+                          {formatarToneladas(item.toneladas)} t perdidas
                         </p>
                       </div>
                     ))
@@ -875,15 +985,20 @@ export default function PrevisaoParadasEstoque() {
           <section className="rounded-3xl border border-sky-500/20 bg-[#071827]/90 p-5">
             <div className="mb-4 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
               <div>
-                <h2 className="text-lg font-black text-sky-100">Detalhamento das Paradas de Estoque</h2>
+                <h2 className="text-lg font-black text-sky-100">
+                  Detalhamento das Paradas de Estoque
+                </h2>
                 <p className="text-sm text-zinc-400">
-                  Eventos classificados por descrição, observação, motivo ou causa.
+                  Eventos classificados por descrição, observação, motivo ou
+                  causa.
                 </p>
               </div>
 
               <div className="text-sm text-zinc-400">
                 Total encontrado:{" "}
-                <span className="font-black text-emerald-400">{paradasFiltradas.length}</span>
+                <span className="font-black text-emerald-400">
+                  {paradasFiltradas.length}
+                </span>
               </div>
             </div>
 
@@ -895,7 +1010,9 @@ export default function PrevisaoParadasEstoque() {
                     <th className="px-3 py-3 text-left">Início</th>
                     <th className="px-3 py-3 text-left">Fim</th>
                     <th className="px-3 py-3 text-left">Classificação</th>
-                    <th className="px-3 py-3 text-left">Observação/Descrição</th>
+                    <th className="px-3 py-3 text-left">
+                      Observação/Descrição
+                    </th>
                     <th className="px-3 py-3 text-right">Horas</th>
                     <th className="px-3 py-3 text-right">Perda Estimada</th>
                   </tr>
@@ -904,13 +1021,19 @@ export default function PrevisaoParadasEstoque() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-zinc-400">
+                      <td
+                        colSpan={7}
+                        className="py-8 text-center text-zinc-400"
+                      >
                         Carregando paradas...
                       </td>
                     </tr>
                   ) : paradasFiltradas.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-zinc-400">
+                      <td
+                        colSpan={7}
+                        className="py-8 text-center text-zinc-400"
+                      >
                         Nenhuma parada de estoque encontrada no período.
                       </td>
                     </tr>
@@ -919,18 +1042,30 @@ export default function PrevisaoParadasEstoque() {
                       const minutos = obterDuracaoMinutos(parada);
                       const horas = minutos / 60;
                       const plantaNormalizada = obterPlantaNormalizada(
-                        parada.planta || parada.unidade || parada.equipamento
+                        parada.planta || parada.unidade || parada.equipamento,
                       );
-                      const perda = horas * (metaHoraPorPlanta[plantaNormalizada] || 0);
+                      const perda =
+                        horas * (metaHoraPorPlanta[plantaNormalizada] || 0);
 
                       return (
-                        <tr key={parada.id} className="border-b border-white/10 hover:bg-white/[0.04]">
+                        <tr
+                          key={parada.id}
+                          className="border-b border-white/10 hover:bg-white/[0.04]"
+                        >
                           <td className="px-3 py-3">
-                            {obterNomePlanta(parada.planta || parada.unidade || parada.equipamento)}
+                            {obterNomePlanta(
+                              parada.planta ||
+                                parada.unidade ||
+                                parada.equipamento,
+                            )}
                           </td>
-                          <td className="px-3 py-3">{formatarDataHora(obterInicio(parada))}</td>
                           <td className="px-3 py-3">
-                            {obterFim(parada) ? formatarDataHora(obterFim(parada)) : "Em aberto"}
+                            {formatarDataHora(obterInicio(parada))}
+                          </td>
+                          <td className="px-3 py-3">
+                            {obterFim(parada)
+                              ? formatarDataHora(obterFim(parada))
+                              : "Em aberto"}
                           </td>
                           <td className="px-3 py-3 font-bold text-emerald-300">
                             {classificarCausaEstoque(parada)}
@@ -938,7 +1073,9 @@ export default function PrevisaoParadasEstoque() {
                           <td className="max-w-[520px] px-3 py-3 text-zinc-300">
                             {obterObservacaoCompleta(parada) || "-"}
                           </td>
-                          <td className="px-3 py-3 text-right">{formatarDecimal(horas)} h</td>
+                          <td className="px-3 py-3 text-right">
+                            {formatarDecimal(horas)} h
+                          </td>
                           <td className="px-3 py-3 text-right font-bold">
                             {formatarToneladas(perda)} t
                           </td>
@@ -956,7 +1093,11 @@ export default function PrevisaoParadasEstoque() {
               i
             </div>
             <p>
-              As horas informadas neste relatório referem-se às paradas operacionais da planta por pilha cheia, falta de área de estoque, cones cheios, pulmão cheio e restrições de recebimento. As toneladas perdidas são estimativas baseadas na meta horária cadastrada por planta.
+              As horas informadas neste relatório referem-se às paradas
+              operacionais da planta por pilha cheia, falta de área de estoque,
+              cones cheios, pulmão cheio e restrições de recebimento. As
+              toneladas perdidas são estimativas baseadas na meta horária
+              cadastrada por planta.
             </p>
           </footer>
         </div>
@@ -974,20 +1115,30 @@ function CardIndicador({
 }: CardIndicadorProps) {
   const estilo = {
     azul: "border-sky-500/25 from-sky-500/15 to-[#071827] text-sky-300",
-    verde: "border-emerald-500/25 from-emerald-500/15 to-[#071827] text-emerald-300",
-    laranja: "border-orange-500/25 from-orange-500/15 to-[#071827] text-orange-300",
+    verde:
+      "border-emerald-500/25 from-emerald-500/15 to-[#071827] text-emerald-300",
+    laranja:
+      "border-orange-500/25 from-orange-500/15 to-[#071827] text-orange-300",
   }[variante];
 
   return (
-    <div className={`rounded-3xl border bg-gradient-to-br ${estilo} p-5 shadow-xl shadow-black/20`}>
+    <div
+      className={`rounded-3xl border bg-gradient-to-br ${estilo} p-5 shadow-xl shadow-black/20`}
+    >
       <div className="flex items-center gap-5">
         <div className="grid h-20 w-20 flex-none place-items-center rounded-full bg-current/10 text-current ring-1 ring-current/20">
           {icone}
         </div>
         <div className="min-w-0">
-          <p className="text-base font-black leading-snug text-sky-100">{titulo}</p>
-          <p className="mt-2 text-4xl font-black tracking-tight text-white">{valor}</p>
-          <p className="mt-2 text-sm font-semibold text-zinc-400">{subtitulo}</p>
+          <p className="text-base font-black leading-snug text-sky-100">
+            {titulo}
+          </p>
+          <p className="mt-2 text-4xl font-black tracking-tight text-white">
+            {valor}
+          </p>
+          <p className="mt-2 text-sm font-semibold text-zinc-400">
+            {subtitulo}
+          </p>
         </div>
       </div>
     </div>
@@ -1005,12 +1156,17 @@ function PainelGrafico({
   cor: "azul" | "verde";
   children: React.ReactNode;
 }) {
-  const barra = cor === "verde" ? "from-emerald-600 to-emerald-500" : "from-[#075985] to-[#0b3b66]";
+  const barra =
+    cor === "verde"
+      ? "from-emerald-600 to-emerald-500"
+      : "from-[#075985] to-[#0b3b66]";
 
   return (
     <div className="rounded-3xl border border-sky-500/20 bg-[#071827]/90 p-5 shadow-xl shadow-black/20">
       <div className="mb-4 text-center">
-        <div className={`mx-auto inline-flex rounded-lg bg-gradient-to-r ${barra} px-6 py-2 text-lg font-black text-white shadow-lg`}>
+        <div
+          className={`mx-auto inline-flex rounded-lg bg-gradient-to-r ${barra} px-6 py-2 text-lg font-black text-white shadow-lg`}
+        >
           {titulo}
         </div>
         <p className="mt-2 text-sm text-zinc-400">{subtitulo}</p>
