@@ -50,6 +50,18 @@ type AggregateStopsPayload = {
   summaries_by_plant_period?: Record<string, any>;
 };
 
+type PlantProductionRow = {
+  period?: string;
+  ton?: number | string | null;
+  freq?: number | string | null;
+};
+
+type PlantProductionPayload = {
+  day: string;
+  plant_id?: number;
+  rows?: PlantProductionRow[];
+};
+
 type ParadaEstoque = {
   id: string;
   day: string;
@@ -76,9 +88,9 @@ type ResumoMensal = {
 
 const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
 
-const metaHoraPorPlanta: Record<string, number> = {
-  planta_01: 170,
-  planta_02: 170,
+const producaoHoraFallbackPorPlanta: Record<string, number> = {
+  planta_01: 0,
+  planta_02: 0,
 };
 
 const palavrasChaveEstoque = [
@@ -359,9 +371,32 @@ function classificarCausa(parada: ParadaEstoque) {
   return "Outras restrições";
 }
 
-function perdaEstimada(parada: ParadaEstoque) {
-  const metaHora = metaHoraPorPlanta[parada.planta] || 0;
-  return (parada.minutos / 60) * metaHora;
+function calcularMediaRealProducao(rows: PlantProductionRow[]) {
+  const linhasComProducao = rows.filter((row) => Number(row.ton || 0) > 0);
+  const producaoTotal = linhasComProducao.reduce(
+    (acc, row) => acc + Number(row.ton || 0),
+    0
+  );
+
+  const horasComProducao = linhasComProducao.length;
+
+  return {
+    producaoTotal,
+    horasComProducao,
+    mediaHora: horasComProducao > 0 ? producaoTotal / horasComProducao : 0,
+  };
+}
+
+function perdaEstimada(
+  parada: ParadaEstoque,
+  producaoHoraPorPlanta: Record<string, number>
+) {
+  const producaoHora =
+    producaoHoraPorPlanta[parada.planta] ||
+    producaoHoraFallbackPorPlanta[parada.planta] ||
+    0;
+
+  return (parada.minutos / 60) * producaoHora;
 }
 
 const BarValueLabel = (props: any) => {
@@ -460,6 +495,24 @@ export default function PrevisaoParadasEstoque() {
   const [dataFim, setDataFim] = useState(hoje);
   const [planta, setPlanta] = useState<PlantaFiltro>("todas");
   const [paradas, setParadas] = useState<ParadaEstoque[]>([]);
+  const [producaoHoraRealPorPlanta, setProducaoHoraRealPorPlanta] = useState<
+    Record<string, number>
+  >({
+    planta_01: 0,
+    planta_02: 0,
+  });
+  const [resumoProducaoReal, setResumoProducaoReal] = useState({
+    planta_01: {
+      producaoTotal: 0,
+      horasComProducao: 0,
+      mediaHora: 0,
+    },
+    planta_02: {
+      producaoTotal: 0,
+      horasComProducao: 0,
+      mediaHora: 0,
+    },
+  });
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -480,7 +533,7 @@ export default function PrevisaoParadasEstoque() {
         return;
       }
 
-      const respostas = await Promise.all(
+      const respostasParadas = await Promise.all(
         dias.map((day) =>
           apiGet<AggregateStopsPayload>(
             `/api/aggregate/stops-launch?day=${encodeURIComponent(day)}`
@@ -488,11 +541,46 @@ export default function PrevisaoParadasEstoque() {
         )
       );
 
-      const linhas = respostas.flatMap((payload) =>
-        (payload.rows || []).map((row) =>
-          transformarLinha(payload.day, row)
-        )
+      const linhas = respostasParadas.flatMap((payload) =>
+        (payload.rows || []).map((row) => transformarLinha(payload.day, row))
       );
+
+      const [producaoPlanta01, producaoPlanta02] = await Promise.all([
+        Promise.all(
+          dias.map((day) =>
+            apiGet<PlantProductionPayload>(
+              `/api/plants/1/plant-production/${encodeURIComponent(day)}`
+            ).catch(() => ({ day, plant_id: 1, rows: [] }))
+          )
+        ),
+        Promise.all(
+          dias.map((day) =>
+            apiGet<PlantProductionPayload>(
+              `/api/plants/2/plant-production/${encodeURIComponent(day)}`
+            ).catch(() => ({ day, plant_id: 2, rows: [] }))
+          )
+        ),
+      ]);
+
+      const linhasProducaoPlanta01 = producaoPlanta01.flatMap(
+        (payload) => payload.rows || []
+      );
+      const linhasProducaoPlanta02 = producaoPlanta02.flatMap(
+        (payload) => payload.rows || []
+      );
+
+      const mediaPlanta01 = calcularMediaRealProducao(linhasProducaoPlanta01);
+      const mediaPlanta02 = calcularMediaRealProducao(linhasProducaoPlanta02);
+
+      setResumoProducaoReal({
+        planta_01: mediaPlanta01,
+        planta_02: mediaPlanta02,
+      });
+
+      setProducaoHoraRealPorPlanta({
+        planta_01: mediaPlanta01.mediaHora,
+        planta_02: mediaPlanta02.mediaHora,
+      });
 
       setParadas(linhas);
     } catch (error: any) {
@@ -517,7 +605,7 @@ export default function PrevisaoParadasEstoque() {
     const totalMinutos = paradasFiltradas.reduce((acc, p) => acc + p.minutos, 0);
     const totalHoras = totalMinutos / 60;
     const toneladasPerdidas = paradasFiltradas.reduce(
-      (acc, p) => acc + perdaEstimada(p),
+      (acc, p) => acc + perdaEstimada(p, producaoHoraRealPorPlanta),
       0
     );
 
@@ -537,7 +625,7 @@ export default function PrevisaoParadasEstoque() {
       previsaoHorasMes,
       previsaoPerdaMes,
     };
-  }, [paradasFiltradas, dataInicio, dataFim]);
+  }, [paradasFiltradas, dataInicio, dataFim, producaoHoraRealPorPlanta]);
 
   const resumoMensal = useMemo<ResumoMensal[]>(() => {
     const mapa = new Map<string, ResumoMensal>();
@@ -556,7 +644,7 @@ export default function PrevisaoParadasEstoque() {
         };
 
       atual.horas += parada.minutos / 60;
-      atual.toneladas += perdaEstimada(parada);
+      atual.toneladas += perdaEstimada(parada, producaoHoraRealPorPlanta);
       atual.eventos += 1;
       atual.mediaProducao = atual.horas > 0 ? atual.toneladas / atual.horas : 0;
 
@@ -571,7 +659,7 @@ export default function PrevisaoParadasEstoque() {
         toneladas: Number(item.toneladas.toFixed(0)),
         mediaProducao: Number(item.mediaProducao.toFixed(1)),
       }));
-  }, [paradasFiltradas]);
+  }, [paradasFiltradas, producaoHoraRealPorPlanta]);
 
   const rankingCausas = useMemo(() => {
     const mapa = new Map<
@@ -591,7 +679,7 @@ export default function PrevisaoParadasEstoque() {
         };
 
       atual.horas += parada.minutos / 60;
-      atual.toneladas += perdaEstimada(parada);
+      atual.toneladas += perdaEstimada(parada, producaoHoraRealPorPlanta);
       atual.eventos += 1;
 
       mapa.set(causa, atual);
@@ -604,7 +692,7 @@ export default function PrevisaoParadasEstoque() {
         horas: Number(item.horas.toFixed(1)),
         toneladas: Number(item.toneladas.toFixed(0)),
       }));
-  }, [paradasFiltradas]);
+  }, [paradasFiltradas, producaoHoraRealPorPlanta]);
 
   const maiorImpacto = useMemo(() => {
     if (!resumoMensal.length) return null;
@@ -988,6 +1076,43 @@ export default function PrevisaoParadasEstoque() {
           line-height: 1.45;
         }
 
+        .pe-production-ref {
+          margin-top: 14px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+
+        .pe-production-ref div {
+          border-radius: 14px;
+          border: 1px solid rgba(148,163,184,0.14);
+          background: rgba(2,6,23,0.35);
+          padding: 12px;
+        }
+
+        .pe-production-ref span {
+          display: block;
+          color: rgba(226,232,240,0.62);
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .pe-production-ref b {
+          display: block;
+          margin-top: 4px;
+          color: #fff;
+          font-size: 18px;
+          font-weight: 950;
+        }
+
+        .pe-production-ref small {
+          display: block;
+          margin-top: 4px;
+          color: rgba(226,232,240,0.48);
+          font-size: 11px;
+          font-weight: 750;
+        }
+
         .pe-cause-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1263,7 +1388,7 @@ export default function PrevisaoParadasEstoque() {
             <CardIndicador
               titulo="Total de Toneladas Perdidas"
               valor={`${formatarToneladas(dados.toneladasPerdidas)} t`}
-              subtitulo="Estimativa por meta horária da planta"
+              subtitulo="Estimativa pela média real de produção"
               icone={<TrendingDown size={34} />}
               variante="verde"
             />
@@ -1317,7 +1442,7 @@ export default function PrevisaoParadasEstoque() {
 
             <PainelGrafico
               titulo="Perda em Toneladas por Mês"
-              subtitulo="Estimativa com base na meta horária da planta"
+              subtitulo="Produção total / horas com produção"
               cor="verde"
             >
               <ResponsiveContainer width="100%" height="100%">
@@ -1412,14 +1537,38 @@ export default function PrevisaoParadasEstoque() {
               </div>
 
               <div className="pe-row-metric">
-                <span>Média perdida</span>
+                <span>Média real usada</span>
                 <b>{formatarDecimal(dados.mediaPerdaHora)} t/h</b>
               </div>
 
               <p className="pe-note">
-                Projeção calculada pela média diária do período filtrado, mantendo a taxa atual
-                de perdas por restrição de estoque.
+                Projeção calculada pela média diária do período filtrado, usando a média real
+                de produção do próprio período: produção total dividida pelas horas com produção.
               </p>
+
+              <div className="pe-production-ref">
+                <div>
+                  <span>Planta 01</span>
+                  <b>
+                    {formatarDecimal(resumoProducaoReal.planta_01.mediaHora)} t/h
+                  </b>
+                  <small>
+                    {formatarToneladas(resumoProducaoReal.planta_01.producaoTotal)} t /{" "}
+                    {resumoProducaoReal.planta_01.horasComProducao} h produtivas
+                  </small>
+                </div>
+
+                <div>
+                  <span>Planta 02</span>
+                  <b>
+                    {formatarDecimal(resumoProducaoReal.planta_02.mediaHora)} t/h
+                  </b>
+                  <small>
+                    {formatarToneladas(resumoProducaoReal.planta_02.producaoTotal)} t /{" "}
+                    {resumoProducaoReal.planta_02.horasComProducao} h produtivas
+                  </small>
+                </div>
+              </div>
             </div>
 
             <div className="pe-card pe-panel">
@@ -1495,7 +1644,7 @@ export default function PrevisaoParadasEstoque() {
                         <td>{parada.equipamento || "-"}</td>
                         <td>{parada.observacaoCompleta || "-"}</td>
                         <td className="right">{formatarDecimal(parada.minutos / 60)} h</td>
-                        <td className="right strong">{formatarToneladas(perdaEstimada(parada))} t</td>
+                        <td className="right strong">{formatarToneladas(perdaEstimada(parada, producaoHoraRealPorPlanta))} t</td>
                       </tr>
                     ))
                   )}
@@ -1510,7 +1659,7 @@ export default function PrevisaoParadasEstoque() {
               A busca é feita nos lançamentos de Paradas Minutos, comparando a descrição com
               palavras-chave como <b>cone cheio</b>, <b>pilha cheia</b>, <b>falta de estoque</b>,
               <b> falta de área de estoque</b>, <b>pulmão cheio</b> e <b>restrição de estoque</b>.
-              As toneladas perdidas são estimadas pela meta horária cadastrada no código da página.
+              As toneladas perdidas são estimadas pela média real de produção da planta no período filtrado.
             </div>
           </footer>
 
