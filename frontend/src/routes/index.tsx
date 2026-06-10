@@ -19,6 +19,7 @@ import DesvioProducao from "../pages/DesvioProducao";
 import Configuracoes from "../pages/Configuracoes";
 import Equipamentos from "../pages/Equipamentos";
 import SupervisoresPlanta from "../pages/SupervisoresPlanta";
+import PrevisaoParadasEstoque from "../pages/PrevisaoParadasEstoque";
 
 import Horimetros from "../pages/Horimetros";
 import LancamentoParadas from "../pages/LancamentoParadas";
@@ -80,6 +81,7 @@ function MobileWrap({
     | "ufdf"
     | "paradas"
     | "paradas-minutos"
+    | "previsao-paradas-estoque"
     | "horimetros"
     | "metas"
     | "exportar"
@@ -225,6 +227,16 @@ export function AppRoutes() {
           <RequireAuth>
             <MobileWrap title="Paradas Minutos" tab="paradas-minutos">
               <LancamentoParadas />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/previsao-paradas-estoque"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Previsão Estoque" tab="previsao-paradas-estoque">
+              <PrevisaoParadasEstoque />
             </MobileWrap>
           </RequireAuth>
         }
@@ -435,6 +447,14 @@ export function AppRoutes() {
           element={
             <RequireRole>
               <LancamentoParadas />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="previsao-paradas-estoque"
+          element={
+            <RequireRole>
+              <PrevisaoParadasEstoque />
             </RequireRole>
           }
         />
