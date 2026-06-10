@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
-  Box,
   CalendarDays,
   Clock,
   Factory,
@@ -16,71 +15,92 @@ import {
   CartesianGrid,
   Cell,
   LabelList,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
-/* =========================================================
-   Página: Previsão de Paradas por Estoque
-   Padrão visual: MonPlant dark / dashboard executivo
-   ========================================================= */
-
 type PlantaFiltro = "todas" | "planta_01" | "planta_02";
 
-type Parada = {
-  id: number | string;
-  planta?: "planta_01" | "planta_02" | string;
-  unidade?: string;
+type StopLaunchRow = {
+  id?: number | string | null;
+  day?: string;
+  plant_id?: number | string;
+  period?: string;
+  ordem?: number;
   equipamento?: string;
-
-  inicio?: string;
-  fim?: string | null;
-  data_inicio?: string;
-  data_fim?: string | null;
-  started_at?: string;
-  ended_at?: string | null;
-
-  causa?: string;
-  motivo?: string;
-  observacao?: string;
-  observação?: string;
+  equipment?: string;
+  tipo_parada?: string;
+  stop_type?: string;
   descricao?: string;
-  descrição?: string;
-  justificativa?: string;
-
-  duracao_minutos?: number;
-  duracao?: number;
+  description?: string;
+  minutos?: number;
+  minutes?: number;
+  hora_inicial?: string;
+  hora_final?: string;
+  justificativa_baixa_producao?: string;
 };
 
-type CardIndicadorProps = {
-  titulo: string;
-  valor: string;
-  subtitulo: string;
-  icon: React.ReactNode;
-  accent?: "blue" | "green" | "orange";
+type AggregateStopsPayload = {
+  day: string;
+  scope?: string;
+  obs?: string;
+  rows?: StopLaunchRow[];
+  summaries_by_plant_period?: Record<string, any>;
 };
 
-const API_BASE =
-  (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
+type ParadaEstoque = {
+  id: string;
+  day: string;
+  planta: "planta_01" | "planta_02";
+  plant_id: number;
+  period: string;
+  equipamento: string;
+  tipo_parada: string;
+  descricao: string;
+  observacaoCompleta: string;
+  minutos: number;
+  hora_inicial: string;
+  hora_final: string;
+};
+
+type ResumoMensal = {
+  chave: string;
+  mes: string;
+  horas: number;
+  toneladas: number;
+  mediaProducao: number;
+  eventos: number;
+};
+
+const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
+
+const metaHoraPorPlanta: Record<string, number> = {
+  planta_01: 170,
+  planta_02: 170,
+};
 
 const palavrasChaveEstoque = [
+  "cone cheio",
+  "cones cheios",
   "pilha cheia",
   "pilhas cheias",
+  "pulmao cheio",
+  "pulmão cheio",
+  "falta de estoque",
+  "falta estoque",
+  "sem estoque",
   "falta de area de estoque",
   "falta de área de estoque",
   "sem area de estoque",
   "sem área de estoque",
   "area de estoque cheia",
   "área de estoque cheia",
-  "cone cheio",
-  "cones cheios",
-  "pulmao cheio",
-  "pulmão cheio",
-  "estoque cheio",
+  "falta de area",
+  "falta de área",
+  "sem area",
+  "sem área",
   "restricao de estoque",
   "restrição de estoque",
   "restricao recebimento",
@@ -90,18 +110,42 @@ const palavrasChaveEstoque = [
   "sem praça de estoque",
   "praca de estoque cheia",
   "praça de estoque cheia",
-  "restrição de área",
-  "restricao de area",
-  "sem destino",
   "destino cheio",
+  "sem destino",
 ];
 
-const metaHoraPorPlanta: Record<string, number> = {
-  planta_01: 170,
-  planta_02: 170,
-};
+const COR_AZUL = "#0ea5e9";
+const COR_AZUL_ESCURO = "#075985";
+const COR_VERDE = "#10b981";
+const COR_LARANJA = "#f59e0b";
 
-function isoTodayLocal(): string {
+function authHeaders(): HeadersInit {
+  const token = (
+    localStorage.getItem("mp_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("auth_token") ||
+    ""
+  ).trim();
+
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function apiGet<T>(path: string): Promise<T> {
+  const url = `${API_BASE}${path}`;
+  const response = await fetch(url, {
+    headers: authHeaders(),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(text || `Erro HTTP ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+function isoTodayLocal() {
   const d = new Date();
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -110,136 +154,186 @@ function isoTodayLocal(): string {
 }
 
 function normalizarTexto(texto: string) {
-  return texto
+  return String(texto || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function listarDiasPeriodo(inicio: string, fim: string) {
+  const out: string[] = [];
+
+  const a = new Date(`${inicio}T00:00:00`);
+  const b = new Date(`${fim}T00:00:00`);
+
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) {
+    return out;
+  }
+
+  const start = a <= b ? a : b;
+  const end = a <= b ? b : a;
+
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    const yyyy = cursor.getFullYear();
+    const mm = String(cursor.getMonth() + 1).padStart(2, "0");
+    const dd = String(cursor.getDate()).padStart(2, "0");
+    out.push(`${yyyy}-${mm}-${dd}`);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return out;
+}
+
 function brDate(iso: string) {
-  if (!iso) return "";
+  if (!iso) return "-";
   const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
   return `${d}/${m}/${y}`;
 }
 
-function obterInicio(parada: Parada) {
-  return parada.inicio || parada.data_inicio || parada.started_at || "";
-}
+function formatarDataHora(day: string, hora?: string) {
+  if (!day) return "-";
+  if (!hora) return brDate(day);
 
-function obterFim(parada: Parada) {
-  return parada.fim || parada.data_fim || parada.ended_at || null;
-}
-
-function obterObservacaoCompleta(parada: Parada) {
-  return [
-    parada.causa,
-    parada.motivo,
-    parada.observacao,
-    parada.observação,
-    parada.descricao,
-    parada.descrição,
-    parada.justificativa,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function obterPlantaNormalizada(planta?: string) {
-  const texto = normalizarTexto(planta || "");
-
-  if (
-    texto.includes("planta_01") ||
-    texto.includes("planta 01") ||
-    texto.includes("planta-01") ||
-    texto.includes("planta 1") ||
-    texto === "1" ||
-    texto === "01"
-  ) {
-    return "planta_01";
-  }
-
-  if (
-    texto.includes("planta_02") ||
-    texto.includes("planta 02") ||
-    texto.includes("planta-02") ||
-    texto.includes("planta 2") ||
-    texto === "2" ||
-    texto === "02"
-  ) {
-    return "planta_02";
-  }
-
-  return texto || "planta_01";
-}
-
-function obterNomePlanta(planta?: string) {
-  const normalizada = obterPlantaNormalizada(planta);
-
-  if (normalizada === "planta_01") return "Planta 01";
-  if (normalizada === "planta_02") return "Planta 02";
-
-  return planta || "-";
-}
-
-function minutosEntre(inicio: string, fim: string | null) {
-  if (!inicio) return 0;
-
-  const dataInicio = new Date(inicio);
-  const dataFim = fim ? new Date(fim) : new Date();
-
-  if (Number.isNaN(dataInicio.getTime()) || Number.isNaN(dataFim.getTime())) {
-    return 0;
-  }
-
-  const diff = dataFim.getTime() - dataInicio.getTime();
-
-  if (diff <= 0) return 0;
-
-  return Math.round(diff / 60000);
-}
-
-function obterDuracaoMinutos(parada: Parada) {
-  if (typeof parada.duracao_minutos === "number") return parada.duracao_minutos;
-  if (typeof parada.duracao === "number") return parada.duracao;
-
-  return minutosEntre(obterInicio(parada), obterFim(parada));
+  return `${brDate(day)}, ${hora.slice(0, 5)}`;
 }
 
 function formatarHoras(minutos: number) {
   const horas = Math.floor(minutos / 60);
   const mins = Math.round(minutos % 60);
-
-  return `${horas}h ${mins.toString().padStart(2, "0")}min`;
-}
-
-function formatarToneladas(valor: number) {
-  return valor.toLocaleString("pt-BR", {
-    maximumFractionDigits: 0,
-  });
+  return `${horas}h ${String(mins).padStart(2, "0")}min`;
 }
 
 function formatarDecimal(valor: number, casas = 1) {
-  return valor.toLocaleString("pt-BR", {
+  return Number(valor || 0).toLocaleString("pt-BR", {
     minimumFractionDigits: casas,
     maximumFractionDigits: casas,
   });
 }
 
-function formatarDataHora(data?: string | null) {
-  if (!data) return "-";
-
-  const dataConvertida = new Date(data);
-
-  if (Number.isNaN(dataConvertida.getTime())) return "-";
-
-  return dataConvertida.toLocaleString("pt-BR");
+function formatarToneladas(valor: number) {
+  return Number(valor || 0).toLocaleString("pt-BR", {
+    maximumFractionDigits: 0,
+  });
 }
 
-function classificarCausaEstoque(parada: Parada) {
-  const texto = normalizarTexto(obterObservacaoCompleta(parada));
+function obterNomeMes(chave: string) {
+  const [ano, mes] = chave.split("-").map(Number);
+  if (!ano || !mes) return chave;
+
+  const data = new Date(ano, mes - 1, 1);
+
+  return data
+    .toLocaleDateString("pt-BR", { month: "long" })
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+function obterPeriodoAnalise(inicio: string, fim: string) {
+  const inicioFmt = new Date(`${inicio}T00:00:00`).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const fimFmt = new Date(`${fim}T00:00:00`).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+
+  return inicioFmt === fimFmt ? inicioFmt : `${inicioFmt} a ${fimFmt}`;
+}
+
+function plantaFromPlantId(plantId: number | string | undefined): "planta_01" | "planta_02" {
+  const n = Number(plantId || 1);
+  return n === 2 ? "planta_02" : "planta_01";
+}
+
+function nomePlanta(planta: string) {
+  return planta === "planta_02" ? "Planta 02" : "Planta 01";
+}
+
+function montarHoraInicial(day: string, period?: string, hora?: string) {
+  if (hora) return hora.slice(0, 5);
+
+  const p = String(period || "");
+  const m = p.match(/^(\d{2})-(\d{2})$/);
+  if (m) return `${m[1]}:00`;
+
+  return "";
+}
+
+function montarHoraFinal(period?: string, hora?: string) {
+  if (hora) return hora.slice(0, 5);
+
+  const p = String(period || "");
+  const m = p.match(/^(\d{2})-(\d{2})$/);
+  if (m) return `${m[2]}:00`;
+
+  return "";
+}
+
+function transformarLinha(day: string, row: StopLaunchRow): ParadaEstoque {
+  const plantId = Number(row.plant_id || 1);
+  const planta = plantaFromPlantId(plantId);
+
+  const equipamento = String(row.equipamento ?? row.equipment ?? "").trim();
+  const tipo = String(row.tipo_parada ?? row.stop_type ?? "").trim();
+  const descricao = String(row.descricao ?? row.description ?? "").trim();
+  const justificativa = String(row.justificativa_baixa_producao ?? "").trim();
+  const period = String(row.period || "").trim();
+
+  const observacaoCompleta = [tipo, descricao, justificativa, equipamento]
+    .filter(Boolean)
+    .join(" ");
+
+  const minutos = Number(row.minutos ?? row.minutes ?? 0) || 0;
+
+  return {
+    id: `${day}-${plantId}-${row.id ?? period}-${row.ordem ?? Math.random()}`,
+    day,
+    planta,
+    plant_id: plantId,
+    period,
+    equipamento,
+    tipo_parada: tipo,
+    descricao,
+    observacaoCompleta,
+    minutos,
+    hora_inicial: montarHoraInicial(day, period, row.hora_inicial),
+    hora_final: montarHoraFinal(period, row.hora_final),
+  };
+}
+
+function ehParadaEstoque(parada: ParadaEstoque) {
+  const texto = normalizarTexto(parada.observacaoCompleta);
+
+  return palavrasChaveEstoque.some((palavra) =>
+    texto.includes(normalizarTexto(palavra))
+  );
+}
+
+function classificarCausa(parada: ParadaEstoque) {
+  const texto = normalizarTexto(parada.observacaoCompleta);
+
+  if (texto.includes("cone cheio") || texto.includes("cones cheios")) {
+    return "Cone cheio";
+  }
 
   if (texto.includes("pilha cheia") || texto.includes("pilhas cheias")) {
     return "Pilha cheia";
+  }
+
+  if (texto.includes("pulmao cheio")) {
+    return "Pulmão cheio";
+  }
+
+  if (
+    texto.includes("falta de estoque") ||
+    texto.includes("falta estoque") ||
+    texto.includes("sem estoque")
+  ) {
+    return "Falta de estoque";
   }
 
   if (
@@ -248,22 +342,9 @@ function classificarCausaEstoque(parada: Parada) {
     texto.includes("area de estoque cheia") ||
     texto.includes("sem local de estoque") ||
     texto.includes("sem local para estocar") ||
-    texto.includes("praca de estoque cheia") ||
-    texto.includes("restricao de area")
+    texto.includes("praca de estoque cheia")
   ) {
     return "Falta de área de estoque";
-  }
-
-  if (texto.includes("cone cheio") || texto.includes("cones cheios")) {
-    return "Cone cheio";
-  }
-
-  if (texto.includes("pulmao cheio")) {
-    return "Pulmão cheio";
-  }
-
-  if (texto.includes("estoque cheio")) {
-    return "Estoque cheio";
   }
 
   if (
@@ -275,24 +356,12 @@ function classificarCausaEstoque(parada: Parada) {
     return "Restrição de estoque";
   }
 
-  return "Outras restrições de estoque";
+  return "Outras restrições";
 }
 
-function ehParadaEstoque(parada: Parada) {
-  const texto = normalizarTexto(obterObservacaoCompleta(parada));
-
-  return palavrasChaveEstoque.some((palavra) =>
-    texto.includes(normalizarTexto(palavra))
-  );
-}
-
-function getToken() {
-  const keys = ["mp_token", "token", "access_token", "auth_token"];
-  for (const key of keys) {
-    const value = (localStorage.getItem(key) || "").trim();
-    if (value) return value;
-  }
-  return "";
+function perdaEstimada(parada: ParadaEstoque) {
+  const metaHora = metaHoraPorPlanta[parada.planta] || 0;
+  return (parada.minutos / 60) * metaHora;
 }
 
 const BarValueLabel = (props: any) => {
@@ -335,49 +404,100 @@ const TonValueLabel = (props: any) => {
   );
 };
 
+function CardIndicador({
+  titulo,
+  valor,
+  subtitulo,
+  icone,
+  variante = "azul",
+}: {
+  titulo: string;
+  valor: string;
+  subtitulo: string;
+  icone: React.ReactNode;
+  variante?: "azul" | "verde" | "laranja";
+}) {
+  return (
+    <div className={`pe-card pe-kpi pe-kpi-${variante}`}>
+      <div className="pe-kpi-icon">{icone}</div>
+
+      <div>
+        <div className="pe-kpi-title">{titulo}</div>
+        <div className="pe-kpi-value">{valor}</div>
+        <div className="pe-kpi-sub">{subtitulo}</div>
+      </div>
+    </div>
+  );
+}
+
+function PainelGrafico({
+  titulo,
+  subtitulo,
+  cor,
+  children,
+}: {
+  titulo: string;
+  subtitulo: string;
+  cor: "azul" | "verde";
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="pe-card pe-chart-card">
+      <div className="pe-chart-header">
+        <div className={`pe-chart-title pe-chart-title-${cor}`}>{titulo}</div>
+        <div className="pe-chart-subtitle">{subtitulo}</div>
+      </div>
+
+      <div className="pe-chart-body">{children}</div>
+    </div>
+  );
+}
+
 export default function PrevisaoParadasEstoque() {
   const hoje = isoTodayLocal();
 
   const [dataInicio, setDataInicio] = useState(hoje);
   const [dataFim, setDataFim] = useState(hoje);
   const [planta, setPlanta] = useState<PlantaFiltro>("todas");
-  const [paradas, setParadas] = useState<Parada[]>([]);
+  const [paradas, setParadas] = useState<ParadaEstoque[]>([]);
   const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState("");
 
   useEffect(() => {
     carregarParadas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataInicio, dataFim, planta]);
+  }, [dataInicio, dataFim]);
 
   async function carregarParadas() {
     try {
       setLoading(true);
+      setErro("");
 
-      const params = new URLSearchParams({
-        dataInicio,
-        dataFim,
-        planta,
-      });
+      const dias = listarDiasPeriodo(dataInicio, dataFim);
 
-      const token = getToken();
-
-      const response = await fetch(`${API_BASE}/api/paradas?${params.toString()}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao carregar paradas");
+      if (!dias.length) {
+        setParadas([]);
+        return;
       }
 
-      const data = await response.json();
+      const respostas = await Promise.all(
+        dias.map((day) =>
+          apiGet<AggregateStopsPayload>(
+            `/api/aggregate/stops-launch?day=${encodeURIComponent(day)}`
+          ).catch(() => ({ day, rows: [] }))
+        )
+      );
 
-      if (Array.isArray(data)) setParadas(data);
-      else if (Array.isArray(data.paradas)) setParadas(data.paradas);
-      else if (Array.isArray(data.items)) setParadas(data.items);
-      else if (Array.isArray(data.data)) setParadas(data.data);
-      else setParadas([]);
-    } catch (error) {
-      console.error("Erro ao carregar paradas de estoque:", error);
+      const linhas = respostas.flatMap((payload) =>
+        (payload.rows || []).map((row) =>
+          transformarLinha(payload.day, row)
+        )
+      );
+
+      setParadas(linhas);
+    } catch (error: any) {
+      console.error("Erro ao carregar paradas da tabela bv_launch.stops_rows:", error);
+      setErro(error?.message || "Erro ao carregar paradas.");
       setParadas([]);
     } finally {
       setLoading(false);
@@ -386,239 +506,174 @@ export default function PrevisaoParadasEstoque() {
 
   const paradasFiltradas = useMemo(() => {
     return paradas.filter((parada) => {
-      const plantaNormalizada = obterPlantaNormalizada(
-        parada.planta || parada.unidade || parada.equipamento
-      );
+      const passaPlanta =
+        planta === "todas" ? true : parada.planta === planta;
 
-      const passaPlanta = planta === "todas" ? true : plantaNormalizada === planta;
-
-      return ehParadaEstoque(parada) && passaPlanta;
+      return passaPlanta && ehParadaEstoque(parada);
     });
   }, [paradas, planta]);
 
-  const dadosCalculados = useMemo(() => {
-    const totalMinutos = paradasFiltradas.reduce((acc, parada) => {
-      return acc + obterDuracaoMinutos(parada);
-    }, 0);
-
+  const dados = useMemo(() => {
+    const totalMinutos = paradasFiltradas.reduce((acc, p) => acc + p.minutos, 0);
     const totalHoras = totalMinutos / 60;
+    const toneladasPerdidas = paradasFiltradas.reduce(
+      (acc, p) => acc + perdaEstimada(p),
+      0
+    );
 
-    const toneladasPerdidas = paradasFiltradas.reduce((acc, parada) => {
-      const minutos = obterDuracaoMinutos(parada);
-      const horas = minutos / 60;
-      const plantaNormalizada = obterPlantaNormalizada(
-        parada.planta || parada.unidade || parada.equipamento
-      );
-      const metaHora = metaHoraPorPlanta[plantaNormalizada] || 0;
+    const mediaPerdaHora =
+      totalHoras > 0 ? toneladasPerdidas / totalHoras : 0;
 
-      return acc + horas * metaHora;
-    }, 0);
-
-    const mediaPerdaHora = totalHoras > 0 ? toneladasPerdidas / totalHoras : 0;
-
-    const diasPeriodo =
-      Math.max(
-        1,
-        Math.ceil(
-          (new Date(dataFim).getTime() - new Date(dataInicio).getTime()) / 86400000
-        ) + 1
-      );
-
-    const mediaHorasParadasDia = totalHoras / diasPeriodo;
-    const previsaoHorasMes = mediaHorasParadasDia * 30;
-    const previsaoPerdaMes = mediaPerdaHora * previsaoHorasMes;
+    const diasPeriodo = Math.max(1, listarDiasPeriodo(dataInicio, dataFim).length);
+    const mediaHorasDia = totalHoras / diasPeriodo;
+    const previsaoHorasMes = mediaHorasDia * 30;
+    const previsaoPerdaMes = previsaoHorasMes * mediaPerdaHora;
 
     return {
       totalMinutos,
       totalHoras,
       toneladasPerdidas,
       mediaPerdaHora,
-      mediaHorasParadasDia,
       previsaoHorasMes,
       previsaoPerdaMes,
     };
   }, [paradasFiltradas, dataInicio, dataFim]);
 
-  const rankingCausas = useMemo(() => {
-    const mapa = new Map<
-      string,
-      { causa: string; minutos: number; toneladas: number; eventos: number }
-    >();
+  const resumoMensal = useMemo<ResumoMensal[]>(() => {
+    const mapa = new Map<string, ResumoMensal>();
 
     paradasFiltradas.forEach((parada) => {
-      const causaClassificada = classificarCausaEstoque(parada);
-      const minutos = obterDuracaoMinutos(parada);
-      const horas = minutos / 60;
-      const plantaNormalizada = obterPlantaNormalizada(
-        parada.planta || parada.unidade || parada.equipamento
-      );
-      const toneladas = horas * (metaHoraPorPlanta[plantaNormalizada] || 0);
+      const chave = parada.day.slice(0, 7);
+      const atual =
+        mapa.get(chave) ||
+        {
+          chave,
+          mes: obterNomeMes(chave),
+          horas: 0,
+          toneladas: 0,
+          mediaProducao: 0,
+          eventos: 0,
+        };
 
-      const atual = mapa.get(causaClassificada) || {
-        causa: causaClassificada,
-        minutos: 0,
-        toneladas: 0,
-        eventos: 0,
-      };
-
-      atual.minutos += minutos;
-      atual.toneladas += toneladas;
+      atual.horas += parada.minutos / 60;
+      atual.toneladas += perdaEstimada(parada);
       atual.eventos += 1;
+      atual.mediaProducao = atual.horas > 0 ? atual.toneladas / atual.horas : 0;
 
-      mapa.set(causaClassificada, atual);
+      mapa.set(chave, atual);
     });
 
     return Array.from(mapa.values())
-      .sort((a, b) => b.minutos - a.minutos)
-      .map((item) => ({
-        ...item,
-        horas: Number((item.minutos / 60).toFixed(2)),
-        toneladas: Number(item.toneladas.toFixed(0)),
-      }));
-  }, [paradasFiltradas]);
-
-  const evolucaoMensal = useMemo(() => {
-    const mapa = new Map<
-      string,
-      {
-        mes: string;
-        mesOrdem: string;
-        horas: number;
-        toneladas: number;
-        eventos: number;
-      }
-    >();
-
-    paradasFiltradas.forEach((parada) => {
-      const inicio = obterInicio(parada);
-      const dataConvertida = inicio ? new Date(inicio) : null;
-
-      const mes =
-        dataConvertida && !Number.isNaN(dataConvertida.getTime())
-          ? dataConvertida.toLocaleDateString("pt-BR", { month: "long" })
-          : "-";
-
-      const mesCapitalizado =
-        mes === "-" ? "-" : mes.charAt(0).toUpperCase() + mes.slice(1);
-
-      const mesOrdem =
-        dataConvertida && !Number.isNaN(dataConvertida.getTime())
-          ? `${dataConvertida.getFullYear()}-${String(dataConvertida.getMonth() + 1).padStart(
-              2,
-              "0"
-            )}`
-          : "-";
-
-      const minutos = obterDuracaoMinutos(parada);
-      const horas = minutos / 60;
-      const plantaNormalizada = obterPlantaNormalizada(
-        parada.planta || parada.unidade || parada.equipamento
-      );
-      const toneladas = horas * (metaHoraPorPlanta[plantaNormalizada] || 0);
-
-      const atual = mapa.get(mesOrdem) || {
-        mes: mesCapitalizado,
-        mesOrdem,
-        horas: 0,
-        toneladas: 0,
-        eventos: 0,
-      };
-
-      atual.horas += horas;
-      atual.toneladas += toneladas;
-      atual.eventos += 1;
-
-      mapa.set(mesOrdem, atual);
-    });
-
-    return Array.from(mapa.values())
-      .sort((a, b) => a.mesOrdem.localeCompare(b.mesOrdem))
+      .sort((a, b) => a.chave.localeCompare(b.chave))
       .map((item) => ({
         ...item,
         horas: Number(item.horas.toFixed(1)),
         toneladas: Number(item.toneladas.toFixed(0)),
-        producaoHora: item.horas > 0 ? Number((item.toneladas / item.horas).toFixed(1)) : 0,
+        mediaProducao: Number(item.mediaProducao.toFixed(1)),
+      }));
+  }, [paradasFiltradas]);
+
+  const rankingCausas = useMemo(() => {
+    const mapa = new Map<
+      string,
+      { causa: string; horas: number; toneladas: number; eventos: number }
+    >();
+
+    paradasFiltradas.forEach((parada) => {
+      const causa = classificarCausa(parada);
+      const atual =
+        mapa.get(causa) ||
+        {
+          causa,
+          horas: 0,
+          toneladas: 0,
+          eventos: 0,
+        };
+
+      atual.horas += parada.minutos / 60;
+      atual.toneladas += perdaEstimada(parada);
+      atual.eventos += 1;
+
+      mapa.set(causa, atual);
+    });
+
+    return Array.from(mapa.values())
+      .sort((a, b) => b.horas - a.horas)
+      .map((item) => ({
+        ...item,
+        horas: Number(item.horas.toFixed(1)),
+        toneladas: Number(item.toneladas.toFixed(0)),
       }));
   }, [paradasFiltradas]);
 
   const maiorImpacto = useMemo(() => {
-    if (!evolucaoMensal.length) return null;
-    return [...evolucaoMensal].sort((a, b) => b.toneladas - a.toneladas)[0];
-  }, [evolucaoMensal]);
+    if (!resumoMensal.length) return null;
 
-  const principalCausa = rankingCausas[0];
+    return [...resumoMensal].sort((a, b) => b.toneladas - a.toneladas)[0];
+  }, [resumoMensal]);
 
   return (
-    <div className="mp-container mp-previsao-estoque">
+    <div className="mp-container pe-page">
       <style>{`
-        .mp-previsao-estoque {
-          width: 100% !important;
-          max-width: none !important;
-          margin: 0 !important;
-          padding: 14px 18px 28px !important;
-          box-sizing: border-box;
-          color: rgba(255,255,255,0.92);
+        .pe-page {
+          width: 100%;
+          max-width: none;
+          margin: 0;
+          padding: 18px;
+          color: #f8fafc;
         }
 
-        .mp-previsao-estoque * {
+        .pe-page * {
           box-sizing: border-box;
         }
 
         .pe-shell {
           width: 100%;
-          border-radius: 24px;
-          border: 1px solid rgba(255,255,255,0.10);
-          background:
-            radial-gradient(circle at top left, rgba(0,104,179,0.20), transparent 28%),
-            radial-gradient(circle at top right, rgba(0,145,93,0.18), transparent 26%),
-            linear-gradient(180deg, rgba(9,16,24,0.98), rgba(4,8,13,0.98));
-          box-shadow: 0 24px 80px rgba(0,0,0,0.38);
           overflow: hidden;
+          border-radius: 24px;
+          border: 1px solid rgba(148,163,184,0.18);
+          background:
+            radial-gradient(circle at top left, rgba(14,165,233,0.18), transparent 28%),
+            radial-gradient(circle at top right, rgba(16,185,129,0.15), transparent 28%),
+            linear-gradient(180deg, #08111c 0%, #050a11 100%);
+          box-shadow: 0 22px 70px rgba(0,0,0,0.35);
         }
 
         .pe-header {
-          min-height: 116px;
-          padding: 22px 26px 18px;
+          position: relative;
           display: grid;
-          grid-template-columns: minmax(250px, 420px) 1fr;
+          grid-template-columns: 360px 1fr;
           gap: 26px;
           align-items: center;
-          border-bottom: 1px solid rgba(255,255,255,0.10);
-          position: relative;
+          padding: 24px 28px 22px;
+          border-bottom: 1px solid rgba(148,163,184,0.16);
         }
 
-        .pe-header:before {
+        .pe-header::after {
           content: "";
           position: absolute;
-          left: 26px;
-          right: 26px;
+          left: 28px;
+          right: 28px;
           bottom: 0;
           height: 3px;
-          border-radius: 99px;
-          background: linear-gradient(90deg, #0d4f86, #00a368, #ff9f1a);
-        }
-
-        .pe-logo-box {
-          display: flex;
-          align-items: center;
-          gap: 18px;
-          min-width: 0;
-        }
-
-        .pe-logo-mark {
-          width: 62px;
-          height: 62px;
-          border-radius: 18px;
-          display: grid;
-          place-items: center;
-          background: linear-gradient(135deg, rgba(12,80,130,0.95), rgba(0,163,104,0.78));
-          border: 1px solid rgba(255,255,255,0.16);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 14px 38px rgba(0,0,0,0.32);
-          color: #fff;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #075985, #10b981, #f59e0b);
         }
 
         .pe-brand {
-          min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: 18px;
+        }
+
+        .pe-brand-icon {
+          display: grid;
+          place-items: center;
+          width: 66px;
+          height: 66px;
+          border-radius: 18px;
+          background: linear-gradient(135deg, #075985, #10b981);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 16px 38px rgba(0,0,0,0.30);
         }
 
         .pe-brand-title {
@@ -626,107 +681,104 @@ export default function PrevisaoParadasEstoque() {
           line-height: 1;
           font-weight: 950;
           letter-spacing: 0.08em;
-          color: #ffffff;
+          color: #fff;
           white-space: nowrap;
         }
 
         .pe-brand-subtitle {
           margin-top: 8px;
+          color: #10b981;
           font-size: 13px;
+          font-weight: 950;
           letter-spacing: 0.52em;
-          color: #00b978;
-          font-weight: 900;
         }
 
-        .pe-title-area {
-          min-width: 0;
+        .pe-title-wrap {
           display: flex;
-          align-items: center;
           justify-content: space-between;
-          gap: 18px;
+          gap: 16px;
+          align-items: center;
         }
 
         .pe-title h1 {
           margin: 0;
-          font-size: clamp(25px, 2.2vw, 38px);
-          line-height: 1.05;
-          font-weight: 950;
           color: #eaf4ff;
+          font-size: clamp(24px, 2.2vw, 38px);
+          font-weight: 950;
+          line-height: 1.05;
           letter-spacing: -0.02em;
         }
 
         .pe-title p {
           margin: 9px 0 0;
-          color: #24d189;
-          font-size: 17px;
+          color: #22c55e;
+          font-size: 16px;
           font-weight: 850;
         }
 
-        .pe-period-pill {
-          flex: 0 0 auto;
-          border-radius: 999px;
-          border: 1px solid rgba(255,159,26,0.34);
-          background: rgba(255,159,26,0.10);
-          color: #ffd49a;
-          padding: 9px 14px;
-          font-size: 13px;
-          font-weight: 850;
+        .pe-period {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          white-space: nowrap;
+          flex: 0 0 auto;
+          padding: 9px 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(245,158,11,0.36);
+          background: rgba(245,158,11,0.12);
+          color: #fed7aa;
+          font-size: 13px;
+          font-weight: 850;
         }
 
         .pe-content {
-          padding: 20px 26px 26px;
+          padding: 20px 28px 28px;
         }
 
         .pe-filter-row {
           display: flex;
-          align-items: center;
           justify-content: space-between;
-          gap: 14px;
+          align-items: center;
           flex-wrap: wrap;
+          gap: 14px;
           margin-bottom: 18px;
         }
 
         .pe-breadcrumb {
-          color: rgba(255,255,255,0.58);
+          color: rgba(226,232,240,0.65);
           font-size: 13px;
-          font-weight: 850;
+          font-weight: 800;
         }
 
         .pe-breadcrumb b {
-          color: #ffffff;
+          color: #fff;
         }
 
         .pe-filters {
           display: flex;
           align-items: center;
-          gap: 10px;
           flex-wrap: wrap;
+          gap: 10px;
           padding: 10px;
           border-radius: 18px;
-          background: rgba(255,255,255,0.045);
-          border: 1px solid rgba(255,255,255,0.09);
+          border: 1px solid rgba(148,163,184,0.16);
+          background: rgba(15,23,42,0.72);
         }
 
         .pe-filter-label {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          color: rgba(255,255,255,0.72);
+          color: rgba(226,232,240,0.75);
           font-size: 13px;
           font-weight: 850;
-          padding: 0 4px;
         }
 
         .pe-input {
           height: 40px;
           min-width: 150px;
-          border: 1px solid rgba(255,255,255,0.12);
-          background: rgba(0,0,0,0.26);
-          color: rgba(255,255,255,0.90);
+          border: 1px solid rgba(148,163,184,0.20);
+          background: rgba(2,6,23,0.65);
+          color: #f8fafc;
           border-radius: 13px;
           padding: 0 12px;
           outline: none;
@@ -734,8 +786,24 @@ export default function PrevisaoParadasEstoque() {
         }
 
         .pe-input:focus {
-          border-color: rgba(255,159,26,0.55);
-          box-shadow: 0 0 0 3px rgba(255,159,26,0.10);
+          border-color: rgba(245,158,11,0.58);
+          box-shadow: 0 0 0 3px rgba(245,158,11,0.12);
+        }
+
+        .pe-error {
+          margin-bottom: 16px;
+          border-radius: 16px;
+          border: 1px solid rgba(248,113,113,0.35);
+          background: rgba(127,29,29,0.28);
+          padding: 12px 14px;
+          color: #fecaca;
+          font-weight: 750;
+        }
+
+        .pe-card {
+          border: 1px solid rgba(148,163,184,0.16);
+          background: linear-gradient(180deg, rgba(15,23,42,0.88), rgba(2,6,23,0.64));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 34px rgba(0,0,0,0.20);
         }
 
         .pe-kpi-grid {
@@ -745,251 +813,179 @@ export default function PrevisaoParadasEstoque() {
           margin-bottom: 18px;
         }
 
-        .pe-card {
-          border-radius: 18px;
-          border: 1px solid rgba(255,255,255,0.11);
-          background: linear-gradient(180deg, rgba(255,255,255,0.078), rgba(255,255,255,0.035));
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-          overflow: hidden;
-        }
-
         .pe-kpi {
           min-height: 118px;
-          padding: 18px 20px;
           display: flex;
           align-items: center;
           gap: 18px;
+          padding: 18px 20px;
+          border-radius: 18px;
           position: relative;
+          overflow: hidden;
         }
 
-        .pe-kpi:after {
+        .pe-kpi::after {
           content: "";
           position: absolute;
-          top: 0;
-          right: 0;
-          width: 120px;
-          height: 100%;
-          opacity: .22;
-          background: radial-gradient(circle at right, currentColor, transparent 62%);
+          right: -30px;
+          top: -40px;
+          width: 160px;
+          height: 160px;
+          border-radius: 50%;
+          opacity: 0.16;
         }
 
-        .pe-kpi.blue { color: #45a3ff; }
-        .pe-kpi.green { color: #15cf89; }
-        .pe-kpi.orange { color: #ff9f1a; }
+        .pe-kpi-azul::after { background: ${COR_AZUL}; }
+        .pe-kpi-verde::after { background: ${COR_VERDE}; }
+        .pe-kpi-laranja::after { background: ${COR_LARANJA}; }
 
         .pe-kpi-icon {
+          position: relative;
+          z-index: 1;
           width: 70px;
           height: 70px;
-          border-radius: 50%;
           display: grid;
           place-items: center;
           flex: 0 0 auto;
-          color: #ffffff;
-          background: linear-gradient(135deg, currentColor, rgba(255,255,255,0.10));
+          border-radius: 50%;
+          color: #fff;
+          background: linear-gradient(135deg, #075985, #0ea5e9);
           box-shadow: 0 16px 34px rgba(0,0,0,0.30);
         }
 
-        .pe-kpi-body {
-          min-width: 0;
-          color: #fff;
+        .pe-kpi-verde .pe-kpi-icon {
+          background: linear-gradient(135deg, #047857, #10b981);
+        }
+
+        .pe-kpi-laranja .pe-kpi-icon {
+          background: linear-gradient(135deg, #b45309, #f59e0b);
         }
 
         .pe-kpi-title {
+          color: rgba(226,232,240,0.74);
           font-size: 15px;
-          color: rgba(255,255,255,0.74);
           font-weight: 850;
-          line-height: 1.2;
+          line-height: 1.22;
         }
 
         .pe-kpi-value {
           margin-top: 6px;
-          font-size: clamp(26px, 2.5vw, 42px);
-          line-height: 1;
+          color: #fff;
+          font-size: clamp(26px, 2.4vw, 40px);
           font-weight: 950;
-          color: #ffffff;
+          line-height: 1;
           letter-spacing: -0.03em;
         }
 
         .pe-kpi-sub {
           margin-top: 8px;
+          color: rgba(226,232,240,0.52);
           font-size: 12px;
-          color: rgba(255,255,255,0.50);
           font-weight: 750;
         }
 
         .pe-chart-grid {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          grid-template-columns: 1fr 1fr;
           gap: 18px;
           margin-bottom: 18px;
         }
 
-        .pe-section {
-          padding: 16px 16px 14px;
+        .pe-chart-card {
+          overflow: hidden;
+          border-radius: 22px;
+          padding: 16px;
         }
 
-        .pe-section-head {
+        .pe-chart-header {
           display: flex;
+          flex-direction: column;
           align-items: center;
-          justify-content: center;
-          gap: 10px;
+          gap: 6px;
           margin-bottom: 12px;
         }
 
-        .pe-section-title {
+        .pe-chart-title {
+          min-height: 38px;
+          min-width: min(380px, 100%);
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-height: 38px;
-          min-width: 320px;
           padding: 0 18px;
           border-radius: 9px;
-          background: linear-gradient(135deg, #073763, #0b5d9c);
-          color: #ffffff;
+          color: #fff;
           font-size: 16px;
           font-weight: 950;
           text-align: center;
           box-shadow: 0 10px 22px rgba(0,0,0,0.22);
         }
 
-        .pe-section-title.green {
-          background: linear-gradient(135deg, #007647, #00a368);
+        .pe-chart-title-azul {
+          background: linear-gradient(135deg, #073763, #0b5d9c);
         }
 
-        .pe-chart {
+        .pe-chart-title-verde {
+          background: linear-gradient(135deg, #047857, #10b981);
+        }
+
+        .pe-chart-subtitle {
+          color: rgba(226,232,240,0.60);
+          font-size: 13px;
+          font-weight: 750;
+        }
+
+        .pe-chart-body {
+          width: 100%;
           height: 318px;
-          width: 100%;
         }
 
-        .pe-table-card {
-          margin-bottom: 18px;
-          padding: 0;
-          overflow: hidden;
-        }
-
-        .pe-table-title {
-          padding: 14px 18px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          border-bottom: 1px solid rgba(255,255,255,0.10);
-          background: linear-gradient(90deg, rgba(7,55,99,0.78), rgba(0,118,71,0.50));
-        }
-
-        .pe-table-title h2 {
-          margin: 0;
-          font-size: 17px;
-          font-weight: 950;
-        }
-
-        .pe-table-title span {
-          color: rgba(255,255,255,0.72);
-          font-weight: 850;
-          font-size: 13px;
-        }
-
-        .pe-table-wrap {
-          width: 100%;
-          overflow-x: auto;
-        }
-
-        .pe-table {
-          width: 100%;
-          border-collapse: collapse;
-          min-width: 860px;
-        }
-
-        .pe-table thead th {
-          background: rgba(0,0,0,0.28);
-          color: rgba(255,255,255,0.86);
-          font-size: 13px;
-          text-align: left;
-          padding: 12px 14px;
-          border-bottom: 1px solid rgba(255,255,255,0.10);
-          white-space: nowrap;
-        }
-
-        .pe-table tbody td {
-          padding: 12px 14px;
-          color: rgba(255,255,255,0.82);
-          border-bottom: 1px solid rgba(255,255,255,0.07);
-          font-size: 13px;
-          vertical-align: top;
-        }
-
-        .pe-table tbody tr:hover td {
-          background: rgba(255,255,255,0.045);
-        }
-
-        .pe-table .right {
-          text-align: right;
-          white-space: nowrap;
-        }
-
-        .pe-table .strong {
-          font-weight: 950;
-          color: #fff;
-        }
-
-        .pe-classificacao {
-          color: #ffb45c !important;
-          font-weight: 950;
-          white-space: nowrap;
-        }
-
-        .pe-lower-grid {
+        .pe-grid-lower {
           display: grid;
-          grid-template-columns: minmax(280px, 430px) 1fr;
+          grid-template-columns: minmax(300px, 420px) 1fr;
           gap: 18px;
           margin-bottom: 18px;
         }
 
-        .pe-forecast {
+        .pe-panel {
+          border-radius: 22px;
           padding: 18px;
-          min-height: 220px;
         }
 
-        .pe-forecast h2,
-        .pe-causes h2 {
-          margin: 0 0 14px;
-          font-size: 20px;
-          font-weight: 950;
+        .pe-panel h2 {
           display: flex;
           align-items: center;
           gap: 10px;
+          margin: 0 0 14px;
+          color: #fff;
+          font-size: 20px;
+          font-weight: 950;
         }
 
-        .pe-forecast-row {
+        .pe-row-metric {
           display: grid;
           grid-template-columns: 1fr auto;
           gap: 12px;
           padding: 12px 0;
-          border-bottom: 1px solid rgba(255,255,255,0.08);
+          border-bottom: 1px solid rgba(148,163,184,0.14);
         }
 
-        .pe-forecast-row span {
-          color: rgba(255,255,255,0.62);
+        .pe-row-metric span {
+          color: rgba(226,232,240,0.65);
           font-size: 13px;
           font-weight: 850;
         }
 
-        .pe-forecast-row b {
+        .pe-row-metric b {
           color: #fff;
           font-size: 18px;
           font-weight: 950;
         }
 
-        .pe-forecast-note {
+        .pe-note {
           margin: 14px 0 0;
-          color: rgba(255,255,255,0.55);
+          color: rgba(226,232,240,0.58);
           font-size: 13px;
           line-height: 1.45;
-        }
-
-        .pe-causes {
-          padding: 18px;
-          min-height: 220px;
         }
 
         .pe-cause-grid {
@@ -998,147 +994,220 @@ export default function PrevisaoParadasEstoque() {
           gap: 12px;
         }
 
-        .pe-cause-item {
+        .pe-cause {
           min-height: 92px;
           border-radius: 16px;
-          border: 1px solid rgba(255,255,255,0.10);
-          background: rgba(0,0,0,0.18);
+          border: 1px solid rgba(148,163,184,0.15);
+          background: rgba(2,6,23,0.38);
           padding: 14px;
         }
 
-        .pe-cause-name {
+        .pe-cause-title {
+          color: #fff;
           font-size: 14px;
           font-weight: 950;
-          color: #fff;
-          display: flex;
-          align-items: center;
-          gap: 8px;
         }
 
-        .pe-cause-hours {
+        .pe-cause-value {
           margin-top: 8px;
+          color: #fbbf24;
           font-size: 23px;
           font-weight: 950;
-          color: #ffb45c;
         }
 
         .pe-cause-sub {
           margin-top: 4px;
-          color: rgba(255,255,255,0.58);
+          color: rgba(226,232,240,0.58);
           font-size: 12px;
           font-weight: 800;
         }
 
-        .pe-footer-note {
-          border-radius: 18px;
-          border: 1px solid rgba(0,163,104,0.30);
-          background: rgba(0,163,104,0.075);
-          padding: 13px 16px;
+        .pe-table-card {
+          overflow: hidden;
+          border-radius: 22px;
+          margin-bottom: 18px;
+        }
+
+        .pe-table-title {
           display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          color: rgba(255,255,255,0.70);
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px 18px;
+          border-bottom: 1px solid rgba(148,163,184,0.15);
+          background: linear-gradient(90deg, rgba(7,89,133,0.78), rgba(4,120,87,0.50));
+        }
+
+        .pe-table-title h2 {
+          margin: 0;
+          color: #fff;
+          font-size: 17px;
+          font-weight: 950;
+        }
+
+        .pe-table-title span {
+          color: rgba(226,232,240,0.74);
+          font-size: 13px;
+          font-weight: 850;
+        }
+
+        .pe-table-wrap {
+          overflow-x: auto;
+          width: 100%;
+        }
+
+        .pe-table {
+          width: 100%;
+          min-width: 860px;
+          border-collapse: collapse;
+        }
+
+        .pe-table thead th {
+          padding: 12px 14px;
+          background: rgba(2,6,23,0.42);
+          border-bottom: 1px solid rgba(148,163,184,0.15);
+          color: rgba(226,232,240,0.88);
+          text-align: left;
+          font-size: 13px;
+          white-space: nowrap;
+        }
+
+        .pe-table tbody td {
+          padding: 12px 14px;
+          border-bottom: 1px solid rgba(148,163,184,0.10);
+          color: rgba(226,232,240,0.82);
+          font-size: 13px;
+          vertical-align: top;
+        }
+
+        .pe-table tbody tr:hover td {
+          background: rgba(255,255,255,0.04);
+        }
+
+        .pe-table .right {
+          text-align: right;
+          white-space: nowrap;
+        }
+
+        .pe-table .strong {
+          color: #fff;
+          font-weight: 950;
+        }
+
+        .pe-class {
+          color: #fbbf24 !important;
+          font-weight: 950;
+          white-space: nowrap;
+        }
+
+        .pe-footer {
+          display: flex;
+          gap: 12px;
+          border-radius: 18px;
+          border: 1px solid rgba(16,185,129,0.28);
+          background: rgba(16,185,129,0.075);
+          padding: 13px 16px;
+          color: rgba(226,232,240,0.72);
           font-size: 13px;
           line-height: 1.45;
         }
 
         .pe-footer-bar {
-          margin-top: 18px;
           height: 18px;
+          margin-top: 18px;
           border-radius: 0 0 20px 20px;
-          background: linear-gradient(90deg, #073763 0%, #073763 62%, #ffffff 62%, #ffffff 64%, #00a368 64%, #00a368 100%);
-          opacity: .95;
+          background: linear-gradient(90deg, #073763 0%, #073763 62%, #fff 62%, #fff 64%, #10b981 64%, #10b981 100%);
+          opacity: 0.92;
         }
 
         @media (max-width: 1180px) {
-          .pe-header {
+          .pe-header,
+          .pe-kpi-grid,
+          .pe-chart-grid,
+          .pe-grid-lower {
             grid-template-columns: 1fr;
           }
-          .pe-title-area {
+
+          .pe-title-wrap {
             align-items: flex-start;
             flex-direction: column;
           }
-          .pe-kpi-grid,
-          .pe-chart-grid,
-          .pe-lower-grid {
-            grid-template-columns: 1fr;
-          }
+
           .pe-cause-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr 1fr;
           }
         }
 
         @media (max-width: 720px) {
-          .mp-previsao-estoque {
-            padding: 10px 10px 80px !important;
+          .pe-page {
+            padding: 10px;
           }
+
           .pe-header,
           .pe-content {
             padding-left: 14px;
             padding-right: 14px;
           }
+
           .pe-brand-title {
             font-size: 26px;
           }
+
           .pe-brand-subtitle {
-            letter-spacing: .34em;
+            letter-spacing: 0.34em;
           }
-          .pe-logo-mark {
-            width: 52px;
-            height: 52px;
+
+          .pe-cause-grid {
+            grid-template-columns: 1fr;
           }
-          .pe-section-title {
-            min-width: 0;
+
+          .pe-input,
+          .pe-filters {
             width: 100%;
-            font-size: 14px;
           }
+
           .pe-kpi {
             align-items: flex-start;
           }
+
           .pe-kpi-icon {
-            width: 56px;
-            height: 56px;
-          }
-          .pe-input {
-            width: 100%;
-          }
-          .pe-filters {
-            width: 100%;
+            width: 58px;
+            height: 58px;
           }
         }
       `}</style>
 
       <div className="pe-shell">
-        <div className="pe-header">
-          <div className="pe-logo-box">
-            <div className="pe-logo-mark">
-              <Factory size={34} />
+        <header className="pe-header">
+          <div className="pe-brand">
+            <div className="pe-brand-icon">
+              <Factory size={36} />
             </div>
 
-            <div className="pe-brand">
+            <div>
               <div className="pe-brand-title">TRINDADE</div>
               <div className="pe-brand-subtitle">MINERAÇÃO</div>
             </div>
           </div>
 
-          <div className="pe-title-area">
+          <div className="pe-title-wrap">
             <div className="pe-title">
               <h1>
                 Previsão de Paradas Operacionais da Planta
                 <br />
                 por Restrição de Estoque
               </h1>
-              <p>Análise de horas paradas, toneladas perdidas e tendência operacional</p>
+              <p>Análise pela descrição dos lançamentos em Paradas Minutos</p>
             </div>
 
-            <div className="pe-period-pill">
+            <div className="pe-period">
               <CalendarDays size={16} />
               {brDate(dataInicio)} até {brDate(dataFim)}
             </div>
           </div>
-        </div>
+        </header>
 
-        <div className="pe-content">
+        <main className="pe-content">
           <div className="pe-filter-row">
             <div className="pe-breadcrumb">
               Operação&nbsp;&nbsp;•&nbsp;&nbsp;<b>Previsão Estoque</b>
@@ -1173,31 +1242,37 @@ export default function PrevisaoParadasEstoque() {
                 <option value="planta_01">Planta 01</option>
                 <option value="planta_02">Planta 02</option>
               </select>
+
+              <button className="pe-input" type="button" onClick={carregarParadas}>
+                Atualizar
+              </button>
             </div>
           </div>
 
-          <div className="pe-kpi-grid">
+          {erro ? <div className="pe-error">{erro}</div> : null}
+
+          <section className="pe-kpi-grid">
             <CardIndicador
               titulo="Total de Horas de Paradas Operacionais da Planta"
-              valor={formatarDecimal(dadosCalculados.totalHoras, 1) + " h"}
-              subtitulo="Soma das restrições de estoque"
-              icon={<Clock size={34} />}
-              accent="blue"
+              valor={`${formatarDecimal(dados.totalHoras)} h`}
+              subtitulo="Cone, pilha, estoque, área e recebimento"
+              icone={<Clock size={34} />}
+              variante="azul"
             />
 
             <CardIndicador
               titulo="Total de Toneladas Perdidas"
-              valor={formatarToneladas(dadosCalculados.toneladasPerdidas) + " t"}
-              subtitulo="Estimativa com base na produção horária"
-              icon={<TrendingDown size={34} />}
-              accent="green"
+              valor={`${formatarToneladas(dados.toneladasPerdidas)} t`}
+              subtitulo="Estimativa por meta horária da planta"
+              icone={<TrendingDown size={34} />}
+              variante="verde"
             />
 
             <CardIndicador
               titulo="Maior Impacto"
               valor={
                 maiorImpacto
-                  ? `${maiorImpacto.mes} – ${formatarDecimal(maiorImpacto.horas, 1)} h`
+                  ? `${maiorImpacto.mes} – ${formatarDecimal(maiorImpacto.horas)} h`
                   : "-"
               }
               subtitulo={
@@ -1205,83 +1280,79 @@ export default function PrevisaoParadasEstoque() {
                   ? `${formatarToneladas(maiorImpacto.toneladas)} t perdidas`
                   : "Sem dados no período"
               }
-              icon={<BarChart3 size={34} />}
-              accent="blue"
+              icone={<BarChart3 size={34} />}
+              variante="laranja"
             />
-          </div>
+          </section>
 
-          <div className="pe-chart-grid">
-            <div className="pe-card pe-section">
-              <div className="pe-section-head">
-                <div className="pe-section-title">
-                  Horas de Paradas Operacionais da Planta por Mês
-                </div>
-              </div>
+          <section className="pe-chart-grid">
+            <PainelGrafico
+              titulo="Horas de Paradas Operacionais da Planta por Mês"
+              subtitulo="Soma de minutos da tabela bv_launch.stops_rows"
+              cor="azul"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={resumoMensal} margin={{ top: 28, right: 20, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
+                  <XAxis dataKey="mes" stroke="#cbd5e1" tick={{ fontSize: 12, fontWeight: 700 }} />
+                  <YAxis stroke="#cbd5e1" />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#09111a",
+                      border: "1px solid rgba(255,255,255,0.14)",
+                      borderRadius: 14,
+                      color: "#fff",
+                    }}
+                    formatter={(value: any) => [`${formatarDecimal(Number(value))} h`, "Horas"]}
+                  />
+                  <Bar dataKey="horas" name="Horas" radius={[8, 8, 0, 0]}>
+                    <LabelList content={<BarValueLabel />} />
+                    {resumoMensal.map((_, index) => (
+                      <Cell key={index} fill={index === 0 ? COR_AZUL : COR_AZUL_ESCURO} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </PainelGrafico>
 
-              <div className="pe-chart">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={evolucaoMensal} margin={{ top: 28, right: 20, left: 4, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.12)" />
-                    <XAxis dataKey="mes" stroke="rgba(255,255,255,0.68)" tick={{ fontSize: 12, fontWeight: 700 }} />
-                    <YAxis stroke="rgba(255,255,255,0.68)" tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "#09111a",
-                        border: "1px solid rgba(255,255,255,0.14)",
-                        borderRadius: 14,
-                        color: "#fff",
-                      }}
-                      formatter={(value: any) => [`${formatarDecimal(Number(value), 1)} h`, "Horas"]}
-                    />
-                    <Bar dataKey="horas" name="Horas" radius={[8, 8, 0, 0]}>
-                      <LabelList content={<BarValueLabel />} />
-                      {evolucaoMensal.map((_, index) => (
-                        <Cell key={index} fill={index === 0 ? "#0b5d9c" : "#0d4f86"} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <PainelGrafico
+              titulo="Perda em Toneladas por Mês"
+              subtitulo="Estimativa com base na meta horária da planta"
+              cor="verde"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={resumoMensal} margin={{ top: 28, right: 20, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
+                  <XAxis dataKey="mes" stroke="#cbd5e1" tick={{ fontSize: 12, fontWeight: 700 }} />
+                  <YAxis stroke="#cbd5e1" />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#09111a",
+                      border: "1px solid rgba(255,255,255,0.14)",
+                      borderRadius: 14,
+                      color: "#fff",
+                    }}
+                    formatter={(value: any) => [`${formatarToneladas(Number(value))} t`, "Toneladas"]}
+                  />
+                  <Bar dataKey="toneladas" name="Toneladas" radius={[8, 8, 0, 0]}>
+                    <LabelList content={<TonValueLabel />} />
+                    {resumoMensal.map((_, index) => (
+                      <Cell key={index} fill={index === 0 ? COR_VERDE : "#047857"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </PainelGrafico>
+          </section>
 
-            <div className="pe-card pe-section">
-              <div className="pe-section-head">
-                <div className="pe-section-title green">
-                  Perda em Toneladas por Mês
-                </div>
-              </div>
-
-              <div className="pe-chart">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={evolucaoMensal} margin={{ top: 28, right: 20, left: 4, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.12)" />
-                    <XAxis dataKey="mes" stroke="rgba(255,255,255,0.68)" tick={{ fontSize: 12, fontWeight: 700 }} />
-                    <YAxis stroke="rgba(255,255,255,0.68)" tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "#09111a",
-                        border: "1px solid rgba(255,255,255,0.14)",
-                        borderRadius: 14,
-                        color: "#fff",
-                      }}
-                      formatter={(value: any) => [`${formatarToneladas(Number(value))} t`, "Toneladas"]}
-                    />
-                    <Bar dataKey="toneladas" name="Toneladas" radius={[8, 8, 0, 0]}>
-                      <LabelList content={<TonValueLabel />} />
-                      {evolucaoMensal.map((_, index) => (
-                        <Cell key={index} fill={index === 0 ? "#00a368" : "#008957"} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          <div className="pe-card pe-table-card">
+          <section className="pe-table-card pe-card">
             <div className="pe-table-title">
               <h2>Consolidado Mensal da Planta</h2>
-              <span>{loading ? "Atualizando..." : `${evolucaoMensal.length} mês(es) encontrado(s)`}</span>
+              <span>
+                {loading
+                  ? "Atualizando..."
+                  : `${resumoMensal.length} mês(es) encontrado(s)`}
+              </span>
             </div>
 
             <div className="pe-table-wrap">
@@ -1297,16 +1368,22 @@ export default function PrevisaoParadasEstoque() {
                 </thead>
 
                 <tbody>
-                  {evolucaoMensal.length === 0 ? (
+                  {loading ? (
                     <tr>
-                      <td colSpan={5}>Nenhuma parada de estoque encontrada no período.</td>
+                      <td colSpan={5}>Carregando dados da tabela bv_launch.stops_rows...</td>
+                    </tr>
+                  ) : resumoMensal.length === 0 ? (
+                    <tr>
+                      <td colSpan={5}>
+                        Nenhuma parada com cone cheio, pilha cheia, falta de estoque ou falta de área encontrada.
+                      </td>
                     </tr>
                   ) : (
-                    evolucaoMensal.map((item) => (
-                      <tr key={item.mesOrdem}>
+                    resumoMensal.map((item) => (
+                      <tr key={item.chave}>
                         <td className="strong">{item.mes}</td>
-                        <td className="right">{formatarDecimal(item.horas, 1)} h</td>
-                        <td className="right">{formatarDecimal(item.producaoHora, 1)} t/h</td>
+                        <td className="right">{formatarDecimal(item.horas)} h</td>
+                        <td className="right">{formatarDecimal(item.mediaProducao)} t/h</td>
                         <td className="right strong">{formatarToneladas(item.toneladas)} t</td>
                         <td className="right">{item.eventos}</td>
                       </tr>
@@ -1315,56 +1392,55 @@ export default function PrevisaoParadasEstoque() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
 
-          <div className="pe-lower-grid">
-            <div className="pe-card pe-forecast">
+          <section className="pe-grid-lower">
+            <div className="pe-card pe-panel">
               <h2>
-                <AlertTriangle size={22} color="#ffb45c" />
+                <AlertTriangle size={22} color={COR_LARANJA} />
                 Previsão operacional
               </h2>
 
-              <div className="pe-forecast-row">
+              <div className="pe-row-metric">
                 <span>Horas previstas / 30 dias</span>
-                <b>{formatarHoras(Math.round(dadosCalculados.previsaoHorasMes * 60))}</b>
+                <b>{formatarHoras(Math.round(dados.previsaoHorasMes * 60))}</b>
               </div>
 
-              <div className="pe-forecast-row">
+              <div className="pe-row-metric">
                 <span>Perda prevista</span>
-                <b>{formatarToneladas(dadosCalculados.previsaoPerdaMes)} t</b>
+                <b>{formatarToneladas(dados.previsaoPerdaMes)} t</b>
               </div>
 
-              <div className="pe-forecast-row">
+              <div className="pe-row-metric">
                 <span>Média perdida</span>
-                <b>{formatarDecimal(dadosCalculados.mediaPerdaHora, 1)} t/h</b>
+                <b>{formatarDecimal(dados.mediaPerdaHora)} t/h</b>
               </div>
 
-              <p className="pe-forecast-note">
+              <p className="pe-note">
                 Projeção calculada pela média diária do período filtrado, mantendo a taxa atual
                 de perdas por restrição de estoque.
               </p>
             </div>
 
-            <div className="pe-card pe-causes">
+            <div className="pe-card pe-panel">
               <h2>
-                <PackageX size={22} color="#45a3ff" />
+                <PackageX size={22} color={COR_AZUL} />
                 Causas identificadas
               </h2>
 
               <div className="pe-cause-grid">
                 {rankingCausas.length === 0 ? (
-                  <div className="pe-cause-item">
-                    <div className="pe-cause-name">Sem ocorrências</div>
-                    <div className="pe-cause-sub">Nenhuma causa identificada no período</div>
+                  <div className="pe-cause">
+                    <div className="pe-cause-title">Sem ocorrências</div>
+                    <div className="pe-cause-sub">
+                      Nenhuma descrição compatível no período filtrado
+                    </div>
                   </div>
                 ) : (
                   rankingCausas.slice(0, 6).map((item) => (
-                    <div className="pe-cause-item" key={item.causa}>
-                      <div className="pe-cause-name">
-                        <Box size={16} />
-                        {item.causa}
-                      </div>
-                      <div className="pe-cause-hours">{formatarDecimal(item.horas, 1)} h</div>
+                    <div className="pe-cause" key={item.causa}>
+                      <div className="pe-cause-title">{item.causa}</div>
+                      <div className="pe-cause-value">{formatarDecimal(item.horas)} h</div>
                       <div className="pe-cause-sub">
                         {item.eventos} evento(s) • {formatarToneladas(item.toneladas)} t perdidas
                       </div>
@@ -1372,17 +1448,10 @@ export default function PrevisaoParadasEstoque() {
                   ))
                 )}
               </div>
-
-              {principalCausa ? (
-                <p className="pe-forecast-note">
-                  Principal restrição no período: <b>{principalCausa.causa}</b>, com{" "}
-                  <b>{formatarDecimal(principalCausa.horas, 1)} h</b> de parada.
-                </p>
-              ) : null}
             </div>
-          </div>
+          </section>
 
-          <div className="pe-card pe-table-card">
+          <section className="pe-table-card pe-card">
             <div className="pe-table-title">
               <h2>Detalhamento das Paradas de Estoque</h2>
               <span>Total encontrado: {paradasFiltradas.length}</span>
@@ -1393,10 +1462,12 @@ export default function PrevisaoParadasEstoque() {
                 <thead>
                   <tr>
                     <th>Planta</th>
+                    <th>Período</th>
                     <th>Início</th>
                     <th>Fim</th>
                     <th>Classificação</th>
-                    <th>Observação/Descrição</th>
+                    <th>Equipamento</th>
+                    <th>Descrição</th>
                     <th className="right">Horas</th>
                     <th className="right">Perda Estimada</th>
                   </tr>
@@ -1405,73 +1476,46 @@ export default function PrevisaoParadasEstoque() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={7}>Carregando paradas...</td>
+                      <td colSpan={9}>Carregando paradas...</td>
                     </tr>
                   ) : paradasFiltradas.length === 0 ? (
                     <tr>
-                      <td colSpan={7}>Nenhuma parada de estoque encontrada no período.</td>
+                      <td colSpan={9}>
+                        Nenhuma parada de estoque encontrada no período.
+                      </td>
                     </tr>
                   ) : (
-                    paradasFiltradas.map((parada, index) => {
-                      const minutos = obterDuracaoMinutos(parada);
-                      const horas = minutos / 60;
-                      const plantaNormalizada = obterPlantaNormalizada(
-                        parada.planta || parada.unidade || parada.equipamento
-                      );
-                      const perda = horas * (metaHoraPorPlanta[plantaNormalizada] || 0);
-
-                      return (
-                        <tr key={`${parada.id}-${index}`}>
-                          <td>{obterNomePlanta(parada.planta || parada.unidade || parada.equipamento)}</td>
-                          <td>{formatarDataHora(obterInicio(parada))}</td>
-                          <td>{obterFim(parada) ? formatarDataHora(obterFim(parada)) : "Em aberto"}</td>
-                          <td className="pe-classificacao">{classificarCausaEstoque(parada)}</td>
-                          <td>{obterObservacaoCompleta(parada) || "-"}</td>
-                          <td className="right">{formatarDecimal(horas, 1)} h</td>
-                          <td className="right strong">{formatarToneladas(perda)} t</td>
-                        </tr>
-                      );
-                    })
+                    paradasFiltradas.map((parada) => (
+                      <tr key={parada.id}>
+                        <td>{nomePlanta(parada.planta)}</td>
+                        <td>{parada.period || "-"}</td>
+                        <td>{formatarDataHora(parada.day, parada.hora_inicial)}</td>
+                        <td>{formatarDataHora(parada.day, parada.hora_final)}</td>
+                        <td className="pe-class">{classificarCausa(parada)}</td>
+                        <td>{parada.equipamento || "-"}</td>
+                        <td>{parada.observacaoCompleta || "-"}</td>
+                        <td className="right">{formatarDecimal(parada.minutos / 60)} h</td>
+                        <td className="right strong">{formatarToneladas(perdaEstimada(parada))} t</td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
 
-          <div className="pe-footer-note">
-            <AlertTriangle size={18} color="#15cf89" />
+          <footer className="pe-footer">
+            <div className="strong">i</div>
             <div>
-              As horas informadas neste relatório referem-se às paradas operacionais da planta
-              por pilha cheia, falta de área de estoque, cones cheios, pulmão cheio e restrições
-              de recebimento. As toneladas perdidas são estimativas baseadas na produção horária
-              cadastrada por planta.
+              A busca é feita nos lançamentos de Paradas Minutos, comparando a descrição com
+              palavras-chave como <b>cone cheio</b>, <b>pilha cheia</b>, <b>falta de estoque</b>,
+              <b> falta de área de estoque</b>, <b>pulmão cheio</b> e <b>restrição de estoque</b>.
+              As toneladas perdidas são estimadas pela meta horária cadastrada no código da página.
             </div>
-          </div>
+          </footer>
 
           <div className="pe-footer-bar" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CardIndicador({
-  titulo,
-  valor,
-  subtitulo,
-  icon,
-  accent = "blue",
-}: CardIndicadorProps) {
-  return (
-    <div className="pe-card pe-kpi-card">
-      <div className={`pe-kpi ${accent}`}>
-        <div className="pe-kpi-icon">{icon}</div>
-
-        <div className="pe-kpi-body">
-          <div className="pe-kpi-title">{titulo}</div>
-          <div className="pe-kpi-value">{valor}</div>
-          <div className="pe-kpi-sub">{subtitulo}</div>
-        </div>
+        </main>
       </div>
     </div>
   );
