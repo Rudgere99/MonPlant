@@ -43,6 +43,35 @@ type Parada = {
   justificativa?: string;
   duracao_minutos?: number;
   duracao?: number;
+  minutos?: number;
+  tipo_parada?: string;
+  stop_type?: string;
+  period?: string;
+  day?: string;
+  plant_id?: number;
+  ordem?: number;
+};
+
+type AggregateStopRow = {
+  id?: number;
+  plant_id?: number;
+  period?: string;
+  equipamento?: string;
+  equipment?: string;
+  tipo_parada?: string;
+  stop_type?: string;
+  descricao?: string;
+  description?: string;
+  minutos?: number;
+  minutes?: number;
+  hora_inicial?: string;
+  hora_final?: string;
+  ordem?: number;
+};
+
+type AggregateStopsPayload = {
+  day: string;
+  rows?: AggregateStopRow[];
 };
 
 type CardIndicadorProps = {
@@ -52,6 +81,49 @@ type CardIndicadorProps = {
   icone: React.ReactNode;
   destaque?: boolean;
 };
+
+
+const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(
+  /\/+$/,
+  ""
+);
+
+function authHeaders(): HeadersInit {
+  const token = (
+    localStorage.getItem("mp_token") ||
+    localStorage.getItem("token") ||
+    ""
+  ).trim();
+
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function buscarJsonComTimeout<T>(url: string, timeoutMs = 20000): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      headers: authHeaders(),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+
+    return (await response.json()) as T;
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw new Error("Tempo limite excedido ao carregar paradas de estoque.");
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 const palavrasChaveEstoque = [
   "pilha cheia",
@@ -106,6 +178,8 @@ function obterObservacaoCompleta(parada: Parada) {
   return [
     parada.causa,
     parada.motivo,
+    parada.tipo_parada,
+    parada.stop_type,
     parada.observacao,
     parada.observação,
     parada.descricao,
@@ -179,6 +253,10 @@ function obterDuracaoMinutos(parada: Parada) {
     return parada.duracao;
   }
 
+  if (typeof parada.minutos === "number") {
+    return parada.minutos;
+  }
+
   return minutosEntre(obterInicio(parada), obterFim(parada));
 }
 
@@ -205,6 +283,76 @@ function formatarDataHora(data?: string | null) {
   }
 
   return dataConvertida.toLocaleString("pt-BR");
+}
+
+function criarDataHora(day?: string, hora?: string) {
+  if (!day || !hora) return undefined;
+  return `${day}T${hora.slice(0, 5)}:00`;
+}
+
+function periodoParaInicio(day?: string, period?: string) {
+  const hora = String(period || "").split("-", 1)[0];
+  if (!day || !/^\d{1,2}$/.test(hora)) return undefined;
+  return `${day}T${hora.padStart(2, "0")}:00:00`;
+}
+
+function adicionarMinutos(dataHora?: string, minutos = 0) {
+  if (!dataHora) return undefined;
+  const data = new Date(dataHora);
+  if (Number.isNaN(data.getTime())) return undefined;
+  data.setMinutes(data.getMinutes() + minutos);
+  return data.toISOString();
+}
+
+function formatarDataISO(data: Date) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function listarDiasPeriodo(inicio: string, fim: string) {
+  const dias: string[] = [];
+  const dataInicial = new Date(`${inicio}T00:00:00`);
+  const dataFinal = new Date(`${fim}T00:00:00`);
+
+  if (Number.isNaN(dataInicial.getTime()) || Number.isNaN(dataFinal.getTime())) {
+    return dias;
+  }
+
+  for (
+    const cursor = new Date(dataInicial);
+    cursor.getTime() <= dataFinal.getTime();
+    cursor.setDate(cursor.getDate() + 1)
+  ) {
+    dias.push(formatarDataISO(cursor));
+  }
+
+  return dias;
+}
+
+function transformarLinhaAgregada(day: string, row: AggregateStopRow): Parada {
+  const minutos = Number(row.minutos ?? row.minutes ?? 0);
+  const inicio =
+    criarDataHora(day, row.hora_inicial) || periodoParaInicio(day, row.period);
+  const fim = criarDataHora(day, row.hora_final) || adicionarMinutos(inicio, minutos);
+
+  return {
+    id: row.id || `${day}-${row.plant_id || 1}-${row.period}-${row.ordem || 1}`,
+    day,
+    plant_id: row.plant_id,
+    planta: `planta_${String(row.plant_id || 1).padStart(2, "0")}`,
+    equipamento: row.equipamento || row.equipment || "",
+    inicio,
+    fim,
+    causa: row.tipo_parada || row.stop_type || "",
+    motivo: row.tipo_parada || row.stop_type || "",
+    descricao: row.descricao || row.description || "",
+    observacao: row.descricao || row.description || "",
+    minutos,
+    period: row.period,
+    ordem: row.ordem,
+  };
 }
 
 function classificarCausaEstoque(parada: Parada) {
@@ -276,31 +424,28 @@ export default function PrevisaoParadasEstoque() {
     try {
       setLoading(true);
 
-      const params = new URLSearchParams({
-        dataInicio,
-        dataFim,
-        planta,
-      });
+      const dias = listarDiasPeriodo(dataInicio, dataFim);
 
-      const response = await fetch(`/api/paradas?${params.toString()}`);
-
-      if (!response.ok) {
-        throw new Error("Erro ao carregar paradas");
-      }
-
-      const data = await response.json();
-
-      if (Array.isArray(data)) {
-        setParadas(data);
-      } else if (Array.isArray(data.paradas)) {
-        setParadas(data.paradas);
-      } else if (Array.isArray(data.items)) {
-        setParadas(data.items);
-      } else if (Array.isArray(data.data)) {
-        setParadas(data.data);
-      } else {
+      if (!dias.length) {
         setParadas([]);
+        return;
       }
+
+      const respostas = await Promise.all(
+        dias.map((day) =>
+          buscarJsonComTimeout<AggregateStopsPayload>(
+            `${API_BASE}/api/aggregate/stops-launch?day=${encodeURIComponent(day)}`
+          )
+        )
+      );
+
+      const paradasAgregadas = respostas.flatMap((payload) =>
+        (payload.rows || []).map((row) =>
+          transformarLinhaAgregada(payload.day, row)
+        )
+      );
+
+      setParadas(paradasAgregadas);
     } catch (error) {
       console.error("Erro ao carregar paradas de estoque:", error);
       setParadas([]);

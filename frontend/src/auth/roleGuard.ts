@@ -105,6 +105,7 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/ritmo",
       "/ritmo-do-turno",
       "/ufdf",
+      "/previsao-paradas-estoque",
       "/statisticas"
     ]);
   }
@@ -119,6 +120,7 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/horimetros",
       "/paradas",
       "/lancamento-paradas",
+      "/previsao-paradas-estoque",
       "/statisticas",
       "/metas",
       "/exportar",
