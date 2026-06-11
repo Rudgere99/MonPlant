@@ -93,253 +93,38 @@ const producaoHoraFallbackPorPlanta: Record<string, number> = {
   planta_02: 0,
 };
 
-type GrupoParadaOperacional = {
-  grupo: string;
-  prioridade: number;
-  palavras: string[];
-};
-
-const gruposParadasOperacionais: GrupoParadaOperacional[] = [
-  {
-    grupo: "Desarme do BT-01 / Britador primário",
-    prioridade: 10,
-    palavras: [
-      "bt-01",
-      "bt01",
-      "bt 01",
-      "britador primario",
-      "britador primário",
-      "primario desarmou",
-      "primário desarmou",
-      "desarme do bt",
-      "desarme bt",
-      "desarme britador",
-      "desarmou britador",
-      "desarmou o bt",
-      "falha bt-01",
-      "falha bt01",
-      "falha no bt",
-      "falha britador primario",
-      "falha britador primário",
-    ],
-  },
-  {
-    grupo: "Rasgo de correia",
-    prioridade: 20,
-    palavras: [
-      "rasgo de correia",
-      "correia rasgada",
-      "rasgou correia",
-      "rasgo na correia",
-      "rasgo tc",
-      "rasgo no tc",
-      "correia tc rasgada",
-      "rasgo pn-01",
-      "rasgo pn01",
-      "rasgo pn 01",
-      "rasgo pn-02",
-      "rasgo pn02",
-      "rasgo pn 02",
-      "pn-01 rasgada",
-      "pn01 rasgada",
-      "pn-02 rasgada",
-      "pn02 rasgada",
-      "correia pn",
-    ],
-  },
-  {
-    grupo: "Sobrecarga do BT-02 / Engaiolamento do rebritador",
-    prioridade: 30,
-    palavras: [
-      "bt-02",
-      "bt02",
-      "bt 02",
-      "britador secundario",
-      "britador secundário",
-      "sobrecarga bt-02",
-      "sobrecarga bt02",
-      "sobrecarga no bt",
-      "sobrecarga britador secundario",
-      "sobrecarga britador secundário",
-      "engaiolamento",
-      "engaiolado",
-      "engaiolou",
-      "rebritador engaiolado",
-      "engaiolamento do rebritador",
-      "engaiolamento do rebrite",
-      "rebrite engaiolado",
-      "rebritador",
-      "rebrite",
-    ],
-  },
-  {
-    grupo: "Sobrecarga na PN-01 / PN-02",
-    prioridade: 40,
-    palavras: [
-      "sobrecarga pn-01",
-      "sobrecarga pn01",
-      "sobrecarga pn 01",
-      "sobrecarga na pn-01",
-      "sobrecarga na pn01",
-      "pn-01 sobrecarregada",
-      "pn01 sobrecarregada",
-      "sobrecarga pn-02",
-      "sobrecarga pn02",
-      "sobrecarga pn 02",
-      "sobrecarga na pn-02",
-      "sobrecarga na pn02",
-      "pn-02 sobrecarregada",
-      "pn02 sobrecarregada",
-      "sobrecarga pn",
-      "sobrecarga na peneira",
-      "peneira sobrecarregada",
-      "peneira cheia",
-    ],
-  },
-  {
-    grupo: "Reparo de telas",
-    prioridade: 50,
-    palavras: [
-      "reparo de tela",
-      "reparo de telas",
-      "troca de tela",
-      "troca de telas",
-      "manutencao tela",
-      "manutenção tela",
-      "manutencao de tela",
-      "manutenção de tela",
-      "tela rasgada",
-      "telas rasgadas",
-      "pano de tela",
-      "substituicao de tela",
-      "substituição de tela",
-      "reparo tela",
-      "reparar tela",
-    ],
-  },
-  {
-    grupo: "Limpeza dos tambores de retorno",
-    prioridade: 60,
-    palavras: [
-      "limpeza dos tambores",
-      "limpeza de tambor",
-      "limpeza do tambor",
-      "limpeza tambor",
-      "tambor de retorno",
-      "tambores de retorno",
-      "limpeza tambor de retorno",
-      "limpeza dos tambores de retorno",
-      "acumulo no tambor",
-      "acúmulo no tambor",
-      "material no tambor",
-      "tambor sujo",
-      "limpeza retorno",
-    ],
-  },
-  {
-    grupo: "Abastecimento da escavadeira",
-    prioridade: 70,
-    palavras: [
-      "abastecimento da escavadeira",
-      "abastecimento escavadeira",
-      "abastecer escavadeira",
-      "escavadeira abastecendo",
-      "escavadeira em abastecimento",
-      "abastecimento da maquina",
-      "abastecimento da máquina",
-      "abastecimento equipamento de carga",
-      "abastecimento eq carga",
-      "abastecimento ex",
-      "abastecimento pc",
-      "abastecimento xe",
-    ],
-  },
-  {
-    grupo: "Falta de área de estoque",
-    prioridade: 80,
-    palavras: [
-      "falta de area de estoque",
-      "falta de área de estoque",
-      "falta de area",
-      "falta de área",
-      "sem area",
-      "sem área",
-      "sem area de estoque",
-      "sem área de estoque",
-      "area de estoque cheia",
-      "área de estoque cheia",
-      "area cheia",
-      "área cheia",
-      "sem local para estocar",
-      "sem local de estoque",
-      "sem praça de estoque",
-      "sem praca de estoque",
-      "praca cheia",
-      "praça cheia",
-      "praca de estoque cheia",
-      "praça de estoque cheia",
-      "estoque hematita cheio",
-      "estoque de hematita cheio",
-      "estoque granulado cheio",
-      "estoque de granulado cheio",
-      "estoque sinter cheio",
-      "estoque sínter cheio",
-      "estoque de sinter cheio",
-      "estoque de sínter cheio",
-      "sem estoque hematita",
-      "sem estoque granulado",
-      "sem estoque sinter",
-      "sem estoque sínter",
-      "falta de estoque hematita",
-      "falta de estoque granulado",
-      "falta de estoque sinter",
-      "falta de estoque sínter",
-      "sem destino para material",
-      "destino cheio",
-    ],
-  },
-  {
-    grupo: "Cone cheio",
-    prioridade: 90,
-    palavras: [
-      "cone cheio",
-      "cones cheios",
-      "cone lotado",
-      "cone saturado",
-      "cone sem capacidade",
-      "cone no limite",
-      "cone transbordando",
-      "cone hematita cheio",
-      "cone de hematita cheio",
-      "cone granulado cheio",
-      "cone de granulado cheio",
-      "cone sinter cheio",
-      "cone sínter cheio",
-      "cone de sinter cheio",
-      "cone de sínter cheio",
-      "cones de hematita",
-      "cones de granulado",
-      "cones de sinter",
-      "cones de sínter",
-      "cone hematita",
-      "cone granulado",
-      "cone sinter",
-      "cone sínter",
-    ],
-  },
+const palavrasChaveEstoque = [
+  "cone cheio",
+  "cones cheios",
+  "pilha cheia",
+  "pilhas cheias",
+  "pulmao cheio",
+  "pulmão cheio",
+  "falta de estoque",
+  "falta estoque",
+  "sem estoque",
+  "falta de area de estoque",
+  "falta de área de estoque",
+  "sem area de estoque",
+  "sem área de estoque",
+  "area de estoque cheia",
+  "área de estoque cheia",
+  "falta de area",
+  "falta de área",
+  "sem area",
+  "sem área",
+  "restricao de estoque",
+  "restrição de estoque",
+  "restricao recebimento",
+  "restrição recebimento",
+  "sem local para estocar",
+  "sem local de estoque",
+  "sem praça de estoque",
+  "praca de estoque cheia",
+  "praça de estoque cheia",
+  "destino cheio",
+  "sem destino",
 ];
-
-function encontrarGrupoParadaOperacional(textoOriginal: string) {
-  const texto = normalizarTexto(textoOriginal);
-
-  const encontrados = gruposParadasOperacionais
-    .filter((grupo) =>
-      grupo.palavras.some((palavra) => texto.includes(normalizarTexto(palavra)))
-    )
-    .sort((a, b) => a.prioridade - b.prioridade);
-
-  return encontrados[0] || null;
-}
 
 const COR_AZUL = "#0ea5e9";
 const COR_AZUL_ESCURO = "#075985";
@@ -533,13 +318,57 @@ function transformarLinha(day: string, row: StopLaunchRow): ParadaEstoque {
 }
 
 function ehParadaEstoque(parada: ParadaEstoque) {
-  return parada.minutos > 0 && normalizarTexto(parada.observacaoCompleta).length > 0;
+  const texto = normalizarTexto(parada.observacaoCompleta);
+
+  return palavrasChaveEstoque.some((palavra) =>
+    texto.includes(normalizarTexto(palavra))
+  );
 }
 
 function classificarCausa(parada: ParadaEstoque) {
-  const grupo = encontrarGrupoParadaOperacional(parada.observacaoCompleta);
+  const texto = normalizarTexto(parada.observacaoCompleta);
 
-  return grupo?.grupo || "Outros";
+  if (texto.includes("cone cheio") || texto.includes("cones cheios")) {
+    return "Cone cheio";
+  }
+
+  if (texto.includes("pilha cheia") || texto.includes("pilhas cheias")) {
+    return "Pilha cheia";
+  }
+
+  if (texto.includes("pulmao cheio")) {
+    return "Pulmão cheio";
+  }
+
+  if (
+    texto.includes("falta de estoque") ||
+    texto.includes("falta estoque") ||
+    texto.includes("sem estoque")
+  ) {
+    return "Falta de estoque";
+  }
+
+  if (
+    texto.includes("falta de area") ||
+    texto.includes("sem area") ||
+    texto.includes("area de estoque cheia") ||
+    texto.includes("sem local de estoque") ||
+    texto.includes("sem local para estocar") ||
+    texto.includes("praca de estoque cheia")
+  ) {
+    return "Falta de área de estoque";
+  }
+
+  if (
+    texto.includes("destino cheio") ||
+    texto.includes("sem destino") ||
+    texto.includes("restricao de estoque") ||
+    texto.includes("restricao recebimento")
+  ) {
+    return "Restrição de estoque";
+  }
+
+  return "Outras restrições";
 }
 
 function calcularMediaRealProducao(rows: PlantProductionRow[]) {
@@ -1491,9 +1320,9 @@ export default function PrevisaoParadasEstoque() {
               <h1>
                 Previsão de Paradas Operacionais da Planta
                 <br />
-                por Causa Classificada
+                por Restrição de Estoque
               </h1>
-              <p>Classificação por palavras-chave, sinônimos e prioridade</p>
+              <p>Análise pela descrição dos lançamentos em Paradas Minutos</p>
             </div>
 
             <div className="pe-period">
@@ -1506,7 +1335,7 @@ export default function PrevisaoParadasEstoque() {
         <main className="pe-content">
           <div className="pe-filter-row">
             <div className="pe-breadcrumb">
-              Operação&nbsp;&nbsp;•&nbsp;&nbsp;<b>Classificação de Paradas</b>
+              Operação&nbsp;&nbsp;•&nbsp;&nbsp;<b>Previsão Estoque</b>
             </div>
 
             <div className="pe-filters">
@@ -1551,7 +1380,7 @@ export default function PrevisaoParadasEstoque() {
             <CardIndicador
               titulo="Total de Horas de Paradas Operacionais da Planta"
               valor={`${formatarDecimal(dados.totalHoras)} h`}
-              subtitulo="Causas operacionais classificadas"
+              subtitulo="Cone, pilha, estoque, área e recebimento"
               icone={<Clock size={34} />}
               variante="azul"
             />
@@ -1612,7 +1441,7 @@ export default function PrevisaoParadasEstoque() {
             </PainelGrafico>
 
             <PainelGrafico
-              titulo="Perda Estimada por Mês"
+              titulo="Perda em Toneladas por Mês"
               subtitulo="Produção total / horas com produção"
               cor="verde"
             >
@@ -1671,7 +1500,7 @@ export default function PrevisaoParadasEstoque() {
                   ) : resumoMensal.length === 0 ? (
                     <tr>
                       <td colSpan={5}>
-                        Nenhuma parada operacional classificada encontrada no período.
+                        Nenhuma parada com cone cheio, pilha cheia, falta de estoque ou falta de área encontrada.
                       </td>
                     </tr>
                   ) : (
@@ -1753,7 +1582,7 @@ export default function PrevisaoParadasEstoque() {
                   <div className="pe-cause">
                     <div className="pe-cause-title">Sem ocorrências</div>
                     <div className="pe-cause-sub">
-                      Nenhuma descrição compatível com os grupos definidos
+                      Nenhuma descrição compatível no período filtrado
                     </div>
                   </div>
                 ) : (
@@ -1773,7 +1602,7 @@ export default function PrevisaoParadasEstoque() {
 
           <section className="pe-table-card pe-card">
             <div className="pe-table-title">
-              <h2>Detalhamento das Paradas Operacionais Classificadas</h2>
+              <h2>Detalhamento das Paradas de Estoque</h2>
               <span>Total encontrado: {paradasFiltradas.length}</span>
             </div>
 
@@ -1801,7 +1630,7 @@ export default function PrevisaoParadasEstoque() {
                   ) : paradasFiltradas.length === 0 ? (
                     <tr>
                       <td colSpan={9}>
-                        Nenhuma parada operacional classificada encontrada no período.
+                        Nenhuma parada de estoque encontrada no período.
                       </td>
                     </tr>
                   ) : (
@@ -1828,12 +1657,9 @@ export default function PrevisaoParadasEstoque() {
             <div className="strong">i</div>
             <div>
               A busca é feita nos lançamentos de Paradas Minutos, comparando a descrição com
-              grupos oficiais de causa, palavras-chave, sinônimos e prioridade. Os grupos atuais são:
-              <b> Cone cheio</b>, <b>Falta de área de estoque</b>, <b>Abastecimento da escavadeira</b>,
-              <b> Limpeza dos tambores de retorno</b>, <b>Sobrecarga do BT-02 / Engaiolamento</b>,
-              <b> Sobrecarga PN-01 / PN-02</b>, <b>Desarme do BT-01</b>, <b>Rasgo de correia</b>,
-              <b>Reparo de telas</b> e <b>Outros</b>. As toneladas perdidas são estimadas pela média real
-              de produção da planta no período filtrado.
+              palavras-chave como <b>cone cheio</b>, <b>pilha cheia</b>, <b>falta de estoque</b>,
+              <b> falta de área de estoque</b>, <b>pulmão cheio</b> e <b>restrição de estoque</b>.
+              As toneladas perdidas são estimadas pela média real de produção da planta no período filtrado.
             </div>
           </footer>
 
