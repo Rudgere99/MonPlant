@@ -135,10 +135,10 @@ function obterLabelTipoParada(tipo: string) {
   return "Outros";
 }
 
-const COR_AZUL = "#0ea5e9";
-const COR_AZUL_ESCURO = "#075985";
-const COR_VERDE = "#10b981";
-const COR_LARANJA = "#f59e0b";
+const COR_AZUL = "#1FC7F2";
+const COR_AZUL_ESCURO = "#1399C8";
+const COR_VERDE = "#1FC7F2";
+const COR_LARANJA = "#F6A21A";
 
 function authHeaders(): HeadersInit {
   const token = (
@@ -444,7 +444,7 @@ function PainelGrafico({
 }: {
   titulo: string;
   subtitulo: string;
-  cor: "azul" | "verde";
+  cor: "azul" | "verde" | "laranja";
   children: React.ReactNode;
 }) {
   return (
@@ -700,9 +700,9 @@ export default function PrevisaoParadasEstoque() {
           border-radius: 24px;
           border: 1px solid rgba(148,163,184,0.18);
           background:
-            radial-gradient(circle at top left, rgba(14,165,233,0.18), transparent 28%),
-            radial-gradient(circle at top right, rgba(16,185,129,0.15), transparent 28%),
-            linear-gradient(180deg, #08111c 0%, #050a11 100%);
+            radial-gradient(circle at top left, rgba(31,199,242,0.16), transparent 30%),
+            radial-gradient(circle at top right, rgba(246,162,26,0.10), transparent 30%),
+            linear-gradient(180deg, #0A0F16 0%, #070B11 100%);
           box-shadow: 0 22px 70px rgba(0,0,0,0.35);
         }
 
@@ -724,7 +724,7 @@ export default function PrevisaoParadasEstoque() {
           bottom: 0;
           height: 3px;
           border-radius: 999px;
-          background: linear-gradient(90deg, #075985, #10b981, #f59e0b);
+          background: linear-gradient(90deg, #1FC7F2, #1399C8, #F6A21A);
         }
 
         .pe-brand {
@@ -739,7 +739,7 @@ export default function PrevisaoParadasEstoque() {
           width: 66px;
           height: 66px;
           border-radius: 18px;
-          background: linear-gradient(135deg, #075985, #10b981);
+          background: linear-gradient(135deg, #123244, #1FC7F2);
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 16px 38px rgba(0,0,0,0.30);
         }
 
@@ -754,7 +754,7 @@ export default function PrevisaoParadasEstoque() {
 
         .pe-brand-subtitle {
           margin-top: 8px;
-          color: #10b981;
+          color: #9fb0c3;
           font-size: 13px;
           font-weight: 950;
           letter-spacing: 0.52em;
@@ -778,7 +778,7 @@ export default function PrevisaoParadasEstoque() {
 
         .pe-title p {
           margin: 9px 0 0;
-          color: #22c55e;
+          color: #F6A21A;
           font-size: 16px;
           font-weight: 850;
         }
@@ -790,9 +790,9 @@ export default function PrevisaoParadasEstoque() {
           flex: 0 0 auto;
           padding: 9px 14px;
           border-radius: 999px;
-          border: 1px solid rgba(245,158,11,0.36);
-          background: rgba(245,158,11,0.12);
-          color: #fed7aa;
+          border: 1px solid rgba(246,162,26,0.32);
+          background: rgba(246,162,26,0.10);
+          color: #ffd89a;
           font-size: 13px;
           font-weight: 850;
         }
@@ -827,7 +827,7 @@ export default function PrevisaoParadasEstoque() {
           gap: 10px;
           padding: 10px;
           border-radius: 18px;
-          border: 1px solid rgba(148,163,184,0.16);
+          border: 1px solid rgba(255,255,255,0.10);
           background: rgba(15,23,42,0.72);
         }
 
@@ -853,8 +853,8 @@ export default function PrevisaoParadasEstoque() {
         }
 
         .pe-input:focus {
-          border-color: rgba(245,158,11,0.58);
-          box-shadow: 0 0 0 3px rgba(245,158,11,0.12);
+          border-color: rgba(31,199,242,0.50);
+          box-shadow: 0 0 0 3px rgba(31,199,242,0.10);
         }
 
         .pe-error {
@@ -868,8 +868,8 @@ export default function PrevisaoParadasEstoque() {
         }
 
         .pe-card {
-          border: 1px solid rgba(148,163,184,0.16);
-          background: linear-gradient(180deg, rgba(15,23,42,0.88), rgba(2,6,23,0.64));
+          border: 1px solid rgba(255,255,255,0.10);
+          background: linear-gradient(180deg, rgba(20,25,34,0.96), rgba(12,17,24,0.92));
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 34px rgba(0,0,0,0.20);
         }
 
@@ -903,7 +903,7 @@ export default function PrevisaoParadasEstoque() {
         }
 
         .pe-kpi-azul::after { background: ${COR_AZUL}; }
-        .pe-kpi-verde::after { background: ${COR_VERDE}; }
+        .pe-kpi-verde::after { background: ${COR_AZUL}; }
         .pe-kpi-laranja::after { background: ${COR_LARANJA}; }
 
         .pe-kpi-icon {
@@ -916,16 +916,16 @@ export default function PrevisaoParadasEstoque() {
           flex: 0 0 auto;
           border-radius: 50%;
           color: #fff;
-          background: linear-gradient(135deg, #075985, #0ea5e9);
+          background: linear-gradient(135deg, #0E3346, #1FC7F2);
           box-shadow: 0 16px 34px rgba(0,0,0,0.30);
         }
 
         .pe-kpi-verde .pe-kpi-icon {
-          background: linear-gradient(135deg, #047857, #10b981);
+          background: linear-gradient(135deg, #5A3700, #F6A21A);
         }
 
         .pe-kpi-laranja .pe-kpi-icon {
-          background: linear-gradient(135deg, #b45309, #f59e0b);
+          background: linear-gradient(135deg, #50310B, #F6A21A);
         }
 
         .pe-kpi-title {
@@ -988,11 +988,15 @@ export default function PrevisaoParadasEstoque() {
         }
 
         .pe-chart-title-azul {
-          background: linear-gradient(135deg, #073763, #0b5d9c);
+          background: linear-gradient(135deg, #0E3346, #1A9FD0);
         }
 
         .pe-chart-title-verde {
-          background: linear-gradient(135deg, #047857, #10b981);
+          background: linear-gradient(135deg, #0E3346, #1A9FD0);
+        }
+
+        .pe-chart-title-laranja {
+          background: linear-gradient(135deg, #5A3700, #F6A21A);
         }
 
         .pe-chart-subtitle {
@@ -1114,7 +1118,7 @@ export default function PrevisaoParadasEstoque() {
 
         .pe-cause-value {
           margin-top: 8px;
-          color: #fbbf24;
+          color: #F6A21A;
           font-size: 23px;
           font-weight: 950;
         }
@@ -1139,7 +1143,7 @@ export default function PrevisaoParadasEstoque() {
           gap: 12px;
           padding: 14px 18px;
           border-bottom: 1px solid rgba(148,163,184,0.15);
-          background: linear-gradient(90deg, rgba(7,89,133,0.78), rgba(4,120,87,0.50));
+          background: linear-gradient(90deg, rgba(14,51,70,0.92), rgba(24,123,159,0.78));
         }
 
         .pe-table-title h2 {
@@ -1208,8 +1212,8 @@ export default function PrevisaoParadasEstoque() {
           display: flex;
           gap: 12px;
           border-radius: 18px;
-          border: 1px solid rgba(16,185,129,0.28);
-          background: rgba(16,185,129,0.075);
+          border: 1px solid rgba(31,199,242,0.22);
+          background: rgba(31,199,242,0.06);
           padding: 13px 16px;
           color: rgba(226,232,240,0.72);
           font-size: 13px;
@@ -1220,7 +1224,7 @@ export default function PrevisaoParadasEstoque() {
           height: 18px;
           margin-top: 18px;
           border-radius: 0 0 20px 20px;
-          background: linear-gradient(90deg, #073763 0%, #073763 62%, #fff 62%, #fff 64%, #10b981 64%, #10b981 100%);
+          background: linear-gradient(90deg, #0E3346 0%, #0E3346 62%, #ffffff 62%, #ffffff 64%, #F6A21A 64%, #F6A21A 100%);
           opacity: 0.92;
         }
 
@@ -1370,7 +1374,7 @@ export default function PrevisaoParadasEstoque() {
             <CardIndicador
               titulo="Total de Horas de Paradas da Planta"
               valor={`${formatarDecimal(dados.totalHoras)} h`}
-              subtitulo="Conforme tipo selecionado no filtro"
+              subtitulo="Paleta e layout alinhados ao padrão MonPlant"
               icone={<Clock size={34} />}
               variante="azul"
             />
@@ -1380,7 +1384,7 @@ export default function PrevisaoParadasEstoque() {
               valor={`${formatarToneladas(dados.toneladasPerdidas)} t`}
               subtitulo="Estimativa pela média real de produção"
               icone={<TrendingDown size={34} />}
-              variante="verde"
+              variante="laranja"
             />
 
             <CardIndicador
@@ -1433,7 +1437,7 @@ export default function PrevisaoParadasEstoque() {
             <PainelGrafico
               titulo="Perda em Toneladas por Mês"
               subtitulo="Produção total / horas com produção"
-              cor="verde"
+              cor="laranja"
             >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={resumoMensal} margin={{ top: 28, right: 20, left: 0, bottom: 10 }}>
@@ -1452,7 +1456,7 @@ export default function PrevisaoParadasEstoque() {
                   <Bar dataKey="toneladas" name="Toneladas" radius={[8, 8, 0, 0]}>
                     <LabelList content={<TonValueLabel />} />
                     {resumoMensal.map((_, index) => (
-                      <Cell key={index} fill={index === 0 ? COR_VERDE : "#047857"} />
+                      <Cell key={index} fill={index === 0 ? COR_LARANJA : "#D88A10"} />
                     ))}
                   </Bar>
                 </BarChart>
