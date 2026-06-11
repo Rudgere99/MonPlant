@@ -87,10 +87,17 @@ type ResumoMensal = {
   eventos: number;
 };
 
-type ResumoProducaoReal = {
+type ProducaoMensalBase = {
+  chave: string;
   producaoTotal: number;
   horasComProducao: number;
   mediaHora: number;
+};
+
+type ProducaoMensalPorEscopo = {
+  todas: Record<string, ProducaoMensalBase>;
+  planta_01: Record<string, ProducaoMensalBase>;
+  planta_02: Record<string, ProducaoMensalBase>;
 };
 
 const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
@@ -364,51 +371,113 @@ function calcularMediaRealProducao(rows: PlantProductionRow[]) {
   };
 }
 
-function calcularMediaRealProducaoPorMes(payloads: PlantProductionPayload[]) {
-  const mapa: Record<string, ResumoProducaoReal> = {};
 
-  payloads.forEach((payload) => {
-    const mes = String(payload.day || "").slice(0, 7);
+function chaveMesFromDay(day: string) {
+  return String(day || "").slice(0, 7);
+}
 
-    if (!mes) return;
+function acumularProducaoMensal(
+  alvo: Record<string, ProducaoMensalBase>,
+  day: string,
+  rows: PlantProductionRow[]
+) {
+  const chave = chaveMesFromDay(day);
+  if (!chave) return;
 
-    if (!mapa[mes]) {
-      mapa[mes] = {
-        producaoTotal: 0,
-        horasComProducao: 0,
-        mediaHora: 0,
-      };
+  const atual =
+    alvo[chave] ||
+    {
+      chave,
+      producaoTotal: 0,
+      horasComProducao: 0,
+      mediaHora: 0,
+    };
+
+  rows.forEach((row) => {
+    const ton = Number(row.ton || 0);
+    if (ton > 0) {
+      atual.producaoTotal += ton;
+      atual.horasComProducao += 1;
     }
-
-    (payload.rows || []).forEach((row) => {
-      const ton = Number(row.ton || 0);
-
-      if (ton > 0) {
-        mapa[mes].producaoTotal += ton;
-        mapa[mes].horasComProducao += 1;
-      }
-    });
   });
 
-  Object.keys(mapa).forEach((mes) => {
-    const item = mapa[mes];
-    item.mediaHora =
-      item.horasComProducao > 0 ? item.producaoTotal / item.horasComProducao : 0;
+  atual.mediaHora =
+    atual.horasComProducao > 0
+      ? atual.producaoTotal / atual.horasComProducao
+      : 0;
+
+  alvo[chave] = atual;
+}
+
+function calcularMediaMensalPorEscopo(
+  producaoPlanta01: PlantProductionPayload[],
+  producaoPlanta02: PlantProductionPayload[]
+): ProducaoMensalPorEscopo {
+  const planta_01: Record<string, ProducaoMensalBase> = {};
+  const planta_02: Record<string, ProducaoMensalBase> = {};
+  const todas: Record<string, ProducaoMensalBase> = {};
+
+  producaoPlanta01.forEach((payload) => {
+    acumularProducaoMensal(planta_01, payload.day, payload.rows || []);
+    acumularProducaoMensal(todas, payload.day, payload.rows || []);
   });
 
-  return mapa;
+  producaoPlanta02.forEach((payload) => {
+    acumularProducaoMensal(planta_02, payload.day, payload.rows || []);
+    acumularProducaoMensal(todas, payload.day, payload.rows || []);
+  });
+
+  return {
+    todas,
+    planta_01,
+    planta_02,
+  };
+}
+
+function obterMediaHoraDaParada(
+  parada: ParadaEstoque,
+  plantaSelecionada: PlantaFiltro,
+  mediasMensais: ProducaoMensalPorEscopo
+) {
+  const chave = parada.day.slice(0, 7);
+
+  if (plantaSelecionada === "todas") {
+    return mediasMensais.todas[chave]?.mediaHora || 0;
+  }
+
+  return mediasMensais[plantaSelecionada][chave]?.mediaHora || 0;
+}
+
+function perdaEstimadaMensal(
+  parada: ParadaEstoque,
+  plantaSelecionada: PlantaFiltro,
+  mediasMensais: ProducaoMensalPorEscopo
+) {
+  const mediaHora = obterMediaHoraDaParada(parada, plantaSelecionada, mediasMensais);
+
+  return (parada.minutos / 60) * mediaHora;
+}
+
+function obterBaseMensalResumo(
+  chave: string,
+  plantaSelecionada: PlantaFiltro,
+  mediasMensais: ProducaoMensalPorEscopo
+) {
+  if (plantaSelecionada === "todas") {
+    return mediasMensais.todas[chave];
+  }
+
+  return mediasMensais[plantaSelecionada][chave];
 }
 
 function perdaEstimada(
   parada: ParadaEstoque,
-  producaoHoraPorPlanta: Record<string, number>,
-  producaoHoraPorMesPlanta: Record<string, Record<string, number>> = {}
+  producaoHoraPorPlanta: Record<string, number>
 ) {
-  const mes = parada.day.slice(0, 7);
-  const producaoHoraMensal = producaoHoraPorMesPlanta[mes]?.[parada.planta] || 0;
-  const producaoHoraPeriodo = producaoHoraPorPlanta[parada.planta] || 0;
-  const producaoHoraFallback = producaoHoraFallbackPorPlanta[parada.planta] || 0;
-  const producaoHora = producaoHoraMensal || producaoHoraPeriodo || producaoHoraFallback;
+  const producaoHora =
+    producaoHoraPorPlanta[parada.planta] ||
+    producaoHoraFallbackPorPlanta[parada.planta] ||
+    0;
 
   return (parada.minutos / 60) * producaoHora;
 }
@@ -515,8 +584,13 @@ export default function PrevisaoParadasEstoque() {
     planta_01: 0,
     planta_02: 0,
   });
-  const [producaoHoraRealPorMesPlanta, setProducaoHoraRealPorMesPlanta] =
-    useState<Record<string, Record<string, number>>>({});
+  const [mediasMensaisPorEscopo, setMediasMensaisPorEscopo] =
+    useState<ProducaoMensalPorEscopo>({
+      todas: {},
+      planta_01: {},
+      planta_02: {},
+    });
+
   const [resumoProducaoReal, setResumoProducaoReal] = useState({
     planta_01: {
       producaoTotal: 0,
@@ -587,18 +661,12 @@ export default function PrevisaoParadasEstoque() {
 
       const mediaPlanta01 = calcularMediaRealProducao(linhasProducaoPlanta01);
       const mediaPlanta02 = calcularMediaRealProducao(linhasProducaoPlanta02);
-      const mediaMensalPlanta01 = calcularMediaRealProducaoPorMes(producaoPlanta01);
-      const mediaMensalPlanta02 = calcularMediaRealProducaoPorMes(producaoPlanta02);
-      const mediaPorMesPlanta: Record<string, Record<string, number>> = {};
+      const mediasMensais = calcularMediaMensalPorEscopo(
+        producaoPlanta01,
+        producaoPlanta02
+      );
 
-      Array.from(
-        new Set([...Object.keys(mediaMensalPlanta01), ...Object.keys(mediaMensalPlanta02)])
-      ).forEach((mes) => {
-        mediaPorMesPlanta[mes] = {
-          planta_01: mediaMensalPlanta01[mes]?.mediaHora || 0,
-          planta_02: mediaMensalPlanta02[mes]?.mediaHora || 0,
-        };
-      });
+      setMediasMensaisPorEscopo(mediasMensais);
 
       setResumoProducaoReal({
         planta_01: mediaPlanta01,
@@ -610,7 +678,6 @@ export default function PrevisaoParadasEstoque() {
         planta_02: mediaPlanta02.mediaHora,
       });
 
-      setProducaoHoraRealPorMesPlanta(mediaPorMesPlanta);
       setParadas(linhas);
     } catch (error: any) {
       console.error("Erro ao carregar paradas da tabela bv_launch.stops_rows:", error);
@@ -641,7 +708,7 @@ export default function PrevisaoParadasEstoque() {
     const totalMinutos = paradasFiltradas.reduce((acc, p) => acc + p.minutos, 0);
     const totalHoras = totalMinutos / 60;
     const toneladasPerdidas = paradasFiltradas.reduce(
-      (acc, p) => acc + perdaEstimada(p, producaoHoraRealPorPlanta, producaoHoraRealPorMesPlanta),
+      (acc, p) => acc + perdaEstimadaMensal(p, planta, mediasMensaisPorEscopo),
       0
     );
 
@@ -661,13 +728,7 @@ export default function PrevisaoParadasEstoque() {
       previsaoHorasMes,
       previsaoPerdaMes,
     };
-  }, [
-    paradasFiltradas,
-    dataInicio,
-    dataFim,
-    producaoHoraRealPorPlanta,
-    producaoHoraRealPorMesPlanta,
-  ]);
+  }, [paradasFiltradas, dataInicio, dataFim, planta, mediasMensaisPorEscopo]);
 
   const resumoMensal = useMemo<ResumoMensal[]>(() => {
     const mapa = new Map<string, ResumoMensal>();
@@ -686,9 +747,19 @@ export default function PrevisaoParadasEstoque() {
         };
 
       atual.horas += parada.minutos / 60;
-      atual.toneladas += perdaEstimada(parada, producaoHoraRealPorPlanta, producaoHoraRealPorMesPlanta);
+      atual.toneladas += perdaEstimadaMensal(
+        parada,
+        planta,
+        mediasMensaisPorEscopo
+      );
       atual.eventos += 1;
-      atual.mediaProducao = atual.horas > 0 ? atual.toneladas / atual.horas : 0;
+      const baseMensal = obterBaseMensalResumo(
+        chave,
+        planta,
+        mediasMensaisPorEscopo
+      );
+
+      atual.mediaProducao = baseMensal?.mediaHora || 0;
 
       mapa.set(chave, atual);
     });
@@ -701,7 +772,7 @@ export default function PrevisaoParadasEstoque() {
         toneladas: Number(item.toneladas.toFixed(0)),
         mediaProducao: Number(item.mediaProducao.toFixed(1)),
       }));
-  }, [paradasFiltradas, producaoHoraRealPorPlanta, producaoHoraRealPorMesPlanta]);
+  }, [paradasFiltradas, planta, mediasMensaisPorEscopo]);
 
   const rankingCausas = useMemo(() => {
     const mapa = new Map<
@@ -721,7 +792,11 @@ export default function PrevisaoParadasEstoque() {
         };
 
       atual.horas += parada.minutos / 60;
-      atual.toneladas += perdaEstimada(parada, producaoHoraRealPorPlanta, producaoHoraRealPorMesPlanta);
+      atual.toneladas += perdaEstimadaMensal(
+        parada,
+        planta,
+        mediasMensaisPorEscopo
+      );
       atual.eventos += 1;
 
       mapa.set(causa, atual);
@@ -734,7 +809,7 @@ export default function PrevisaoParadasEstoque() {
         horas: Number(item.horas.toFixed(1)),
         toneladas: Number(item.toneladas.toFixed(0)),
       }));
-  }, [paradasFiltradas, producaoHoraRealPorPlanta, producaoHoraRealPorMesPlanta]);
+  }, [paradasFiltradas, planta, mediasMensaisPorEscopo]);
 
   const maiorImpacto = useMemo(() => {
     if (!resumoMensal.length) return null;
@@ -1544,8 +1619,8 @@ export default function PrevisaoParadasEstoque() {
               </div>
 
               <p className="pe-note">
-                Projeção calculada pela média diária do período filtrado. Para o histórico mensal,
-                cada mês usa sua própria média real de produção: produção do mês dividida pelas horas com produção do mês.
+                Projeção calculada pela média diária do período filtrado, usando a média real
+                de produção do próprio período: produção total dividida pelas horas com produção.
               </p>
 
               <div className="pe-production-ref">
@@ -1646,7 +1721,13 @@ export default function PrevisaoParadasEstoque() {
                         <td>{parada.equipamento || "-"}</td>
                         <td>{parada.observacaoCompleta || "-"}</td>
                         <td className="right">{formatarDecimal(parada.minutos / 60)} h</td>
-                        <td className="right strong">{formatarToneladas(perdaEstimada(parada, producaoHoraRealPorPlanta, producaoHoraRealPorMesPlanta))} t</td>
+                        <td className="right strong">{formatarToneladas(
+                            perdaEstimadaMensal(
+                              parada,
+                              planta,
+                              mediasMensaisPorEscopo
+                            )
+                          )} t</td>
                       </tr>
                     ))
                   )}
@@ -1660,8 +1741,8 @@ export default function PrevisaoParadasEstoque() {
             <div>
               A busca é feita nos lançamentos de Paradas Minutos, utilizando o campo padronizado de tipo de parada:
               <b> Operacional</b>, <b>Corretiva</b> e <b>Preventiva</b>. O filtro permite visualizar cada tipo
-              separadamente ou todos os tipos consolidados. As toneladas perdidas são estimadas pela média real de produção de cada mês,
-              tornando o cálculo mensal mais fiel ao desempenho real daquele período.
+              separadamente ou todos os tipos consolidados. As toneladas perdidas são estimadas pela média real de cada mês, considerando
+              produção total do mês dividida pelas horas produtivas do próprio mês.
             </div>
           </footer>
 
