@@ -1,186 +1,40 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { useIsMobile } from "../mobile/useIsMobile";
+import { useNavigate } from "react-router-dom";
+import html2canvas from "html2canvas";
 import {
-  AlertTriangle,
   BarChart3,
   CalendarDays,
-  Clock,
-  Factory,
-  Filter,
-  PackageX,
+  Gauge,
+  LayoutGrid,
+  Percent,
+  Timer,
+  TrendingUp,
   TrendingDown,
+  Minus,
 } from "lucide-react";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  LabelList,
   ResponsiveContainer,
-  Tooltip,
+  AreaChart,
+  Area,
+  Line,
   XAxis,
   YAxis,
+  Tooltip,
+  CartesianGrid,
+  RadialBarChart,
+  RadialBar,
+  BarChart,
+  Bar,
+  ComposedChart,
+  Legend,
+  LabelList,
+  ReferenceLine,
 } from "recharts";
 
-type PlantaFiltro = "todas" | "planta_01" | "planta_02";
-type TipoParadaFiltro = "todas" | "operacional" | "corretiva" | "preventiva";
-
-type StopLaunchRow = {
-  id?: number | string | null;
-  day?: string;
-  plant_id?: number | string;
-  period?: string;
-  ordem?: number;
-  equipamento?: string;
-  equipment?: string;
-  tipo_parada?: string;
-  stop_type?: string;
-  descricao?: string;
-  description?: string;
-  minutos?: number;
-  minutes?: number;
-  hora_inicial?: string;
-  hora_final?: string;
-  justificativa_baixa_producao?: string;
-};
-
-type AggregateStopsPayload = {
-  day: string;
-  scope?: string;
-  obs?: string;
-  rows?: StopLaunchRow[];
-  summaries_by_plant_period?: Record<string, any>;
-};
-
-type PlantProductionRow = {
-  period?: string;
-  ton?: number | string | null;
-  freq?: number | string | null;
-};
-
-type PlantProductionPayload = {
-  day: string;
-  plant_id?: number;
-  rows?: PlantProductionRow[];
-};
-
-type ParadaEstoque = {
-  id: string;
-  day: string;
-  planta: "planta_01" | "planta_02";
-  plant_id: number;
-  period: string;
-  equipamento: string;
-  tipo_parada: string;
-  descricao: string;
-  observacaoCompleta: string;
-  minutos: number;
-  hora_inicial: string;
-  hora_final: string;
-};
-
-type ResumoMensal = {
-  chave: string;
-  mes: string;
-  horas: number;
-  toneladas: number;
-  mediaProducao: number;
-  eventos: number;
-};
-
-type ProducaoMensalDashboard = {
-  chave: string;
-  producaoTotal: number;
-  dias: number;
-  faixasProdutivas: number;
-  mediaHora: number;
-};
-
-type ProducaoMensalDashboardPorEscopo = {
-  todas: Record<string, ProducaoMensalDashboard>;
-  planta_01: Record<string, ProducaoMensalDashboard>;
-  planta_02: Record<string, ProducaoMensalDashboard>;
-};
-
-const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
-
-const producaoHoraFallbackPorPlanta: Record<string, number> = {
-  planta_01: 0,
-  planta_02: 0,
-};
-
-const tiposParadaPadronizados = [
-  {
-    value: "operacional",
-    label: "Operacional",
-    palavras: ["operacional", "operação", "operacao"],
-  },
-  {
-    value: "corretiva",
-    label: "Corretiva",
-    palavras: ["corretiva", "manutencao corretiva", "manutenção corretiva"],
-  },
-  {
-    value: "preventiva",
-    label: "Preventiva",
-    palavras: ["preventiva", "manutencao preventiva", "manutenção preventiva"],
-  },
-] as const;
-
-function obterTipoParadaPadronizado(textoOriginal: string): TipoParadaFiltro | "outros" {
-  const texto = normalizarTexto(textoOriginal);
-
-  for (const tipo of tiposParadaPadronizados) {
-    const encontrou = tipo.palavras.some((palavra) =>
-      texto.includes(normalizarTexto(palavra))
-    );
-
-    if (encontrou) {
-      return tipo.value;
-    }
-  }
-
-  return "outros";
-}
-
-function obterLabelTipoParada(tipo: string) {
-  if (tipo === "operacional") return "Operacional";
-  if (tipo === "corretiva") return "Corretiva";
-  if (tipo === "preventiva") return "Preventiva";
-  return "Outros";
-}
-
-const COR_AZUL = "#1FC7F2";
-const COR_AZUL_ESCURO = "#1399C8";
-const COR_VERDE = "#1FC7F2";
-const COR_LARANJA = "#F6A21A";
-
-function authHeaders(): HeadersInit {
-  const token = (
-    localStorage.getItem("mp_token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("access_token") ||
-    localStorage.getItem("auth_token") ||
-    ""
-  ).trim();
-
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-async function apiGet<T>(path: string): Promise<T> {
-  const url = `${API_BASE}${path}`;
-  const response = await fetch(url, {
-    headers: authHeaders(),
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(text || `Erro HTTP ${response.status}`);
-  }
-
-  return (await response.json()) as T;
-}
-
-function isoTodayLocal() {
+/* ===================== helpers ===================== */
+function isoTodayLocal(): string {
   const d = new Date();
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -188,201 +42,108 @@ function isoTodayLocal() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function normalizarTexto(texto: string) {
-  return String(texto || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function listarDiasPeriodo(inicio: string, fim: string) {
-  const out: string[] = [];
-
-  const a = new Date(`${inicio}T00:00:00`);
-  const b = new Date(`${fim}T00:00:00`);
-
-  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) {
-    return out;
-  }
-
-  const start = a <= b ? a : b;
-  const end = a <= b ? b : a;
-
-  const cursor = new Date(start);
-
-  while (cursor <= end) {
-    const yyyy = cursor.getFullYear();
-    const mm = String(cursor.getMonth() + 1).padStart(2, "0");
-    const dd = String(cursor.getDate()).padStart(2, "0");
-    out.push(`${yyyy}-${mm}-${dd}`);
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return out;
-}
-
 function brDate(iso: string) {
-  if (!iso) return "-";
+  if (!iso) return "";
   const [y, m, d] = iso.split("-");
-  if (!y || !m || !d) return iso;
   return `${d}/${m}/${y}`;
 }
 
-function formatarDataHora(day: string, hora?: string) {
-  if (!day) return "-";
-  if (!hora) return brDate(day);
-
-  return `${brDate(day)}, ${hora.slice(0, 5)}`;
+function dayLabel(iso: string) {
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}`;
 }
 
-function formatarHoras(minutos: number) {
-  const horas = Math.floor(minutos / 60);
-  const mins = Math.round(minutos % 60);
-  return `${horas}h ${String(mins).padStart(2, "0")}min`;
+function parseBRNumber(v: any): number {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  let s = String(v).trim();
+  if (!s) return 0;
+  s = s.replace("%", "").trim();
+  s = s.replace(/\s/g, "");
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function formatarDecimal(valor: number, casas = 1) {
-  return Number(valor || 0).toLocaleString("pt-BR", {
-    minimumFractionDigits: casas,
-    maximumFractionDigits: casas,
-  });
+function fmtBR0(n: number) {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(n);
 }
-
-function formatarToneladas(valor: number) {
-  return Number(valor || 0).toLocaleString("pt-BR", {
-    maximumFractionDigits: 0,
-  });
+function fmtBR1(n: number) {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(n);
 }
-
-function obterNomeMes(chave: string) {
-  const [ano, mes] = chave.split("-").map(Number);
-  if (!ano || !mes) return chave;
-
-  const data = new Date(ano, mes - 1, 1);
-
-  return data
-    .toLocaleDateString("pt-BR", { month: "long" })
-    .replace(/^./, (c) => c.toUpperCase());
-}
-
-function obterPeriodoAnalise(inicio: string, fim: string) {
-  const inicioFmt = new Date(`${inicio}T00:00:00`).toLocaleDateString("pt-BR", {
-    month: "long",
-    year: "numeric",
-  });
-
-  const fimFmt = new Date(`${fim}T00:00:00`).toLocaleDateString("pt-BR", {
-    month: "long",
-    year: "numeric",
-  });
-
-  return inicioFmt === fimFmt ? inicioFmt : `${inicioFmt} a ${fimFmt}`;
-}
-
-function plantaFromPlantId(plantId: number | string | undefined): "planta_01" | "planta_02" {
-  const n = Number(plantId || 1);
-  return n === 2 ? "planta_02" : "planta_01";
-}
-
-function nomePlanta(planta: string) {
-  return planta === "planta_02" ? "Planta 02" : "Planta 01";
-}
-
-function montarHoraInicial(day: string, period?: string, hora?: string) {
-  if (hora) return hora.slice(0, 5);
-
-  const p = String(period || "");
-  const m = p.match(/^(\d{2})-(\d{2})$/);
-  if (m) return `${m[1]}:00`;
-
-  return "";
-}
-
-function montarHoraFinal(period?: string, hora?: string) {
-  if (hora) return hora.slice(0, 5);
-
-  const p = String(period || "");
-  const m = p.match(/^(\d{2})-(\d{2})$/);
-  if (m) return `${m[2]}:00`;
-
-  return "";
-}
-
-function transformarLinha(day: string, row: StopLaunchRow): ParadaEstoque {
-  const plantId = Number(row.plant_id || 1);
-  const planta = plantaFromPlantId(plantId);
-
-  const equipamento = String(row.equipamento ?? row.equipment ?? "").trim();
-  const tipo = String(row.tipo_parada ?? row.stop_type ?? "").trim();
-  const descricao = String(row.descricao ?? row.description ?? "").trim();
-  const justificativa = String(row.justificativa_baixa_producao ?? "").trim();
-  const period = String(row.period || "").trim();
-
-  const observacaoCompleta = [tipo, descricao, justificativa, equipamento]
-    .filter(Boolean)
-    .join(" ");
-
-  const minutos = Number(row.minutos ?? row.minutes ?? 0) || 0;
-
-  return {
-    id: `${day}-${plantId}-${row.id ?? period}-${row.ordem ?? Math.random()}`,
-    day,
-    planta,
-    plant_id: plantId,
-    period,
-    equipamento,
-    tipo_parada: tipo,
-    descricao,
-    observacaoCompleta,
-    minutos,
-    hora_inicial: montarHoraInicial(day, period, row.hora_inicial),
-    hora_final: montarHoraFinal(period, row.hora_final),
-  };
-}
-
-function ehParadaEstoque(parada: ParadaEstoque) {
-  const tipo = obterTipoParadaPadronizado(
-    `${parada.tipo_parada} ${parada.observacaoCompleta}`
-  );
-
-  return tipo === "operacional" || tipo === "corretiva" || tipo === "preventiva";
-}
-
-function classificarCausa(parada: ParadaEstoque) {
-  const tipo = obterTipoParadaPadronizado(
-    `${parada.tipo_parada} ${parada.observacaoCompleta}`
-  );
-
-  return obterLabelTipoParada(tipo);
-}
-
-function calcularMediaRealProducao(rows: PlantProductionRow[]) {
-  const linhasComProducao = rows.filter((row) => Number(row.ton || 0) > 0);
-  const producaoTotal = linhasComProducao.reduce(
-    (acc, row) => acc + Number(row.ton || 0),
-    0
-  );
-
-  const horasComProducao = linhasComProducao.length;
-
-  return {
-    producaoTotal,
-    horasComProducao,
-    mediaHora: horasComProducao > 0 ? producaoTotal / horasComProducao : 0,
-  };
-}
-
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-function normalizarPeriodoProducao(period?: string) {
+function addDaysISO(iso: string, delta: number) {
+  const base = new Date(`${iso}T00:00:00`);
+  base.setDate(base.getDate() + delta);
+  const yyyy = base.getFullYear();
+  const mm = String(base.getMonth() + 1).padStart(2, "0");
+  const dd = String(base.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function enumerateDaysInclusive(startIso: string, endIso: string) {
+  if (!startIso || !endIso) return [] as string[];
+  let start = startIso;
+  let end = endIso;
+  if (start > end) {
+    start = endIso;
+    end = startIso;
+  }
+  const out: string[] = [];
+  let cur = start;
+  for (let guard = 0; guard < 370; guard++) {
+    out.push(cur);
+    if (cur === end) break;
+    cur = addDaysISO(cur, 1);
+  }
+  return out;
+}
+
+const WEEKDAY_OPTIONS = [
+  { value: 0, short: "Dom", label: "Domingo" },
+  { value: 1, short: "Seg", label: "Segunda-feira" },
+  { value: 2, short: "Ter", label: "Terça-feira" },
+  { value: 3, short: "Qua", label: "Quarta-feira" },
+  { value: 4, short: "Qui", label: "Quinta-feira" },
+  { value: 5, short: "Sex", label: "Sexta-feira" },
+  { value: 6, short: "Sáb", label: "Sábado" },
+];
+
+function getWeekdayFromISO(iso: string): number {
+  const [y, m, d] = String(iso || "").split("-").map(Number);
+  if (!y || !m || !d) return -1;
+  return new Date(y, m - 1, d).getDay();
+}
+
+function filterDaysByExcludedWeekdays(days: string[], excludedWeekdays: number[]) {
+  if (!excludedWeekdays?.length) return days;
+  const blocked = new Set(excludedWeekdays);
+  return days.filter((d) => !blocked.has(getWeekdayFromISO(d)));
+}
+
+/**
+ * Normaliza period do backend para "HH-HH"
+ * Aceita: "00-01", "0-1", "00:00-01:00", "00:00–01:00", "00:00 — 01:00"
+ *
+ * ✅ FIX 23-00:
+ * - O grid do dashboard usa o último período como "23-00" (virada do dia).
+ * - Então NUNCA converta "00" para "24" aqui, senão o dado cai em "23-24" e some do gráfico.
+ */
+function normalizePeriod(period: string): string {
   const s0 = String(period || "").trim();
   if (!s0) return s0;
 
-  const s = s0.replace(/–|—/g, "-").replace(/\s+/g, "");
-  const parts = s.split("-").filter(Boolean);
+  const s = s0.replace(/–|—/g, "-");
+  const parts = s
+    .split("-")
+    .map((x) => x.trim())
+    .filter(Boolean);
 
   if (parts.length >= 2) {
     const h1m = parts[0].match(/^(\d{1,2})/);
@@ -390,1412 +151,2382 @@ function normalizarPeriodoProducao(period?: string) {
 
     if (h1m && h2m) {
       const h1 = Math.max(0, Math.min(23, Number(h1m[1])));
-      const h2 = Math.max(0, Math.min(23, Number(h2m[1])));
+      const h2 = Math.max(0, Math.min(23, Number(h2m[1]))); // ✅ mantém 00 como 00
       return `${pad2(h1)}-${pad2(h2)}`;
     }
+  }
+
+  const m = s.match(/^(\d{1,2})\s*-\s*(\d{1,2})$/);
+  if (m) {
+    const h1 = Math.max(0, Math.min(23, Number(m[1])));
+    const h2 = Math.max(0, Math.min(23, Number(m[2]))); // ✅ mantém 00 como 00
+    return `${pad2(h1)}-${pad2(h2)}`;
   }
 
   return s0;
 }
 
-function criarGrid24Producao(rows: PlantProductionRow[]) {
-  const mapa = new Map<string, number>();
+/** Cria sempre as 24 horas: 00-01 ... 23-00 (virada) e mescla com rows */
+function buildHourlyGrid(rows: { period: string; ton: number; freq: number }[]) {
+  const map = new Map<string, { ton: number; freq: number }>();
 
-  for (const row of rows || []) {
-    const key = normalizarPeriodoProducao(row.period);
-    const ton = Number(row.ton || 0) || 0;
-    mapa.set(key, (mapa.get(key) || 0) + ton);
+  for (const r of rows) {
+    const key = normalizePeriod(r.period);
+    const prev = map.get(key);
+    const ton = (prev?.ton || 0) + (Number(r.ton) || 0);
+    const freq = Math.max(prev?.freq || 0, Number(r.freq) || 0);
+    map.set(key, { ton, freq });
   }
 
-  const result: { period: string; ton: number }[] = [];
-
+  const result: { period: string; ton: number; freq: number }[] = [];
   for (let h = 0; h < 24; h++) {
-    const label = `${pad2(h)}-${pad2((h + 1) % 24)}`;
-    result.push({
-      period: label,
-      ton: mapa.get(label) || 0,
-    });
+    const label = `${pad2(h)}-${pad2((h + 1) % 24)}`; // 23-00
+    const found = map.get(label);
+    result.push({ period: label, ton: found?.ton ?? 0, freq: found?.freq ?? 0 });
   }
-
   return result;
 }
 
-function calcularMediaMensalDashboard(payloads: PlantProductionPayload[]) {
-  const meses = new Map<
-    string,
-    {
-      dias: Set<string>;
-      bucket: Map<string, number>;
-      producaoTotal: number;
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://127.0.0.1:8000";
+
+
+/* ===================== auth hydration (anti-flicker) ===================== */
+/**
+ * Pequeno hook local para evitar o "pisca" no F5:
+ * - primeiro render: loading=true (ainda não leu localStorage)
+ * - depois: carrega token e libera chamadas de API
+ *
+ * Se você já tiver um AuthProvider global com useAuth(), pode remover este hook
+ * e importar o seu. Mantive aqui para o Dashboard ficar auto-suficiente.
+ */
+function useAuth() {
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const keys = ["mp_token", "token", "access_token", "auth_token"];
+    let t: string | null = null;
+    for (const k of keys) {
+      const v = (localStorage.getItem(k) || "").trim();
+      if (v) { t = v; break; }
     }
-  >();
+    setToken(t);
+    setLoading(false);
 
-  for (const payload of payloads || []) {
-    const day = String(payload.day || "");
-    const chave = day.slice(0, 7);
-    if (!chave) continue;
-
-    const atual =
-      meses.get(chave) ||
-      {
-        dias: new Set<string>(),
-        bucket: new Map<string, number>(),
-        producaoTotal: 0,
-      };
-
-    atual.dias.add(day);
-
-    const grid = criarGrid24Producao(payload.rows || []);
-
-    for (const row of grid) {
-      atual.bucket.set(row.period, (atual.bucket.get(row.period) || 0) + row.ton);
-      atual.producaoTotal += row.ton;
-    }
-
-    meses.set(chave, atual);
-  }
-
-  const out: Record<string, ProducaoMensalDashboard> = {};
-
-  meses.forEach((item, chave) => {
-    const dias = Math.max(1, item.dias.size);
-
-    const mediasPorFaixa = Array.from(item.bucket.values()).map(
-      (totalFaixa) => totalFaixa / dias
-    );
-
-    const faixasProdutivas = mediasPorFaixa.filter((valor) => valor > 0);
-    const somaFaixas = faixasProdutivas.reduce((acc, valor) => acc + valor, 0);
-    const mediaHora =
-      faixasProdutivas.length > 0 ? somaFaixas / faixasProdutivas.length : 0;
-
-    out[chave] = {
-      chave,
-      producaoTotal: item.producaoTotal,
-      dias,
-      faixasProdutivas: faixasProdutivas.length,
-      mediaHora,
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (!keys.includes(e.key)) return;
+      const v = (localStorage.getItem(e.key) || "").trim();
+      setToken(v || null);
     };
-  });
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
-  return out;
+  return { token, loading };
 }
 
-function calcularMediasMensaisDashboardPorEscopo(
-  producaoPlanta01: PlantProductionPayload[],
-  producaoPlanta02: PlantProductionPayload[]
-): ProducaoMensalDashboardPorEscopo {
-  return {
-    planta_01: calcularMediaMensalDashboard(producaoPlanta01),
-    planta_02: calcularMediaMensalDashboard(producaoPlanta02),
-    todas: calcularMediaMensalDashboard([
-      ...(producaoPlanta01 || []),
-      ...(producaoPlanta02 || []),
-    ]),
-  };
-}
-
-function obterMediaMensalDashboard(
-  chave: string,
-  plantaSelecionada: PlantaFiltro,
-  medias: ProducaoMensalDashboardPorEscopo
-) {
-  if (plantaSelecionada === "todas") {
-    return medias.todas[chave]?.mediaHora || 0;
-  }
-
-  return medias[plantaSelecionada][chave]?.mediaHora || 0;
-}
-
-function perdaEstimadaDashboardMensal(
-  parada: ParadaEstoque,
-  plantaSelecionada: PlantaFiltro,
-  medias: ProducaoMensalDashboardPorEscopo
-) {
-  const chave = parada.day.slice(0, 7);
-  const mediaHora = obterMediaMensalDashboard(chave, plantaSelecionada, medias);
-
-  return (parada.minutos / 60) * mediaHora;
-}
-
-function perdaEstimada(
-  parada: ParadaEstoque,
-  producaoHoraPorPlanta: Record<string, number>
-) {
-  const producaoHora =
-    producaoHoraPorPlanta[parada.planta] ||
-    producaoHoraFallbackPorPlanta[parada.planta] ||
-    0;
-
-  return (parada.minutos / 60) * producaoHora;
-}
-
+// ==== Labels do gráfico ====
 const BarValueLabel = (props: any) => {
   const { x, y, width, value } = props || {};
   const n = Number(value);
-
   if (!Number.isFinite(n) || n === 0) return null;
-
+  const cx = (Number(x) || 0) + (Number(width) || 0) / 2;
+  const cy = (Number(y) || 0) - 6;
+  const label = n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
   return (
     <text
-      x={(Number(x) || 0) + (Number(width) || 0) / 2}
-      y={(Number(y) || 0) - 8}
+      x={cx}
+      y={cy}
       textAnchor="middle"
-      fill="#e8f2ff"
+      fill="rgba(255,255,255,0.9)"
       fontSize={13}
       fontWeight={900}
     >
-      {n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
+      {label}
     </text>
   );
 };
 
-const TonValueLabel = (props: any) => {
-  const { x, y, width, value } = props || {};
+const FreqPointLabel = (props: any) => {
+  const { x, y, value } = props || {};
   const n = Number(value);
-
   if (!Number.isFinite(n) || n === 0) return null;
-
+  const cx = Number(x) || 0;
+  const cy = (Number(y) || 0) - 28;
+  const label = `${Math.round(n)}%`;
   return (
     <text
-      x={(Number(x) || 0) + (Number(width) || 0) / 2}
-      y={(Number(y) || 0) - 8}
+      x={cx}
+      y={cy}
       textAnchor="middle"
-      fill="#d9ffee"
+      fill="rgba(255,255,255,0.9)"
       fontSize={13}
       fontWeight={900}
     >
-      {n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+      {label}
     </text>
+  );
+
+};
+
+/* ===================== Tooltip (Produção -> Paradas) ===================== */
+type StopTipItem = { equipamento: string; descricao: string };
+
+function TooltipStopsHour({
+  active,
+  label,
+  stopsMap,
+}: {
+  active?: boolean;
+  label?: string;
+  stopsMap: Record<string, StopTipItem[]>;
+}) {
+  if (!active || !label) return null;
+
+  const items = stopsMap?.[String(label)] || [];
+  const show = items.slice(0, 5);
+  const more = Math.max(0, items.length - show.length);
+
+  return (
+    <div
+      style={{
+        background: "rgba(0,0,0,0.86)",
+        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: 14,
+        boxShadow: "0 18px 50px rgba(0,0,0,0.65)",
+        padding: "10px 12px",
+        maxWidth: 320,
+      }}
+    >
+      <div style={{ color: "rgba(255,255,255,0.90)", fontWeight: 950, marginBottom: 6 }}>
+        {label}
+      </div>
+
+      {show.length ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {show.map((it, i) => (
+            <div key={i} style={{ fontSize: 12.5, lineHeight: 1.35, color: "rgba(255,255,255,0.82)" }}>
+              <b style={{ color: "rgba(255,255,255,0.92)" }}>{it.equipamento}</b>
+              {" — "}
+              {it.descricao || "Parada (sem descrição)"}
+            </div>
+          ))}
+          {more > 0 ? (
+            <div style={{ fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
+              +{more} outras
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.55)", fontWeight: 850 }}>
+          Sem parada registrada neste horário
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+// Label do gráfico "Últimos 7 dias": risquinho no ponto + valor acima (com clamp nas bordas)
+const Last7PointLabel = (props: any) => {
+  const { x, y, cx: _cx, cy: _cy, width, height, value, viewBox } = props || {};
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+
+  const vb = viewBox || { x: 0, y: 0, width: 0, height: 0 };
+  const pad = 22; // garante que 1º/último não fiquem "comidos"
+  const minX = (Number(vb.x) || 0) + pad;
+  const maxX = (Number(vb.x) || 0) + (Number(vb.width) || 0) - pad;
+  // Em LabelList, "x" pode vir como canto esquerdo do label.
+  // Preferimos coordenadas do ponto (cx/cy) quando disponíveis.
+  const cx0 = Number.isFinite(Number(x)) ? Number(x) : Number(_cx) || ((Number(x) || 0) + (Number(width) || 0) / 2);
+  const cy0 = Number.isFinite(Number(y)) ? Number(y) : Number(_cy) || ((Number(y) || 0) + (Number(height) || 0) / 2);
+
+  // Clamp só do TEXTO (pra não cortar nas bordas). O risquinho fica no ponto (bolinha).
+  const textX = Math.max(minX, Math.min(maxX, cx0));
+
+  const tickTop = cy0 - 12;
+  const textY = cy0 - 18;
+  const label = fmtBR0(n);
+
+  return (
+    <g>
+      <line x1={cx0} y1={cy0 - 2} x2={cx0} y2={tickTop} stroke="rgba(255,255,255,0.45)" strokeWidth={1.2} />
+      <text
+        x={textX}
+        y={textY}
+        textAnchor="middle"
+        fill="rgba(255,255,255,0.90)"
+        fontSize={12}
+        fontWeight={950}
+      >
+        {label}
+      </text>
+    </g>
   );
 };
 
-function CardIndicador({
-  titulo,
-  valor,
-  subtitulo,
-  icone,
-  variante = "azul",
-}: {
-  titulo: string;
-  valor: string;
-  subtitulo: string;
-  icone: React.ReactNode;
-  variante?: "azul" | "verde" | "laranja";
-}) {
-  return (
-    <div className={`pe-card pe-kpi pe-kpi-${variante}`}>
-      <div className="pe-kpi-icon">{icone}</div>
+function authHeaders(token?: string | null): Record<string, string> {
+  const t = (token || "").trim();
+  if (t) return { Authorization: `Bearer ${t}` };
 
-      <div>
-        <div className="pe-kpi-title">{titulo}</div>
-        <div className="pe-kpi-value">{valor}</div>
-        <div className="pe-kpi-sub">{subtitulo}</div>
-      </div>
-    </div>
-  );
+  const keys = ["mp_token", "token", "access_token", "auth_token"];
+  for (const k of keys) {
+    const v = (localStorage.getItem(k) || "").trim();
+    if (v) return { Authorization: `Bearer ${v}` };
+  }
+  return {};
 }
 
-function PainelGrafico({
-  titulo,
-  subtitulo,
-  cor,
-  children,
-}: {
-  titulo: string;
-  subtitulo: string;
-  cor: "azul" | "verde" | "laranja";
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="pe-card pe-chart-card">
-      <div className="pe-chart-header">
-        <div className={`pe-chart-title pe-chart-title-${cor}`}>{titulo}</div>
-      </div>
-
-      <div className="pe-chart-body">{children}</div>
-    </div>
-  );
+async function apiGet<T>(path: string, token?: string | null): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, { headers: authHeaders(token) });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(t || `HTTP ${r.status}`);
+  }
+  return (await r.json()) as T;
 }
 
-export default function PrevisaoParadasEstoque() {
-  const hoje = isoTodayLocal();
+function goalDayPath(scope: PlantScope, d: string): string {
+  return scope === "all"
+    ? `/api/aggregate/goals/day/${encodeURIComponent(d)}`
+    : `/api/plants/${scope}/goals/day/${encodeURIComponent(d)}`;
+}
 
-  const [dataInicio, setDataInicio] = useState(hoje);
-  const [dataFim, setDataFim] = useState(hoje);
-  const [planta, setPlanta] = useState<PlantaFiltro>("todas");
-  const [tipoParada, setTipoParada] = useState<TipoParadaFiltro>("operacional");
-  const [paradas, setParadas] = useState<ParadaEstoque[]>([]);
-  const [mediasMensaisDashboard, setMediasMensaisDashboard] =
-    useState<ProducaoMensalDashboardPorEscopo>({
-      todas: {},
-      planta_01: {},
-      planta_02: {},
+/* ===================== types ===================== */
+type PlantHourRow = { period: string; ton?: any; freq?: any };
+type PlantDayPayload = { day: string; obs?: string | null; rows: PlantHourRow[]; updated_at?: string | null };
+type Last7Item = { day: string; total_ton: number };
+
+type GoalDay = { day: string; meta_ton: number | null; discount_hours: number | null; updated_at?: string | null };
+type RangePlantDay = { day: string; rows: PlantHourRow[]; obs?: string | null; updated_at?: string | null; total_ton?: number };
+
+type StopRow = {
+  id: number;
+  day: string;
+  data_inicio: string;
+  hora_inicio: string;
+  data_fim: string;
+  hora_fim: string;
+  equipamento: string;
+  tipo_parada: string;
+  atividade: string;
+  descricao: string;
+  tempo_parada_h: number;
+  created_at?: string | null;
+};
+
+type HorimetroRow = {
+  equipamento: string;
+  horimetro_ini: number;
+  horimetro_fim: number;
+  day: string;
+  turno: 1 | 2;
+  created_at?: string | null;
+};
+
+type PlantInfo = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+};
+
+type PlantScope = number | "all";
+
+
+const EQ_BT01 = "BT-01";
+const EQS_TOP_PRODUCTS = ["BT-02", "PN-02", "PN-01", "EH-08"] as const;
+
+type ExportKey =
+  | "prod_horaria"
+  | "taxa"
+  | "meta_dia"
+  | "media_hora"
+  | "ultimos_7"
+  | "hoje_cards"
+  | "horimetros_top";
+
+type ExportItem = { key: ExportKey; label: string; hint: string; icon: any };
+
+export default function Dashboard() {
+  const nav = useNavigate();
+  const { token, loading: authLoading } = useAuth();
+  const [day, setDay] = useState<string>(isoTodayLocal());
+  const [rangeMode, setRangeMode] = useState(false);
+  const [startDay, setStartDay] = useState<string>(addDaysISO(isoTodayLocal(), -10));
+  const [endDay, setEndDay] = useState<string>(isoTodayLocal());
+  const [excludedWeekdays, setExcludedWeekdays] = useState<number[]>([]);
+  const [rangeProdDays, setRangeProdDays] = useState<RangePlantDay[]>([]);
+  const [rangeGoalDays, setRangeGoalDays] = useState<GoalDay[]>([]);
+  const mobile = useIsMobile();
+
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const [prodDay, setProdDay] = useState<PlantDayPayload | null>(null);
+  const [last7, setLast7] = useState<Last7Item[]>([]);
+  const [stops, setStops] = useState<StopRow[]>([]);
+  const [stopsDayCount, setStopsDayCount] = useState<number>(0);
+  const [lastByEq, setLastByEq] = useState<Record<string, HorimetroRow | null>>({});
+  const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [plantId, setPlantId] = useState<PlantScope | null>(null);
+
+  const POLL_MS = 10_000;
+
+  // ===== metas (dinâmicas por dia/mês) =====
+  const WORK_HOURS_BASE = 22; // horas de produção do dia (base)
+  const [metaDia, setMetaDia] = useState<number>(8000);
+  const [discountHours, setDiscountHours] = useState<number>(2); // almoço / paradas programadas
+
+  const metaHorasTrabalhadas = useMemo(() => {
+    const v = Math.max(0, WORK_HOURS_BASE - (discountHours || 0));
+    return v;
+  }, [discountHours]);
+
+  const metaHoraEsperada = useMemo(() => {
+    if (!metaDia || metaDia <= 0) return 0;
+    if (!metaHorasTrabalhadas || metaHorasTrabalhadas <= 0) return 0;
+    return metaDia / metaHorasTrabalhadas;
+  }, [metaDia, metaHorasTrabalhadas]);
+
+  // ===== export modal =====
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement | null>(null);
+
+  const exportItems: ExportItem[] = useMemo(
+    () => [
+      { key: "prod_horaria", label: "Produção", hint: "Ton/H + Freq", icon: BarChart3 },
+      { key: "taxa", label: "Taxa", hint: "Freq% horas", icon: Percent },
+      { key: "meta_dia", label: "Meta", hint: "Gauge", icon: Gauge },
+      { key: "media_hora", label: "Média", hint: "Mini área", icon: TrendingUp },
+      { key: "ultimos_7", label: "7 dias", hint: "Área", icon: CalendarDays },
+      { key: "hoje_cards", label: "Hoje", hint: "Cards", icon: LayoutGrid },
+      { key: "horimetros_top", label: "Horim.", hint: "Cards", icon: Timer },
+    ],
+    []
+  );
+
+  const [exportSel, setExportSel] = useState<Record<ExportKey, boolean>>({
+    prod_horaria: true,
+    taxa: true,
+    meta_dia: true,
+    media_hora: true,
+    ultimos_7: true,
+    hoje_cards: true,
+    horimetros_top: true,
+  });
+
+  async function exportJPEG() {
+    const el = exportRef.current;
+    if (!el) return;
+
+    // evita capturar tooltip aberto
+    try {
+      const active = document.activeElement as HTMLElement | null;
+      active?.blur?.();
+    } catch {
+      // ignore
+    }
+
+    const canvas = await html2canvas(el, {
+      backgroundColor: "#0b0f14",
+      scale: Math.min(2, window.devicePixelRatio || 1.5),
+      useCORS: true,
     });
 
-  const [producaoHoraRealPorPlanta, setProducaoHoraRealPorPlanta] = useState<
-    Record<string, number>
-  >({
-    planta_01: 0,
-    planta_02: 0,
-  });
-  const [resumoProducaoReal, setResumoProducaoReal] = useState({
-    planta_01: {
-      producaoTotal: 0,
-      horasComProducao: 0,
-      mediaHora: 0,
-    },
-    planta_02: {
-      producaoTotal: 0,
-      horasComProducao: 0,
-      mediaHora: 0,
-    },
-  });
-  const [loading, setLoading] = useState(false);
-  const [erro, setErro] = useState("");
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `monplant_export_${day}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
 
-  useEffect(() => {
-    carregarParadas();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataInicio, dataFim]);
 
-  async function carregarParadas() {
+  async function loadPlants() {
     try {
-      setLoading(true);
-      setErro("");
+      const data = await apiGet<PlantInfo[]>(`/api/plants`, token).catch(() => []);
+      const list = Array.isArray(data) ? data : [];
+      setPlants(list);
+      setPlantId((current) => {
+        if (current === "all") return "all";
+        if (current && list.some((p) => Number(p.id) === Number(current))) return current;
+        return list.length ? Number(list[0].id) : null;
+      });
+    } catch {
+      setPlants([]);
+      setPlantId(null);
+    }
+  }
 
-      const dias = listarDiasPeriodo(dataInicio, dataFim);
+  async function loadAll() {
+    setLoading(true);
+    setErr(null);
 
-      if (!dias.length) {
-        setParadas([]);
+    try {
+      if (!plantId) {
+        setProdDay(null);
+        setRangeProdDays([]);
+        setRangeGoalDays([]);
+        setLast7([]);
+        setStops([]);
+        setStopsDayCount(0);
+        setLastByEq({});
         return;
       }
 
-      const respostasParadas = await Promise.all(
-        dias.map((day) =>
-          apiGet<AggregateStopsPayload>(
-            `/api/aggregate/stops-launch?day=${encodeURIComponent(day)}`
-          ).catch(() => ({ day, rows: [] }))
-        )
-      );
+      if (rangeMode) {
+        const days = filterDaysByExcludedWeekdays(
+          enumerateDaysInclusive(startDay, endDay),
+          excludedWeekdays
+        );
+        const prodResults = await Promise.all(
+          days.map(async (d) => {
+            const rangePath =
+              plantId === "all"
+                ? `/api/aggregate/plant-production/${encodeURIComponent(d)}`
+                : `/api/plants/${plantId}/plant-production/${encodeURIComponent(d)}`;
 
-      const linhas = respostasParadas.flatMap((payload) =>
-        (payload.rows || []).map((row) => transformarLinha(payload.day, row))
-      );
+            const payload = await apiGet<PlantDayPayload>(rangePath, token).catch(() => {
+              return { day: d, rows: [], obs: "" } as PlantDayPayload;
+            });
+            const total_ton = (payload?.rows || []).reduce((acc, r) => acc + parseBRNumber(r?.ton), 0);
+            return { ...payload, day: d, total_ton } as RangePlantDay;
+          })
+        );
 
-      const [producaoPlanta01, producaoPlanta02] = await Promise.all([
-        Promise.all(
-          dias.map((day) =>
-            apiGet<PlantProductionPayload>(
-              `/api/plants/1/plant-production/${encodeURIComponent(day)}`
-            ).catch(() => ({ day, plant_id: 1, rows: [] }))
-          )
-        ),
-        Promise.all(
-          dias.map((day) =>
-            apiGet<PlantProductionPayload>(
-              `/api/plants/2/plant-production/${encodeURIComponent(day)}`
-            ).catch(() => ({ day, plant_id: 2, rows: [] }))
-          )
-        ),
-      ]);
+        const goalResults = await Promise.all(
+          days.map(async (d) => {
+            const g = await apiGet<GoalDay>(goalDayPath(plantId, d), token).catch(() => null as any);
+            return g ? ({ ...g, day: d } as GoalDay) : ({ day: d, meta_ton: null, discount_hours: null } as GoalDay);
+          })
+        );
 
-      const linhasProducaoPlanta01 = producaoPlanta01.flatMap(
-        (payload) => payload.rows || []
-      );
-      const linhasProducaoPlanta02 = producaoPlanta02.flatMap(
-        (payload) => payload.rows || []
-      );
+        const metas = goalResults.map((g) => Number(g?.meta_ton ?? 0)).filter((n) => Number.isFinite(n) && n > 0);
+        const discounts = goalResults.map((g) => Number(g?.discount_hours ?? 0)).filter((n) => Number.isFinite(n));
 
-      const mediaPlanta01 = calcularMediaRealProducao(linhasProducaoPlanta01);
-      const mediaPlanta02 = calcularMediaRealProducao(linhasProducaoPlanta02);
-      const mediasMensais = calcularMediasMensaisDashboardPorEscopo(
-        producaoPlanta01,
-        producaoPlanta02
-      );
+        if (metas.length) setMetaDia(metas.reduce((a, b) => a + b, 0) / metas.length);
+        if (discounts.length) setDiscountHours(discounts.reduce((a, b) => a + b, 0) / discounts.length);
 
-      setMediasMensaisDashboard(mediasMensais);
+        setRangeProdDays(prodResults);
+        setRangeGoalDays(goalResults);
+        setProdDay(null);
+        setLast7(prodResults.map((x) => ({ day: x.day, total_ton: Number(x.total_ton) || 0 })));
+        setStops([]);
+        setStopsDayCount(0);
+        setLastByEq({});
+        return;
+      }
 
-      setResumoProducaoReal({
-        planta_01: mediaPlanta01,
-        planta_02: mediaPlanta02,
+      const dayPath =
+        plantId === "all"
+          ? `/api/aggregate/plant-production/${encodeURIComponent(day)}`
+          : `/api/plants/${plantId}/plant-production/${encodeURIComponent(day)}`;
+
+      const p = await apiGet<PlantDayPayload>(dayPath, token).catch(() => {
+        return { day, rows: [], obs: "" } as PlantDayPayload;
       });
 
-      setProducaoHoraRealPorPlanta({
-        planta_01: mediaPlanta01.mediaHora,
-        planta_02: mediaPlanta02.mediaHora,
-      });
+      const g = await apiGet<GoalDay>(goalDayPath(plantId, day), token).catch(() => null as any);
+      if (g && typeof g === "object") {
+        const mdRaw = (g as any).meta_ton;
+        const dhRaw = (g as any).discount_hours;
+        if (mdRaw !== null && mdRaw !== undefined) {
+          const md = Number(mdRaw);
+          if (!Number.isNaN(md)) setMetaDia(md);
+        }
+        if (dhRaw !== null && dhRaw !== undefined) {
+          const dh = Number(dhRaw);
+          if (!Number.isNaN(dh)) setDiscountHours(dh);
+        }
+      }
 
-      setParadas(linhas);
-    } catch (error: any) {
-      console.error("Erro ao carregar paradas da tabela bv_launch.stops_rows:", error);
-      setErro(error?.message || "Erro ao carregar paradas.");
-      setParadas([]);
+      const last7Path =
+        plantId === "all"
+          ? `/api/aggregate/plant-production/last7days`
+          : `/api/plants/${plantId}/plant-production/last7days`;
+
+      const stopsLaunchPath =
+        plantId === "all"
+          ? `/api/aggregate/stops-launch?day=${encodeURIComponent(day)}`
+          : `/api/plants/${plantId}/stops-launch?day=${encodeURIComponent(day)}`;
+
+      const ps = await apiGet<any>(stopsLaunchPath, token).catch(() => null);
+      const l7 = await apiGet<Last7Item[]>(last7Path, token).catch(() => []);
+
+      const psDay =
+        plantId === "all"
+          ? []
+          : await apiGet<StopRow[]>(`/api/plants/${plantId}/stops?day=${encodeURIComponent(day)}`, token).catch(() => []);
+
+      const hb =
+        plantId === "all"
+          ? []
+          : await apiGet<HorimetroRow[]>(`/api/plants/${plantId}/horimetros/last-by-eq`, token).catch(() => []);
+
+      const map: Record<string, HorimetroRow | null> = {};
+      for (const r of hb || []) {
+        if (!r?.equipamento) continue;
+        map[r.equipamento] = r;
+      }
+
+      setProdDay(p);
+      setRangeProdDays([]);
+      setRangeGoalDays([]);
+      setLast7(Array.isArray(l7) ? l7 : []);
+      setStops(Array.isArray((ps as any)?.rows) ? (ps as any).rows : []);
+      setStopsDayCount(Array.isArray(psDay) ? psDay.length : 0);
+      setLastByEq(map);
+    } catch (e: any) {
+      setErr(e?.message || "Falha ao carregar dashboard");
     } finally {
       setLoading(false);
     }
   }
 
-  const paradasFiltradas = useMemo(() => {
-    return paradas.filter((parada) => {
-      const passaPlanta =
-        planta === "todas" ? true : parada.planta === planta;
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) return;
+    loadPlants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, token]);
 
-      const tipoClassificado = obterTipoParadaPadronizado(
-        `${parada.tipo_parada} ${parada.observacaoCompleta}`
-      );
+  useEffect(() => {
+    if (authLoading) return; // espera hidratar auth
+    if (!token) return; // só chama API se tiver token
+    if (!plantId) return;
 
-      const passaTipo =
-        tipoParada === "todas" ? ehParadaEstoque(parada) : tipoClassificado === tipoParada;
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, token, plantId, day, rangeMode, startDay, endDay, excludedWeekdays]);
 
-      return passaPlanta && passaTipo;
-    });
-  }, [paradas, planta, tipoParada]);
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) return;
+    if (!plantId) return;
 
-  const dados = useMemo(() => {
-    const totalMinutos = paradasFiltradas.reduce((acc, p) => acc + p.minutos, 0);
-    const totalHoras = totalMinutos / 60;
-    const toneladasPerdidas = paradasFiltradas.reduce(
-      (acc, p) =>
-        acc + perdaEstimadaDashboardMensal(p, planta, mediasMensaisDashboard),
-      0
+    const id = window.setInterval(() => loadAll(), POLL_MS);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, token, plantId, day, rangeMode, startDay, endDay, excludedWeekdays]);
+
+  /* ===================== computed ===================== */
+  const rangeDays = useMemo(() => {
+    return filterDaysByExcludedWeekdays(
+      enumerateDaysInclusive(startDay, endDay),
+      excludedWeekdays
     );
+  }, [startDay, endDay, excludedWeekdays]);
 
-    const mediaPerdaHora =
-      totalHoras > 0 ? toneladasPerdidas / totalHoras : 0;
+  const totalTonDay = useMemo(() => {
+    if (rangeMode) {
+      return (rangeProdDays || []).reduce((acc, d) => acc + (Number(d.total_ton) || 0), 0);
+    }
+    const rows = prodDay?.rows || [];
+    let sum = 0;
+    for (const r of rows) sum += parseBRNumber(r.ton);
+    return sum;
+  }, [prodDay, rangeMode, rangeProdDays]);
 
-    const diasPeriodo = Math.max(1, listarDiasPeriodo(dataInicio, dataFim).length);
-    const mediaHorasDia = totalHoras / diasPeriodo;
-    const previsaoHorasMes = mediaHorasDia * 30;
-    const previsaoPerdaMes = previsaoHorasMes * mediaPerdaHora;
+  const totalTonWith20Desvio = useMemo(() => {
+    return totalTonDay * 0.8;
+  }, [totalTonDay]);
+
+  const pctMetaRaw = useMemo(() => {
+    if (metaDia <= 0) return 0;
+    return (totalTonDay / metaDia) * 100;
+  }, [totalTonDay, metaDia]);
+
+  // Gauge não passa de 100% (visual), mas o texto mostra o valor real (ex: 120%)
+  const pctMetaGauge = useMemo(() => {
+    return Math.max(0, Math.min(100, pctMetaRaw));
+  }, [pctMetaRaw]);
+
+  const pctMetaOver = useMemo(() => {
+    return pctMetaRaw > 100 ? pctMetaRaw - 100 : 0;
+  }, [pctMetaRaw]);
+
+  // ✅ normaliza + garante 24 horas + inclui 23-00
+  const hourlySeries = useMemo(() => {
+    if (rangeMode) {
+      const days = rangeDays.length || 1;
+      const bucket = new Map<string, { ton: number; freq: number }>();
+      for (const d of rangeProdDays || []) {
+        const grid = buildHourlyGrid(
+          (d.rows || []).map((r) => ({
+            period: normalizePeriod(r.period),
+            ton: parseBRNumber(r.ton),
+            freq: parseBRNumber(r.freq),
+          }))
+        );
+        for (const row of grid) {
+          const prev = bucket.get(row.period) || { ton: 0, freq: 0 };
+          bucket.set(row.period, {
+            ton: prev.ton + (Number(row.ton) || 0),
+            freq: prev.freq + (Number(row.freq) || 0),
+          });
+        }
+      }
+      return buildHourlyGrid(
+        Array.from(bucket.entries()).map(([period, vals]) => ({
+          period,
+          ton: vals.ton / days,
+          freq: vals.freq / days,
+        }))
+      );
+    }
+
+    const rows = prodDay?.rows || [];
+    const data = rows.map((r) => ({
+      period: normalizePeriod(r.period),
+      ton: parseBRNumber(r.ton),
+      freq: parseBRNumber(r.freq),
+    }));
+    return buildHourlyGrid(data);
+  }, [prodDay, rangeMode, rangeProdDays, rangeDays]);
+
+    // ✅ Mapa: período ("HH-HH") -> lista de observações de parada (para tooltip do gráfico)
+  // Regras:
+  // - aceita tanto formato antigo (hora_inicio) quanto novo (period "HH-HH")
+  // - se a parada vier como faixa (ex: 19-21), a descrição aparece em TODOS os horários decorrentes (19-20, 20-21, 21-22)
+  const stopsByPeriod = useMemo<Record<string, StopTipItem[]>>(() => {
+    const map: Record<string, StopTipItem[]> = {};
+
+    const push = (h: number, eq: string, desc: string) => {
+      const key = `${pad2(h)}-${pad2((h + 1) % 24)}`;
+      if (!map[key]) map[key] = [];
+      map[key].push({ equipamento: eq, descricao: desc });
+    };
+
+    const parsePeriod = (p: string): { a: number; b: number } | null => {
+      const s = String(p || "").trim();
+      const m = s.match(/^(\d{2})-(\d{2})$/);
+      if (!m) return null;
+      const a = Number(m[1]);
+      const b = Number(m[2]);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      if (a < 0 || a > 23 || b < 0 || b > 23) return null;
+      return { a, b };
+    };
+
+    const expandHoursInclusive = (a: number, b: number): number[] => {
+      // Regra:
+      // - Se for uma faixa "normal" de 1h (ex: 22-23), a parada pertence SOMENTE ao bucket 22-23 (não joga em 23-00)
+      // - Se for uma faixa maior (ex: 19-21), aplica em TODOS os horários decorrentes incluindo o "b"
+      //   (19-20, 20-21, 21-22)
+      if (((a + 1) % 24) === b) return [a];
+
+      const out: number[] = [];
+      let h = a;
+      for (let guard = 0; guard < 48; guard++) {
+        out.push(h);
+        if (h === b) break;
+        h = (h + 1) % 24;
+      }
+      return out;
+    };
+
+    for (const s of (stops || []) as any[]) {
+      const tipo = String(s?.tipo_parada ?? s?.stop_type ?? "").trim();
+      const descRaw = String(s?.descricao ?? s?.atividade ?? s?.description ?? "").trim();
+      const eq = String(s?.equipamento ?? s?.equipment ?? "").trim() || "—";
+      const minutes = Number(s?.minutos ?? s?.minutes ?? 0) || 0;
+
+      // ignora linhas totalmente vazias/zeradas (pra não poluir tooltip)
+      const hasText = Boolean(tipo || descRaw || (eq && eq !== "—"));
+      if (minutes <= 0 && !hasText) continue;
+
+      const desc = (tipo && descRaw) ? `${tipo} — ${descRaw}` : (tipo || descRaw || "Parada");
+
+      // Novo formato (bv_launch.stops_rows): period "HH-HH"
+      const p = parsePeriod(String(s?.period || ""));
+      if (p) {
+        const hours = expandHoursInclusive(p.a, p.b);
+        for (const h of hours) push(h, eq, desc);
+        continue;
+      }
+
+      // Formato antigo: hora_inicio (HH:mm:ss)
+      const hStr = String(s?.hora_inicio || "").slice(0, 2);
+      const h = Number(hStr);
+      if (Number.isFinite(h) && h >= 0 && h <= 23) push(h, eq, desc);
+    }
+
+    return map;
+  }, [stops]);
+
+
+  // ✅ garante respiro no eixo Y (Ton/H): maior valor + 120
+  const tonDomain = useMemo(() => {
+    const maxTon = Math.max(...(hourlySeries || []).map((r) => Number(r.ton) || 0), 0);
+    return [0, Math.max(120, maxTon + 120)] as [number, number];
+  }, [hourlySeries]);
+
+  const avgTonPerHour = useMemo(() => {
+    const filled = (hourlySeries || []).filter((r) => (Number(r.ton) || 0) > 0);
+    if (!filled.length) return 0;
+    const sum = filled.reduce((acc, r) => acc + (Number(r.ton) || 0), 0);
+    return sum / filled.length;
+  }, [hourlySeries]);
+
+  
+  // ===== projeção (mesma lógica do Ritmo) =====
+// Projeção (HOJE): produzido até agora + (média real t/h * horas restantes do dia)
+// Projeção (DIA PASSADO): total do dia (sem projeção)
+const projectionTon24 = useMemo(() => {
+  const avg = Number(avgTonPerHour) || 0;
+  if (!avg) return totalTonDay;
+
+  const isToday = day === isoTodayLocal();
+  if (!isToday) return totalTonDay;
+
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const remainingH = Math.max(0, (1440 - mins) / 60);
+
+  return totalTonDay + avg * remainingH;
+}, [avgTonPerHour, day, totalTonDay]);
+
+  const projectionDiffTon = useMemo(() => {
+    if (!metaDia || metaDia <= 0) return 0;
+    return projectionTon24 - metaDia;
+  }, [projectionTon24, metaDia]);
+
+  const projectionIsPositive = metaDia > 0 ? projectionTon24 >= metaDia : false;
+
+const EXPECTED_TON_H = metaHoraEsperada;
+
+  // garante que as linhas (esperada e media real) sempre aparecam no mini-grafico
+  const miniTonDomain = useMemo(() => {
+    const maxTon = Math.max(...(hourlySeries || []).map((r) => Number(r.ton) || 0), 0);
+    const maxRef = Math.max(maxTon, EXPECTED_TON_H, Number(avgTonPerHour) || 0);
+    return [0, Math.max(120, maxRef + 120)] as [number, number];
+  }, [hourlySeries, avgTonPerHour]);
+
+  // tendência da última hora preenchida vs penúltima (seta no card "Média/Hora")
+  const avgHourTrend = useMemo(() => {
+    const filled = (hourlySeries || []).filter((r) => (Number(r.ton) || 0) > 0);
+    if (filled.length < 2) {
+      return {
+        dir: "na" as "up" | "down" | "flat" | "na",
+        delta: 0,
+        lastPeriod: "",
+        prevPeriod: "",
+      };
+    }
+
+    const prev = filled[filled.length - 2];
+    const last = filled[filled.length - 1];
+    const prevTon = Number(prev?.ton) || 0;
+    const lastTon = Number(last?.ton) || 0;
+    const delta = lastTon - prevTon;
+
+    const EPS = 0.05; // evita piscar com diferenças minúsculas
+    const dir: "up" | "down" | "flat" = Math.abs(delta) <= EPS ? "flat" : delta > 0 ? "up" : "down";
 
     return {
-      totalMinutos,
-      totalHoras,
-      toneladasPerdidas,
-      mediaPerdaHora,
-      previsaoHorasMes,
-      previsaoPerdaMes,
+      dir,
+      delta,
+      lastPeriod: String(last?.period || ""),
+      prevPeriod: String(prev?.period || ""),
     };
-  }, [paradasFiltradas, dataInicio, dataFim, planta, mediasMensaisDashboard]);
+  }, [hourlySeries]);
 
-  const resumoMensal = useMemo<ResumoMensal[]>(() => {
-    const mapa = new Map<string, ResumoMensal>();
-
-    paradasFiltradas.forEach((parada) => {
-      const chave = parada.day.slice(0, 7);
-      const atual =
-        mapa.get(chave) ||
-        {
-          chave,
-          mes: obterNomeMes(chave),
-          horas: 0,
-          toneladas: 0,
-          mediaProducao: 0,
-          eventos: 0,
-        };
-
-      atual.horas += parada.minutos / 60;
-      atual.toneladas += perdaEstimadaDashboardMensal(
-        parada,
-        planta,
-        mediasMensaisDashboard
-      );
-      atual.eventos += 1;
-      atual.mediaProducao = obterMediaMensalDashboard(
-        chave,
-        planta,
-        mediasMensaisDashboard
-      );
-
-      mapa.set(chave, atual);
-    });
-
-    return Array.from(mapa.values())
-      .sort((a, b) => a.chave.localeCompare(b.chave))
-      .map((item) => ({
-        ...item,
-        horas: Number(item.horas.toFixed(1)),
-        toneladas: Number(item.toneladas.toFixed(0)),
-        mediaProducao: Number(item.mediaProducao.toFixed(1)),
+  const last7Series = useMemo(() => {
+    if (rangeMode) {
+      return (rangeProdDays || []).map((x) => ({
+        day: dayLabel(x.day),
+        total: Number(x.total_ton) || 0,
       }));
-  }, [paradasFiltradas, planta, mediasMensaisDashboard]);
+    }
+    return (last7 || []).map((x) => ({
+      day: dayLabel(x.day),
+      total: Number(x.total_ton) || 0,
+    }));
+  }, [last7, rangeMode, rangeProdDays]);
 
-  const rankingCausas = useMemo(() => {
-    const mapa = new Map<
-      string,
-      { causa: string; horas: number; toneladas: number; eventos: number }
-    >();
+  const rangeAvgDayTon = useMemo(() => {
+    if (!rangeMode) return 0;
+    const days = rangeDays.length || 1;
+    return totalTonDay / days;
+  }, [rangeMode, totalTonDay, rangeDays]);
 
-    paradasFiltradas.forEach((parada) => {
-      const causa = classificarCausa(parada);
-      const atual =
-        mapa.get(causa) ||
-        {
-          causa,
-          horas: 0,
-          toneladas: 0,
-          eventos: 0,
-        };
+  const periodSummaryText = useMemo(() => {
+    if (!rangeMode) return "";
+    const days = rangeDays.length;
+    const excluded = excludedWeekdays
+      .map((w) => WEEKDAY_OPTIONS.find((x) => x.value === w)?.short)
+      .filter(Boolean)
+      .join(", ");
+    return `${brDate(startDay)} a ${brDate(endDay)} • ${days} dia${days === 1 ? "" : "s"}${excluded ? ` • exceto ${excluded}` : ""}`;
+  }, [rangeMode, startDay, endDay, rangeDays, excludedWeekdays]);
 
-      atual.horas += parada.minutos / 60;
-      atual.toneladas += perdaEstimadaDashboardMensal(
-        parada,
-        planta,
-        mediasMensaisDashboard
-      );
-      atual.eventos += 1;
+  const totalStops = useMemo(() => Number(stopsDayCount) || 0, [stopsDayCount]);
 
-      mapa.set(causa, atual);
-    });
+  const lastStop = useMemo(() => {
+    const list = [...(stops || [])];
+    list.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+    return list[0] || null;
+  }, [stops]);
 
-    return Array.from(mapa.values())
-      .sort((a, b) => b.horas - a.horas)
-      .map((item) => ({
-        ...item,
-        horas: Number(item.horas.toFixed(1)),
-        toneladas: Number(item.toneladas.toFixed(0)),
-      }));
-  }, [paradasFiltradas, planta, mediasMensaisDashboard]);
+  const lastHorimetroBT01 = useMemo(() => {
+    return (lastByEq || {})[EQ_BT01] || null;
+  }, [lastByEq]);
 
-  const maiorImpacto = useMemo(() => {
-    if (!resumoMensal.length) return null;
+  const topProductsHorimetros = useMemo(() => {
+    const map = lastByEq || {};
+    return EQS_TOP_PRODUCTS.map((eq) => ({
+      eq,
+      row: map[eq] || null,
+    }));
+  }, [lastByEq]);
 
-    return [...resumoMensal].sort((a, b) => b.toneladas - a.toneladas)[0];
-  }, [resumoMensal]);
+  const levelBars = useMemo(() => {
+    const filled = (hourlySeries || []).filter((r) => r.freq > 0 || r.ton > 0);
+    const last = filled.slice(-6);
+    return last.map((r) => ({
+      period: r.period,
+      freq: Math.max(0, Math.min(100, r.freq)),
+    }));
+  }, [hourlySeries]);
+
+  const levelAvg = useMemo(() => {
+    if (!levelBars.length) return 0;
+    const s = levelBars.reduce((acc, r) => acc + (Number(r.freq) || 0), 0);
+    return s / levelBars.length;
+  }, [levelBars]);
+
+  const selectedPlantName =
+    plantId === "all"
+      ? "Todas as plantas"
+      : plants.find((p) => Number(p.id) === Number(plantId))?.name || "Planta";
+
+  const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff9f1a" }], [pctMetaGauge]);
+
+  /* ===================== styles ===================== */
+  const cardBase: React.CSSProperties = {
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))",
+    boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
+    backdropFilter: "blur(10px)",
+  };
+
+  const headerStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    justifyContent: "space-between",
+    marginBottom: 12,
+  };
+
+  const titleStyle: React.CSSProperties = {
+    fontWeight: 900,
+    letterSpacing: -0.02,
+    fontSize: 18,
+  };
+
+  const subStyle: React.CSSProperties = {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 12,
+    fontWeight: 700,
+  };
+
+  const topBar: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: mobile ? "1fr" : "1fr auto auto auto",
+    gap: 12,
+    alignItems: "center",
+    marginTop: 10,
+  };
+
+  const smallPill: React.CSSProperties = {
+    height: 36,
+    borderRadius: 999,
+    border: "1px solid rgba(255,159,26,0.25)",
+    background: "rgba(255,159,26,0.10)",
+    padding: "0 12px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    fontWeight: 900,
+    color: "rgba(255,255,255,0.88)",
+  };
+
+  // ===== export modal styles =====
+  const modalOverlay: React.CSSProperties = {
+    position: "fixed",
+    inset: 0,
+    zIndex: 200,
+    background: "rgba(0,0,0,0.65)",
+    backdropFilter: "blur(8px)",
+    display: "grid",
+    placeItems: "center",
+    padding: 14,
+  };
+
+  const modalCard: React.CSSProperties = {
+    width: "min(1480px, 98vw)",
+    maxHeight: "94vh",
+    borderRadius: 22,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(14,18,22,0.86)",
+    boxShadow: "0 30px 90px rgba(0,0,0,0.70)",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+  };
+
+  const modalHeader: React.CSSProperties = {
+    padding: 14,
+    borderBottom: "1px solid rgba(255,255,255,0.10)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  };
+
+  const modalBody: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "92px 1fr",
+    gap: 14,
+    padding: 14,
+    minHeight: 0,
+    flex: 1,
+  };
+
+  const panel: React.CSSProperties = {
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(0,0,0,0.22)",
+    padding: 12,
+    minHeight: 0,
+  };
 
   return (
-    <div className="mp-container pe-page">
+    <div
+      className="mp-container mp-dashboard-wide"
+      style={{
+        width: "100%",
+        maxWidth: "none",
+        margin: 0,
+        padding: mobile ? "10px 10px 80px" : "14px 18px 28px",
+        boxSizing: "border-box",
+      }}
+    >
       <style>{`
-        .pe-page {
-          width: 100%;
-          max-width: none;
-          margin: 0;
-          padding: 18px;
-          color: #f8fafc;
+        .mp-dashboard-wide {
+          width: 100% !important;
+          max-width: none !important;
+          margin-left: 0 !important;
+          margin-right: 0 !important;
         }
-
-        .pe-page * {
+        .mp-dashboard-wide, .mp-dashboard-wide * {
           box-sizing: border-box;
         }
-
-        .pe-shell {
-          width: 100%;
-          overflow: hidden;
-          border-radius: 24px;
-          border: 1px solid rgba(255,255,255,0.08);
-          background: #070b11;
-          box-shadow: 0 14px 34px rgba(0,0,0,0.28);
-        }
-
-        .pe-header {
-          position: relative;
-          display: block;
-          padding: 20px 28px 18px;
-          border-bottom: 1px solid rgba(255,255,255,0.08);
-        }
-
-        .pe-header::after {
-          content: "";
-          position: absolute;
-          left: 28px;
-          right: 28px;
-          bottom: 0;
-          height: 3px;
-          border-radius: 999px;
-          background: linear-gradient(90deg, #1FC7F2, #1399C8, #F6A21A);
-        }
-
-        
-        
-        
-        
-        .pe-title-wrap {
-          display: flex;
-          justify-content: space-between;
-          gap: 16px;
-          align-items: center;
-          width: 100%;
-        }
-
-        .pe-title h1 {
-          margin: 0;
-          color: #eaf4ff;
-          font-size: clamp(24px, 2.0vw, 34px);
-          font-weight: 950;
-          line-height: 1.05;
-          letter-spacing: -0.02em;
-        }
-
-        .pe-title p {
-          margin: 9px 0 0;
-          color: #F6A21A;
-          font-size: 16px;
-          font-weight: 850;
-        }
-
-        .pe-period {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          flex: 0 0 auto;
-          padding: 9px 14px;
-          border-radius: 999px;
-          border: 1px solid rgba(246,162,26,0.32);
-          background: rgba(246,162,26,0.10);
-          color: #ffd89a;
-          font-size: 13px;
-          font-weight: 850;
-        }
-
-        .pe-content {
-          padding: 20px 28px 28px;
-        }
-
-        .pe-filter-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 14px;
-          margin-bottom: 18px;
-        }
-
-        .pe-breadcrumb {
-          color: rgba(226,232,240,0.65);
-          font-size: 13px;
-          font-weight: 800;
-        }
-
-        .pe-breadcrumb b {
-          color: #fff;
-        }
-
-        .pe-filters {
-          display: flex;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 10px;
-          padding: 10px;
-          border-radius: 18px;
-          border: 1px solid rgba(255,255,255,0.08);
-          background: #0f141b;
-        }
-
-        .pe-filter-label {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          color: rgba(226,232,240,0.75);
-          font-size: 13px;
-          font-weight: 850;
-        }
-
-        .pe-input {
-          height: 40px;
-          min-width: 150px;
-          border: 1px solid rgba(148,163,184,0.20);
-          background: #0d1218;
-          color: #f8fafc;
-          border-radius: 13px;
-          padding: 0 12px;
-          outline: none;
-          font-weight: 750;
-        }
-
-        .pe-input:focus {
-          border-color: rgba(31,199,242,0.50);
-          box-shadow: 0 0 0 3px rgba(31,199,242,0.10);
-        }
-
-        .pe-error {
-          margin-bottom: 16px;
-          border-radius: 16px;
-          border: 1px solid rgba(248,113,113,0.35);
-          background: rgba(127,29,29,0.28);
-          padding: 12px 14px;
-          color: #fecaca;
-          font-weight: 750;
-        }
-
-        .pe-card {
-          border: 1px solid rgba(255,255,255,0.08);
-          background: #0f141b;
-          box-shadow: 0 8px 22px rgba(0,0,0,0.18);
-        }
-
-        .pe-kpi-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 16px;
-          margin-bottom: 18px;
-        }
-
-        .pe-kpi {
-          min-height: 118px;
-          display: flex;
-          align-items: center;
-          gap: 18px;
-          padding: 18px 20px;
-          border-radius: 18px;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .pe-kpi::after {
-          content: "";
-          position: absolute;
-          right: -30px;
-          top: -40px;
-          width: 160px;
-          height: 160px;
-          border-radius: 50%;
-          opacity: 0.05;
-        }
-
-        .pe-kpi-azul::after { background: ${COR_AZUL}; }
-        .pe-kpi-verde::after { background: ${COR_AZUL}; }
-        .pe-kpi-laranja::after { background: ${COR_LARANJA}; }
-
-        .pe-kpi-icon {
-          position: relative;
-          z-index: 1;
-          width: 70px;
-          height: 70px;
-          display: grid;
-          place-items: center;
-          flex: 0 0 auto;
-          border-radius: 50%;
-          color: #fff;
-          background: #1a222d;
-          box-shadow: 0 16px 34px rgba(0,0,0,0.30);
-        }
-
-        .pe-kpi-verde .pe-kpi-icon {
-          background: linear-gradient(135deg, #5A3700, #F6A21A);
-        }
-
-        .pe-kpi-laranja .pe-kpi-icon {
-          background: #1a222d;
-        }
-
-        .pe-kpi-title {
-          color: rgba(226,232,240,0.74);
-          font-size: 15px;
-          font-weight: 850;
-          line-height: 1.22;
-        }
-
-        .pe-kpi-value {
-          margin-top: 6px;
-          color: #fff;
-          font-size: clamp(26px, 2.4vw, 40px);
-          font-weight: 950;
-          line-height: 1;
-          letter-spacing: -0.03em;
-        }
-
-        .pe-kpi-sub {
-          margin-top: 8px;
-          color: rgba(226,232,240,0.52);
-          font-size: 12px;
-          font-weight: 750;
-        }
-
-        .pe-chart-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 18px;
-          margin-bottom: 18px;
-        }
-
-        .pe-chart-card {
-          overflow: hidden;
-          border-radius: 22px;
-          padding: 16px;
-        }
-
-        .pe-chart-header {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          margin-bottom: 12px;
-        }
-
-        .pe-chart-title {
-          min-height: 38px;
-          min-width: min(380px, 100%);
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0 18px;
-          border-radius: 9px;
-          color: #fff;
-          font-size: 16px;
-          font-weight: 950;
-          text-align: center;
-          box-shadow: 0 10px 22px rgba(0,0,0,0.22);
-        }
-
-        .pe-chart-title-azul {
-          background: linear-gradient(135deg, #0E3346, #1A9FD0);
-        }
-
-        .pe-chart-title-verde {
-          background: linear-gradient(135deg, #0E3346, #1A9FD0);
-        }
-
-        .pe-chart-title-laranja {
-          background: linear-gradient(135deg, #5A3700, #F6A21A);
-        }
-
-        .pe-chart-subtitle {
-          display: none;
-        }
-
-        .pe-chart-body {
-          width: 100%;
-          height: 318px;
-        }
-
-        .pe-grid-lower {
-          display: grid;
-          grid-template-columns: minmax(300px, 420px) 1fr;
-          gap: 18px;
-          margin-bottom: 18px;
-        }
-
-        .pe-panel {
-          border-radius: 22px;
-          padding: 18px;
-        }
-
-        .pe-panel h2 {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin: 0 0 14px;
-          color: #fff;
-          font-size: 20px;
-          font-weight: 950;
-        }
-
-        .pe-row-metric {
-          display: grid;
-          grid-template-columns: 1fr auto;
-          gap: 12px;
-          padding: 12px 0;
-          border-bottom: 1px solid rgba(148,163,184,0.14);
-        }
-
-        .pe-row-metric span {
-          color: rgba(226,232,240,0.65);
-          font-size: 13px;
-          font-weight: 850;
-        }
-
-        .pe-row-metric b {
-          color: #fff;
-          font-size: 18px;
-          font-weight: 950;
-        }
-
-        .pe-note {
-          margin: 14px 0 0;
-          color: rgba(226,232,240,0.58);
-          font-size: 13px;
-          line-height: 1.45;
-        }
-
-        .pe-production-ref {
-          margin-top: 14px;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-        }
-
-        .pe-production-ref div {
-          border-radius: 14px;
-          border: 1px solid rgba(148,163,184,0.14);
-          background: #0d1218;
-          padding: 12px;
-        }
-
-        .pe-production-ref span {
-          display: block;
-          color: rgba(226,232,240,0.62);
-          font-size: 12px;
-          font-weight: 850;
-        }
-
-        .pe-production-ref b {
-          display: block;
-          margin-top: 4px;
-          color: #fff;
-          font-size: 18px;
-          font-weight: 950;
-        }
-
-        .pe-production-ref small {
-          display: block;
-          margin-top: 4px;
-          color: rgba(226,232,240,0.48);
-          font-size: 11px;
-          font-weight: 750;
-        }
-
-        .pe-cause-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 12px;
-        }
-
-        .pe-cause {
-          min-height: 92px;
-          border-radius: 16px;
-          border: 1px solid rgba(148,163,184,0.15);
-          background: #0d1218;
-          padding: 14px;
-        }
-
-        .pe-cause-title {
-          color: #fff;
-          font-size: 14px;
-          font-weight: 950;
-        }
-
-        .pe-cause-value {
-          margin-top: 8px;
-          color: #F6A21A;
-          font-size: 23px;
-          font-weight: 950;
-        }
-
-        .pe-cause-sub {
-          margin-top: 4px;
-          color: rgba(226,232,240,0.58);
-          font-size: 12px;
-          font-weight: 800;
-        }
-
-        .pe-table-card {
-          overflow: hidden;
-          border-radius: 22px;
-          margin-bottom: 18px;
-        }
-
-        .pe-table-title {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 14px 18px;
-          border-bottom: 1px solid rgba(148,163,184,0.15);
-          background: #10151d;
-        }
-
-        .pe-table-title h2 {
-          margin: 0;
-          color: #fff;
-          font-size: 17px;
-          font-weight: 950;
-        }
-
-        .pe-table-title span {
-          color: rgba(226,232,240,0.74);
-          font-size: 13px;
-          font-weight: 850;
-        }
-
-        .pe-table-wrap {
-          overflow-x: auto;
-          width: 100%;
-        }
-
-        .pe-table {
-          width: 100%;
-          min-width: 860px;
-          border-collapse: collapse;
-        }
-
-        .pe-table thead th {
-          padding: 12px 14px;
-          background: #0f141b;
-          border-bottom: 1px solid rgba(148,163,184,0.15);
-          color: rgba(226,232,240,0.88);
-          text-align: left;
-          font-size: 13px;
-          white-space: nowrap;
-        }
-
-        .pe-table tbody td {
-          padding: 12px 14px;
-          border-bottom: 1px solid rgba(148,163,184,0.10);
-          color: rgba(226,232,240,0.82);
-          font-size: 13px;
-          vertical-align: top;
-        }
-
-        .pe-table tbody tr:hover td {
-          background: rgba(255,255,255,0.04);
-        }
-
-        .pe-table .right {
-          text-align: right;
-          white-space: nowrap;
-        }
-
-        .pe-table .strong {
-          color: #fff;
-          font-weight: 950;
-        }
-
-        .pe-class {
-          color: #fbbf24 !important;
-          font-weight: 950;
-          white-space: nowrap;
-        }
-
-        .pe-footer {
-          display: flex;
-          gap: 12px;
-          border-radius: 18px;
-          border: 1px solid rgba(31,199,242,0.22);
-          background: #0f141b;
-          padding: 13px 16px;
-          color: rgba(226,232,240,0.72);
-          font-size: 13px;
-          line-height: 1.45;
-        }
-
-        .pe-footer-bar {
-          height: 18px;
-          margin-top: 18px;
-          border-radius: 0 0 20px 20px;
-          background: linear-gradient(90deg, #0E3346 0%, #0E3346 62%, #ffffff 62%, #ffffff 64%, #F6A21A 64%, #F6A21A 100%);
-          opacity: 0.92;
-        }
-
-        @media (max-width: 1180px) {
-          .pe-header,
-          .pe-kpi-grid,
-          .pe-chart-grid,
-          .pe-grid-lower {
-            grid-template-columns: 1fr;
-          }
-
-          .pe-title-wrap {
-            align-items: flex-start;
-            flex-direction: column;
-          }
-
-          .pe-cause-grid {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-
-        @media (max-width: 720px) {
-          .pe-page {
-            padding: 10px;
-          }
-
-          .pe-header,
-          .pe-content {
-            padding-left: 14px;
-            padding-right: 14px;
-          }
-
-
-          .pe-cause-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .pe-input,
-          .pe-filters {
-            width: 100%;
-          }
-
-          .pe-kpi {
-            align-items: flex-start;
-          }
-
-          .pe-kpi-icon {
-            width: 58px;
-            height: 58px;
+        @media (max-width: 980px) {
+          .mp-dashboard-wide {
+            padding-bottom: 80px !important;
           }
         }
       `}</style>
+      {/* TOP BAR */}
+      <div style={topBar}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ ...subStyle, marginRight: 2 }}>Modo</span>
+          <button
+            type="button"
+            onClick={() => setRangeMode((v) => !v)}
+            style={{
+              height: 38,
+              minWidth: 148,
+              borderRadius: 999,
+              border: "1px solid " + (rangeMode ? "rgba(255,159,26,0.35)" : "rgba(255,255,255,0.12)"),
+              background: rangeMode ? "rgba(255,159,26,0.12)" : "rgba(255,255,255,0.06)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              padding: "0 8px 0 12px",
+              color: "rgba(255,255,255,0.88)",
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            <span>{rangeMode ? "Período" : "Principal"}</span>
+            <span
+              style={{
+                width: 42,
+                height: 24,
+                borderRadius: 999,
+                background: rangeMode ? "rgba(255,159,26,0.22)" : "rgba(255,255,255,0.12)",
+                position: "relative",
+                display: "inline-block",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: rangeMode ? 21 : 3,
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  background: rangeMode ? "#ff9f1a" : "rgba(255,255,255,0.82)",
+                  transition: "left .18s ease",
+                }}
+              />
+            </span>
+          </button>
 
-      <div className="pe-shell">
-        <header className="pe-header">
-          <div className="pe-title-wrap">
-            <div className="pe-title">
-              <h1>
-                Relatório de Horas de Paradas da Planta
-                <br />
-                e Toneladas Perdidas
-              </h1>
-            </div>
+          <span style={{ ...subStyle, marginLeft: 6 }}>Planta</span>
+          <select
+            className="mp-input"
+            style={{ width: mobile ? "100%" : 210, height: 42, borderRadius: 14 }}
+            value={plantId ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              setPlantId(v === "all" ? "all" : v ? Number(v) : null);
+            }}
+            disabled={plants.length === 0}
+          >
+            {plants.length === 0 ? <option value="">Sem plantas</option> : null}
+            {plants.length > 0 ? <option value="all">Todas as plantas</option> : null}
+            {plants.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
 
-            <div className="pe-period">
-              <CalendarDays size={16} />
-              {brDate(dataInicio)} até {brDate(dataFim)}
-            </div>
-          </div>
-        </header>
-
-        <main className="pe-content">
-          <div className="pe-filter-row">
-            <div className="pe-breadcrumb">
-              Operação&nbsp;&nbsp;•&nbsp;&nbsp;<b>Paradas Planta</b>
-            </div>
-
-            <div className="pe-filters">
-              <div className="pe-filter-label">
-                <Filter size={16} />
-                Filtros
-              </div>
-
+          {!rangeMode ? (
+            <>
+              <span style={{ ...subStyle, marginLeft: 6 }}>Data</span>
               <input
-                className="pe-input"
+                className="mp-input"
+                style={{ width: mobile ? "100%" : 160, height: 42, borderRadius: 14 }}
                 type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
+                value={day}
+                onChange={(e) => setDay(e.target.value)}
+              />
+            </>
+          ) : (
+            <>
+              <span style={{ ...subStyle, marginLeft: 6 }}>De</span>
+              <input
+                className="mp-input"
+                style={{ width: mobile ? "100%" : 160, height: 42, borderRadius: 14 }}
+                type="date"
+                value={startDay}
+                max={endDay}
+                onChange={(e) => setStartDay(e.target.value)}
+              />
+              <span style={subStyle}>Até</span>
+              <input
+                className="mp-input"
+                style={{ width: mobile ? "100%" : 160, height: 42, borderRadius: 14 }}
+                type="date"
+                value={endDay}
+                min={startDay}
+                onChange={(e) => setEndDay(e.target.value)}
               />
 
-              <input
-                className="pe-input"
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-              />
+              <span style={{ ...subStyle, marginLeft: 6 }}>Excluir dias</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                {WEEKDAY_OPTIONS.map((w) => {
+                  const selected = excludedWeekdays.includes(w.value);
+                  return (
+                    <button
+                      key={w.value}
+                      type="button"
+                      title={`Não considerar ${w.label}`}
+                      onClick={() =>
+                        setExcludedWeekdays((prev) =>
+                          prev.includes(w.value)
+                            ? prev.filter((x) => x !== w.value)
+                            : [...prev, w.value].sort((a, b) => a - b)
+                        )
+                      }
+                      style={{
+                        height: 34,
+                        minWidth: 46,
+                        borderRadius: 999,
+                        border: "1px solid " + (selected ? "rgba(255,159,26,0.50)" : "rgba(255,255,255,0.12)"),
+                        background: selected ? "rgba(255,159,26,0.18)" : "rgba(255,255,255,0.05)",
+                        color: selected ? "#ffb24a" : "rgba(255,255,255,0.78)",
+                        fontWeight: 950,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {w.short}
+                    </button>
+                  );
+                })}
 
-              <select
-                className="pe-input"
-                value={planta}
-                onChange={(e) => setPlanta(e.target.value as PlantaFiltro)}
-              >
-                <option value="todas">Todas as Plantas</option>
-                <option value="planta_01">Planta 01</option>
-                <option value="planta_02">Planta 02</option>
-              </select>
-
-              <select
-                className="pe-input"
-                value={tipoParada}
-                onChange={(e) => setTipoParada(e.target.value as TipoParadaFiltro)}
-              >
-                <option value="todas">Todas</option>
-                <option value="operacional">Operacional</option>
-                <option value="corretiva">Corretiva</option>
-                <option value="preventiva">Preventiva</option>
-              </select>
-
-              <button className="pe-input" type="button" onClick={carregarParadas}>
-                Atualizar
-              </button>
-            </div>
-          </div>
-
-          {erro ? <div className="pe-error">{erro}</div> : null}
-
-          <section className="pe-kpi-grid">
-            <CardIndicador
-              titulo="Total de Horas de Paradas da Planta"
-              valor={`${formatarDecimal(dados.totalHoras)} h`}
-              subtitulo="Paleta e layout alinhados ao padrão MonPlant"
-              icone={<Clock size={34} />}
-              variante="azul"
-            />
-
-            <CardIndicador
-              titulo="Total de Toneladas Perdidas"
-              valor={`${formatarToneladas(dados.toneladasPerdidas)} t`}
-              subtitulo="Estimativa pela média real de produção"
-              icone={<TrendingDown size={34} />}
-              variante="laranja"
-            />
-
-            <CardIndicador
-              titulo="Maior Impacto"
-              valor={
-                maiorImpacto
-                  ? `${maiorImpacto.mes} – ${formatarDecimal(maiorImpacto.horas)} h`
-                  : "-"
-              }
-              subtitulo={
-                maiorImpacto
-                  ? `${formatarToneladas(maiorImpacto.toneladas)} t perdidas`
-                  : "Sem dados no período"
-              }
-              icone={<BarChart3 size={34} />}
-              variante="laranja"
-            />
-          </section>
-
-          <section className="pe-chart-grid">
-            <PainelGrafico
-              titulo="Horas de Paradas da Planta por Mês"
-              subtitulo="Soma de horas conforme tipo de parada selecionado"
-              cor="azul"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={resumoMensal} margin={{ top: 28, right: 20, left: 0, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
-                  <XAxis dataKey="mes" stroke="#cbd5e1" tick={{ fontSize: 12, fontWeight: 700 }} />
-                  <YAxis stroke="#cbd5e1" />
-                  <Tooltip
-                    contentStyle={{
-                      background: "#09111a",
-                      border: "1px solid rgba(255,255,255,0.14)",
-                      borderRadius: 14,
-                      color: "#fff",
+                {excludedWeekdays.length ? (
+                  <button
+                    type="button"
+                    onClick={() => setExcludedWeekdays([])}
+                    style={{
+                      height: 34,
+                      borderRadius: 999,
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "rgba(255,255,255,0.04)",
+                      color: "rgba(255,255,255,0.70)",
+                      fontWeight: 900,
+                      cursor: "pointer",
+                      padding: "0 10px",
                     }}
-                    formatter={(value: any) => [`${formatarDecimal(Number(value))} h`, "Horas"]}
-                  />
-                  <Bar dataKey="horas" name="Horas" radius={[8, 8, 0, 0]}>
-                    <LabelList content={<BarValueLabel />} />
-                    {resumoMensal.map((_, index) => (
-                      <Cell key={index} fill={index === 0 ? COR_AZUL : COR_AZUL_ESCURO} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </PainelGrafico>
-
-            <PainelGrafico
-              titulo="Perda em Toneladas por Mês"
-              subtitulo="Produção total / horas com produção"
-              cor="laranja"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={resumoMensal} margin={{ top: 28, right: 20, left: 0, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
-                  <XAxis dataKey="mes" stroke="#cbd5e1" tick={{ fontSize: 12, fontWeight: 700 }} />
-                  <YAxis stroke="#cbd5e1" />
-                  <Tooltip
-                    contentStyle={{
-                      background: "#09111a",
-                      border: "1px solid rgba(255,255,255,0.14)",
-                      borderRadius: 14,
-                      color: "#fff",
-                    }}
-                    formatter={(value: any) => [`${formatarToneladas(Number(value))} t`, "Toneladas"]}
-                  />
-                  <Bar dataKey="toneladas" name="Toneladas" radius={[8, 8, 0, 0]}>
-                    <LabelList content={<TonValueLabel />} />
-                    {resumoMensal.map((_, index) => (
-                      <Cell key={index} fill={index === 0 ? COR_LARANJA : "#D88A10"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </PainelGrafico>
-          </section>
-
-          <section className="pe-table-card pe-card">
-            <div className="pe-table-title">
-              <h2>Consolidado Mensal da Planta</h2>
-              <span>
-                {loading
-                  ? "Atualizando..."
-                  : `${resumoMensal.length} mês(es) encontrado(s)`}
-              </span>
-            </div>
-
-            <div className="pe-table-wrap">
-              <table className="pe-table">
-                <thead>
-                  <tr>
-                    <th>Mês</th>
-                    <th className="right">Horas de Paradas Operacionais da Planta</th>
-                    <th className="right">Média Real do Mês</th>
-                    <th className="right">Perda em Toneladas</th>
-                    <th className="right">Eventos</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={5}>Carregando dados da tabela bv_launch.stops_rows...</td>
-                    </tr>
-                  ) : resumoMensal.length === 0 ? (
-                    <tr>
-                      <td colSpan={5}>
-                        Nenhuma parada encontrada para o tipo selecionado.
-                      </td>
-                    </tr>
-                  ) : (
-                    resumoMensal.map((item) => (
-                      <tr key={item.chave}>
-                        <td className="strong">{item.mes}</td>
-                        <td className="right">{formatarDecimal(item.horas)} h</td>
-                        <td className="right">{formatarDecimal(item.mediaProducao)} t/h</td>
-                        <td className="right strong">{formatarToneladas(item.toneladas)} t</td>
-                        <td className="right">{item.eventos}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="pe-grid-lower">
-            <div className="pe-card pe-panel">
-              <h2>
-                <AlertTriangle size={22} color={COR_LARANJA} />
-                Previsão operacional
-              </h2>
-
-              <div className="pe-row-metric">
-                <span>Horas previstas / 30 dias</span>
-                <b>{formatarHoras(Math.round(dados.previsaoHorasMes * 60))}</b>
+                  >
+                    Limpar
+                  </button>
+                ) : null}
               </div>
+            </>
+          )}
+        </div>
 
-              <div className="pe-row-metric">
-                <span>Perda prevista</span>
-                <b>{formatarToneladas(dados.previsaoPerdaMes)} t</b>
-              </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: mobile ? "wrap" : "nowrap", justifyContent: mobile ? "flex-start" : "flex-end" }}>
+          <span style={{ ...smallPill, flex: mobile ? "1 1 100%" : undefined }}>
+            {!plantId ? "Selecione a planta" : loading ? "Atualizando..." : err ? "Erro" : "Online"}
+          </span>
 
-              <div className="pe-row-metric">
-                <span>Média real usada</span>
-                <b>{formatarDecimal(dados.mediaPerdaHora)} t/h</b>
-              </div>
+          <button className="mp-btn" onClick={() => setExportOpen(true)} style={{ height: 42, flex: mobile ? "1 1 120px" : undefined }}>
+            Exportar
+          </button>
 
-              <p className="pe-note">
-                Projeção calculada pela média diária do período filtrado, usando a média real
-                de produção do próprio período: produção total dividida pelas horas com produção.
-              </p>
+          <button className="mp-btn mp-btn-primary" onClick={loadAll} disabled={loading} style={{ height: 42, flex: mobile ? "1 1 120px" : undefined }}>
+            Atualizar
+          </button>
+        </div>
+      </div>
 
-              <div className="pe-production-ref">
-                <div>
-                  <span>Planta 01</span>
-                  <b>
-                    {formatarDecimal(resumoProducaoReal.planta_01.mediaHora)} t/h
-                  </b>
-                  <small>
-                    {formatarToneladas(resumoProducaoReal.planta_01.producaoTotal)} t /{" "}
-                    {resumoProducaoReal.planta_01.horasComProducao} h produtivas
-                  </small>
+      <div style={{ marginTop: 8, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 800 }}>
+        Dashboard • {selectedPlantName} • {rangeMode ? periodSummaryText : brDate(day)} {err ? `• ${err}` : plantId === "all" ? "• consolidado" : rangeMode ? "• média por período" : "• tempo real"}
+      </div>
+
+      {/* MODAL EXPORT */}
+      {exportOpen ? (
+        <div style={modalOverlay} onClick={() => setExportOpen(false)}>
+          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+            <div style={modalHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 950, fontSize: 16, color: "rgba(255,255,255,0.92)" }}>
+                  Exportação • {brDate(day)}
                 </div>
-
-                <div>
-                  <span>Planta 02</span>
-                  <b>
-                    {formatarDecimal(resumoProducaoReal.planta_02.mediaHora)} t/h
-                  </b>
-                  <small>
-                    {formatarToneladas(resumoProducaoReal.planta_02.producaoTotal)} t /{" "}
-                    {resumoProducaoReal.planta_02.horasComProducao} h produtivas
-                  </small>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                  Marque o que vai aparecer e clique em “Exportar JPEG”.
                 </div>
               </div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <button
+                  className="mp-btn"
+                  style={{ height: 38 }}
+                  onClick={() => {
+                    const allOn = {} as Record<ExportKey, boolean>;
+                    exportItems.forEach((it) => (allOn[it.key] = true));
+                    setExportSel(allOn);
+                  }}
+                >
+                  Marcar tudo
+                </button>
+
+                <button
+                  className="mp-btn"
+                  style={{ height: 38 }}
+                  onClick={() => {
+                    const allOff = {} as Record<ExportKey, boolean>;
+                    exportItems.forEach((it) => (allOff[it.key] = false));
+                    setExportSel(allOff);
+                  }}
+                >
+                  Limpar
+                </button>
+
+                <button className="mp-btn mp-btn-primary" style={{ height: 38 }} onClick={exportJPEG}>
+                  Exportar JPEG
+                </button>
+
+                <button className="mp-btn" style={{ height: 38 }} onClick={() => setExportOpen(false)}>
+                  Fechar
+                </button>
+              </div>
             </div>
 
-            <div className="pe-card pe-panel">
-              <h2>
-                <PackageX size={22} color={COR_AZUL} />
-                Tipos identificados
-              </h2>
+            <div style={modalBody} className="mp-export-body">
+              {/* left: selector */}
+              <div style={{ ...panel, overflow: "auto", padding: 10 }}>
+                <div style={{ fontWeight: 950, marginBottom: 10, color: "rgba(255,255,255,0.9)", paddingLeft: 4 }}>
+                  Selecionar
+                </div>
 
-              <div className="pe-cause-grid">
-                {rankingCausas.length === 0 ? (
-                  <div className="pe-cause">
-                    <div className="pe-cause-title">Sem ocorrências</div>
-                    <div className="pe-cause-sub">
-                      Nenhuma descrição compatível no período filtrado
-                    </div>
-                  </div>
-                ) : (
-                  rankingCausas.slice(0, 6).map((item) => (
-                    <div className="pe-cause" key={item.causa}>
-                      <div className="pe-cause-title">{item.causa}</div>
-                      <div className="pe-cause-value">{formatarDecimal(item.horas)} h</div>
-                      <div className="pe-cause-sub">
-                        {item.eventos} evento(s) • {formatarToneladas(item.toneladas)} t perdidas
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+                  {exportItems.map((it) => {
+                    const Icon = it.icon;
+                    const on = !!exportSel[it.key];
+                    return (
+                      <button
+                        key={it.key}
+                        onClick={() => setExportSel((s) => ({ ...s, [it.key]: !on }))}
+                        title={`${it.label} • ${it.hint}`}
+                        style={{
+                          width: 64,
+                          height: 64,
+                          borderRadius: 18,
+                          border: "1px solid " + (on ? "rgba(255,159,26,0.30)" : "rgba(255,255,255,0.10)"),
+                          background: on ? "rgba(255,159,26,0.12)" : "rgba(255,255,255,0.04)",
+                          display: "grid",
+                          placeItems: "center",
+                          cursor: "pointer",
+                          color: "rgba(255,255,255,0.92)",
+                          padding: 0,
+                        }}
+                      >
+                        <div style={{ display: "grid", placeItems: "center", gap: 6 }}>
+                          <span
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 16,
+                              display: "grid",
+                              placeItems: "center",
+                              border: "1px solid " + (on ? "rgba(255,159,26,0.28)" : "rgba(255,255,255,0.10)"),
+                              background: on ? "rgba(255,159,26,0.10)" : "rgba(0,0,0,0.18)",
+                            }}
+                          >
+                            <Icon size={20} />
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ marginTop: 12, fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.45)", padding: "0 4px" }}>
+                  Dica: passe o mouse para ver o nome.
+                </div>
+              </div>
+
+              {/* right: preview (capturado) */}
+              <div style={{ ...panel, overflow: "auto" }}>
+                <div
+                  ref={exportRef}
+                  style={{
+                    borderRadius: 18,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "#0b0f14",
+                    padding: 14,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 950, fontSize: 16, color: "rgba(255,255,255,0.92)" }}>
+                        MonPlant • Dashboard • {selectedPlantName}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                        {brDate(day)} • Exportação
                       </div>
                     </div>
-                  ))
-                )}
+                    <div
+                      style={{
+                        height: 32,
+                        borderRadius: 999,
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        background: "rgba(255,255,255,0.06)",
+                        padding: "0 12px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        fontWeight: 900,
+                        color: "rgba(255,255,255,0.82)",
+                      }}
+                    >
+                      {loading ? "Atualizando..." : err ? "Erro" : "Online"}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(12, minmax(0, 1fr))", gap: 14, alignItems: "start", width: "100%" }}>
+                    {/* PRODUÇÃO HORÁRIA (grande) */}
+                    {exportSel.prod_horaria ? (
+                      <div style={{ ...cardBase, padding: 16, gridColumn: "span 12" }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
+                            <div style={subStyle}>
+                               {rangeMode ? <>Média diária do filtro: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(rangeAvgDayTon)}</b> t</> : <>Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t</>}
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              height: 32,
+                              borderRadius: 999,
+                              border: "1px solid rgba(255,255,255,0.12)",
+                              background: "rgba(255,255,255,0.06)",
+                              padding: "0 12px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              fontWeight: 900,
+                              color: "rgba(255,255,255,0.82)",
+                            }}
+                          >
+                            {prodDay?.updated_at ? "Atualizado" : "—"}
+                          </span>
+                        </div>
+
+                        <div style={{ height: mobile ? 300 : 420 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
+                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                              <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <YAxis
+                                yAxisId="left"
+                                domain={tonDomain}
+                                tickFormatter={(v) => fmtBR0(Number(v) || 0)}
+                                tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                              />
+                              <YAxis
+                                yAxisId="right"
+                                orientation="right"
+                                domain={[0, 100]}
+                                tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
+                                tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                              />
+                              <Tooltip content={(p: any) => <TooltipStopsHour {...p} stopsMap={stopsByPeriod} />} />
+<Legend
+                                verticalAlign="bottom"
+                                height={30}
+                                iconType="circle"
+                                formatter={(value) => (value === "freq" ? "Frequência (%)" : value === "ton" ? "Ton/H" : value)}
+                                wrapperStyle={{ color: "#00CCFF", fontWeight: 900 }}
+                              />
+
+                              <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={38}>
+                                <LabelList dataKey="ton" content={BarValueLabel} />
+                              </Bar>
+
+                              <Line
+                                yAxisId="right"
+                                type="monotone"
+                                dataKey="freq"
+                                stroke="#ff9f1a"
+                                strokeWidth={3}
+                                dot={{ r: 4 }}
+                                activeDot={{ r: 5 }}
+                              >
+                                <LabelList dataKey="freq" content={FreqPointLabel} />
+                              </Line>
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* TAXA */}
+                    {exportSel.taxa ? (
+                      <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 4", minHeight: 310 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Taxa Média</div>
+                            <div style={subStyle}>Freq% últimas horas</div>
+                          </div>
+                          <span
+                            style={{
+                              height: 32,
+                              borderRadius: 999,
+                              border: "1px solid rgba(255,255,255,0.12)",
+                              background: "rgba(255,255,255,0.06)",
+                              padding: "0 12px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              fontWeight: 900,
+                              color: "rgba(255,255,255,0.82)",
+                            }}
+                          >
+                            {fmtBR0(levelAvg)}%
+                          </span>
+                        </div>
+
+                        <div style={{ height: mobile ? 160 : 190 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
+                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                              <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                              <Tooltip
+                                formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
+                                contentStyle={{
+                                  background: "rgba(0,0,0,0.86)",
+                                  border: "1px solid rgba(255,255,255,0.12)",
+                                  borderRadius: 14,
+                                }}
+                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                              />
+                              <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a">
+                                <LabelList
+                                  dataKey="freq"
+                                  position="center"
+                                  formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
+                                  style={{
+                                    fill: "rgba(255,255,255,0.95)",
+                                    fontWeight: 900,
+                                    fontSize: 11,
+                                    textShadow: "0 1px 2px rgba(0,0,0,.55)",
+                                    pointerEvents: "none",
+                                  }}
+                                />
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* META */}
+                    {exportSel.meta_dia ? (
+                      <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 4", minHeight: 310 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Produção do dia</div>
+                            <div style={subStyle}>Meta: {fmtBR0(metaDia)} t</div>
+                          </div>
+                        </div>
+
+                        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
+                              <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
+                            </RadialBarChart>
+                          </ResponsiveContainer>
+
+                          <div style={{ position: "absolute", left: 0, right: 0, top: 78, textAlign: "center", pointerEvents: "none" }}>
+                            <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMetaRaw)}%</div>
+                            <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
+                            {pctMetaOver > 0 ? (
+                              <div style={{ marginTop: 4, fontWeight: 900, color: "rgba(34,197,94,0.95)" }}>
+                                +{fmtBR0(pctMetaOver)}% acima
+                              </div>
+                            ) : null}
+                            <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                              {fmtBR0(totalTonDay)} t
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* MÉDIA */}
+                    {exportSel.media_hora ? (
+                      <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 4", minHeight: 310 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Média/Hora</div>
+                            <div style={subStyle}>Média de produção por hora</div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span
+                              style={{
+                                height: 32,
+                                borderRadius: 999,
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                background: "rgba(255,255,255,0.06)",
+                                padding: "0 12px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                fontWeight: 900,
+                                color: "rgba(255,255,255,0.82)",
+                              }}
+                            >
+                              {fmtBR1(avgTonPerHour)} t/h
+                            </span>
+
+                            <span
+                              title={
+                                avgHourTrend.dir === "na"
+                                  ? "Sem comparação (precisa de pelo menos 2 horas preenchidas)"
+                                  : `Comparação: ${avgHourTrend.prevPeriod} → ${avgHourTrend.lastPeriod}`
+                              }
+                              style={{
+                                height: 32,
+                                borderRadius: 999,
+                                border:
+                                  avgHourTrend.dir === "up"
+                                    ? "1px solid rgba(34,197,94,0.40)"
+                                    : avgHourTrend.dir === "down"
+                                      ? "1px solid rgba(239,68,68,0.40)"
+                                      : "1px solid rgba(255,255,255,0.12)",
+                                background:
+                                  avgHourTrend.dir === "up"
+                                    ? "rgba(34,197,94,0.14)"
+                                    : avgHourTrend.dir === "down"
+                                      ? "rgba(239,68,68,0.14)"
+                                      : "rgba(255,255,255,0.06)",
+                                padding: "0 10px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                fontWeight: 950,
+                                color:
+                                  avgHourTrend.dir === "up"
+                                    ? "rgba(34,197,94,0.95)"
+                                    : avgHourTrend.dir === "down"
+                                      ? "rgba(239,68,68,0.95)"
+                                      : "rgba(255,255,255,0.75)",
+                              }}
+                            >
+                              {avgHourTrend.dir === "up" ? (
+                                <TrendingUp size={16} />
+                              ) : avgHourTrend.dir === "down" ? (
+                                <TrendingDown size={16} />
+                              ) : (
+                                <Minus size={16} />
+                              )}
+
+                              {avgHourTrend.dir === "na"
+                                ? "—"
+                                : avgHourTrend.dir === "flat"
+                                  ? "0"
+                                  : avgHourTrend.delta > 0
+                                    ? `+${fmtBR1(Math.abs(avgHourTrend.delta))}`
+                                    : `-${fmtBR1(Math.abs(avgHourTrend.delta))}`}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ height: mobile ? 160 : 190 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
+                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                              <XAxis dataKey="period" interval={3} tickMargin={6} angle={-35} textAnchor="end" height={24} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 9 }} />
+                              <YAxis domain={miniTonDomain} hide />
+                              <Tooltip
+                                formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
+                                contentStyle={{
+                                  background: "rgba(0,0,0,0.86)",
+                                  border: "1px solid rgba(255,255,255,0.12)",
+                                  borderRadius: 14,
+                                }}
+                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                              />
+                              <ReferenceLine y={EXPECTED_TON_H} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeDasharray="6 6" />
+                              <ReferenceLine y={avgTonPerHour} stroke="#00CCFF" strokeWidth={2} strokeDasharray="4 4" />
+                              <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        {/* legenda (igual padrão do gráfico de produção) */}
+                        <div
+                          style={{
+                            marginTop: 8,
+                            display: "flex",
+                            gap: 14,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 12,
+                            fontWeight: 900,
+                            color: "rgba(255,255,255,0.72)",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 18, borderTop: "2px dashed rgba(255,255,255,0.40)" }} />
+                            <span>Esperada: {fmtBR0(EXPECTED_TON_H)} t/h</span>
+                          </div>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ width: 18, borderTop: "2px dashed #00CCFF" }} />
+                            <span>Média real: {fmtBR1(avgTonPerHour)} t/h</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* ÚLTIMOS 7 DIAS */}
+                    {exportSel.ultimos_7 ? (
+                      <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6", minHeight: 270 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>Últimos 7 dias</div>
+                            <div style={subStyle}>Total por dia</div>
+                          </div>
+                        </div>
+
+                        <div style={{ height: mobile ? 150 : 180 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={last7Series} margin={{ top: 22, right: 26, left: 10, bottom: 0 }}>
+                              <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                              <XAxis
+                                dataKey="day"
+                                interval={0}
+                                padding={{ left: 18, right: 18 }}
+                                tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                              />
+                              <YAxis hide />
+                              <Tooltip
+                                formatter={(v: any) => fmtBR0(Number(v) || 0)}
+                                contentStyle={{
+                                  background: "rgba(0,0,0,0.86)",
+                                  border: "1px solid rgba(255,255,255,0.12)",
+                                  borderRadius: 14,
+                                }}
+                                labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                              />
+                              <Area
+                                type="monotone"
+                                dataKey="total"
+                                stroke="#ff9f1a"
+                                fill="rgba(255,159,26,0.14)"
+                                strokeWidth={2.5}
+                                dot={{ r: 3, strokeWidth: 2, fill: "rgba(7,9,13,0.92)" }}
+                                activeDot={{ r: 5 }}
+                                isAnimationActive={false}
+                              >
+                                <LabelList dataKey="total" content={Last7PointLabel as any} />
+                              </Area>
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* HOJE */}
+                    {exportSel.hoje_cards ? (
+                      <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6", minHeight: 270 }}>
+                        <div style={headerStyle}>
+                          <div>
+                            <div style={titleStyle}>{rangeMode ? "Período" : "Hoje"}</div>
+                            <div style={subStyle}>{rangeMode ? "Resumo do filtro" : "Resumo • Paradas + Horímetro"}</div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: mobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 12 }}>
+                          {rangeMode ? (
+                            <>
+                              <MiniStat icon="📅" title="Período" value={periodSummaryText} sub="Filtro aplicado no dashboard" />
+                              <MiniStat icon="∑" title="Total no filtro" value={`${fmtBR0(totalTonDay)} t`} sub="Soma de todos os dias" />
+                              <MiniStat icon="⌀" title="Média diária" value={`${fmtBR0(rangeAvgDayTon)} t`} sub="Média do período" />
+                            </>
+                          ) : (
+                            <>
+                              <MiniStat
+                                icon="⏸"
+                                title="Última Parada"
+                                value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
+                                sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
+                              />
+                              <MiniStat icon="📌" title="Total de Paradas" value={String(totalStops)} sub={`Dia ${brDate(day)}`} />
+                              <MiniStat
+                                icon="⏱"
+                                title="Último Horímetro (BT-01)"
+                                value={
+                                  lastHorimetroBT01
+                                    ? `${fmtBR1(lastHorimetroBT01.horimetro_ini)} → ${fmtBR1(lastHorimetroBT01.horimetro_fim)}`
+                                    : "—"
+                                }
+                                sub={
+                                  lastHorimetroBT01
+                                    ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
+                                    : "Sem registros"
+                                }
+                              />
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* HORÍMETROS */}
+                    {exportSel.horimetros_top ? (
+                      !rangeMode ? (
+                        <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
+                          <div style={headerStyle}>
+                            <div>
+                              <div style={titleStyle}>Horímetros</div>
+                              <div style={subStyle}>BT-02 • PN-02 • PN-01 • EH-08</div>
+                            </div>
+                          </div>
+
+                          <div style={{ display: "grid", gap: 10 }}>
+                            {topProductsHorimetros.map(({ eq, row }) => (
+                              <div
+                                key={eq}
+                                style={{
+                                  borderRadius: 16,
+                                  border: "1px solid rgba(255,255,255,0.10)",
+                                  background: "rgba(0,0,0,0.18)",
+                                  padding: 12,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  gap: 10,
+                                }}
+                              >
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  <div
+                                    style={{
+                                      width: 52,
+                                      height: 34,
+                                      borderRadius: 12,
+                                      border: "1px solid rgba(255,159,26,0.20)",
+                                      background: "rgba(255,159,26,0.10)",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontSize: 12,
+                                      fontWeight: 950,
+                                      color: "rgba(255,255,255,0.85)",
+                                    }}
+                                  >
+                                    {eq}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
+                                      {row ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}` : "—"}
+                                    </div>
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                                      {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div style={{ fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,0.55)" }}>
+                                  {row?.equipamento ?? ""}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
-          </section>
 
-          <section className="pe-table-card pe-card">
-            <div className="pe-table-title">
-              <h2>Detalhamento das Paradas da Planta</h2>
-              <span>Total encontrado: {paradasFiltradas.length}</span>
-            </div>
+            <style>{`
+              @media (max-width: 980px) {
+                .mp-container { padding-bottom: 80px; }
+              }
+              @media (max-width: 920px) {
+                .mp-export-body { grid-template-columns: 1fr !important; }
+              }
+            `}</style>
+          </div>
+        </div>
+      ) : null}
 
-            <div className="pe-table-wrap">
-              <table className="pe-table">
-                <thead>
-                  <tr>
-                    <th>Planta</th>
-                    <th>Período</th>
-                    <th>Início</th>
-                    <th>Fim</th>
-                    <th>Tipo</th>
-                    <th>Equipamento</th>
-                    <th>Descrição</th>
-                    <th className="right">Horas</th>
-                    <th className="right">Perda Estimada</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={9}>Carregando paradas...</td>
-                    </tr>
-                  ) : paradasFiltradas.length === 0 ? (
-                    <tr>
-                      <td colSpan={9}>
-                        Nenhuma parada encontrada para o tipo selecionado.
-                      </td>
-                    </tr>
-                  ) : (
-                    paradasFiltradas.map((parada) => (
-                      <tr key={parada.id}>
-                        <td>{nomePlanta(parada.planta)}</td>
-                        <td>{parada.period || "-"}</td>
-                        <td>{formatarDataHora(parada.day, parada.hora_inicial)}</td>
-                        <td>{formatarDataHora(parada.day, parada.hora_final)}</td>
-                        <td className="pe-class">{classificarCausa(parada)}</td>
-                        <td>{parada.equipamento || "-"}</td>
-                        <td>{parada.observacaoCompleta || "-"}</td>
-                        <td className="right">{formatarDecimal(parada.minutos / 60)} h</td>
-                        <td className="right strong">{formatarToneladas(
-                            perdaEstimadaDashboardMensal(
-                              parada,
-                              planta,
-                              mediasMensaisDashboard
-                            )
-                          )} t</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <footer className="pe-footer">
-            <div className="strong">i</div>
+      {/* ===================== MAIN DASHBOARD GRID (MESMO FORMATO DO EXPORT) ===================== */}
+      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(12, minmax(0, 1fr))", gap: 14, alignItems: "start", width: "100%" }}>
+        {/* PRODUÇÃO HORÁRIA (12 col) */}
+        <div
+          style={{ ...cardBase, padding: 16, gridColumn: "span 12", cursor: "pointer", minWidth: 0 }}
+          onClick={() => nav("/plant-production")}
+        >
+          <div style={headerStyle}>
             <div>
-              A busca é feita nos lançamentos de Paradas Minutos, utilizando o campo padronizado de tipo de parada:
-              <b> Operacional</b>, <b>Corretiva</b> e <b>Preventiva</b>. O filtro permite visualizar cada tipo
-              separadamente ou todos os tipos consolidados. As toneladas perdidas são estimadas usando a mesma lógica da média real do Dashboard:
-              média das faixas horárias produtivas do mês.
+              <div style={titleStyle}>Produção por hora (Ton/H + Frequência)</div>
+              <div style={subStyle}>
+                 {rangeMode ? <>Média diária do filtro: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(rangeAvgDayTon)}</b> t</> : <>Total do dia: <b style={{ color: "rgba(255,255,255,0.88)" }}>{fmtBR0(totalTonDay)}</b> t</>}
+              </div>
             </div>
-          </footer>
+            <span
+              style={{
+                height: 32,
+                borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(255,255,255,0.06)",
+                padding: "0 12px",
+                display: "inline-flex",
+                alignItems: "center",
+                fontWeight: 900,
+                color: "rgba(255,255,255,0.82)",
+              }}
+            >
+              {prodDay?.updated_at ? "Atualizado" : "—"}
+            </span>
+          </div>
 
-          <div className="pe-footer-bar" />
-        </main>
+          <div style={{ height: mobile ? 300 : 420 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <YAxis
+                  yAxisId="left"
+                  domain={tonDomain}
+                  tickFormatter={(v) => fmtBR0(Number(v) || 0)}
+                  tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  domain={[0, 100]}
+                  tickFormatter={(v) => `${fmtBR0(Number(v) || 0)}%`}
+                  tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                />
+                <Tooltip content={(p: any) => <TooltipStopsHour {...p} stopsMap={stopsByPeriod} />} />
+<Legend
+                  verticalAlign="bottom"
+                  height={30}
+                  iconType="circle"
+                  formatter={(value) => (value === "freq" ? "Frequência (%)" : value === "ton" ? "Ton/H" : value)}
+                  wrapperStyle={{ color: "#00CCFF", fontWeight: 900 }}
+                />
+
+                <Bar yAxisId="left" dataKey="ton" fill="#00CCFF" radius={[10, 10, 0, 0]} maxBarSize={38}>
+                  <LabelList dataKey="ton" content={BarValueLabel} />
+                </Bar>
+
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="freq"
+                  stroke="#ff9f1a"
+                  strokeWidth={3}
+                  dot={{ r: 4 }}
+                  activeDot={{ r: 5 }}
+                >
+                  <LabelList dataKey="freq" content={FreqPointLabel} />
+                </Line>
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* TAXA (4 col) */}
+        <div
+          style={{
+            ...cardBase,
+            padding: 14,
+            gridColumn: mobile ? "span 12" : "span 4",
+            minWidth: 0,
+            height: mobile ? undefined : 250,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>Taxa Média</div>
+              <div style={subStyle}>{rangeMode ? "Freq% média por faixa horária" : "Freq% últimas horas"}</div>
+            </div>
+            <span
+              style={{
+                height: 32,
+                borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(255,255,255,0.06)",
+                padding: "0 12px",
+                display: "inline-flex",
+                alignItems: "center",
+                fontWeight: 900,
+                color: "rgba(255,255,255,0.82)",
+              }}
+            >
+              {fmtBR0(levelAvg)}%
+            </span>
+          </div>
+
+          <div style={{ flex: 1, minHeight: 0, height: mobile ? 160 : undefined }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={levelBars} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={0} minTickGap={0} tickMargin={6} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                <Tooltip
+                  formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
+                  contentStyle={{
+                    background: "rgba(0,0,0,0.86)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 14,
+                  }}
+                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                />
+                <Bar dataKey="freq" radius={[10, 10, 0, 0]} fill="#ff9f1a">
+                  <LabelList
+                    dataKey="freq"
+                    position="center"
+                    formatter={(v: any) => `${fmtBR0(Number(v) || 0)}%`}
+                    style={{
+                      fill: "rgba(255,255,255,0.95)",
+                      fontWeight: 900,
+                      fontSize: 12,
+                      textShadow: "0 1px 2px rgba(0,0,0,.55)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>        {/* META (4 col) */}
+        <div
+          style={{
+            ...cardBase,
+            padding: 14,
+            gridColumn: mobile ? "span 12" : "span 4",
+            cursor: "pointer",
+            height: mobile ? undefined : 250,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+          onClick={() => nav("/plant-production")}
+        >
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>{rangeMode ? "Média da meta do período" : "Produção do dia"}</div>
+              <div style={subStyle}>{rangeMode ? periodSummaryText : `Meta: ${fmtBR0(metaDia)} t`}</div>
+            </div>
+          </div>
+
+          {rangeMode ? (
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                display: "grid",
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: 18,
+                  alignItems: "start",
+                  maxWidth: mobile ? 300 : 360,
+                  margin: "0 auto",
+                  width: "100%",
+                }}
+              >
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ ...subStyle, marginTop: 0 }}>Produção realizada</div>
+                  <div style={{ marginTop: 8, fontSize: mobile ? 24 : 30, fontWeight: 950, color: "rgba(255,255,255,0.96)" }}>
+                    {fmtBR0(totalTonDay)} t
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    textAlign: "center",
+                    borderLeft: "1px solid rgba(255,255,255,0.10)",
+                    paddingLeft: 18,
+                  }}
+                >
+                  <div style={{ ...subStyle, marginTop: 0 }}>C/ desvio de 20%</div>
+                  <div style={{ marginTop: 8, fontSize: mobile ? 24 : 30, fontWeight: 950, color: "rgba(34,197,94,0.95)" }}>
+                    {fmtBR0(totalTonWith20Desvio)} t
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ height: mobile ? 160 : 190, position: "relative" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart data={gaugeData} innerRadius="75%" outerRadius="100%" startAngle={180} endAngle={0}>
+                  <RadialBar dataKey="value" cornerRadius={14} background={{ fill: "rgba(255,255,255,0.08)" }} />
+                </RadialBarChart>
+              </ResponsiveContainer>
+
+              <div style={{ position: "absolute", left: 0, right: 0, top: 78, textAlign: "center", pointerEvents: "none" }}>
+                <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.02 }}>{fmtBR0(pctMetaRaw)}%</div>
+                <div style={{ ...subStyle, marginTop: 2 }}>Atingimento</div>
+                {pctMetaOver > 0 ? (
+                  <div style={{ marginTop: 4, fontWeight: 900, color: "rgba(34,197,94,0.95)" }}>
+                    +{fmtBR0(pctMetaOver)}% acima
+                  </div>
+                ) : null}
+                <div style={{ marginTop: 6, fontWeight: 900, color: "rgba(255,255,255,0.86)" }}>
+                  {fmtBR0(totalTonDay)} t
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* MÉDIA (4 col) */}
+        <div
+          style={{
+            ...cardBase,
+            padding: 14,
+            gridColumn: mobile ? "span 12" : "span 4",
+            minWidth: 0,
+            height: mobile ? undefined : 250,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>Média/Hora</div>
+              <div style={subStyle}>{rangeMode ? "Média da soma por faixa do filtro" : "Média de produção por hora"}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span
+                style={{
+                  height: 32,
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.06)",
+                  padding: "0 12px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  fontWeight: 900,
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
+                {fmtBR1(avgTonPerHour)} t/h
+              </span>
+
+              <span
+                title={
+                  avgHourTrend.dir === "na"
+                    ? "Sem comparação (precisa de pelo menos 2 horas preenchidas)"
+                    : `Comparação: ${avgHourTrend.prevPeriod} → ${avgHourTrend.lastPeriod}`
+                }
+                style={{
+                  height: 32,
+                  borderRadius: 999,
+                  border:
+                    avgHourTrend.dir === "up"
+                      ? "1px solid rgba(34,197,94,0.40)"
+                      : avgHourTrend.dir === "down"
+                        ? "1px solid rgba(239,68,68,0.40)"
+                        : "1px solid rgba(255,255,255,0.12)",
+                  background:
+                    avgHourTrend.dir === "up"
+                      ? "rgba(34,197,94,0.14)"
+                      : avgHourTrend.dir === "down"
+                        ? "rgba(239,68,68,0.14)"
+                        : "rgba(255,255,255,0.06)",
+                  padding: "0 10px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontWeight: 950,
+                  color:
+                    avgHourTrend.dir === "up"
+                      ? "rgba(34,197,94,0.95)"
+                      : avgHourTrend.dir === "down"
+                        ? "rgba(239,68,68,0.95)"
+                        : "rgba(255,255,255,0.75)",
+                }}
+              >
+                {avgHourTrend.dir === "up" ? (
+                  <TrendingUp size={16} />
+                ) : avgHourTrend.dir === "down" ? (
+                  <TrendingDown size={16} />
+                ) : (
+                  <Minus size={16} />
+                )}
+
+                {avgHourTrend.dir === "na"
+                  ? "—"
+                  : avgHourTrend.dir === "flat"
+                    ? "0"
+                    : avgHourTrend.delta > 0
+                      ? `+${fmtBR1(Math.abs(avgHourTrend.delta))}`
+                      : `-${fmtBR1(Math.abs(avgHourTrend.delta))}`}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ flex: 1, minHeight: 0, marginTop: 2 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={hourlySeries} margin={{ top: 6, right: 12, left: -10, bottom: -2 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <XAxis dataKey="period" interval={2} tickMargin={10} angle={-35} textAnchor="end" height={34} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
+                <YAxis domain={miniTonDomain} hide />
+                <Tooltip
+                  formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}
+                  contentStyle={{
+                    background: "rgba(0,0,0,0.86)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 14,
+                  }}
+                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                />
+                <ReferenceLine y={EXPECTED_TON_H} stroke="rgba(255,255,255,0.35)" strokeWidth={2} strokeDasharray="6 6" />
+                <ReferenceLine y={avgTonPerHour} stroke="#00CCFF" strokeWidth={2} strokeDasharray="4 4" />
+                <Area type="monotone" dataKey="ton" stroke="#ff9f1a" fill="rgba(255,159,26,0.14)" strokeWidth={2.5} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* legenda (igual padrão do gráfico de produção) */}
+          <div
+            style={{
+              marginTop: 2,
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              fontWeight: 900,
+              color: "rgba(255,255,255,0.72)",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 18, borderTop: "2px dashed rgba(255,255,255,0.40)" }} />
+              <span>Esperada: {fmtBR0(EXPECTED_TON_H)} t/h</span>
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 18, borderTop: "2px dashed #00CCFF" }} />
+              <span>Média real: {fmtBR1(avgTonPerHour)} t/h</span>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 2, textAlign: "center", fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.45)", lineHeight: 1.1 }}>
+            Somente horas preenchidas (Ton/H &gt; 0).
+          </div>
+        </div>
+
+        {/* ÚLTIMOS 7 DIAS (6 col) */}
+        <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6", cursor: "pointer" }} onClick={() => nav("/last7days")}>
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>{rangeMode ? "Totais do período" : "Últimos 7 dias"}</div>
+              <div style={subStyle}>{rangeMode ? "Totais diários dentro do filtro" : "Total por dia"}</div>
+            </div>
+          </div>
+
+          <div style={{ height: mobile ? 150 : 180 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={last7Series} margin={{ top: 22, right: 26, left: 10, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="day"
+                  interval={0}
+                  padding={{ left: 18, right: 18 }}
+                  tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }}
+                />
+                <YAxis hide />
+                <Tooltip
+                  formatter={(v: any) => fmtBR0(Number(v) || 0)}
+                  contentStyle={{
+                    background: "rgba(0,0,0,0.86)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 14,
+                  }}
+                  labelStyle={{ color: "rgba(255,255,255,0.86)" }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="total"
+                  stroke="#ff9f1a"
+                  fill="rgba(255,159,26,0.14)"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, strokeWidth: 2, fill: "rgba(7,9,13,0.92)" }}
+                  activeDot={{ r: 5 }}
+                  isAnimationActive={false}
+                >
+                  <LabelList dataKey="total" content={Last7PointLabel as any} />
+                </Area>
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* HOJE (6 col) */}
+        <div style={{ ...cardBase, padding: 14, gridColumn: mobile ? "span 12" : "span 6" }}>
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>{rangeMode ? "Período" : "Hoje"}</div>
+              <div style={subStyle}>{rangeMode ? "Resumo do filtro" : "Resumo • Paradas + Horímetro"}</div>
+            </div>
+
+            {!rangeMode ? (
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/paradas")}>
+                  Abrir Paradas
+                </button>
+                <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
+                  Abrir Horímetros
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: mobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 12 }}>
+            {rangeMode ? (
+              <>
+                <MiniStat icon="📅" title="Período" value={periodSummaryText} sub="Filtro aplicado no dashboard" />
+                <MiniStat icon="∑" title="Total no filtro" value={`${fmtBR0(totalTonDay)} t`} sub="Soma de todos os dias" />
+                <MiniStat icon="⌀" title="Média diária" value={`${fmtBR0(rangeAvgDayTon)} t`} sub="Média do período" />
+              </>
+            ) : (
+              <>
+                <MiniStat
+                  icon="⏸"
+                  title="Última Parada"
+                  value={lastStop ? `${lastStop.equipamento} • ${fmtBR1(Number(lastStop.tempo_parada_h || 0))}h` : "—"}
+                  sub={lastStop ? `${lastStop.data_inicio} ${lastStop.hora_inicio}` : "Sem registros no dia"}
+                  onClick={() => nav("/paradas")}
+                />
+                <MiniStat
+                  icon="📌"
+                  title="Total de Paradas"
+                  value={String(totalStops)}
+                  sub={`Dia ${brDate(day)}`}
+                  onClick={() => nav("/paradas")}
+                />
+                <MiniStat
+                  icon="⏱"
+                  title="Último Horímetro (BT-01)"
+                  value={
+                    lastHorimetroBT01
+                      ? `${fmtBR1(lastHorimetroBT01.horimetro_ini)} → ${fmtBR1(lastHorimetroBT01.horimetro_fim)}`
+                      : "—"
+                  }
+                  sub={
+                    lastHorimetroBT01
+                      ? `Dia ${brDate(lastHorimetroBT01.day)} • Turno ${lastHorimetroBT01.turno}`
+                      : "Sem registros"
+                  }
+                  onClick={() => nav("/horimetros")}
+                />
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* HORÍMETROS (12 col) */}
+        {!rangeMode ? (
+        <div style={{ ...cardBase, padding: 14, gridColumn: "span 12" }}>
+          <div style={headerStyle}>
+            <div>
+              <div style={titleStyle}>Horímetros</div>
+              <div style={subStyle}>BT-02 • PN-02 • PN-01 • EH-08</div>
+            </div>
+            <button className="mp-btn" style={{ height: 36 }} onClick={() => nav("/horimetros")}>
+              Abrir Horímetros
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {topProductsHorimetros.map(({ eq, row }) => (
+              <div
+                key={eq}
+                style={{
+                  borderRadius: 16,
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(0,0,0,0.18)",
+                  padding: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{
+                      width: 52,
+                      height: 34,
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,159,26,0.20)",
+                      background: "rgba(255,159,26,0.10)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 12,
+                      fontWeight: 950,
+                      color: "rgba(255,255,255,0.85)",
+                    }}
+                  >
+                    {eq}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 950, color: "rgba(255,255,255,0.88)" }}>
+                      {row ? `${fmtBR1(row.horimetro_ini)} → ${fmtBR1(row.horimetro_fim)}` : "—"}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                      {row ? `Dia ${brDate(row.day)} • Turno ${row.turno}` : "Sem registro"}
+                    </div>
+                  </div>
+                </div>
+
+                <button className="mp-btn" style={{ height: 34 }} onClick={() => nav("/horimetros")}>
+                  Ver
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+/* ===================== MiniStat ===================== */
+function MiniStat({
+  icon,
+  title,
+  value,
+  sub,
+  onClick,
+}: {
+  icon: string;
+  title: string;
+  value: string;
+  sub: string;
+  onClick?: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      style={{
+        borderRadius: 16,
+        border: "1px solid rgba(255,255,255,0.10)",
+        background: "rgba(0,0,0,0.18)",
+        padding: 12,
+        cursor: onClick ? "pointer" : "default",
+        transition: "transform .15s ease, border-color .15s ease, box-shadow .15s ease",
+        boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+      }}
+      onMouseEnter={(e) => {
+        if (!onClick) return;
+        (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,159,26,0.22)";
+      }}
+      onMouseLeave={(e) => {
+        if (!onClick) return;
+        (e.currentTarget as HTMLDivElement).style.transform = "translateY(0px)";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,0.10)";
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <div
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 12,
+            border: "1px solid rgba(255,159,26,0.20)",
+            background: "rgba(255,159,26,0.10)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 16,
+          }}
+        >
+          {icon}
+        </div>
+        <div style={{ fontWeight: 900, color: "rgba(255,255,255,0.78)", fontSize: 13 }}>{title}</div>
+      </div>
+
+      <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.01, color: "rgba(255,255,255,0.92)" }}>
+        {value}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>{sub}</div>
     </div>
   );
 }
