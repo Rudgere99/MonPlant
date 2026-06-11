@@ -52,12 +52,11 @@ const nav: NavItem[] = [
   { to: "/producao-planta", label: "Produção Planta", icon: Factory, group: "Produção" },
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/lancamento-paradas", label: "Paradas Minutos", icon: PauseCircle, group: "Operação" },
-  { to: "/previsao-paradas-estoque", label: "Previsão Estoque", icon: Calculator, group: "Operação" },
+  { to: "/previsao-paradas-estoque", label: "Realtório de Perdas", icon: Calculator, group: "Operação" },
   { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
 
 
   { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
-  { to: "/exportar", label: "Relatórios", icon: FileSpreadsheet, group: "Utilitários" },
 ];
 
 
