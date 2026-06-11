@@ -451,7 +451,6 @@ function PainelGrafico({
     <div className="pe-card pe-chart-card">
       <div className="pe-chart-header">
         <div className={`pe-chart-title pe-chart-title-${cor}`}>{titulo}</div>
-        <div className="pe-chart-subtitle">{subtitulo}</div>
       </div>
 
       <div className="pe-chart-body">{children}</div>
@@ -698,19 +697,16 @@ export default function PrevisaoParadasEstoque() {
           width: 100%;
           overflow: hidden;
           border-radius: 24px;
-          border: 1px solid rgba(148,163,184,0.18);
-          background: #0a0f16;
-          box-shadow: 0 22px 70px rgba(0,0,0,0.35);
+          border: 1px solid rgba(255,255,255,0.08);
+          background: #070b11;
+          box-shadow: 0 14px 34px rgba(0,0,0,0.28);
         }
 
         .pe-header {
           position: relative;
-          display: grid;
-          grid-template-columns: 360px 1fr;
-          gap: 26px;
-          align-items: center;
-          padding: 24px 28px 22px;
-          border-bottom: 1px solid rgba(148,163,184,0.16);
+          display: block;
+          padding: 20px 28px 18px;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
         }
 
         .pe-header::after {
@@ -724,50 +720,22 @@ export default function PrevisaoParadasEstoque() {
           background: linear-gradient(90deg, #1FC7F2, #1399C8, #F6A21A);
         }
 
-        .pe-brand {
-          display: flex;
-          align-items: center;
-          gap: 18px;
-        }
-
-        .pe-brand-icon {
-          display: grid;
-          place-items: center;
-          width: 66px;
-          height: 66px;
-          border-radius: 18px;
-          background: #121a24;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 16px 38px rgba(0,0,0,0.30);
-        }
-
-        .pe-brand-title {
-          font-size: 34px;
-          line-height: 1;
-          font-weight: 950;
-          letter-spacing: 0.08em;
-          color: #fff;
-          white-space: nowrap;
-        }
-
-        .pe-brand-subtitle {
-          margin-top: 8px;
-          color: #9fb0c3;
-          font-size: 13px;
-          font-weight: 950;
-          letter-spacing: 0.52em;
-        }
-
+        
+        
+        
+        
         .pe-title-wrap {
           display: flex;
           justify-content: space-between;
           gap: 16px;
           align-items: center;
+          width: 100%;
         }
 
         .pe-title h1 {
           margin: 0;
           color: #eaf4ff;
-          font-size: clamp(24px, 2.2vw, 38px);
+          font-size: clamp(24px, 2.0vw, 34px);
           font-weight: 950;
           line-height: 1.05;
           letter-spacing: -0.02em;
@@ -825,7 +793,7 @@ export default function PrevisaoParadasEstoque() {
           padding: 10px;
           border-radius: 18px;
           border: 1px solid rgba(255,255,255,0.08);
-          background: #121821;
+          background: #0f141b;
         }
 
         .pe-filter-label {
@@ -841,7 +809,7 @@ export default function PrevisaoParadasEstoque() {
           height: 40px;
           min-width: 150px;
           border: 1px solid rgba(148,163,184,0.20);
-          background: #0f141c;
+          background: #0d1218;
           color: #f8fafc;
           border-radius: 13px;
           padding: 0 12px;
@@ -866,8 +834,8 @@ export default function PrevisaoParadasEstoque() {
 
         .pe-card {
           border: 1px solid rgba(255,255,255,0.08);
-          background: #11161f;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 34px rgba(0,0,0,0.20);
+          background: #0f141b;
+          box-shadow: 0 8px 22px rgba(0,0,0,0.18);
         }
 
         .pe-kpi-grid {
@@ -997,9 +965,7 @@ export default function PrevisaoParadasEstoque() {
         }
 
         .pe-chart-subtitle {
-          color: rgba(226,232,240,0.60);
-          font-size: 13px;
-          font-weight: 750;
+          display: none;
         }
 
         .pe-chart-body {
@@ -1066,7 +1032,7 @@ export default function PrevisaoParadasEstoque() {
         .pe-production-ref div {
           border-radius: 14px;
           border: 1px solid rgba(148,163,184,0.14);
-          background: #0f141c;
+          background: #0d1218;
           padding: 12px;
         }
 
@@ -1103,7 +1069,7 @@ export default function PrevisaoParadasEstoque() {
           min-height: 92px;
           border-radius: 16px;
           border: 1px solid rgba(148,163,184,0.15);
-          background: #0f141c;
+          background: #0d1218;
           padding: 14px;
         }
 
@@ -1140,7 +1106,7 @@ export default function PrevisaoParadasEstoque() {
           gap: 12px;
           padding: 14px 18px;
           border-bottom: 1px solid rgba(148,163,184,0.15);
-          background: #111926;
+          background: #10151d;
         }
 
         .pe-table-title h2 {
@@ -1169,7 +1135,7 @@ export default function PrevisaoParadasEstoque() {
 
         .pe-table thead th {
           padding: 12px 14px;
-          background: #101722;
+          background: #0f141b;
           border-bottom: 1px solid rgba(148,163,184,0.15);
           color: rgba(226,232,240,0.88);
           text-align: left;
@@ -1210,7 +1176,7 @@ export default function PrevisaoParadasEstoque() {
           gap: 12px;
           border-radius: 18px;
           border: 1px solid rgba(31,199,242,0.22);
-          background: #101722;
+          background: #0f141b;
           padding: 13px 16px;
           color: rgba(226,232,240,0.72);
           font-size: 13px;
@@ -1254,13 +1220,6 @@ export default function PrevisaoParadasEstoque() {
             padding-right: 14px;
           }
 
-          .pe-brand-title {
-            font-size: 26px;
-          }
-
-          .pe-brand-subtitle {
-            letter-spacing: 0.34em;
-          }
 
           .pe-cause-grid {
             grid-template-columns: 1fr;
@@ -1284,17 +1243,6 @@ export default function PrevisaoParadasEstoque() {
 
       <div className="pe-shell">
         <header className="pe-header">
-          <div className="pe-brand">
-            <div className="pe-brand-icon">
-              <Factory size={36} />
-            </div>
-
-            <div>
-              <div className="pe-brand-title">TRINDADE</div>
-              <div className="pe-brand-subtitle">MINERAÇÃO</div>
-            </div>
-          </div>
-
           <div className="pe-title-wrap">
             <div className="pe-title">
               <h1>
@@ -1302,7 +1250,6 @@ export default function PrevisaoParadasEstoque() {
                 <br />
                 e Toneladas Perdidas
               </h1>
-              <p>Análise por tipo padronizado: operacional, corretiva e preventiva</p>
             </div>
 
             <div className="pe-period">
