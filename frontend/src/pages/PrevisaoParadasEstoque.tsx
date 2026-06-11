@@ -699,10 +699,7 @@ export default function PrevisaoParadasEstoque() {
           overflow: hidden;
           border-radius: 24px;
           border: 1px solid rgba(148,163,184,0.18);
-          background:
-            radial-gradient(circle at top left, rgba(31,199,242,0.16), transparent 30%),
-            radial-gradient(circle at top right, rgba(246,162,26,0.10), transparent 30%),
-            linear-gradient(180deg, #0A0F16 0%, #070B11 100%);
+          background: #0a0f16;
           box-shadow: 0 22px 70px rgba(0,0,0,0.35);
         }
 
@@ -739,7 +736,7 @@ export default function PrevisaoParadasEstoque() {
           width: 66px;
           height: 66px;
           border-radius: 18px;
-          background: linear-gradient(135deg, #123244, #1FC7F2);
+          background: #121a24;
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 16px 38px rgba(0,0,0,0.30);
         }
 
@@ -827,8 +824,8 @@ export default function PrevisaoParadasEstoque() {
           gap: 10px;
           padding: 10px;
           border-radius: 18px;
-          border: 1px solid rgba(255,255,255,0.10);
-          background: rgba(15,23,42,0.72);
+          border: 1px solid rgba(255,255,255,0.08);
+          background: #121821;
         }
 
         .pe-filter-label {
@@ -844,7 +841,7 @@ export default function PrevisaoParadasEstoque() {
           height: 40px;
           min-width: 150px;
           border: 1px solid rgba(148,163,184,0.20);
-          background: rgba(2,6,23,0.65);
+          background: #0f141c;
           color: #f8fafc;
           border-radius: 13px;
           padding: 0 12px;
@@ -868,8 +865,8 @@ export default function PrevisaoParadasEstoque() {
         }
 
         .pe-card {
-          border: 1px solid rgba(255,255,255,0.10);
-          background: linear-gradient(180deg, rgba(20,25,34,0.96), rgba(12,17,24,0.92));
+          border: 1px solid rgba(255,255,255,0.08);
+          background: #11161f;
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 34px rgba(0,0,0,0.20);
         }
 
@@ -899,7 +896,7 @@ export default function PrevisaoParadasEstoque() {
           width: 160px;
           height: 160px;
           border-radius: 50%;
-          opacity: 0.16;
+          opacity: 0.05;
         }
 
         .pe-kpi-azul::after { background: ${COR_AZUL}; }
@@ -916,7 +913,7 @@ export default function PrevisaoParadasEstoque() {
           flex: 0 0 auto;
           border-radius: 50%;
           color: #fff;
-          background: linear-gradient(135deg, #0E3346, #1FC7F2);
+          background: #1a222d;
           box-shadow: 0 16px 34px rgba(0,0,0,0.30);
         }
 
@@ -925,7 +922,7 @@ export default function PrevisaoParadasEstoque() {
         }
 
         .pe-kpi-laranja .pe-kpi-icon {
-          background: linear-gradient(135deg, #50310B, #F6A21A);
+          background: #1a222d;
         }
 
         .pe-kpi-title {
@@ -1069,7 +1066,7 @@ export default function PrevisaoParadasEstoque() {
         .pe-production-ref div {
           border-radius: 14px;
           border: 1px solid rgba(148,163,184,0.14);
-          background: rgba(2,6,23,0.35);
+          background: #0f141c;
           padding: 12px;
         }
 
@@ -1106,7 +1103,7 @@ export default function PrevisaoParadasEstoque() {
           min-height: 92px;
           border-radius: 16px;
           border: 1px solid rgba(148,163,184,0.15);
-          background: rgba(2,6,23,0.38);
+          background: #0f141c;
           padding: 14px;
         }
 
@@ -1143,7 +1140,7 @@ export default function PrevisaoParadasEstoque() {
           gap: 12px;
           padding: 14px 18px;
           border-bottom: 1px solid rgba(148,163,184,0.15);
-          background: linear-gradient(90deg, rgba(14,51,70,0.92), rgba(24,123,159,0.78));
+          background: #111926;
         }
 
         .pe-table-title h2 {
@@ -1172,7 +1169,7 @@ export default function PrevisaoParadasEstoque() {
 
         .pe-table thead th {
           padding: 12px 14px;
-          background: rgba(2,6,23,0.42);
+          background: #101722;
           border-bottom: 1px solid rgba(148,163,184,0.15);
           color: rgba(226,232,240,0.88);
           text-align: left;
@@ -1213,7 +1210,7 @@ export default function PrevisaoParadasEstoque() {
           gap: 12px;
           border-radius: 18px;
           border: 1px solid rgba(31,199,242,0.22);
-          background: rgba(31,199,242,0.06);
+          background: #101722;
           padding: 13px 16px;
           color: rgba(226,232,240,0.72);
           font-size: 13px;
