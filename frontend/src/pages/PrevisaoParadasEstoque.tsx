@@ -22,6 +22,7 @@ import {
 } from "recharts";
 
 type PlantaFiltro = "todas" | "planta_01" | "planta_02";
+type TipoParadaFiltro = "todas" | "operacional" | "corretiva" | "preventiva";
 
 type StopLaunchRow = {
   id?: number | string | null;
@@ -93,38 +94,46 @@ const producaoHoraFallbackPorPlanta: Record<string, number> = {
   planta_02: 0,
 };
 
-const palavrasChaveEstoque = [
-  "cone cheio",
-  "cones cheios",
-  "pilha cheia",
-  "pilhas cheias",
-  "pulmao cheio",
-  "pulmão cheio",
-  "falta de estoque",
-  "falta estoque",
-  "sem estoque",
-  "falta de area de estoque",
-  "falta de área de estoque",
-  "sem area de estoque",
-  "sem área de estoque",
-  "area de estoque cheia",
-  "área de estoque cheia",
-  "falta de area",
-  "falta de área",
-  "sem area",
-  "sem área",
-  "restricao de estoque",
-  "restrição de estoque",
-  "restricao recebimento",
-  "restrição recebimento",
-  "sem local para estocar",
-  "sem local de estoque",
-  "sem praça de estoque",
-  "praca de estoque cheia",
-  "praça de estoque cheia",
-  "destino cheio",
-  "sem destino",
-];
+const tiposParadaPadronizados = [
+  {
+    value: "operacional",
+    label: "Operacional",
+    palavras: ["operacional", "operação", "operacao"],
+  },
+  {
+    value: "corretiva",
+    label: "Corretiva",
+    palavras: ["corretiva", "manutencao corretiva", "manutenção corretiva"],
+  },
+  {
+    value: "preventiva",
+    label: "Preventiva",
+    palavras: ["preventiva", "manutencao preventiva", "manutenção preventiva"],
+  },
+] as const;
+
+function obterTipoParadaPadronizado(textoOriginal: string): TipoParadaFiltro | "outros" {
+  const texto = normalizarTexto(textoOriginal);
+
+  for (const tipo of tiposParadaPadronizados) {
+    const encontrou = tipo.palavras.some((palavra) =>
+      texto.includes(normalizarTexto(palavra))
+    );
+
+    if (encontrou) {
+      return tipo.value;
+    }
+  }
+
+  return "outros";
+}
+
+function obterLabelTipoParada(tipo: string) {
+  if (tipo === "operacional") return "Operacional";
+  if (tipo === "corretiva") return "Corretiva";
+  if (tipo === "preventiva") return "Preventiva";
+  return "Outros";
+}
 
 const COR_AZUL = "#0ea5e9";
 const COR_AZUL_ESCURO = "#075985";
@@ -318,57 +327,19 @@ function transformarLinha(day: string, row: StopLaunchRow): ParadaEstoque {
 }
 
 function ehParadaEstoque(parada: ParadaEstoque) {
-  const texto = normalizarTexto(parada.observacaoCompleta);
-
-  return palavrasChaveEstoque.some((palavra) =>
-    texto.includes(normalizarTexto(palavra))
+  const tipo = obterTipoParadaPadronizado(
+    `${parada.tipo_parada} ${parada.observacaoCompleta}`
   );
+
+  return tipo === "operacional" || tipo === "corretiva" || tipo === "preventiva";
 }
 
 function classificarCausa(parada: ParadaEstoque) {
-  const texto = normalizarTexto(parada.observacaoCompleta);
+  const tipo = obterTipoParadaPadronizado(
+    `${parada.tipo_parada} ${parada.observacaoCompleta}`
+  );
 
-  if (texto.includes("cone cheio") || texto.includes("cones cheios")) {
-    return "Cone cheio";
-  }
-
-  if (texto.includes("pilha cheia") || texto.includes("pilhas cheias")) {
-    return "Pilha cheia";
-  }
-
-  if (texto.includes("pulmao cheio")) {
-    return "Pulmão cheio";
-  }
-
-  if (
-    texto.includes("falta de estoque") ||
-    texto.includes("falta estoque") ||
-    texto.includes("sem estoque")
-  ) {
-    return "Falta de estoque";
-  }
-
-  if (
-    texto.includes("falta de area") ||
-    texto.includes("sem area") ||
-    texto.includes("area de estoque cheia") ||
-    texto.includes("sem local de estoque") ||
-    texto.includes("sem local para estocar") ||
-    texto.includes("praca de estoque cheia")
-  ) {
-    return "Falta de área de estoque";
-  }
-
-  if (
-    texto.includes("destino cheio") ||
-    texto.includes("sem destino") ||
-    texto.includes("restricao de estoque") ||
-    texto.includes("restricao recebimento")
-  ) {
-    return "Restrição de estoque";
-  }
-
-  return "Outras restrições";
+  return obterLabelTipoParada(tipo);
 }
 
 function calcularMediaRealProducao(rows: PlantProductionRow[]) {
@@ -494,6 +465,7 @@ export default function PrevisaoParadasEstoque() {
   const [dataInicio, setDataInicio] = useState(hoje);
   const [dataFim, setDataFim] = useState(hoje);
   const [planta, setPlanta] = useState<PlantaFiltro>("todas");
+  const [tipoParada, setTipoParada] = useState<TipoParadaFiltro>("operacional");
   const [paradas, setParadas] = useState<ParadaEstoque[]>([]);
   const [producaoHoraRealPorPlanta, setProducaoHoraRealPorPlanta] = useState<
     Record<string, number>
@@ -597,9 +569,16 @@ export default function PrevisaoParadasEstoque() {
       const passaPlanta =
         planta === "todas" ? true : parada.planta === planta;
 
-      return passaPlanta && ehParadaEstoque(parada);
+      const tipoClassificado = obterTipoParadaPadronizado(
+        `${parada.tipo_parada} ${parada.observacaoCompleta}`
+      );
+
+      const passaTipo =
+        tipoParada === "todas" ? ehParadaEstoque(parada) : tipoClassificado === tipoParada;
+
+      return passaPlanta && passaTipo;
     });
-  }, [paradas, planta]);
+  }, [paradas, planta, tipoParada]);
 
   const dados = useMemo(() => {
     const totalMinutos = paradasFiltradas.reduce((acc, p) => acc + p.minutos, 0);
@@ -1318,11 +1297,11 @@ export default function PrevisaoParadasEstoque() {
           <div className="pe-title-wrap">
             <div className="pe-title">
               <h1>
-                Previsão de Paradas Operacionais da Planta
+                Relatório de Horas de Paradas da Planta
                 <br />
-                por Restrição de Estoque
+                e Toneladas Perdidas
               </h1>
-              <p>Análise pela descrição dos lançamentos em Paradas Minutos</p>
+              <p>Análise por tipo padronizado: operacional, corretiva e preventiva</p>
             </div>
 
             <div className="pe-period">
@@ -1335,7 +1314,7 @@ export default function PrevisaoParadasEstoque() {
         <main className="pe-content">
           <div className="pe-filter-row">
             <div className="pe-breadcrumb">
-              Operação&nbsp;&nbsp;•&nbsp;&nbsp;<b>Previsão Estoque</b>
+              Operação&nbsp;&nbsp;•&nbsp;&nbsp;<b>Paradas Planta</b>
             </div>
 
             <div className="pe-filters">
@@ -1368,6 +1347,17 @@ export default function PrevisaoParadasEstoque() {
                 <option value="planta_02">Planta 02</option>
               </select>
 
+              <select
+                className="pe-input"
+                value={tipoParada}
+                onChange={(e) => setTipoParada(e.target.value as TipoParadaFiltro)}
+              >
+                <option value="todas">Todas</option>
+                <option value="operacional">Operacional</option>
+                <option value="corretiva">Corretiva</option>
+                <option value="preventiva">Preventiva</option>
+              </select>
+
               <button className="pe-input" type="button" onClick={carregarParadas}>
                 Atualizar
               </button>
@@ -1378,9 +1368,9 @@ export default function PrevisaoParadasEstoque() {
 
           <section className="pe-kpi-grid">
             <CardIndicador
-              titulo="Total de Horas de Paradas Operacionais da Planta"
+              titulo="Total de Horas de Paradas da Planta"
               valor={`${formatarDecimal(dados.totalHoras)} h`}
-              subtitulo="Cone, pilha, estoque, área e recebimento"
+              subtitulo="Conforme tipo selecionado no filtro"
               icone={<Clock size={34} />}
               variante="azul"
             />
@@ -1412,8 +1402,8 @@ export default function PrevisaoParadasEstoque() {
 
           <section className="pe-chart-grid">
             <PainelGrafico
-              titulo="Horas de Paradas Operacionais da Planta por Mês"
-              subtitulo="Soma de minutos da tabela bv_launch.stops_rows"
+              titulo="Horas de Paradas da Planta por Mês"
+              subtitulo="Soma de horas conforme tipo de parada selecionado"
               cor="azul"
             >
               <ResponsiveContainer width="100%" height="100%">
@@ -1500,7 +1490,7 @@ export default function PrevisaoParadasEstoque() {
                   ) : resumoMensal.length === 0 ? (
                     <tr>
                       <td colSpan={5}>
-                        Nenhuma parada com cone cheio, pilha cheia, falta de estoque ou falta de área encontrada.
+                        Nenhuma parada encontrada para o tipo selecionado.
                       </td>
                     </tr>
                   ) : (
@@ -1574,7 +1564,7 @@ export default function PrevisaoParadasEstoque() {
             <div className="pe-card pe-panel">
               <h2>
                 <PackageX size={22} color={COR_AZUL} />
-                Causas identificadas
+                Tipos identificados
               </h2>
 
               <div className="pe-cause-grid">
@@ -1602,7 +1592,7 @@ export default function PrevisaoParadasEstoque() {
 
           <section className="pe-table-card pe-card">
             <div className="pe-table-title">
-              <h2>Detalhamento das Paradas de Estoque</h2>
+              <h2>Detalhamento das Paradas da Planta</h2>
               <span>Total encontrado: {paradasFiltradas.length}</span>
             </div>
 
@@ -1614,7 +1604,7 @@ export default function PrevisaoParadasEstoque() {
                     <th>Período</th>
                     <th>Início</th>
                     <th>Fim</th>
-                    <th>Classificação</th>
+                    <th>Tipo</th>
                     <th>Equipamento</th>
                     <th>Descrição</th>
                     <th className="right">Horas</th>
@@ -1630,7 +1620,7 @@ export default function PrevisaoParadasEstoque() {
                   ) : paradasFiltradas.length === 0 ? (
                     <tr>
                       <td colSpan={9}>
-                        Nenhuma parada de estoque encontrada no período.
+                        Nenhuma parada encontrada para o tipo selecionado.
                       </td>
                     </tr>
                   ) : (
@@ -1656,10 +1646,10 @@ export default function PrevisaoParadasEstoque() {
           <footer className="pe-footer">
             <div className="strong">i</div>
             <div>
-              A busca é feita nos lançamentos de Paradas Minutos, comparando a descrição com
-              palavras-chave como <b>cone cheio</b>, <b>pilha cheia</b>, <b>falta de estoque</b>,
-              <b> falta de área de estoque</b>, <b>pulmão cheio</b> e <b>restrição de estoque</b>.
-              As toneladas perdidas são estimadas pela média real de produção da planta no período filtrado.
+              A busca é feita nos lançamentos de Paradas Minutos, utilizando o campo padronizado de tipo de parada:
+              <b> Operacional</b>, <b>Corretiva</b> e <b>Preventiva</b>. O filtro permite visualizar cada tipo
+              separadamente ou todos os tipos consolidados. As toneladas perdidas são estimadas pela média real
+              de produção da planta no período filtrado.
             </div>
           </footer>
 
