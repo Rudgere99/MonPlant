@@ -8,6 +8,7 @@ type Tab =
   | "dashboard"
   | "production"
   | "desvio"
+  | "baixa-performance"
   | "ritmo"
   | "stats"
   | "ufdf"
@@ -28,6 +29,7 @@ const MOBILE_NAV_ITEMS: Array<{ key: Tab; to: string; label: string }> = [
   { key: "dashboard", to: "/m/dashboard", label: "Dashboard" },
   { key: "production", to: "/m/producao-planta", label: "Produção Planta" },
   { key: "desvio", to: "/m/desvio-producao", label: "Desvio Produção" },
+  { key: "baixa-performance", to: "/m/controle-baixa-performance", label: "Baixa Performance" },
   { key: "ritmo", to: "/m/ritmo", label: "Ritmo" },
   { key: "stats", to: "/m/statisticas", label: "Estatísticas" },
   { key: "ufdf", to: "/m/ufdf", label: "UF/DF" },
