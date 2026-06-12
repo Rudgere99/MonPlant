@@ -183,7 +183,7 @@ function statusLabel(status: StatusKind): string {
 }
 
 function statusColor(status: StatusKind): string {
-  if (status === "ok") return "#00b7a8";
+  if (status === "ok") return "#15cbe2";
   if (status === "lowNoStop") return "#ff8a00";
   if (status === "lowWithStop") return "#64707f";
   return "#293241";
@@ -494,14 +494,14 @@ export default function ControleBaixaPerformance() {
             <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", marginBottom: 12 }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: 20, display: "flex", gap: 10, alignItems: "center" }}>
-                  <Factory size={20} color="#00b7a8" /> Produção por faixa horária
+                  <Factory size={20} color="#15cbe2" /> Produção por faixa horária
                 </h2>
                 <div style={{ marginTop: 4, color: "rgba(255,255,255,0.58)", fontWeight: 800 }}>
                   {selectedPlantName} • linha de meta: {fmtBR(targetTon)} t/h
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <MetricBadge icon={<BadgeCheck size={17} />} label="Dentro" value={okRows.length} color="#00b7a8" />
+                <MetricBadge icon={<BadgeCheck size={17} />} label="Dentro" value={okRows.length} color="#15cbe2" />
                 <MetricBadge icon={<AlertTriangle size={17} />} label="Sem parada" value={lowNoStop.length} color="#ff8a00" />
                 <MetricBadge icon={<PauseCircle size={17} />} label="Com parada" value={lowWithStop.length} color="#8a94a3" />
               </div>
@@ -537,7 +537,7 @@ export default function ControleBaixaPerformance() {
               <h3 style={{ margin: "0 0 14px", display: "flex", alignItems: "center", gap: 10 }}>
                 <ClipboardCheck size={20} color="#a7f3d0" /> Legenda
               </h3>
-              <LegendRow color="#00b7a8" title="Dentro da meta" text={`Produção ≥ ${fmtBR(targetTon)} t/h`} />
+              <LegendRow color="#15cbe2" title="Dentro da meta" text={`Produção ≥ ${fmtBR(targetTon)} t/h`} />
               <LegendRow color="#ff8a00" title="Abaixo da meta sem parada" text="Produção baixa e sem parada registrada; exige motivo CCO." />
               <LegendRow color="#64707f" title="Abaixo da meta com parada" text="Produção baixa justificada por lançamento de parada." />
             </div>
