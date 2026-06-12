@@ -16,6 +16,7 @@ import Ritmo from "../pages/Ritmo";
 import Statistics from "../pages/Statistics";
 import UfDF from "../pages/UfDF";
 import DesvioProducao from "../pages/DesvioProducao";
+import ControleBaixaPerformance from "../pages/ControleBaixaPerformance";
 import Configuracoes from "../pages/Configuracoes";
 import Equipamentos from "../pages/Equipamentos";
 import SupervisoresPlanta from "../pages/SupervisoresPlanta";
@@ -76,6 +77,7 @@ function MobileWrap({
     | "dashboard"
     | "production"
     | "desvio"
+    | "baixa-performance"
     | "ritmo"
     | "stats"
     | "ufdf"
@@ -217,6 +219,16 @@ export function AppRoutes() {
           <RequireAuth>
             <MobileWrap title="Desvio Produção" tab="desvio">
               <DesvioProducao />
+            </MobileWrap>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/m/controle-baixa-performance"
+        element={
+          <RequireAuth>
+            <MobileWrap title="Baixa Performance" tab="baixa-performance">
+              <ControleBaixaPerformance />
             </MobileWrap>
           </RequireAuth>
         }
@@ -414,6 +426,14 @@ export function AppRoutes() {
           element={
             <RequireRole>
               <DesvioProducao />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="controle-baixa-performance"
+          element={
+            <RequireRole>
+              <ControleBaixaPerformance />
             </RequireRole>
           }
         />
