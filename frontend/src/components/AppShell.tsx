@@ -37,11 +37,11 @@ const nav: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Visão geral" },
   { to: "/desvio-producao", label: "Desvio Produção", icon: LayoutDashboard, group: "Produção" },
   { to: "/controle-baixa-performance", label: "Baixa Performance", icon: BarChart3, group: "Produção" },
+  { to: "/previsao-paradas-estoque", label: "Realtório de Perdas", icon: Calculator, group: "Operação" },
   { to: "/statisticas", label: "Estatísticas", icon: BarChart3, group: "Configurações" },
   { to: "/ritmo", label: "Ritmo", icon: Factory, group: "Operação" },
   { to: "/equipamentos", label: "Equipamentos", icon: Factory, group: "Configurações" },
   { to: "/supervisores-planta", label: "Supervisores Planta", icon: Users, group: "Configurações" },
-
   { to: "/dashboard/gestao-vista-planta", label: "Gestão à Vista", icon: LayoutDashboard, group: "Visão geral" },
 
   // ===== DEV =====
@@ -53,10 +53,7 @@ const nav: NavItem[] = [
   { to: "/producao-planta", label: "Produção Planta", icon: Factory, group: "Produção" },
   { to: "/horimetros", label: "Horímetros", icon: Timer, group: "Operação" },
   { to: "/lancamento-paradas", label: "Paradas Minutos", icon: PauseCircle, group: "Operação" },
-  { to: "/previsao-paradas-estoque", label: "Realtório de Perdas", icon: Calculator, group: "Operação" },
   { to: "/ufdf", label: "UF / DF", icon: BarChart3, group: "Indicadores" },
-
-
   { to: "/metas", label: "Metas do mês", icon: FileSpreadsheet, group: "Configurações" },
 ];
 
