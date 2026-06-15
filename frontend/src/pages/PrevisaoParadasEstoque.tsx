@@ -1965,10 +1965,8 @@ export default function PrevisaoParadasEstoque() {
           <footer className="pe-footer">
             <div className="strong">i</div>
             <div>
-              A busca é feita nos lançamentos de Paradas Minutos, utilizando o campo padronizado de tipo de parada:
-              <b> Operacional</b>, <b>Corretiva</b> e <b>Preventiva</b>. O filtro permite visualizar cada tipo
-              separadamente ou todos os tipos consolidados. As toneladas perdidas usam a produção real da hora da parada. Quando a hora não teve operação,
-              o cálculo considera a média esperada do dia da respectiva planta, respeitando variações por dia, mês e planta.
+              As toneladas perdidas são estimadas a partir das horas reais de parada da planta. A taxa de produção utilizada considera, prioritariamente, a produção real da faixa horária em que ocorreu a parada. 
+              Quando não houver produção registrada na respectiva hora, será utilizada a média esperada do dia da planta, calculada pela meta diária dividida pelas horas produtivas previstas. Na ausência dessa base, o cálculo utiliza a média real do mês ou do período filtrado.
             </div>
           </footer>
 
