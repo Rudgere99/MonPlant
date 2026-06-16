@@ -36,7 +36,7 @@ type NavItem = {
 const nav: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Visão geral" },
   { to: "/desvio-producao", label: "Desvio Produção", icon: LayoutDashboard, group: "Produção" },
-  { to: "/controle-baixa-performance", label: "Baixa Performance", icon: BarChart3, group: "Produção" },
+  { to: "/controle-baixa-performance", label: "Performance", icon: BarChart3, group: "Produção" },
   { to: "/previsao-paradas-estoque", label: "Realtório de Perdas", icon: Calculator, group: "Operação" },
   { to: "/statisticas", label: "Estatísticas", icon: BarChart3, group: "Configurações" },
   { to: "/ritmo", label: "Ritmo", icon: Factory, group: "Operação" },
