@@ -417,7 +417,7 @@ export default function ControleBaixaPerformance() {
                 Produção horária da planta
               </div>
               <h1 style={{ margin: "4px 0 6px", fontSize: 34, lineHeight: 1, letterSpacing: -1.2 }}>
-                Controle de Baixa Performance
+                Controle de Performance
               </h1>
               <p style={{ margin: 0, color: "rgba(255,255,255,0.66)", fontWeight: 700 }}>
                 Se a produção ficar abaixo de {fmtBR(targetTon)} t/h e não houver parada registrada, o motivo deve ser informado pelo CCO.
