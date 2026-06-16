@@ -127,7 +127,9 @@ function periodLabel(period: string): string {
 
 function periodCompact(period: string): string {
   const [start, end] = normalizePeriod(period).split("-");
-  return `${start || "--"}\n${end || "--"}`;
+  const startHour = (start || "--:--").slice(0, 2);
+  const endHour = (end || "--:--").slice(0, 2);
+  return `${startHour}-${endHour}`;
 }
 
 function parseBRNumber(value: unknown): number | null {
@@ -483,9 +485,17 @@ export default function ControleBaixaPerformance() {
 
             <div style={{ height: 430 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={controlRows} margin={{ top: 34, right: 20, left: 2, bottom: 34 }}>
+                <BarChart data={controlRows} margin={{ top: 34, right: 20, left: 2, bottom: 46 }}>
                   <CartesianGrid strokeDasharray="4 7" stroke="rgba(255,255,255,0.10)" vertical={false} />
-                  <XAxis dataKey="period" tickFormatter={periodCompact} interval={0} tick={{ fill: "rgba(255,255,255,0.66)", fontSize: 11, fontWeight: 800 }} height={48} />
+                  <XAxis
+                    dataKey="period"
+                    tickFormatter={periodCompact}
+                    interval={0}
+                    minTickGap={0}
+                    tickMargin={12}
+                    height={54}
+                    tick={{ fill: "rgba(255,255,255,0.66)", fontSize: 10, fontWeight: 800 }}
+                  />
                   <YAxis domain={[0, chartMax]} tick={{ fill: "rgba(255,255,255,0.62)", fontSize: 12, fontWeight: 800 }} unit=" t/h" width={66} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
                   <ReferenceLine
