@@ -22,7 +22,15 @@ type PlantInfo = {
   is_active?: boolean;
 };
 
-const EQUIPAMENTOS = ["BT-01", "BT-02", "PN-01", "PN-02", "EH-08"] as const;
+type PlantProductionEquipment = {
+  id: number;
+  tag: string;
+  plant_id: number;
+  plant_name?: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
 
 /* ===================== helpers ===================== */
 function isoTodayLocal() {
@@ -110,18 +118,37 @@ export default function Horimetros() {
   // lançamento (IMPORTANTE: SEM TRAVA de dia anterior)
   const [day, setDay] = useState<string>(isoTodayLocal());
   const [turno, setTurno] = useState<Turno>(1);
-  const [equipamento, setEquipamento] = useState<string>(EQUIPAMENTOS[0]);
+  const [equipamento, setEquipamento] = useState<string>("");
 
   const [horimetroIni, setHorimetroIni] = useState<string>("");
   const [horimetroFim, setHorimetroFim] = useState<string>("");
   const [obs, setObs] = useState<string>("");
 
   const [plants, setPlants] = useState<PlantInfo[]>([]);
+  const [prodEquipments, setProdEquipments] = useState<PlantProductionEquipment[]>([]);
   const [plantId, setPlantId] = useState<number | null>(null);
   const [rows, setRows] = useState<HorimetroRow[]>([]);
   const [lastByEq, setLastByEq] = useState<Record<string, HorimetroRow | null>>({});
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const equipamentoOptions = useMemo(() => {
+    return prodEquipments
+      .filter((e) => e.is_active && Number(e.plant_id) === Number(plantId))
+      .map((e) => String(e.tag || "").trim().toUpperCase())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [prodEquipments, plantId]);
+
+  async function loadProductionEquipments() {
+    try {
+      const data = await apiGet<PlantProductionEquipment[]>(`/api/plant-production-equipments?include_inactive=true`);
+      setProdEquipments(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setProdEquipments([]);
+      setErr(e?.message || "Erro ao carregar TAGs de equipamentos da produção de planta");
+    }
+  }
 
   async function loadPlants() {
     try {
@@ -139,19 +166,23 @@ export default function Horimetros() {
     }
   }
 
-  async function loadLastByEq(selectedPlantId: number) {
+  async function loadLastByEq(selectedPlantId: number, eqTags: string[] = equipamentoOptions) {
     try {
       const data = await apiGet<any[]>(`/api/plants/${selectedPlantId}/horimetros/last-by-eq`);
       const map: Record<string, HorimetroRow | null> = {};
-      for (const eq of EQUIPAMENTOS) map[eq] = null;
+
+      for (const eq of eqTags) map[eq] = null;
+
       for (const r of data || []) {
-        if (!r?.equipamento) continue;
-        map[r.equipamento] = r as HorimetroRow;
+        const tag = String(r?.equipamento || "").trim().toUpperCase();
+        if (!tag || !eqTags.includes(tag)) continue;
+        map[tag] = { ...(r as HorimetroRow), equipamento: tag };
       }
+
       setLastByEq(map);
     } catch {
       const map: Record<string, HorimetroRow | null> = {};
-      for (const eq of EQUIPAMENTOS) map[eq] = null;
+      for (const eq of eqTags) map[eq] = null;
       setLastByEq(map);
     }
   }
@@ -177,18 +208,31 @@ export default function Horimetros() {
 
   useEffect(() => {
     loadPlants();
+    loadProductionEquipments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!equipamentoOptions.length) {
+      setEquipamento("");
+      setFEq("ALL");
+      setLastByEq({});
+      return;
+    }
+
+    setEquipamento((current) => (current && equipamentoOptions.includes(current) ? current : equipamentoOptions[0]));
+    setFEq((current) => (current === "ALL" || equipamentoOptions.includes(String(current)) ? current : "ALL"));
+  }, [equipamentoOptions.join("|")]);
 
   useEffect(() => {
     if (!plantId) {
       setRows([]);
       return;
     }
-    loadLastByEq(plantId);
+    loadLastByEq(plantId, equipamentoOptions);
     loadFiltered(plantId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plantId]);
+  }, [plantId, equipamentoOptions.join("|")]);
 
   useEffect(() => {
     if (!plantId) {
@@ -217,8 +261,18 @@ export default function Horimetros() {
     setErr(null);
 
     // SEM qualquer regra de "dia anterior" aqui.
+    if (!equipamentoOptions.length) {
+      setErr("Cadastre pelo menos uma TAG ativa para a planta selecionada antes de lançar horímetro.");
+      return;
+    }
+
     if (!day || !equipamento) {
       setErr("Informe a data e selecione o equipamento.");
+      return;
+    }
+
+    if (!equipamentoOptions.includes(equipamento)) {
+      setErr("A TAG selecionada não pertence à planta atual.");
       return;
     }
 
@@ -255,7 +309,7 @@ export default function Horimetros() {
         obs: obs || "",
       });
 
-      await loadLastByEq(plantId);
+      await loadLastByEq(plantId, equipamentoOptions);
       await loadFiltered(plantId);
 
       // mostra o que lançou (mantém isso porque ajuda, mas não trava nada)
@@ -281,7 +335,7 @@ export default function Horimetros() {
       }
       setLoading(true);
       await apiDelete(`/api/plants/${plantId}/horimetros/${id}`);
-      await loadLastByEq(plantId);
+      await loadLastByEq(plantId, equipamentoOptions);
       await loadFiltered(plantId);
     } catch (e: any) {
       setErr(e?.message || "Falha ao excluir");
@@ -375,7 +429,7 @@ export default function Horimetros() {
                 className="mp-btn"
                 onClick={() => {
                   if (plantId) {
-                    loadLastByEq(plantId);
+                    loadLastByEq(plantId, equipamentoOptions);
                     loadFiltered(plantId);
                   }
                 }}
@@ -395,7 +449,10 @@ export default function Horimetros() {
             </div>
             <div className="mp-card-b">
               <div className="hor-kpi-grid">
-                {EQUIPAMENTOS.map((eq) => {
+                {equipamentoOptions.length === 0 ? (
+                  <div className="mp-help">Nenhuma TAG ativa cadastrada para esta planta.</div>
+                ) : null}
+                {equipamentoOptions.map((eq) => {
                   const r = lastByEq?.[eq] || null;
                   return (
                     <div
@@ -546,8 +603,9 @@ export default function Horimetros() {
 
                 <div>
                   <div className="mp-label">Equipamento</div>
-                  <select className="mp-input" value={equipamento} onChange={(e) => setEquipamento(e.target.value)}>
-                    {EQUIPAMENTOS.map((x) => (
+                  <select className="mp-input" value={equipamento} onChange={(e) => setEquipamento(e.target.value)} disabled={equipamentoOptions.length === 0}>
+                    {equipamentoOptions.length === 0 ? <option value="">Sem TAGs para esta planta</option> : null}
+                    {equipamentoOptions.map((x) => (
                       <option key={x} value={x}>
                         {x}
                       </option>
@@ -631,7 +689,7 @@ export default function Horimetros() {
                   <div className="mp-label">Equipamento</div>
                   <select className="mp-input" value={fEq} onChange={(e) => setFEq(e.target.value)}>
                     <option value="ALL">Todos</option>
-                    {EQUIPAMENTOS.map((x) => (
+                    {equipamentoOptions.map((x) => (
                       <option key={x} value={x}>
                         {x}
                       </option>
