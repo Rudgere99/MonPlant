@@ -1,14 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import html2canvas from "html2canvas";
 import {
   AlertTriangle,
   BadgeCheck,
   BarChart3,
   ClipboardCheck,
+  Download,
   Factory,
+  FileImage,
   PauseCircle,
   RefreshCcw,
   Target,
+  X,
 } from "lucide-react";
 import {
   Bar,
@@ -98,6 +102,12 @@ function isoTodayLocal(): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function brDate(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return y && m && d ? `${d}/${m}/${y}` : iso;
 }
 
 function makePeriods24(): string[] {
@@ -273,6 +283,8 @@ export default function ControleBaixaPerformance() {
   const [goalDay, setGoalDay] = useState<GoalDayPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement | null>(null);
 
   async function loadPlants() {
     setMsg(null);
@@ -309,6 +321,32 @@ export default function ControleBaixaPerformance() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function exportJPEG() {
+    const el = exportRef.current;
+    if (!el) return;
+
+    try {
+      const active = document.activeElement as HTMLElement | null;
+      active?.blur?.();
+    } catch {
+      // ignore
+    }
+
+    const canvas = await html2canvas(el, {
+      backgroundColor: "#0b0f14",
+      scale: Math.min(2, window.devicePixelRatio || 1.5),
+      useCORS: true,
+    });
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `controle_performance_${selectedPlantName.replace(/\s+/g, "_").toLowerCase()}_${day}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   useEffect(() => {
@@ -443,6 +481,21 @@ export default function ControleBaixaPerformance() {
             </label>
             <button
               type="button"
+              onClick={() => setExportOpen(true)}
+              disabled={!plantId}
+              style={{
+                ...fieldStyle,
+                alignSelf: "end",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: !plantId ? "not-allowed" : "pointer",
+              }}
+            >
+              <FileImage size={16} /> Exportar
+            </button>
+            <button
+              type="button"
               onClick={loadControlData}
               disabled={loading || !plantId}
               style={{
@@ -573,6 +626,124 @@ export default function ControleBaixaPerformance() {
           </div>
         </section>
       </div>
+
+      {exportOpen ? (
+        <div style={modalOverlay} onClick={() => setExportOpen(false)}>
+          <div style={modalCard} onClick={(event) => event.stopPropagation()}>
+            <div style={modalHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 950, fontSize: 16, color: "rgba(255,255,255,0.92)" }}>
+                  Exportação • Controle de Performance
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.55)" }}>
+                  Visualização do gráfico com justificativas conectadas às barras laranja e cinza.
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <button className="mp-btn mp-btn-primary" style={{ height: 38 }} onClick={exportJPEG}>
+                  <Download size={16} /> Exportar JPEG
+                </button>
+                <button className="mp-btn" style={{ height: 38, display: "inline-flex", alignItems: "center", gap: 8 }} onClick={() => setExportOpen(false)}>
+                  <X size={16} /> Fechar
+                </button>
+              </div>
+            </div>
+
+            <div style={modalBody}>
+              <div style={previewShell}>
+                <div ref={exportRef} style={previewCapture}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 16, alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ color: "rgba(255,255,255,0.56)", fontWeight: 900, fontSize: 12, textTransform: "uppercase", letterSpacing: 1.2 }}>
+                        Produção horária da planta
+                      </div>
+                      <div style={{ fontSize: 28, fontWeight: 950, color: "white", lineHeight: 1.05, marginTop: 4 }}>
+                        Controle de Performance • {selectedPlantName}
+                      </div>
+                      <div style={{ marginTop: 6, color: "rgba(255,255,255,0.62)", fontWeight: 800, fontSize: 13 }}>
+                        {brDate(day)} • Meta horária: {fmtBR(targetTon)} t/h
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <ExportStatPill label="Dentro" value={okRows.length} color="#00b7a8" />
+                      <ExportStatPill label="Sem parada" value={lowNoStop.length} color="#ff8a00" />
+                      <ExportStatPill label="Com parada" value={lowWithStop.length} color="#8a94a3" />
+                    </div>
+                  </div>
+
+                  <div style={previewChartCard}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 12, alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontWeight: 900, color: "white", fontSize: 18 }}>Produção por faixa horária</div>
+                        <div style={{ color: "rgba(255,255,255,0.58)", fontWeight: 800, fontSize: 12 }}>
+                          Barras coloridas por status e fluxo de justificativas para faixas críticas.
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,0.72)" }}>
+                        <span style={legendMiniDot("#00b7a8")}>Dentro</span>
+                        <span style={legendMiniDot("#ff8a00")}>Sem parada</span>
+                        <span style={legendMiniDot("#64707f")}>Com parada</span>
+                      </div>
+                    </div>
+
+                    <div style={{ height: 360 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={controlRows} margin={{ top: 32, right: 18, left: 6, bottom: 44 }}>
+                          <CartesianGrid strokeDasharray="4 7" stroke="rgba(255,255,255,0.10)" vertical={false} />
+                          <XAxis
+                            dataKey="period"
+                            tickFormatter={periodCompact}
+                            interval={0}
+                            minTickGap={0}
+                            tickMargin={12}
+                            height={52}
+                            tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 10, fontWeight: 800 }}
+                          />
+                          <YAxis domain={[0, chartMax]} tick={{ fill: "rgba(255,255,255,0.64)", fontSize: 12, fontWeight: 800 }} unit=" t/h" width={68} />
+                          <ReferenceLine
+                            y={targetTon}
+                            stroke="#ff5555"
+                            strokeWidth={2}
+                            strokeDasharray="8 6"
+                            label={{ value: `Meta: ${fmtBR(targetTon)} t/h`, fill: "#ffb4b4", fontSize: 12, fontWeight: 950, position: "right" }}
+                          />
+                          <Bar dataKey="ton" radius={[10, 10, 4, 4]} maxBarSize={34}>
+                            {controlRows.map((entry) => (
+                              <Cell key={`export-${entry.period}`} fill={statusColor(entry.status)} />
+                            ))}
+                            <LabelList content={<TonBarLabel />} />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <PerformanceFlowMap rows={controlRows} />
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, marginTop: 16 }}>
+                    <ExportInfoCard
+                      title="Critério"
+                      text={`Produção menor que ${fmtBR(targetTon)} t/h sem parada registrada exige lançamento do motivo pelo CCO.`}
+                      accent="#fbbf24"
+                    />
+                    <ExportInfoCard
+                      title="Observação"
+                      text="Barras cinza indicam baixa produção com parada registrada. Barras laranja indicam baixa produção sem parada registrada."
+                      accent="#a78bfa"
+                    />
+                    <ExportInfoCard
+                      title="Leitura rápida"
+                      text="As conexões destacam somente os horários críticos para facilitar exportação e apresentação em relatório ou reunião."
+                      accent="#22d3ee"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -600,3 +771,260 @@ function LegendRow({ color, title, text }: { color: string; title: string; text:
     </div>
   );
 }
+
+function ExportStatPill({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        borderRadius: 999,
+        padding: "8px 12px",
+        border: `1px solid ${color}55`,
+        background: `${color}18`,
+        color: "rgba(255,255,255,0.94)",
+        fontWeight: 900,
+        fontSize: 12,
+      }}
+    >
+      <span style={{ width: 8, height: 8, borderRadius: 999, background: color, boxShadow: `0 0 18px ${color}` }} />
+      {label}
+      <span style={{ color: "white" }}>{value}</span>
+    </div>
+  );
+}
+
+function ExportInfoCard({ title, text, accent }: { title: string; text: string; accent: string }) {
+  return (
+    <div
+      style={{
+        borderRadius: 18,
+        border: `1px solid ${accent}35`,
+        background: "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.03))",
+        padding: 14,
+        boxShadow: `0 16px 38px ${accent}10`,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span style={{ width: 10, height: 10, borderRadius: 999, background: accent }} />
+        <div style={{ fontWeight: 900, color: "white" }}>{title}</div>
+      </div>
+      <div style={{ color: "rgba(255,255,255,0.68)", lineHeight: 1.45, fontSize: 13, fontWeight: 760 }}>{text}</div>
+    </div>
+  );
+}
+
+function legendMiniDot(color: string): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    padding: "6px 10px",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    position: "relative",
+  };
+}
+
+type FlowItem = {
+  row: ControlRow;
+  x: number;
+  y: number;
+  cardX: number;
+  lineEndX: number;
+  color: string;
+};
+
+function PerformanceFlowMap({ rows }: { rows: ControlRow[] }) {
+  const lowRows = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.status === "lowNoStop" || row.status === "lowWithStop");
+
+  if (!lowRows.length) {
+    return (
+      <div style={{ ...previewCardBase, marginTop: 16, padding: 16 }}>
+        <div style={{ fontWeight: 900, fontSize: 18, color: "white", marginBottom: 8 }}>Justificativas das faixas críticas</div>
+        <div style={{ color: "rgba(255,255,255,0.62)", fontWeight: 760 }}>
+          Não há barras laranja ou cinza no período selecionado. Nenhuma justificativa crítica para destacar na exportação.
+        </div>
+      </div>
+    );
+  }
+
+  const baseWidth = 1180;
+  const cardWidth = 214;
+  const topAnchorY = 24;
+  const cardTopStart = 58;
+  const laneHeight = 122;
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+  const items: FlowItem[] = lowRows.map(({ row, index }, order) => {
+    const x = 44 + ((index + 0.5) / 24) * (baseWidth - 88);
+    const lane = order % 2;
+    const rowBand = Math.floor(order / 2);
+    const y = cardTopStart + rowBand * laneHeight + lane * 12;
+    const direction = lane === 0 ? -1 : 1;
+    const tentativeX = x + direction * 110 - cardWidth / 2;
+    const cardX = clamp(tentativeX, 18, baseWidth - cardWidth - 18);
+    const lineEndX = clamp(cardX + cardWidth / 2, 18, baseWidth - 18);
+    return { row, x, y, cardX, lineEndX, color: statusColor(row.status) };
+  });
+
+  const flowHeight = Math.max(170, Math.max(...items.map((item) => item.y + 112)));
+
+  return (
+    <div style={{ ...previewCardBase, marginTop: 16, padding: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
+        <div>
+          <div style={{ fontWeight: 900, fontSize: 18, color: "white" }}>Justificativas das faixas críticas</div>
+          <div style={{ color: "rgba(255,255,255,0.58)", fontWeight: 760, fontSize: 12 }}>
+            Fluxo visual ligando cada barra crítica ao respectivo card de justificativa.
+          </div>
+        </div>
+        <div style={{ color: "rgba(255,255,255,0.52)", fontWeight: 800, fontSize: 12 }}>
+          Exibindo {lowRows.length} {lowRows.length === 1 ? "ocorrência" : "ocorrências"}
+        </div>
+      </div>
+
+      <div style={{ position: "relative", minHeight: flowHeight, width: "100%" }}>
+        <svg
+          viewBox={`0 0 ${baseWidth} ${flowHeight}`}
+          preserveAspectRatio="none"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+        >
+          {items.map((item, index) => (
+            <g key={`flow-${item.row.period}-${index}`}>
+              <circle cx={item.x} cy={topAnchorY} r={7} fill={item.color} opacity="0.95" />
+              <line x1={item.x} y1={topAnchorY + 7} x2={item.x} y2={item.y - 12} stroke={item.color} strokeWidth="2.4" strokeDasharray="4 5" opacity="0.9" />
+              <line x1={item.x} y1={item.y - 12} x2={item.lineEndX} y2={item.y - 12} stroke={item.color} strokeWidth="2.4" opacity="0.9" />
+              <circle cx={item.lineEndX} cy={item.y - 12} r={4.5} fill={item.color} opacity="0.95" />
+            </g>
+          ))}
+        </svg>
+
+        {items.map((item, index) => (
+          <div
+            key={`card-${item.row.period}-${index}`}
+            style={{
+              position: "absolute",
+              left: `${(item.cardX / baseWidth) * 100}%`,
+              top: item.y,
+              width: cardWidth,
+              borderRadius: 18,
+              border: `1px solid ${item.color}44`,
+              background: "linear-gradient(180deg, rgba(15,19,26,0.98), rgba(10,14,18,0.96))",
+              boxShadow: `0 20px 48px ${item.color}18`,
+              padding: 12,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontWeight: 950, fontSize: 13, color: "white" }}>{periodCompact(item.row.period)}</span>
+              <span
+                style={{
+                  borderRadius: 999,
+                  padding: "4px 8px",
+                  fontSize: 10,
+                  fontWeight: 900,
+                  background: `${item.color}18`,
+                  color: "white",
+                  border: `1px solid ${item.color}45`,
+                }}
+              >
+                {item.row.status === "lowWithStop" ? "Com parada" : "Sem parada"}
+              </span>
+            </div>
+
+            <div style={{ display: "grid", gap: 4, color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: 760 }}>
+              <div>
+                Produção: <b style={{ color: "white" }}>{item.row.ton === null ? "—" : `${fmtBR(item.row.ton)} t`}</b>
+              </div>
+              <div>
+                Diferença: <b style={{ color: item.row.diff !== null && item.row.diff < 0 ? "#fdba74" : "#93c5fd" }}>{item.row.diff === null ? "—" : `${item.row.diff >= 0 ? "+" : ""}${fmtBR(item.row.diff)} t`}</b>
+              </div>
+              <div>
+                Parada: <b style={{ color: "white" }}>{item.row.hasStop ? `Sim (${fmtBR(item.row.stopMinutes)} min)` : "Não"}</b>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+              <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: 900, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
+                Justificativa
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.90)", fontSize: 12, fontWeight: 780, lineHeight: 1.42 }}>
+                {item.row.reason || (item.row.hasStop ? "Baixa produção associada ao lançamento de parada registrado para a faixa horária." : "Motivo do CCO não informado para esta faixa horária.")}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const modalOverlay: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 220,
+  background: "rgba(0,0,0,0.68)",
+  backdropFilter: "blur(8px)",
+  display: "grid",
+  placeItems: "center",
+  padding: 14,
+};
+
+const modalCard: CSSProperties = {
+  width: "min(1480px, 98vw)",
+  maxHeight: "94vh",
+  borderRadius: 22,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(14,18,22,0.90)",
+  boxShadow: "0 30px 90px rgba(0,0,0,0.70)",
+  overflow: "hidden",
+  display: "flex",
+  flexDirection: "column",
+};
+
+const modalHeader: CSSProperties = {
+  padding: 14,
+  borderBottom: "1px solid rgba(255,255,255,0.10)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+};
+
+const modalBody: CSSProperties = {
+  padding: 14,
+  minHeight: 0,
+  flex: 1,
+  overflow: "auto",
+};
+
+const previewShell: CSSProperties = {
+  display: "grid",
+  justifyContent: "center",
+};
+
+const previewCapture: CSSProperties = {
+  width: 1180,
+  maxWidth: "100%",
+  borderRadius: 20,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "#0b0f14",
+  padding: 18,
+  boxSizing: "border-box",
+};
+
+const previewCardBase: CSSProperties = {
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "linear-gradient(180deg, rgba(16,21,29,0.94), rgba(11,15,20,0.94))",
+  boxShadow: "0 22px 60px rgba(0,0,0,0.38)",
+};
+
+const previewChartCard: CSSProperties = {
+  ...previewCardBase,
+  padding: 16,
+};
