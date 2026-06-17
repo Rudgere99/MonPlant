@@ -672,7 +672,7 @@ export default function ControleBaixaPerformance() {
                     </div>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", gap: 14, alignItems: "stretch" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "240px minmax(0, 1fr)", gap: 14, alignItems: "stretch" }}>
                     <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
                       <ExportInfoCard
                         title="Critério"
@@ -706,9 +706,9 @@ export default function ControleBaixaPerformance() {
                         </div>
                       </div>
 
-                      <div style={{ height: 360 }}>
+                      <div style={{ height: 430 }}>
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={controlRows} margin={{ top: 32, right: 18, left: 6, bottom: 44 }}>
+                          <BarChart data={controlRows} margin={{ top: 24, right: 8, left: 0, bottom: 40 }}>
                             <CartesianGrid strokeDasharray="4 7" stroke="rgba(255,255,255,0.10)" vertical={false} />
                             <XAxis
                               dataKey="period"
@@ -952,7 +952,7 @@ const previewShell: CSSProperties = {
 };
 
 const previewCapture: CSSProperties = {
-  width: 1180,
+  width: 1280,
   maxWidth: "100%",
   borderRadius: 20,
   border: "1px solid rgba(255,255,255,0.10)",
