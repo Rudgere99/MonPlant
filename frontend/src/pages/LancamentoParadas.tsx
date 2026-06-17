@@ -68,6 +68,26 @@ type PlantProductionPayload = {
   rows?: PlantProductionRow[];
 };
 
+type PlantProductionEquipment = {
+  id: number;
+  tag: string;
+  plant_id: number;
+  plant_name?: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type Equipment = {
+  id: number;
+  equipment_type?: string | null;
+  tag: string;
+  bucket_ton?: number;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 type GoalDayPayload = {
   day: string;
   meta_ton?: number | null;
@@ -435,6 +455,8 @@ export default function LancamentoParadas() {
   const [expandedPeriod, setExpandedPeriod] = useState<string | null>("07-08");
   const [productionRows, setProductionRows] = useState<PlantProductionRow[]>([]);
   const [goalDay, setGoalDay] = useState<GoalDayPayload | null>(null);
+  const [prodEquipments, setProdEquipments] = useState<PlantProductionEquipment[]>([]);
+  const [excavators, setExcavators] = useState<Equipment[]>([]);
 
   const [rows, setRows] = useState<StopRow[]>(periods.map((p) => blankRow(p, 1)));
 
@@ -443,19 +465,26 @@ export default function LancamentoParadas() {
   const [msg, setMsg] = useState("");
   const [dirty, setDirty] = useState(false);
 
-  const equipmentOptions = useMemo(
-    () => [
-      "BT-01",
-      "BT-02",
-      "PN-01",
-      "PN-02",
-      "EH-08",
-      "EH-04",
-      "Peneiras",
-      "Todos",
-    ],
-    [],
-  );
+  const equipmentOptions = useMemo(() => {
+    const selectedPlantId = Number(plantId);
+
+    const plantTags = prodEquipments
+      .filter((e) => e.is_active && Number(e.plant_id) === selectedPlantId)
+      .map((e) => String(e.tag || "").trim().toUpperCase())
+      .filter(Boolean);
+
+    // Escavadeiras vêm do cadastro geral de equipamentos.
+    // Nesta tela elas podem ser usadas por qualquer planta, por isso não são filtradas por planta.
+    const excavatorTags = excavators
+      .filter((e) => e.is_active !== false)
+      .filter((e) => String(e.equipment_type || "").trim().toLowerCase().includes("escav"))
+      .map((e) => String(e.tag || "").trim().toUpperCase())
+      .filter(Boolean);
+
+    return Array.from(new Set([...plantTags, ...excavatorTags])).sort((a, b) =>
+      a.localeCompare(b, "pt-BR"),
+    );
+  }, [prodEquipments, excavators, plantId]);
 
   const stopTypes = useMemo(() => ["Corretiva", "Preventiva", "Operacional"], []);
 
@@ -541,6 +570,26 @@ export default function LancamentoParadas() {
       const items = rowsForPeriod(period);
       return { period, rows: items, calc: calculatePeriod(items) };
     });
+  }
+
+  async function loadProductionEquipments() {
+    try {
+      const data = await apiGet<PlantProductionEquipment[]>(`/api/plant-production-equipments?include_inactive=true`);
+      setProdEquipments(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setProdEquipments([]);
+      setMsg(e?.message || "Erro ao carregar TAGs de equipamentos da produção de planta.");
+    }
+  }
+
+  async function loadExcavators() {
+    try {
+      const data = await apiGet<Equipment[]>(`/api/equipments?include_inactive=true`);
+      setExcavators(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setExcavators([]);
+      setMsg(e?.message || "Erro ao carregar escavadeiras cadastradas.");
+    }
   }
 
   async function loadPlants() {
@@ -723,6 +772,10 @@ export default function LancamentoParadas() {
     for (const r of rowsToValidate) {
       if (rowIsBlank(r)) continue;
       const p = normalizePeriodLaunch(r.period);
+      const eq = String(r.equipamento || "").trim().toUpperCase();
+      if (eq && !equipmentOptions.includes(eq)) {
+        return `Equipamento ${eq} não pertence à ${selectedPlantName} ou não está ativo no cadastro.`;
+      }
       const ini = String(r.hora_inicial || "").trim();
       const fim = String(r.hora_final || "").trim();
       if ((ini && !fim) || (!ini && fim)) {
@@ -805,6 +858,8 @@ export default function LancamentoParadas() {
 
   useEffect(() => {
     loadPlants();
+    loadProductionEquipments();
+    loadExcavators();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -939,6 +994,12 @@ export default function LancamentoParadas() {
     load();
   }
 
+  function equipmentOptionsForValue(value: string): string[] {
+    const current = String(value || "").trim().toUpperCase();
+    if (!current || equipmentOptions.includes(current)) return equipmentOptions;
+    return [current, ...equipmentOptions];
+  }
+
   function renderRowInputs(r: StopRow, period: string, ordem: number, compact = false) {
     const c = colorForType(r.tipo_parada);
     const lowPeriod = isLowProductionPeriod(period);
@@ -962,7 +1023,7 @@ export default function LancamentoParadas() {
             onChange={(e) => updateRowByPeriod(period, ordem, { equipamento: e.target.value })}
           >
             <option value="">—</option>
-            {equipmentOptions.map((x) => (
+            {equipmentOptionsForValue(r.equipamento).map((x) => (
               <option key={x} value={x}>
                 {x}
               </option>
