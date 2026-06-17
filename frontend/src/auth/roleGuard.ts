@@ -120,13 +120,11 @@ export function canAccess(role: UserRole, path: string): boolean {
       "/equipamentos",
       "/ritmo-do-turno",
       "/horimetros",
-      "/paradas",
       "/lancamento-paradas",
       "/previsao-paradas-estoque",
       "/statisticas",
       "/metas",
       "/exportar",
-      "/historico",
       "/ufdf",
       "/desvio-producao",
       "/dashboard/gestao-vista-planta",
@@ -136,7 +134,7 @@ export function canAccess(role: UserRole, path: string): boolean {
   }
 
   if (role === "apontador") {
-    return isAllowedExactOrPrefix(p, ["/producao-planta", "/paradas"]);
+    return isAllowedExactOrPrefix(p, ["/producao-planta"]);
   }
 
   if (role === "supervisor") {

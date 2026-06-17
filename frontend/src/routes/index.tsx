@@ -81,7 +81,6 @@ function MobileWrap({
     | "ritmo"
     | "stats"
     | "ufdf"
-    | "paradas"
     | "paradas-minutos"
     | "previsao-paradas-estoque"
     | "horimetros"
