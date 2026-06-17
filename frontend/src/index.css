@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap");
+
 * {
   box-sizing: border-box;
 }
@@ -53,7 +55,7 @@ textarea:focus {
    ========================= */
 
 :root{
-  --mp-font-dashboard: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --mp-font-dashboard: "Poppins", Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   --bg: #0b0f14;
   --panel: rgba(255,255,255,.04);
   --panel2: rgba(255,255,255,.06);
@@ -69,6 +71,8 @@ textarea:focus {
 
 html, body {
   font-family: var(--mp-font-dashboard);
+  font-weight: 500;
+  letter-spacing: -0.01em;
   background: radial-gradient(1200px 600px at 20% 0%, rgba(0,0,0,.35), transparent 60%),
               radial-gradient(900px 500px at 100% 0%, rgba(30,30,30,.20), transparent 55%),
               var(--bg);
@@ -89,6 +93,35 @@ svg text,
 .recharts-wrapper,
 .recharts-wrapper * {
   font-family: var(--mp-font-dashboard) !important;
+}
+
+/* Padronização visual forte: deixa o padrão do Dashboard perceptível em telas com estilos inline. */
+.mp-page-title,
+h1,
+h2,
+h3,
+.mp-card-h,
+.mp-top-h1,
+.mp-menu-link,
+.mp-tab,
+.mp-btn {
+  font-family: var(--mp-font-dashboard) !important;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.mp-chip,
+.mp-label,
+.mp-help,
+.mp-page-sub,
+.mp-top-sub {
+  font-family: var(--mp-font-dashboard) !important;
+  font-weight: 600;
+}
+
+.recharts-wrapper text {
+  font-family: var(--mp-font-dashboard) !important;
+  font-weight: 600;
 }
 
 a { color: inherit; text-decoration: none; }
