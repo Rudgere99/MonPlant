@@ -5023,7 +5023,7 @@ def _ensure_supervisor_auto_reminders(uid: str):
             )
 
             # 2) Impacto/baixa produção — cria o primeiro automaticamente.
-            # Depois, cria novo se passaram 90min; entre 45 e 90min tem chance controlada.
+            # Depois, cria novo a cada 45min de forma determinística.
             cur.execute(
                 """
                 select created_at
@@ -5045,10 +5045,8 @@ def _ensure_supervisor_auto_reminders(uid: str):
                 if last_dt.tzinfo is None:
                     last_dt = last_dt.replace(tzinfo=timezone.utc)
                 elapsed_min = (datetime.now(timezone.utc) - last_dt.astimezone(timezone.utc)).total_seconds() / 60
-                if elapsed_min >= 90:
+                if elapsed_min >= 45:
                     should_create_impact = True
-                elif elapsed_min >= 45:
-                    should_create_impact = random.random() < 0.20
 
             if should_create_impact:
                 impact_key = f"impact:{uid}:{now.strftime('%Y%m%d%H%M')}"
