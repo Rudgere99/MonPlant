@@ -672,72 +672,74 @@ export default function ControleBaixaPerformance() {
                     </div>
                   </div>
 
-                  <div style={previewChartCard}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 12, alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontWeight: 900, color: "white", fontSize: 18 }}>Produção por faixa horária</div>
-                        <div style={{ color: "rgba(255,255,255,0.58)", fontWeight: 800, fontSize: 12 }}>
-                          Barras coloridas por status e fluxo de justificativas para faixas críticas.
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,0.72)" }}>
-                        <span style={legendMiniDot("#00b7a8")}>Dentro</span>
-                        <span style={legendMiniDot("#ff8a00")}>Sem parada</span>
-                        <span style={legendMiniDot("#64707f")}>Com parada</span>
-                      </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", gap: 14, alignItems: "stretch" }}>
+                    <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
+                      <ExportInfoCard
+                        title="Critério"
+                        text={`Produção menor que ${fmtBR(targetTon)} t/h sem parada registrada exige lançamento do motivo pelo CCO.`}
+                        accent="#fbbf24"
+                      />
+                      <ExportInfoCard
+                        title="Observação"
+                        text="Barras cinza indicam baixa produção com parada registrada. Barras laranja indicam baixa produção sem parada registrada."
+                        accent="#a78bfa"
+                      />
+                      <ExportInfoCard
+                        title="Leitura rápida"
+                        text="Os horários críticos ficam detalhados abaixo do gráfico para facilitar a leitura do relatório."
+                        accent="#22d3ee"
+                      />
                     </div>
 
-                    <div style={{ height: 360 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={controlRows} margin={{ top: 32, right: 18, left: 6, bottom: 44 }}>
-                          <CartesianGrid strokeDasharray="4 7" stroke="rgba(255,255,255,0.10)" vertical={false} />
-                          <XAxis
-                            dataKey="period"
-                            tickFormatter={periodCompact}
-                            interval={0}
-                            minTickGap={0}
-                            tickMargin={12}
-                            height={52}
-                            tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 10, fontWeight: 800 }}
-                          />
-                          <YAxis domain={[0, chartMax]} tick={{ fill: "rgba(255,255,255,0.64)", fontSize: 12, fontWeight: 800 }} unit=" t/h" width={68} />
-                          <ReferenceLine
-                            y={targetTon}
-                            stroke="#ff5555"
-                            strokeWidth={2}
-                            strokeDasharray="8 6"
-                            label={{ value: `Meta: ${fmtBR(targetTon)} t/h`, fill: "#ffb4b4", fontSize: 12, fontWeight: 950, position: "right" }}
-                          />
-                          <Bar dataKey="ton" radius={[10, 10, 4, 4]} maxBarSize={34}>
-                            {controlRows.map((entry) => (
-                              <Cell key={`export-${entry.period}`} fill={statusColor(entry.status)} />
-                            ))}
-                            <LabelList content={<TonBarLabel />} />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                    <div style={previewChartCard}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 12, alignItems: "center" }}>
+                        <div>
+                          <div style={{ fontWeight: 900, color: "white", fontSize: 18 }}>Produção por faixa horária</div>
+                          <div style={{ color: "rgba(255,255,255,0.58)", fontWeight: 800, fontSize: 12 }}>
+                            Barras coloridas por status e justificativas detalhadas abaixo.
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, fontWeight: 850, color: "rgba(255,255,255,0.72)" }}>
+                          <span style={legendMiniDot("#00b7a8")}>Dentro</span>
+                          <span style={legendMiniDot("#ff8a00")}>Sem parada</span>
+                          <span style={legendMiniDot("#64707f")}>Com parada</span>
+                        </div>
+                      </div>
+
+                      <div style={{ height: 360 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={controlRows} margin={{ top: 32, right: 18, left: 6, bottom: 44 }}>
+                            <CartesianGrid strokeDasharray="4 7" stroke="rgba(255,255,255,0.10)" vertical={false} />
+                            <XAxis
+                              dataKey="period"
+                              tickFormatter={periodCompact}
+                              interval={0}
+                              minTickGap={0}
+                              tickMargin={12}
+                              height={52}
+                              tick={{ fill: "rgba(255,255,255,0.70)", fontSize: 10, fontWeight: 800 }}
+                            />
+                            <YAxis domain={[0, chartMax]} tick={{ fill: "rgba(255,255,255,0.64)", fontSize: 12, fontWeight: 800 }} unit=" t/h" width={68} />
+                            <ReferenceLine
+                              y={targetTon}
+                              stroke="#ff5555"
+                              strokeWidth={2}
+                              strokeDasharray="8 6"
+                              label={{ value: `Meta: ${fmtBR(targetTon)} t/h`, fill: "#ffb4b4", fontSize: 12, fontWeight: 950, position: "right" }}
+                            />
+                            <Bar dataKey="ton" radius={[10, 10, 4, 4]} maxBarSize={34}>
+                              {controlRows.map((entry) => (
+                                <Cell key={`export-${entry.period}`} fill={statusColor(entry.status)} />
+                              ))}
+                              <LabelList content={<TonBarLabel />} />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   </div>
 
                   <PerformanceFlowMap rows={controlRows} />
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, marginTop: 16 }}>
-                    <ExportInfoCard
-                      title="Critério"
-                      text={`Produção menor que ${fmtBR(targetTon)} t/h sem parada registrada exige lançamento do motivo pelo CCO.`}
-                      accent="#fbbf24"
-                    />
-                    <ExportInfoCard
-                      title="Observação"
-                      text="Barras cinza indicam baixa produção com parada registrada. Barras laranja indicam baixa produção sem parada registrada."
-                      accent="#a78bfa"
-                    />
-                    <ExportInfoCard
-                      title="Leitura rápida"
-                      text="As conexões destacam somente os horários críticos para facilitar exportação e apresentação em relatório ou reunião."
-                      accent="#22d3ee"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
@@ -851,38 +853,6 @@ function PerformanceFlowMap({ rows }: { rows: ControlRow[] }) {
     );
   }
 
-  const textItems = lowRows.map((row) => {
-    const color = statusColor(row.status);
-    const tipo = row.status === "lowWithStop" ? "com parada" : "sem parada";
-    const parada = row.hasStop ? `, ${fmtBR(row.stopMinutes)} min parados` : "";
-    const motivo =
-      row.reason ||
-      (row.hasStop
-        ? "baixa produção associada à parada registrada"
-        : "motivo CCO não informado");
-
-    return (
-      <span key={row.period} style={{ display: "inline" }}>
-        <span
-          style={{
-            display: "inline-block",
-            width: 8,
-            height: 8,
-            borderRadius: 999,
-            background: color,
-            marginRight: 6,
-            boxShadow: `0 0 12px ${color}`,
-          }}
-        />
-        <b style={{ color: "white" }}>{periodCompact(row.period)}</b>
-        <span style={{ color: "rgba(255,255,255,0.72)" }}>
-          {" "}
-          ({tipo}{parada}): {motivo}
-        </span>
-      </span>
-    );
-  });
-
   return (
     <div
       style={{
@@ -897,13 +867,42 @@ function PerformanceFlowMap({ rows }: { rows: ControlRow[] }) {
         lineHeight: 1.55,
       }}
     >
-      <b style={{ color: "white" }}>Justificativas:</b>{" "}
-      {textItems.map((item, index) => (
-        <span key={index}>
-          {item}
-          {index < textItems.length - 1 ? <span style={{ color: "rgba(255,255,255,0.32)" }}> • </span> : null}
-        </span>
-      ))}
+      <div style={{ color: "white", fontWeight: 950, marginBottom: 8 }}>Justificativas das faixas críticas</div>
+
+      <div style={{ display: "grid", gap: 7 }}>
+        {lowRows.map((row) => {
+          const color = statusColor(row.status);
+          const tipo = row.status === "lowWithStop" ? "com parada" : "sem parada";
+          const parada = row.hasStop ? ` • ${fmtBR(row.stopMinutes)} min parados` : "";
+          const motivo =
+            row.reason ||
+            (row.hasStop
+              ? "baixa produção associada à parada registrada"
+              : "motivo CCO não informado");
+
+          return (
+            <div key={row.period} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: 999,
+                  background: color,
+                  marginTop: 6,
+                  flex: "0 0 auto",
+                  boxShadow: `0 0 12px ${color}`,
+                }}
+              />
+              <div>
+                <b style={{ color: "white" }}>{periodCompact(row.period)}</b>
+                <span style={{ color: "rgba(255,255,255,0.72)" }}>
+                  {" "}({tipo}{parada}) — {motivo}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
