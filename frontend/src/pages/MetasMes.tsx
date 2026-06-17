@@ -452,7 +452,7 @@ export default function MetasMes() {
           <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.60)", marginBottom: 6 }}>
             Configurações • Metas do mês • Planta selecionada
           </div>
-          <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: -0.3 }}>Metas por planta com redistribuição</div>
+          <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.3 }}>Metas por planta com redistribuição</div>
         </div>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -492,24 +492,24 @@ export default function MetasMes() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           <div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>Meta do mês</div>
-            <div style={{ fontSize: 24, fontWeight: 950 }}>{fmtBR0(totalMes)} t</div>
+            <div style={{ fontSize: 30, fontWeight: 950 }}>{fmtBR0(totalMes)} t</div>
           </div>
 
           <div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>Realizado dias fechados</div>
-            <div style={{ fontSize: 24, fontWeight: 950 }}>{fmtBR0(totalActualClosed)} t</div>
+            <div style={{ fontSize: 30, fontWeight: 950 }}>{fmtBR0(totalActualClosed)} t</div>
           </div>
 
           <div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>Saldo a redistribuir</div>
-            <div style={{ fontSize: 24, fontWeight: 950, color: carryGap > 0 ? "#fcd34d" : "#86efac" }}>
+            <div style={{ fontSize: 30, fontWeight: 950, color: carryGap > 0 ? "#fcd34d" : "#86efac" }}>
               {carryGap >= 0 ? "+" : ""}{fmtBR0(carryGap)} t
             </div>
           </div>
 
           <div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 800 }}>Meta aberta recalculada</div>
-            <div style={{ fontSize: 24, fontWeight: 950 }}>{fmtBR0(totalOpenAdjusted)} t</div>
+            <div style={{ fontSize: 30, fontWeight: 950 }}>{fmtBR0(totalOpenAdjusted)} t</div>
           </div>
         </div>
 

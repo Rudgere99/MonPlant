@@ -432,7 +432,7 @@ const exportPlantStrip: React.CSSProperties = {
   background: "#fff200",
   color: "#050505",
   fontWeight: 990,
-  fontSize: 22,
+  fontSize: 30,
   letterSpacing: 1.2,
   textTransform: "uppercase",
   textAlign: "center",
@@ -996,7 +996,7 @@ return (
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 990, fontSize: 20 }}>
+            <div style={{ color: "rgba(255,255,255,0.92)", fontWeight: 990, fontSize: 18 }}>
               Ritmo do Dia • {selectedPlantName}{plantId === "all" ? " • Consolidado" : ""}
             </div>
             <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 900, fontSize: 13 }}>

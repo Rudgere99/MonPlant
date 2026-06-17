@@ -336,10 +336,10 @@ function MetricCard({ title, value, suffix, subtitle, trend, icon }: { title: st
         <div>
           <div style={{ fontSize: 13, fontWeight: 950, color: COLORS.green, textTransform: "uppercase" }}>{title}</div>
           <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontSize: 46, fontWeight: 950, color: "#fff", lineHeight: 1 }}>{value}</span>
-            {suffix ? <span style={{ fontSize: 17, color: COLORS.text }}>{suffix}</span> : null}
+            <span style={{ fontSize: 30, fontWeight: 950, color: "#fff", lineHeight: 1 }}>{value}</span>
+            {suffix ? <span style={{ fontSize: 16, color: COLORS.text }}>{suffix}</span> : null}
           </div>
-          <div style={{ marginTop: 8, color: COLORS.text, fontSize: 14 }}>{subtitle}</div>
+          <div style={{ marginTop: 8, color: COLORS.text, fontSize: 13 }}>{subtitle}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
           <div style={{ padding: 10, borderRadius: 12, background: "rgba(255,159,26,0.12)", color: COLORS.green }}>{icon}</div>
@@ -367,19 +367,19 @@ function LetterCard({ item }: { item: LetterKpi }) {
     <div style={{ ...panelStyle({ borderColor: `${color}99` }), padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <div style={{ fontSize: 46, fontWeight: 950, color }}>{item.letter}</div>
+          <div style={{ fontSize: 30, fontWeight: 950, color }}>{item.letter}</div>
         </div>
         <div style={{ alignSelf: "flex-start", padding: "4px 10px", borderRadius: 999, background: "rgba(255,255,255,.06)", fontSize: 11, fontWeight: 900 }}>
           {item.workedDays} dias
         </div>
       </div>
       <div style={{ marginTop: 12 }}>
-        <span style={{ fontSize: 38, fontWeight: 950 }}>{fmtBR0(item.realized)}</span>
+        <span style={{ fontSize: 30, fontWeight: 950 }}>{fmtBR0(item.realized)}</span>
         <span style={{ marginLeft: 6, color: COLORS.text }}>t</span>
-        <div style={{ marginTop: 6, fontSize: 14, color: COLORS.text }}>Meta: {fmtBR0(item.target)} t</div>
+        <div style={{ marginTop: 6, fontSize: 13, color: COLORS.text }}>Meta: {fmtBR0(item.target)} t</div>
       </div>
       <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 38, fontWeight: 950, color }}>{fmtBR0(item.percent)}%</div>
+        <div style={{ fontSize: 30, fontWeight: 950, color }}>{fmtBR0(item.percent)}%</div>
         <div style={{ display: "flex", alignItems: "center", gap: 4, color: item.trend >= 0 ? COLORS.green : COLORS.red, fontWeight: 900 }}>
           {item.trend >= 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />} {fmtBR1(Math.abs(item.trend))}%
         </div>
@@ -424,7 +424,7 @@ function Ticker({ items }: { items: React.ReactNode[] }) {
           whiteSpace: "nowrap",
           color: "#ffffff",
           fontWeight: 950,
-          fontSize: 15,
+          fontSize: 16,
           letterSpacing: 0.2,
         }}
       >
@@ -735,7 +735,7 @@ export default function GestaoVistaPlanta() {
             <div style={{ width: 52, height: 52, borderRadius: 14, display: "grid", placeItems: "center", background: "rgba(255,159,26,0.12)", color: COLORS.green }}><Factory size={31} /></div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 950, letterSpacing: 4, color: COLORS.green }}>MONPLANT</div>
-              <h1 style={{ margin: 0, fontSize: 34, lineHeight: 1.05, fontWeight: 950 }}>Gestão à Vista da Planta</h1>
+              <h1 style={{ margin: 0, fontSize: 30, lineHeight: 1.05, fontWeight: 950 }}>Gestão à Vista da Planta</h1>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>

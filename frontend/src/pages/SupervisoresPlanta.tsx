@@ -522,7 +522,7 @@ export default function SupervisoresPlanta() {
                 <Users size={23} />
               </div>
               <div>
-                <h1 style={{ margin: 0, fontSize: 24, letterSpacing: -0.6 }}>Cadastro de Supervisores da Planta</h1>
+                <h1 style={{ margin: 0, fontSize: 30, letterSpacing: -0.6 }}>Cadastro de Supervisores da Planta</h1>
                 <p style={{ margin: "5px 0 0", color: "rgba(255,255,255,0.58)", fontWeight: 700 }}>
                   Base para vincular supervisor, empresa, planta de operação e letra do turno.
                 </p>
@@ -1063,7 +1063,7 @@ function Metric({ title, value, muted }: { title: string; value: React.ReactNode
       <div style={{ color: "rgba(255,255,255,0.48)", fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: 0.6 }}>
         {title}
       </div>
-      <div style={{ marginTop: 6, fontSize: 24, fontWeight: 950, color: muted ? "rgba(255,255,255,0.62)" : "#FFB547" }}>{value}</div>
+      <div style={{ marginTop: 6, fontSize: 30, fontWeight: 950, color: muted ? "rgba(255,255,255,0.62)" : "#FFB547" }}>{value}</div>
     </div>
   );
 }
@@ -1105,7 +1105,7 @@ function Th({ children, align = "left" }: { children: React.ReactNode; align?: "
 }
 
 function Td({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
-  return <td style={{ textAlign: align, padding: "13px 14px", color: "rgba(255,255,255,0.82)", fontSize: 14 }}>{children}</td>;
+  return <td style={{ textAlign: align, padding: "13px 14px", color: "rgba(255,255,255,0.82)", fontSize: 13 }}>{children}</td>;
 }
 
 const inputStyle: React.CSSProperties = {

@@ -1701,7 +1701,7 @@ const EXPECTED_TON_H = metaHoraEsperada;
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={hourlySeries} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
                               <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                              <XAxis dataKey="period" interval={3} tickMargin={6} angle={-35} textAnchor="end" height={24} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 9 }} />
+                              <XAxis dataKey="period" interval={3} tickMargin={6} angle={-35} textAnchor="end" height={24} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
                               <YAxis domain={miniTonDomain} hide />
                               <Tooltip
                                 formatter={(v: any) => `${fmtBR1(Number(v) || 0)} t/h`}

@@ -1289,7 +1289,7 @@ export default function Exportar() {
           }}
         >
           <div>
-            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: 0.2 }}>Central de Exportação</div>
+            <div style={{ fontWeight: 900, fontSize: 30, letterSpacing: 0.2 }}>Central de Exportação</div>
             <div style={{ marginTop: 4, color: "rgba(255,255,255,.58)", fontSize: 13 }}>
               Visualize o relatório no site antes de gerar o Excel e exporte somente quando estiver tudo conferido.
             </div>

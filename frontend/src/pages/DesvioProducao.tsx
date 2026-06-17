@@ -761,7 +761,7 @@ function Header({
             marginTop: 4,
             color: "rgba(255,255,255,0.82)",
             fontWeight: 900,
-            fontSize: 14,
+            fontSize: 13,
           }}
         >
           {selectedPlantName}
@@ -937,7 +937,7 @@ function MetricCard({
       <div
         style={{
           marginTop: 8,
-          fontSize: 40,
+          fontSize: 30,
           fontWeight: 980,
           letterSpacing: -1.2,
           color: getAccentColor(accent),
@@ -1029,7 +1029,7 @@ function SplitInputCard({
           background: "rgba(255,255,255,0.03)",
           display: "grid",
           placeItems: "center",
-          fontSize: 22,
+          fontSize: 30,
           fontWeight: 980,
         }}
       >

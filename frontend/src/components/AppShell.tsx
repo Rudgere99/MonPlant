@@ -945,7 +945,7 @@ function AppShell() {
                   alignItems: "center",
                   gap: 10,
                   color: "rgba(255,255,255,0.92)",
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 900,
                   whiteSpace: "nowrap",
                   overflow: "hidden",
@@ -1071,7 +1071,7 @@ function AppShell() {
                 style={{
                   whiteSpace: "pre-wrap",
                   lineHeight: 1.45,
-                  fontSize: 14,
+                  fontSize: 13,
                   opacity: 0.95,
                 }}
               >

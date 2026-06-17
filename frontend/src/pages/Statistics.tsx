@@ -395,7 +395,7 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
                 background: "linear-gradient(180deg, rgba(255,159,26,0.96), rgba(255,159,26,0.55))",
               }}
             >
-              <div style={{ fontSize: 22 }}>{fmtBR0(producedTon)} t</div>
+              <div style={{ fontSize: 30 }}>{fmtBR0(producedTon)} t</div>
             </div>
           </div>
 
@@ -418,7 +418,7 @@ function MonthBars({ producedTon, metaTon }: { producedTon: number; metaTon: num
                 background: "linear-gradient(180deg, rgba(148,163,184,0.75), rgba(148,163,184,0.35))",
               }}
             >
-              <div style={{ fontSize: 22 }}>{fmtBR0(metaTon)} t</div>
+              <div style={{ fontSize: 30 }}>{fmtBR0(metaTon)} t</div>
             </div>
           </div>
         </div>
@@ -532,8 +532,8 @@ function SectionHeader({ icon, title, sub }: { icon: string; title: string; sub?
   return (
     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginTop: 4 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 980, color: "rgba(255,255,255,0.80)" }}>{icon}</div>
-        <div style={{ fontSize: 14, fontWeight: 980, color: "rgba(255,255,255,0.90)", letterSpacing: -0.2 }}>{title}</div>
+        <div style={{ fontSize: 13, fontWeight: 980, color: "rgba(255,255,255,0.80)" }}>{icon}</div>
+        <div style={{ fontSize: 13, fontWeight: 980, color: "rgba(255,255,255,0.90)", letterSpacing: -0.2 }}>{title}</div>
         {sub ? <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12, whiteSpace: "nowrap" }}>• {sub}</div> : null}
       </div>
       <div
@@ -1062,7 +1062,7 @@ export default function Statistics() {
           <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>
             Relatórios • Estatísticas • {selectedPlantName}{plantId === "all" ? " • Consolidado" : ""}
           </div>
-          <div style={{ marginTop: 4, fontSize: 26, fontWeight: 980, color: COLORS.text, letterSpacing: -0.4 }}>
+          <div style={{ marginTop: 4, fontSize: 30, fontWeight: 980, color: COLORS.text, letterSpacing: -0.4 }}>
             Estatísticas do mês
           </div>
 
@@ -1199,7 +1199,7 @@ export default function Statistics() {
               <StatusChip ok={okAtt} label={okAtt ? "🟢 Acima" : "🔴 Abaixo"} />
             </div>
 
-            <div style={{ marginTop: 10, fontSize: 34, fontWeight: 990, color: COLORS.text, letterSpacing: -0.6, lineHeight: 1 }}>
+            <div style={{ marginTop: 10, fontSize: 30, fontWeight: 990, color: COLORS.text, letterSpacing: -0.6, lineHeight: 1 }}>
               {deltaTon >= 0 ? `+${fmtBR0(deltaTon)} t` : `-${fmtBR0(Math.abs(deltaTon))} t`}
             </div>
             <div style={{ marginTop: 8, color: COLORS.sub, fontWeight: 920 }}>
@@ -1274,25 +1274,25 @@ export default function Statistics() {
           <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: mobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))", gap: 10 }}>
             <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
               <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Dias produzidos</div>
-              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{producedDays}</div>
+              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 30, color: COLORS.text }}>{producedDays}</div>
               <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>de {dim} dias</div>
             </div>
 
             <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
               <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Parada programada</div>
-              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{programmedStopDays}</div>
+              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 30, color: COLORS.text }}>{programmedStopDays}</div>
               <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Dias com meta 0</div>
             </div>
 
             <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
               <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Manutenção</div>
-              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{maintDays}</div>
+              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 30, color: COLORS.text }}>{maintDays}</div>
               <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Dias com manutenção</div>
             </div>
 
             <div style={{ borderRadius: 18, border: `1px solid ${COLORS.stroke}`, background: "rgba(0,0,0,0.20)", padding: 12 }}>
               <div style={{ color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>Horas operadas</div>
-              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 28, color: COLORS.text }}>{fmtBR1(totalWorkedHours)} h</div>
+              <div style={{ marginTop: 6, fontWeight: 980, fontSize: 30, color: COLORS.text }}>{fmtBR1(totalWorkedHours)} h</div>
               <div style={{ color: COLORS.sub, fontWeight: 850, fontSize: 12 }}>Horímetro (mês)</div>
             </div>
           </div>
@@ -1496,7 +1496,7 @@ export default function Statistics() {
                       />
                       <div style={{ color: "rgba(255,255,255,0.85)", fontWeight: 950, fontSize: 12 }}>{it.name}</div>
                     </div>
-                    <div style={{ marginTop: 8, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 22 }}>
+                    <div style={{ marginTop: 8, color: "rgba(255,255,255,0.92)", fontWeight: 980, fontSize: 30 }}>
                       {fmtBR0(it.value)}t
                     </div>
                     <div style={{ marginTop: 4, color: COLORS.sub, fontWeight: 900, fontSize: 12 }}>
@@ -1635,13 +1635,13 @@ export default function Statistics() {
                       >
                         <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(0,0,0,0.18)", padding: 12 }}>
                           <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Meta do mês</div>
-                          <div style={{ marginTop: 6, fontWeight: 980, fontSize: 22, color: "rgba(255,255,255,0.92)" }}>
+                          <div style={{ marginTop: 6, fontWeight: 980, fontSize: 30, color: "rgba(255,255,255,0.92)" }}>
                             {fmtBR0(Number(data?.meta_month_ton || 0))} t
                           </div>
                         </div>
                         <div style={{ borderRadius: 16, border: "1px solid rgba(255,255,255,0.10)", background: "rgba(0,0,0,0.18)", padding: 12 }}>
                           <div style={{ color: "rgba(255,255,255,0.55)", fontWeight: 900, fontSize: 12 }}>Produzido</div>
-                          <div style={{ marginTop: 6, fontWeight: 980, fontSize: 22, color: "rgba(255,255,255,0.92)" }}>
+                          <div style={{ marginTop: 6, fontWeight: 980, fontSize: 30, color: "rgba(255,255,255,0.92)" }}>
                             {fmtBR0(Number(data?.produced_month_ton || 0))} t
                           </div>
                         </div>

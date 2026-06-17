@@ -361,7 +361,7 @@ export default function Equipamentos() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
         <div>
           <div style={{ color: "rgba(255,255,255,.58)", fontWeight: 950, fontSize: 13 }}>MonPlant • Configurações</div>
-          <h1 style={{ margin: "6px 0 0", color: "white", fontSize: 28, letterSpacing: -0.6 }}>Equipamentos</h1>
+          <h1 style={{ margin: "6px 0 0", color: "white", fontSize: 30, letterSpacing: -0.6 }}>Equipamentos</h1>
           <div style={{ marginTop: 8, color: "rgba(255,255,255,.62)", fontWeight: 750, maxWidth: 980 }}>
             Cadastre os equipamentos da produção de planta por TAG e planta. Depois, a tela Paradas Minutos poderá buscar estes equipamentos automaticamente, sem lista fixa no código.
           </div>
@@ -378,7 +378,7 @@ export default function Equipamentos() {
       <div style={{ ...card, padding: 18, borderColor: "rgba(255,159,26,.28)" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
           <div>
-            <div style={{ color: "white", fontWeight: 1000, fontSize: 19 }}>Equipamentos da Produção de Planta</div>
+            <div style={{ color: "white", fontWeight: 1000, fontSize: 18 }}>Equipamentos da Produção de Planta</div>
             <div style={{ color: "rgba(255,255,255,.58)", fontWeight: 850, fontSize: 12, marginTop: 4 }}>
               Cadastro que será usado pela tela Paradas Minutos. Informe somente a TAG e a planta à qual o equipamento pertence.
             </div>
@@ -497,7 +497,7 @@ export default function Equipamentos() {
               <Factory size={20} />
             </div>
             <div>
-              <div style={{ color: "white", fontWeight: 1000, fontSize: 17 }}>{editingId ? "Editar equipamento do Ritmo" : "Novo equipamento do Ritmo"}</div>
+              <div style={{ color: "white", fontWeight: 1000, fontSize: 16 }}>{editingId ? "Editar equipamento do Ritmo" : "Novo equipamento do Ritmo"}</div>
               <div style={{ color: "rgba(255,255,255,.55)", fontWeight: 800, fontSize: 12 }}>Escavadeiras / concha</div>
             </div>
           </div>

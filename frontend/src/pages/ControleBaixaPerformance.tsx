@@ -456,7 +456,7 @@ export default function ControleBaixaPerformance() {
               <div style={{ color: "rgba(255,255,255,0.58)", fontWeight: 900, fontSize: 12, textTransform: "uppercase", letterSpacing: 1.4 }}>
                 Produção horária da planta
               </div>
-              <h1 style={{ margin: "4px 0 6px", fontSize: 34, lineHeight: 1, letterSpacing: -1.2 }}>
+              <h1 style={{ margin: "4px 0 6px", fontSize: 30, lineHeight: 1, letterSpacing: -1.2 }}>
                 Controle de Performance
               </h1>
               <p style={{ margin: 0, color: "rgba(255,255,255,0.66)", fontWeight: 700 }}>
@@ -522,7 +522,7 @@ export default function ControleBaixaPerformance() {
           <div style={{ ...cardStyle, padding: 18, minHeight: 500 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", marginBottom: 12 }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: 20, display: "flex", gap: 10, alignItems: "center" }}>
+                <h2 style={{ margin: 0, fontSize: 18, display: "flex", gap: 10, alignItems: "center" }}>
                   <Factory size={20} color="#00b7a8" /> Produção por faixa horária
                 </h2>
                 <div style={{ marginTop: 4, color: "rgba(255,255,255,0.58)", fontWeight: 800 }}>
@@ -591,7 +591,7 @@ export default function ControleBaixaPerformance() {
         </section>
 
         <section style={{ ...cardStyle, padding: 18, marginTop: 16 }}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 20 }}>Detalhamento por faixa horária</h2>
+          <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Detalhamento por faixa horária</h2>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
               <thead>
@@ -658,7 +658,7 @@ export default function ControleBaixaPerformance() {
                       <div style={{ color: "rgba(255,255,255,0.56)", fontWeight: 900, fontSize: 12, textTransform: "uppercase", letterSpacing: 1.2 }}>
                         Produção horária da planta
                       </div>
-                      <div style={{ fontSize: 28, fontWeight: 950, color: "white", lineHeight: 1.05, marginTop: 4 }}>
+                      <div style={{ fontSize: 30, fontWeight: 950, color: "white", lineHeight: 1.05, marginTop: 4 }}>
                         Controle de Performance • {selectedPlantName}
                       </div>
                       <div style={{ marginTop: 6, color: "rgba(255,255,255,0.62)", fontWeight: 800, fontSize: 13 }}>

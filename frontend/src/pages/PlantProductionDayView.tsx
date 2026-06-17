@@ -678,7 +678,7 @@ export default function PlantProductionDayView() {
                 }}
               >
                 <div className="mp-help">Abatimento por hora</div>
-                <div style={{ color: "#FFA31A", fontSize: 28, fontWeight: 980, lineHeight: 1.05 }}>
+                <div style={{ color: "#FFA31A", fontSize: 30, fontWeight: 980, lineHeight: 1.05 }}>
                   {fmtBR2(overPerHour)} t/h
                 </div>
               </div>

@@ -177,7 +177,7 @@ function StatCard({
       }}
     >
       <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)", marginBottom: 8 }}>{title}</div>
-      <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 30, fontWeight: 900, lineHeight: 1.1 }}>{value}</div>
       {sub ? <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,.48)" }}>{sub}</div> : null}
     </div>
   );
@@ -331,7 +331,7 @@ export default function DevUsers() {
           }}
         >
           <div>
-            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: 0.2 }}>Usuários do Sistema</div>
+            <div style={{ fontWeight: 900, fontSize: 30, letterSpacing: 0.2 }}>Usuários do Sistema</div>
             <div style={{ marginTop: 4, color: "rgba(255,255,255,.58)", fontSize: 13 }}>
               Gestão de acessos e perfis internos do MonPlant.
             </div>
