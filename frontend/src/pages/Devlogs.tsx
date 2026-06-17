@@ -102,7 +102,7 @@ function StatCard({
       }}
     >
       <div style={{ fontSize: 12, color: "rgba(255,255,255,.58)", marginBottom: 8 }}>{title}</div>
-      <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 30, fontWeight: 900, lineHeight: 1.1 }}>{value}</div>
       {sub ? <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,.48)" }}>{sub}</div> : null}
     </div>
   );
@@ -167,8 +167,8 @@ export default function DevLogs() {
         }}
       >
         <div>
-          <div style={{ fontWeight: 900, fontSize: 28, letterSpacing: 0.2 }}>Logs do Sistema</div>
-          <div style={{ marginTop: 6, color: "rgba(255,255,255,.58)", fontSize: 14 }}>
+          <div style={{ fontWeight: 900, fontSize: 30, letterSpacing: 0.2 }}>Logs do Sistema</div>
+          <div style={{ marginTop: 6, color: "rgba(255,255,255,.58)", fontSize: 13 }}>
             Auditoria de acessos, alterações, salvamentos e exclusões do MonPlant.
           </div>
         </div>
@@ -336,7 +336,7 @@ export default function DevLogs() {
                       borderBottom: "1px solid rgba(255,255,255,.05)",
                       verticalAlign: "top",
                       color: "rgba(255,255,255,.70)",
-                      fontFamily: "monospace",
+                      fontFamily: "var(--mp-font-dashboard)",
                       fontSize: 12,
                     }}
                   >
@@ -349,7 +349,7 @@ export default function DevLogs() {
                       borderBottom: "1px solid rgba(255,255,255,.05)",
                       verticalAlign: "top",
                       color: "rgba(255,255,255,.70)",
-                      fontFamily: "monospace",
+                      fontFamily: "var(--mp-font-dashboard)",
                       fontSize: 12,
                     }}
                   >
@@ -380,8 +380,7 @@ export default function DevLogs() {
                           color: "rgba(255,255,255,.78)",
                           fontSize: 12,
                           lineHeight: 1.45,
-                          fontFamily:
-                            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
+                          fontFamily: "var(--mp-font-dashboard)",
                         }}
                       >
                         {l.payload ? JSON.stringify(l.payload, null, 2) : "-"}

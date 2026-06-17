@@ -117,7 +117,7 @@ export default function Home() {
                   style={{
                     marginTop: 18,
                     maxWidth: 760,
-                    fontSize: 17,
+                    fontSize: 16,
                     lineHeight: 1.75,
                     color: "rgba(255,255,255,.80)",
                   }}
@@ -131,7 +131,7 @@ export default function Home() {
                   style={{
                     marginTop: 12,
                     maxWidth: 780,
-                    fontSize: 15,
+                    fontSize: 16,
                     lineHeight: 1.8,
                     color: "rgba(255,255,255,.66)",
                   }}
@@ -174,7 +174,7 @@ export default function Home() {
                     <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 0.8, color: "rgba(167,243,208,.92)" }}>
                       MANIFESTO OPERACIONAL
                     </div>
-                    <div style={{ marginTop: 8, fontSize: 28, fontWeight: 950, lineHeight: 1.08 }}>
+                    <div style={{ marginTop: 8, fontSize: 30, fontWeight: 950, lineHeight: 1.08 }}>
                       Controle, contexto e clareza para a decisão.
                     </div>
                   </div>
@@ -242,11 +242,11 @@ export default function Home() {
                 <div style={{ marginTop: 8, fontSize: 30, fontWeight: 950, lineHeight: 1.1 }}>
                   MonPlant é presença de gestão dentro da rotina operacional.
                 </div>
-                <div style={{ marginTop: 12, fontSize: 14, lineHeight: 1.8, color: "rgba(255,255,255,.72)" }}>
+                <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.8, color: "rgba(255,255,255,.72)" }}>
                   A plataforma aproxima campo, supervisão e gestão. Ela organiza o que acontece no turno, dá forma ao
                   que antes estava disperso e transforma informação operacional em linguagem de decisão.
                 </div>
-                <div style={{ marginTop: 12, fontSize: 14, lineHeight: 1.8, color: "rgba(255,255,255,.72)" }}>
+                <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.8, color: "rgba(255,255,255,.72)" }}>
                   No MonPlant, o dado não é apenas registrado. Ele ganha contexto, prioridade e direção.
                 </div>
               </div>
@@ -300,7 +300,7 @@ function ManifestItem({ title, desc }: { title: string; desc: string }) {
         background: "rgba(255,255,255,.04)",
       }}
     >
-      <div style={{ fontSize: 14, fontWeight: 900, color: "rgba(255,255,255,.94)" }}>{title}</div>
+      <div style={{ fontSize: 13, fontWeight: 900, color: "rgba(255,255,255,.94)" }}>{title}</div>
       <div style={{ marginTop: 4, fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,.66)" }}>{desc}</div>
     </div>
   );
@@ -310,8 +310,8 @@ function MetricCard({ value, label, desc }: { value: string; label: string; desc
   return (
     <div className="mp-card" style={{ background: "rgba(0,0,0,.18)" }}>
       <div className="mp-card-b" style={{ padding: 14 }}>
-        <div style={{ fontSize: 28, fontWeight: 950, color: "rgba(167,243,208,.95)" }}>{value}</div>
-        <div style={{ marginTop: 6, fontSize: 15, fontWeight: 900 }}>{label}</div>
+        <div style={{ fontSize: 30, fontWeight: 950, color: "rgba(167,243,208,.95)" }}>{value}</div>
+        <div style={{ marginTop: 6, fontSize: 16, fontWeight: 900 }}>{label}</div>
         <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.6, color: "rgba(255,255,255,.66)" }}>{desc}</div>
       </div>
     </div>

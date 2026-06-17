@@ -1256,7 +1256,7 @@ export default function Exportar() {
       setMsg("❌ Não foi possível abrir a janela para gerar o PDF.");
       return;
     }
-    w.document.write(`<html><head><title>Analise Tecnica</title></head><body style="font-family:Arial;padding:24px;white-space:pre-wrap">${textLines.join("\n")}</body></html>`);
+    w.document.write(`<html><head><title>Analise Tecnica</title></head><body style="font-family:Poppins, Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;padding:24px;white-space:pre-wrap">${textLines.join("\n")}</body></html>`);
     w.document.close();
     w.focus();
     w.print();
@@ -1289,7 +1289,7 @@ export default function Exportar() {
           }}
         >
           <div>
-            <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: 0.2 }}>Central de Exportação</div>
+            <div style={{ fontWeight: 900, fontSize: 30, letterSpacing: 0.2 }}>Central de Exportação</div>
             <div style={{ marginTop: 4, color: "rgba(255,255,255,.58)", fontSize: 13 }}>
               Visualize o relatório no site antes de gerar o Excel e exporte somente quando estiver tudo conferido.
             </div>

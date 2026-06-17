@@ -187,7 +187,7 @@ export default function Configuracoes() {
               >
                 <Settings size={18} />
               </div>
-              <div style={{ fontSize: 28, fontWeight: 980, color: "rgba(255,255,255,0.94)", letterSpacing: -0.4 }}>
+              <div style={{ fontSize: 30, fontWeight: 980, color: "rgba(255,255,255,0.94)", letterSpacing: -0.4 }}>
                 Configurações
               </div>
             </div>
@@ -220,14 +220,14 @@ export default function Configuracoes() {
       >
         <div style={{ ...card, padding: 16, gridColumn: "span 4" }}>
           <div style={{ ...label, marginBottom: 4 }}>Plantas cadastradas</div>
-          <div style={{ fontSize: 34, fontWeight: 980, color: "rgba(255,255,255,0.94)" }}>
+          <div style={{ fontSize: 30, fontWeight: 980, color: "rgba(255,255,255,0.94)" }}>
             {plants.length}
           </div>
         </div>
 
         <div style={{ ...card, padding: 16, gridColumn: "span 4" }}>
           <div style={{ ...label, marginBottom: 4 }}>Plantas ativas</div>
-          <div style={{ fontSize: 34, fontWeight: 980, color: "rgba(34,197,94,0.95)" }}>
+          <div style={{ fontSize: 30, fontWeight: 980, color: "rgba(34,197,94,0.95)" }}>
             {activeCount}
           </div>
         </div>

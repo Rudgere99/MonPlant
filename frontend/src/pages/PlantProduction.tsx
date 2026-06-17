@@ -1099,7 +1099,7 @@ export default function PlantProduction() {
                     marginTop: 6,
                     color: "rgba(255,255,255,0.92)",
                     fontWeight: 980,
-                    fontSize: 28,
+                    fontSize: 30,
                     lineHeight: 1,
                   }}
                 >

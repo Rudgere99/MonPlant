@@ -445,7 +445,7 @@ export default function UfDF() {
     <div style={{ padding: 18 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: -0.3 }}>UF / DF • {selectedPlantName}</div>
+          <div style={{ fontSize: 30, fontWeight: 950, letterSpacing: -0.3 }}>UF / DF • {selectedPlantName}</div>
           <div style={{ color: "rgba(255,255,255,0.65)", fontWeight: 800, marginTop: 4 }}>
             Base: paradas hora a hora • tempo líquido do mês, abatendo coincidências por planta e horário
           </div>
