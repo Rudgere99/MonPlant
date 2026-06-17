@@ -1449,7 +1449,7 @@ export default function Statistics() {
                             style={{
                               fontSize: 16,
                               fontWeight: 800,
-                              fontFamily: "Poppins, Inter, Montserrat, sans-serif",
+                              fontFamily: "var(--mp-font-dashboard)",
                               letterSpacing: 0.4,
                             }}
                           >

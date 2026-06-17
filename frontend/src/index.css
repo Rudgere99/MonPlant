@@ -10,7 +10,7 @@ body,
   min-height: 100vh;
   background: #0B0F14;
   color: #E5E7EB;
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: var(--mp-font-dashboard);
 }
 
 a {
@@ -53,6 +53,7 @@ textarea:focus {
    ========================= */
 
 :root{
+  --mp-font-dashboard: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   --bg: #0b0f14;
   --panel: rgba(255,255,255,.04);
   --panel2: rgba(255,255,255,.06);
@@ -67,12 +68,28 @@ textarea:focus {
 }
 
 html, body {
+  font-family: var(--mp-font-dashboard);
   background: radial-gradient(1200px 600px at 20% 0%, rgba(0,0,0,.35), transparent 60%),
               radial-gradient(900px 500px at 100% 0%, rgba(30,30,30,.20), transparent 55%),
               var(--bg);
 }
 
-* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+* {
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea,
+table,
+svg text,
+.recharts-wrapper,
+.recharts-wrapper * {
+  font-family: var(--mp-font-dashboard) !important;
+}
 
 a { color: inherit; text-decoration: none; }
 
@@ -568,8 +585,9 @@ a { color: inherit; text-decoration: none; }
   color: rgba(255,255,255,0.92);
   font-weight: 900;
   font-size: 13px;
+}
 
-  /* Dashboard charts: reduzir poluição no mobile */
+/* Dashboard charts: reduzir poluição no mobile */
 @media (max-width: 860px) {
   /* diminui fonte dos eixos */
   .recharts-cartesian-axis-tick-value {
@@ -587,7 +605,7 @@ a { color: inherit; text-decoration: none; }
   }
 }
 
-  /* ===== MobileShell: Tabs no topo quando em landscape =====
+/* ===== MobileShell: Tabs no topo quando em landscape =====
    Cole NO FINAL do frontend/src/index.css
 */
 .mp-top-tabs{

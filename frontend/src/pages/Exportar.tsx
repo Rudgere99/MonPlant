@@ -1256,7 +1256,7 @@ export default function Exportar() {
       setMsg("❌ Não foi possível abrir a janela para gerar o PDF.");
       return;
     }
-    w.document.write(`<html><head><title>Analise Tecnica</title></head><body style="font-family:Arial;padding:24px;white-space:pre-wrap">${textLines.join("\n")}</body></html>`);
+    w.document.write(`<html><head><title>Analise Tecnica</title></head><body style="font-family:Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;padding:24px;white-space:pre-wrap">${textLines.join("\n")}</body></html>`);
     w.document.close();
     w.focus();
     w.print();
