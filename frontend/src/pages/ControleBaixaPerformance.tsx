@@ -833,7 +833,7 @@ type FlowItem = {
   x: number;
   y: number;
   cardX: number;
-  lineEndX: number;
+  cardCenterX: number;
   color: string;
 };
 
@@ -844,7 +844,7 @@ function PerformanceFlowMap({ rows }: { rows: ControlRow[] }) {
 
   if (!lowRows.length) {
     return (
-      <div style={{ ...previewCardBase, marginTop: 16, padding: 16 }}>
+      <div style={{ marginTop: 24, padding: "0 16px" }}>
         <div style={{ fontWeight: 900, fontSize: 18, color: "white", marginBottom: 8 }}>Justificativas das faixas críticas</div>
         <div style={{ color: "rgba(255,255,255,0.62)", fontWeight: 760 }}>
           Não há barras laranja ou cinza no período selecionado. Nenhuma justificativa crítica para destacar na exportação.
@@ -855,8 +855,8 @@ function PerformanceFlowMap({ rows }: { rows: ControlRow[] }) {
 
   const baseWidth = 1180;
   const cardWidth = 214;
-  const topAnchorY = 24;
-  const cardTopStart = 58;
+  const topAnchorY = 10;
+  const cardTopStart = 52;
   const laneHeight = 122;
   const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
@@ -868,15 +868,15 @@ function PerformanceFlowMap({ rows }: { rows: ControlRow[] }) {
     const direction = lane === 0 ? -1 : 1;
     const tentativeX = x + direction * 110 - cardWidth / 2;
     const cardX = clamp(tentativeX, 18, baseWidth - cardWidth - 18);
-    const lineEndX = clamp(cardX + cardWidth / 2, 18, baseWidth - 18);
-    return { row, x, y, cardX, lineEndX, color: statusColor(row.status) };
+    const cardCenterX = clamp(cardX + cardWidth / 2, 18, baseWidth - 18);
+    return { row, x, y, cardX, cardCenterX, color: statusColor(row.status) };
   });
 
   const flowHeight = Math.max(170, Math.max(...items.map((item) => item.y + 112)));
 
   return (
-    <div style={{ ...previewCardBase, marginTop: 16, padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
+    <div style={{ marginTop: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12, padding: "0 16px" }}>
         <div>
           <div style={{ fontWeight: 900, fontSize: 18, color: "white" }}>Justificativas das faixas críticas</div>
           <div style={{ color: "rgba(255,255,255,0.58)", fontWeight: 760, fontSize: 12 }}>
@@ -888,7 +888,7 @@ function PerformanceFlowMap({ rows }: { rows: ControlRow[] }) {
         </div>
       </div>
 
-      <div style={{ position: "relative", minHeight: flowHeight, width: "100%" }}>
+      <div style={{ position: "relative", minHeight: flowHeight, width: "100%", overflow: "visible" }}>
         <svg
           viewBox={`0 0 ${baseWidth} ${flowHeight}`}
           preserveAspectRatio="none"
@@ -896,10 +896,17 @@ function PerformanceFlowMap({ rows }: { rows: ControlRow[] }) {
         >
           {items.map((item, index) => (
             <g key={`flow-${item.row.period}-${index}`}>
-              <circle cx={item.x} cy={topAnchorY} r={7} fill={item.color} opacity="0.95" />
-              <line x1={item.x} y1={topAnchorY + 7} x2={item.x} y2={item.y - 12} stroke={item.color} strokeWidth="2.4" strokeDasharray="4 5" opacity="0.9" />
-              <line x1={item.x} y1={item.y - 12} x2={item.lineEndX} y2={item.y - 12} stroke={item.color} strokeWidth="2.4" opacity="0.9" />
-              <circle cx={item.lineEndX} cy={item.y - 12} r={4.5} fill={item.color} opacity="0.95" />
+              <circle cx={item.x} cy={topAnchorY} r={5.5} fill={item.color} opacity="0.95" />
+              <path
+                d={`M ${item.x} ${topAnchorY + 6} V ${item.y - 12} H ${item.cardCenterX} V ${item.y}`}
+                fill="none"
+                stroke={item.color}
+                strokeWidth="2.4"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                opacity="0.9"
+              />
+              <circle cx={item.cardCenterX} cy={item.y} r={4.5} fill={item.color} opacity="0.95" />
             </g>
           ))}
         </svg>
