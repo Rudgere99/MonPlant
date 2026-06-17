@@ -828,144 +828,82 @@ function legendMiniDot(color: string): CSSProperties {
   };
 }
 
-type FlowItem = {
-  row: ControlRow;
-  x: number;
-  y: number;
-  cardX: number;
-  cardCenterX: number;
-  color: string;
-};
-
 function PerformanceFlowMap({ rows }: { rows: ControlRow[] }) {
-  const lowRows = rows
-    .map((row, index) => ({ row, index }))
-    .filter(({ row }) => row.status === "lowNoStop" || row.status === "lowWithStop");
+  const lowRows = rows.filter((row) => row.status === "lowNoStop" || row.status === "lowWithStop");
 
   if (!lowRows.length) {
     return (
-      <div style={{ marginTop: 24, padding: "0 16px" }}>
-        <div style={{ fontWeight: 900, fontSize: 18, color: "white", marginBottom: 8 }}>Justificativas das faixas críticas</div>
-        <div style={{ color: "rgba(255,255,255,0.62)", fontWeight: 760 }}>
-          Não há barras laranja ou cinza no período selecionado. Nenhuma justificativa crítica para destacar na exportação.
-        </div>
+      <div
+        style={{
+          marginTop: 12,
+          borderRadius: 16,
+          border: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(255,255,255,0.035)",
+          padding: "12px 14px",
+          color: "rgba(255,255,255,0.68)",
+          fontSize: 13,
+          fontWeight: 780,
+          lineHeight: 1.45,
+        }}
+      >
+        <b style={{ color: "white" }}>Justificativas:</b> não há faixas cinzas ou laranjas no período selecionado.
       </div>
     );
   }
 
-  const baseWidth = 1180;
-  const cardWidth = 214;
-  const topAnchorY = 10;
-  const cardTopStart = 52;
-  const laneHeight = 122;
-  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const textItems = lowRows.map((row) => {
+    const color = statusColor(row.status);
+    const tipo = row.status === "lowWithStop" ? "com parada" : "sem parada";
+    const parada = row.hasStop ? `, ${fmtBR(row.stopMinutes)} min parados` : "";
+    const motivo =
+      row.reason ||
+      (row.hasStop
+        ? "baixa produção associada à parada registrada"
+        : "motivo CCO não informado");
 
-  const items: FlowItem[] = lowRows.map(({ row, index }, order) => {
-    const x = 44 + ((index + 0.5) / 24) * (baseWidth - 88);
-    const lane = order % 2;
-    const rowBand = Math.floor(order / 2);
-    const y = cardTopStart + rowBand * laneHeight + lane * 12;
-    const direction = lane === 0 ? -1 : 1;
-    const tentativeX = x + direction * 110 - cardWidth / 2;
-    const cardX = clamp(tentativeX, 18, baseWidth - cardWidth - 18);
-    const cardCenterX = clamp(cardX + cardWidth / 2, 18, baseWidth - 18);
-    return { row, x, y, cardX, cardCenterX, color: statusColor(row.status) };
+    return (
+      <span key={row.period} style={{ display: "inline" }}>
+        <span
+          style={{
+            display: "inline-block",
+            width: 8,
+            height: 8,
+            borderRadius: 999,
+            background: color,
+            marginRight: 6,
+            boxShadow: `0 0 12px ${color}`,
+          }}
+        />
+        <b style={{ color: "white" }}>{periodCompact(row.period)}</b>
+        <span style={{ color: "rgba(255,255,255,0.72)" }}>
+          {" "}
+          ({tipo}{parada}): {motivo}
+        </span>
+      </span>
+    );
   });
 
-  const flowHeight = Math.max(170, Math.max(...items.map((item) => item.y + 112)));
-
   return (
-    <div style={{ marginTop: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12, padding: "0 16px" }}>
-        <div>
-          <div style={{ fontWeight: 900, fontSize: 18, color: "white" }}>Justificativas das faixas críticas</div>
-          <div style={{ color: "rgba(255,255,255,0.58)", fontWeight: 760, fontSize: 12 }}>
-            Fluxo visual ligando cada barra crítica ao respectivo card de justificativa.
-          </div>
-        </div>
-        <div style={{ color: "rgba(255,255,255,0.52)", fontWeight: 800, fontSize: 12 }}>
-          Exibindo {lowRows.length} {lowRows.length === 1 ? "ocorrência" : "ocorrências"}
-        </div>
-      </div>
-
-      <div style={{ position: "relative", minHeight: flowHeight, width: "100%", overflow: "visible" }}>
-        <svg
-          viewBox={`0 0 ${baseWidth} ${flowHeight}`}
-          preserveAspectRatio="none"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
-        >
-          {items.map((item, index) => (
-            <g key={`flow-${item.row.period}-${index}`}>
-              <circle cx={item.x} cy={topAnchorY} r={5.5} fill={item.color} opacity="0.95" />
-              <path
-                d={`M ${item.x} ${topAnchorY + 6} V ${item.y - 12} H ${item.cardCenterX} V ${item.y}`}
-                fill="none"
-                stroke={item.color}
-                strokeWidth="2.4"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                opacity="0.9"
-              />
-              <circle cx={item.cardCenterX} cy={item.y} r={4.5} fill={item.color} opacity="0.95" />
-            </g>
-          ))}
-        </svg>
-
-        {items.map((item, index) => (
-          <div
-            key={`card-${item.row.period}-${index}`}
-            style={{
-              position: "absolute",
-              left: `${(item.cardX / baseWidth) * 100}%`,
-              top: item.y,
-              width: cardWidth,
-              borderRadius: 18,
-              border: `1px solid ${item.color}44`,
-              background: "linear-gradient(180deg, rgba(15,19,26,0.98), rgba(10,14,18,0.96))",
-              boxShadow: `0 20px 48px ${item.color}18`,
-              padding: 12,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontWeight: 950, fontSize: 13, color: "white" }}>{periodCompact(item.row.period)}</span>
-              <span
-                style={{
-                  borderRadius: 999,
-                  padding: "4px 8px",
-                  fontSize: 10,
-                  fontWeight: 900,
-                  background: `${item.color}18`,
-                  color: "white",
-                  border: `1px solid ${item.color}45`,
-                }}
-              >
-                {item.row.status === "lowWithStop" ? "Com parada" : "Sem parada"}
-              </span>
-            </div>
-
-            <div style={{ display: "grid", gap: 4, color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: 760 }}>
-              <div>
-                Produção: <b style={{ color: "white" }}>{item.row.ton === null ? "—" : `${fmtBR(item.row.ton)} t`}</b>
-              </div>
-              <div>
-                Diferença: <b style={{ color: item.row.diff !== null && item.row.diff < 0 ? "#fdba74" : "#93c5fd" }}>{item.row.diff === null ? "—" : `${item.row.diff >= 0 ? "+" : ""}${fmtBR(item.row.diff)} t`}</b>
-              </div>
-              <div>
-                Parada: <b style={{ color: "white" }}>{item.row.hasStop ? `Sim (${fmtBR(item.row.stopMinutes)} min)` : "Não"}</b>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-              <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: 900, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
-                Justificativa
-              </div>
-              <div style={{ color: "rgba(255,255,255,0.90)", fontSize: 12, fontWeight: 780, lineHeight: 1.42 }}>
-                {item.row.reason || (item.row.hasStop ? "Baixa produção associada ao lançamento de parada registrado para a faixa horária." : "Motivo do CCO não informado para esta faixa horária.")}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+    <div
+      style={{
+        marginTop: 12,
+        borderRadius: 16,
+        border: "1px solid rgba(255,255,255,0.08)",
+        background: "rgba(255,255,255,0.035)",
+        padding: "12px 14px",
+        color: "rgba(255,255,255,0.72)",
+        fontSize: 13,
+        fontWeight: 780,
+        lineHeight: 1.55,
+      }}
+    >
+      <b style={{ color: "white" }}>Justificativas:</b>{" "}
+      {textItems.map((item, index) => (
+        <span key={index}>
+          {item}
+          {index < textItems.length - 1 ? <span style={{ color: "rgba(255,255,255,0.32)" }}> • </span> : null}
+        </span>
+      ))}
     </div>
   );
 }
