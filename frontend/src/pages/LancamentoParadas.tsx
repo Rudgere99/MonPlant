@@ -468,23 +468,18 @@ export default function LancamentoParadas() {
   const equipmentOptions = useMemo(() => {
     const selectedPlantId = Number(plantId);
 
+    // Regra multi-planta: a tela de lançamento de paradas só exibe TAGs
+    // registradas para a planta selecionada. Assim, Planta 01 não puxa
+    // equipamentos da Planta 02 e vice-versa.
     const plantTags = prodEquipments
       .filter((e) => e.is_active && Number(e.plant_id) === selectedPlantId)
       .map((e) => String(e.tag || "").trim().toUpperCase())
       .filter(Boolean);
 
-    // Escavadeiras vêm do cadastro geral de equipamentos.
-    // Nesta tela elas podem ser usadas por qualquer planta, por isso não são filtradas por planta.
-    const excavatorTags = excavators
-      .filter((e) => e.is_active !== false)
-      .filter((e) => String(e.equipment_type || "").trim().toLowerCase().includes("escav"))
-      .map((e) => String(e.tag || "").trim().toUpperCase())
-      .filter(Boolean);
-
-    return Array.from(new Set([...plantTags, ...excavatorTags])).sort((a, b) =>
+    return Array.from(new Set(plantTags)).sort((a, b) =>
       a.localeCompare(b, "pt-BR"),
     );
-  }, [prodEquipments, excavators, plantId]);
+  }, [prodEquipments, plantId]);
 
   const stopTypes = useMemo(() => ["Corretiva", "Preventiva", "Operacional"], []);
 

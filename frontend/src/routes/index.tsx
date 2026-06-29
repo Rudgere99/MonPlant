@@ -43,11 +43,20 @@ function defaultPathFor(role: Role) {
   return getDefaultPathByRole(role);
 }
 
+function pathForRoleCheck(path: string) {
+  if (path === "/m") return "/";
+  if (path.startsWith("/m/")) return path.slice(2) || "/";
+  return path;
+}
+
 function canAccessAppPath(role: Role, path: string) {
-  if (path === "/supervisores-planta" || path.startsWith("/supervisores-planta/")) {
+  const checkedPath = pathForRoleCheck(path);
+
+  if (checkedPath === "/supervisores-planta" || checkedPath.startsWith("/supervisores-planta/")) {
     return role === "dev" || role === "gerencia" || role === "controlador";
   }
-  return canAccessRole(role, path);
+
+  return canAccessRole(role, checkedPath);
 }
 
 function RequireRole({ children }: { children: ReactNode }) {
@@ -297,9 +306,11 @@ export function AppRoutes() {
         path="/m/supervisores-planta"
         element={
           <RequireAuth>
-            <MobileWrap title="Supervisores Planta" tab="configuracoes">
-              <SupervisoresPlanta />
-            </MobileWrap>
+            <RequireRole>
+              <MobileWrap title="Supervisores Planta" tab="configuracoes">
+                <SupervisoresPlanta />
+              </MobileWrap>
+            </RequireRole>
           </RequireAuth>
         }
       />
@@ -327,9 +338,11 @@ export function AppRoutes() {
         path="/m/dev/logs"
         element={
           <RequireAuth>
-            <MobileWrap title="Dev Logs" tab="dev-logs">
-              <DevLogs />
-            </MobileWrap>
+            <RequireRole>
+              <MobileWrap title="Dev Logs" tab="dev-logs">
+                <DevLogs />
+              </MobileWrap>
+            </RequireRole>
           </RequireAuth>
         }
       />
@@ -337,9 +350,11 @@ export function AppRoutes() {
         path="/m/dev/users"
         element={
           <RequireAuth>
-            <MobileWrap title="Dev Usuários" tab="dev-users">
-              <DevUsers />
-            </MobileWrap>
+            <RequireRole>
+              <MobileWrap title="Dev Usuários" tab="dev-users">
+                <DevUsers />
+              </MobileWrap>
+            </RequireRole>
           </RequireAuth>
         }
       />

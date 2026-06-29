@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Query, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, EmailStr
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, time
 from typing import Optional, List, Any, Dict
 from zoneinfo import ZoneInfo
 import os
@@ -315,7 +315,13 @@ def cors_preflight(path: str):
 BR_TZ = ZoneInfo("America/Sao_Paulo")
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-AUTH_SECRET = (os.getenv("AUTH_SECRET") or "CHANGE_ME_AUTH_SECRET").strip()
+AUTH_SECRET = (os.getenv("AUTH_SECRET") or "").strip()
+if not AUTH_SECRET or AUTH_SECRET == "CHANGE_ME_AUTH_SECRET":
+    # Em produção, defina AUTH_SECRET no Railway/ambiente.
+    # Mantém fallback apenas em execução local para não quebrar desenvolvimento.
+    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RENDER") or os.getenv("VERCEL"):
+        raise RuntimeError("AUTH_SECRET não configurado para produção")
+    AUTH_SECRET = "DEV_ONLY_CHANGE_ME_AUTH_SECRET"
 AUTH_TTL_HOURS = int(os.getenv("AUTH_TTL_HOURS") or "168")  # 7 dias
 
 
@@ -402,31 +408,38 @@ def user_can_edit_retroactive(authorization: Optional[str]) -> bool:
 
 def block_retro(d: date, dev_key: Optional[str] = None, authorization: Optional[str] = None):
     """
-    Regra (Brasil):
-      - Bloqueia somente se for dia ANTERIOR ao "hoje"
-      - EXCETO: permite editar "ontem" até um horário limite (útil para turno 19:00-07:00)
-      - DEV: se X-Dev-Key bater, não bloqueia nada
+    Regra operacional (America/Sao_Paulo):
+      - Não permite lançar/editar data futura.
+      - Permite editar o dia atual.
+      - Permite editar o dia anterior somente até o horário limite configurado.
+      - DEV ou usuário com permissão retroativa podem editar fora da janela.
 
-    Configure no Railway (opcional):
-      - RETRO_ALLOW_UNTIL_HOUR (default 7)  -> permite editar ontem até HH:59
+    Configure no ambiente:
+      - RETRO_ALLOW_UNTIL_HOUR (default 1) -> libera D-1 até HH:00.
     """
     if is_dev(dev_key) or user_can_edit_retroactive(authorization):
         return
 
     tdy = today_local()
-    if d >= tdy:
-        return
-
     n = now_local()
 
-    # ✅ janela para "ontem" (turno noturno cruzando meia-noite)
-    allow_until_hour = int(os.getenv("RETRO_ALLOW_UNTIL_HOUR") or "7")  # 07:00
-    if d == (tdy - timedelta(days=1)):
-        if n.hour <= allow_until_hour:
-            return
+    if d > tdy:
+        raise HTTPException(status_code=403, detail="Data futura não pode ser editada.")
 
-    raise HTTPException(status_code=403, detail="Dia anterior não pode ser editado.")
+    if d == tdy:
+        return
 
+    allow_until_hour = int(os.getenv("RETRO_ALLOW_UNTIL_HOUR") or "1")
+    allow_until_hour = max(0, min(23, allow_until_hour))
+    cutoff = datetime.combine(tdy, time(hour=allow_until_hour, minute=0), tzinfo=BR_TZ)
+
+    if d == (tdy - timedelta(days=1)) and n <= cutoff:
+        return
+
+    raise HTTPException(
+        status_code=403,
+        detail=f"Dia anterior só pode ser editado até {allow_until_hour:02d}:00. Datas futuras não são permitidas.",
+    )
 
 def parse_float(v):
     if v is None:
@@ -708,6 +721,62 @@ def require_dev_user(
     payload = decode_token(tok)
     if payload.get("typ") != "dev":
         raise HTTPException(status_code=403, detail="Acesso negado")
+    return payload
+
+
+def _active_user_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    uid = payload.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                select user_type, email, full_name, coalesce(is_active, true) as is_active
+                from public.bv_users
+                where id=%s
+                """,
+                (uid,),
+            )
+            row = cur.fetchone()
+    except HTTPException:
+        raise
+    except Exception:
+        # Se a consulta falhar por uma migração ainda não aplicada, mantém o token validado.
+        row = None
+
+    if row is not None:
+        if not bool(row.get("is_active", True)):
+            raise HTTPException(status_code=403, detail="Usuário inativo")
+        payload = dict(payload)
+        payload["typ"] = normalize_user_type(row.get("user_type") or payload.get("typ"))
+        payload["em"] = row.get("email") or payload.get("em")
+        payload["name"] = row.get("full_name") or payload.get("name")
+
+    return payload
+
+
+def require_authenticated_user(
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+):
+    tok = bearer_token(authorization)
+    if not tok:
+        raise HTTPException(status_code=401, detail="Sem token")
+    return _active_user_payload(decode_token(tok))
+
+
+def require_write_user(payload: Dict[str, Any] = Depends(require_authenticated_user)):
+    role = normalize_user_type(payload.get("typ"))
+    if role not in {"apontador", "controlador", "supervisor", "gerencia", "dev"}:
+        raise HTTPException(status_code=403, detail="Usuário sem permissão para salvar dados")
+    return payload
+
+
+def require_control_user(payload: Dict[str, Any] = Depends(require_authenticated_user)):
+    role = normalize_user_type(payload.get("typ"))
+    if role not in {"controlador", "gerencia", "dev"}:
+        raise HTTPException(status_code=403, detail="Usuário sem permissão para esta alteração")
     return payload
 
 
@@ -1331,6 +1400,7 @@ def list_plants(owner_id: str = Depends(require_owner_id)):
 def create_plant(
     body: PlantCreateIn,
     owner_id: str = Depends(require_owner_id),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -1459,6 +1529,7 @@ def criar_supervisor_planta(
     body: SupervisorPlantaIn,
     request: Request,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     owner_id = safe_owner_id_from_auth(authorization)
     ensure_supervisor_planta_tables()
@@ -1516,6 +1587,7 @@ def atualizar_supervisor_planta(
     body: SupervisorPlantaIn,
     request: Request,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     return alterar_supervisor_planta(supervisor_id, SupervisorPlantaUpdateIn(**body.model_dump()), request, authorization)
 
@@ -1526,6 +1598,7 @@ def alterar_supervisor_planta(
     body: SupervisorPlantaUpdateIn,
     request: Request,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     owner_id = safe_owner_id_from_auth(authorization)
     ensure_supervisor_planta_tables()
@@ -1613,6 +1686,7 @@ def remover_supervisor_planta(
     supervisor_id: int,
     request: Request,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     """Inativa o cadastro para preservar histórico."""
     owner_id = safe_owner_id_from_auth(authorization)
@@ -1695,6 +1769,7 @@ def create_equipment(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     tag = (body.tag or "").strip().upper()
     if not tag:
@@ -1740,6 +1815,7 @@ def update_equipment(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     fields = []
     values: List[Any] = []
@@ -1809,6 +1885,7 @@ def delete_equipment(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     """Inativa o equipamento para preservar histórico e não quebrar alocações antigas."""
     user_payload = get_optional_user(authorization)
@@ -1907,6 +1984,7 @@ def put_equipment_allocation(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     plant_id = _validate_plant_id(plant_id)
     user_payload = get_optional_user(authorization)
@@ -2063,6 +2141,7 @@ def create_plant_production_equipment(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     """Cria TAG de equipamento vinculado a uma planta."""
     ensure_plant_production_equipment_tables()
@@ -2116,6 +2195,7 @@ def update_plant_production_equipment(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     """Atualiza TAG/planta/descrição/status do equipamento de produção de planta."""
     ensure_plant_production_equipment_tables()
@@ -2194,6 +2274,7 @@ def delete_plant_production_equipment(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
     """Inativa o equipamento para preservar histórico."""
     ensure_plant_production_equipment_tables()
@@ -2328,6 +2409,7 @@ def put_plant_day_by_plant(
     owner_id: str = Depends(require_owner_id),
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_write_user),
 ):
     ensure_plant_production_over_columns()
     block_retro(day, x_dev_key, authorization)
@@ -2501,6 +2583,7 @@ def put_plant_day(
     owner_id: str = Depends(require_owner_id),
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_write_user),
 ):
     ensure_plant_production_over_columns()
     block_retro(day, x_dev_key, authorization)
@@ -2609,6 +2692,7 @@ def create_stop_by_plant(
     owner_id: str = Depends(require_owner_id),
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_write_user),
 ):
     block_retro(body.day, x_dev_key, authorization)
 
@@ -2664,6 +2748,7 @@ def delete_stop_by_plant(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_write_user),
 ):
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
@@ -2720,6 +2805,7 @@ def create_stop(
     owner_id: str = Depends(require_owner_id),
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_write_user),
 ):
     block_retro(body.day, x_dev_key, authorization)
 
@@ -2773,6 +2859,7 @@ def delete_stop(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_write_user),
 ):
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
@@ -2814,9 +2901,10 @@ def create_horimetro_by_plant(
     owner_id: str = Depends(require_owner_id),
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_write_user),
 ):
-    # ✅ Horímetros: NÃO trava retroativo (dia anterior, etc.)
-    # block_retro(body.day, x_dev_key, authorization)
+    # Horímetros seguem a mesma trava operacional de data.
+    block_retro(body.day, x_dev_key, authorization)
 
     if body.horimetro_fim < body.horimetro_ini:
         raise HTTPException(status_code=400, detail="horimetro_fim deve ser >= horimetro_ini")
@@ -2953,6 +3041,7 @@ def delete_horimetro_by_plant(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_write_user),
 ):
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
@@ -2994,9 +3083,10 @@ def create_horimetro(
     # mantive o header pra não quebrar front (mas ele não é mais usado aqui)
     x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_write_user),
 ):
-    # ✅ Horímetros: NÃO trava retroativo (dia anterior, etc.)
-    # block_retro(body.day, x_dev_key, authorization)
+    # Horímetros seguem a mesma trava operacional de data.
+    block_retro(body.day, x_dev_key, authorization)
 
     if body.horimetro_fim < body.horimetro_ini:
         raise HTTPException(status_code=400, detail="horimetro_fim deve ser >= horimetro_ini")
@@ -3130,6 +3220,7 @@ def delete_horimetro(
     request: Request,
     owner_id: str = Depends(require_owner_id),
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_write_user),
 ):
     user_payload = get_optional_user(authorization)
     user_id = user_payload.get("uid") if user_payload else None
@@ -3322,7 +3413,7 @@ def goals_get_day_by_plant(plant_id: int, day: date, owner_id: str = Depends(req
 
 
 @app.put("/api/plants/{plant_id}/goals/day/{day}", response_model=GoalDayOut)
-def goals_put_day_by_plant(plant_id: int, day: date, body: GoalDayIn, owner_id: str = Depends(require_owner_id)):
+def goals_put_day_by_plant(plant_id: int, day: date, body: GoalDayIn, owner_id: str = Depends(require_owner_id), _user: Dict[str, Any] = Depends(require_control_user)):
     _ensure_goals_table()
     plant_id = _validate_plant_id(plant_id)
     with get_conn() as conn:
@@ -3363,7 +3454,7 @@ def goals_get_month_by_plant(plant_id: int, month: str, owner_id: str = Depends(
 
 
 @app.put("/api/plants/{plant_id}/goals/month/{month}", response_model=GoalMonthOut)
-def goals_put_month_by_plant(plant_id: int, month: str, body: GoalMonthIn, owner_id: str = Depends(require_owner_id)):
+def goals_put_month_by_plant(plant_id: int, month: str, body: GoalMonthIn, owner_id: str = Depends(require_owner_id), _user: Dict[str, Any] = Depends(require_control_user)):
     _ensure_goals_table()
     plant_id = _validate_plant_id(plant_id)
     first = _parse_yyyy_mm(month)
@@ -3445,8 +3536,8 @@ def goals_get_day(day: date, owner_id: str = Depends(require_owner_id)):
 
 
 @app.put("/api/goals/day/{day}", response_model=GoalDayOut)
-def goals_put_day(day: date, body: GoalDayIn, owner_id: str = Depends(require_owner_id)):
-    return goals_put_day_by_plant(1, day, body, owner_id)
+def goals_put_day(day: date, body: GoalDayIn, owner_id: str = Depends(require_owner_id), _user: Dict[str, Any] = Depends(require_control_user)):
+    return goals_put_day_by_plant(1, day, body, owner_id, _user)
 
 
 @app.get("/api/goals/month/{month}", response_model=GoalMonthOut)
@@ -3455,8 +3546,8 @@ def goals_get_month(month: str, owner_id: str = Depends(require_owner_id)):
 
 
 @app.put("/api/goals/month/{month}", response_model=GoalMonthOut)
-def goals_put_month(month: str, body: GoalMonthIn, owner_id: str = Depends(require_owner_id)):
-    return goals_put_month_by_plant(1, month, body, owner_id)
+def goals_put_month(month: str, body: GoalMonthIn, owner_id: str = Depends(require_owner_id), _user: Dict[str, Any] = Depends(require_control_user)):
+    return goals_put_month_by_plant(1, month, body, owner_id, _user)
 
 
 # =========================
@@ -4460,7 +4551,11 @@ def put_stops_launch_by_plant(
     payload: StopLaunchDayUpsert,
     day: date = Query(...),
     owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
+    block_retro(day, x_dev_key, authorization)
     return _put_stops_launch_payload(owner_id=owner_id, day=day, payload=payload, plant_id=plant_id)
 
 
@@ -4478,7 +4573,11 @@ def put_stops_launch(
     payload: StopLaunchDayUpsert,
     day: date = Query(...),
     owner_id: str = Depends(require_owner_id),
+    x_dev_key: Optional[str] = Header(default=None, alias="X-Dev-Key"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    _user: Dict[str, Any] = Depends(require_control_user),
 ):
+    block_retro(day, x_dev_key, authorization)
     # Endpoint legado: salva como Planta 1.
     return _put_stops_launch_payload(owner_id=owner_id, day=day, payload=payload, plant_id=1)
 

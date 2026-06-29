@@ -793,7 +793,7 @@ export default function Dashboard() {
     // ✅ Mapa: período ("HH-HH") -> lista de observações de parada (para tooltip do gráfico)
   // Regras:
   // - aceita tanto formato antigo (hora_inicio) quanto novo (period "HH-HH")
-  // - se a parada vier como faixa (ex: 19-21), a descrição aparece em TODOS os horários decorrentes (19-20, 20-21, 21-22)
+  // - se a parada vier como faixa (ex: 19-21), a descrição aparece nos horários decorrentes (19-20, 20-21)
   const stopsByPeriod = useMemo<Record<string, StopTipItem[]>>(() => {
     const map: Record<string, StopTipItem[]> = {};
 
@@ -814,21 +814,22 @@ export default function Dashboard() {
       return { a, b };
     };
 
-    const expandHoursInclusive = (a: number, b: number): number[] => {
-      // Regra:
-      // - Se for uma faixa "normal" de 1h (ex: 22-23), a parada pertence SOMENTE ao bucket 22-23 (não joga em 23-00)
-      // - Se for uma faixa maior (ex: 19-21), aplica em TODOS os horários decorrentes incluindo o "b"
-      //   (19-20, 20-21, 21-22)
-      if (((a + 1) % 24) === b) return [a];
-
+    const expandHoursExclusiveEnd = (a: number, b: number): number[] => {
+      // Regra operacional:
+      // - "22-23" pertence apenas ao bucket 22-23.
+      // - "19-21" pertence aos buckets 19-20 e 20-21.
+      // A hora final é limite da faixa, não início de uma nova faixa.
       const out: number[] = [];
       let h = a;
-      for (let guard = 0; guard < 48; guard++) {
-        out.push(h);
+
+      for (let guard = 0; guard < 24; guard++) {
         if (h === b) break;
+        out.push(h);
         h = (h + 1) % 24;
       }
-      return out;
+
+      // Se alguém lançar 07-07, trata como faixa única para não sumir do gráfico.
+      return out.length ? out : [a];
     };
 
     for (const s of (stops || []) as any[]) {
@@ -846,7 +847,7 @@ export default function Dashboard() {
       // Novo formato (bv_launch.stops_rows): period "HH-HH"
       const p = parsePeriod(String(s?.period || ""));
       if (p) {
-        const hours = expandHoursInclusive(p.a, p.b);
+        const hours = expandHoursExclusiveEnd(p.a, p.b);
         for (const h of hours) push(h, eq, desc);
         continue;
       }
