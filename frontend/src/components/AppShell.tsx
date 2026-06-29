@@ -425,7 +425,7 @@ function AppShell() {
     if (!isTarget) return null;
   }
 
-  const sideW = sideCollapsed ? 86 : 300;
+  const sideW = sideCollapsed ? 78 : 300;
 
   const cardGlass: React.CSSProperties = {
     borderRadius: 22,
@@ -454,6 +454,29 @@ function AppShell() {
           background: rgba(255,159,26,.08) !important;
         }
 
+        .mp-sidebar-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255,255,255,0.16) transparent;
+        }
+
+        .mp-sidebar-scroll::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .mp-sidebar-scroll::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.16);
+          border-radius: 999px;
+        }
+
+        .mp-sidebar-scroll-collapsed {
+          scrollbar-width: none;
+        }
+
+        .mp-sidebar-scroll-collapsed::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+        }
+
         @media (min-width: 980px) {
           .mp-sidebar-desktop { display: block !important; }
           .mp-mobile-fab { display: none !important; }
@@ -478,7 +501,7 @@ function AppShell() {
           style={{
             width: sideW,
             display: "none",
-            padding: "8px 10px 8px 8px",
+            padding: sideCollapsed ? "8px 7px" : "8px 10px 8px 8px",
             background: "rgba(5,8,12,0.98)",
             borderRight: "1px solid rgba(255,255,255,0.06)",
             position: "sticky",
@@ -492,7 +515,7 @@ function AppShell() {
           <div
             style={{
               height: "calc(100vh - 16px)",
-              padding: sideCollapsed ? "10px 6px 10px 6px" : "12px 10px 10px 10px",
+              padding: sideCollapsed ? "10px 4px" : "12px 10px 10px 10px",
               display: "flex",
               flexDirection: "column",
               overflow: "visible",
@@ -505,21 +528,22 @@ function AppShell() {
             <div
               style={{
                 display: "flex",
+                flexDirection: sideCollapsed ? "column" : "row",
                 alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
+                justifyContent: sideCollapsed ? "center" : "space-between",
+                gap: sideCollapsed ? 8 : 10,
                 flex: "0 0 auto",
-                minHeight: 84,
+                minHeight: sideCollapsed ? 58 : 84,
               }}
             >
               <div
               style={{
-                flex: 1,
-                display: "flex",
+                flex: sideCollapsed ? "0 0 auto" : 1,
+                display: sideCollapsed ? "none" : "flex",
                 alignItems: "center",
-                justifyContent: sideCollapsed ? "center" : "flex-start",
+                justifyContent: "flex-start",
                 minWidth: 0,
-                paddingLeft: sideCollapsed ? 0 : 10,
+                paddingLeft: 10,
               }}
             >
               <img
@@ -545,10 +569,10 @@ function AppShell() {
                 aria-label={sideCollapsed ? "Expandir menu" : "Minimizar menu"}
                 title={sideCollapsed ? "Expandir" : "Minimizar"}
                 style={{
-                  height: 42,
-                  width: 42,
-                  borderRadius: 14,
-                  background: "rgba(255,255,255,0.06)",
+                  height: sideCollapsed ? 44 : 42,
+                  width: sideCollapsed ? 44 : 42,
+                  borderRadius: sideCollapsed ? 16 : 14,
+                  background: sideCollapsed ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.06)",
                   border: "1px solid rgba(255,255,255,0.10)",
                   cursor: "pointer",
                   color: "white",
@@ -573,12 +597,22 @@ function AppShell() {
                 }}
               />
             ) : (
-              <div style={{ marginTop: 10, marginBottom: 8, height: 1, background: "rgba(255,255,255,0.06)" }} />
+              <div style={{ marginTop: 8, marginBottom: 8, height: 1, background: "rgba(255,255,255,0.06)", flex: "0 0 auto" }} />
             )}
 
             {/* Área rolável do menu */}
-            <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
-              <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div
+              className={`mp-sidebar-scroll ${sideCollapsed ? "mp-sidebar-scroll-collapsed" : ""}`}
+              style={{
+                marginTop: sideCollapsed ? 6 : 10,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                overflowX: "hidden",
+                paddingRight: sideCollapsed ? 0 : 4,
+              }}
+            >
+              <nav style={{ display: "flex", flexDirection: "column", alignItems: sideCollapsed ? "center" : "stretch", gap: sideCollapsed ? 7 : 6 }}>
                 {sidebarNavItems.map((i) => {
                   const Icon = i.icon;
 
@@ -590,7 +624,8 @@ function AppShell() {
                         className={({ isActive }) => (isActive ? "mp-navlink-active" : "")}
                         title={i.label}
                         style={({ isActive }) => ({
-                          height: 52,
+                          height: 50,
+                          width: 50,
                           borderRadius: 16,
                           border: "1px solid " + (isActive ? "rgba(255,159,26,.18)" : "transparent"),
                           background: isActive ? "rgba(255,159,26,.08)" : "transparent",
