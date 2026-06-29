@@ -452,6 +452,44 @@ type ExportKey =
 
 type ExportItem = { key: ExportKey; label: string; hint: string; icon: any };
 
+type VisualTone = "success" | "warning" | "danger" | "info" | "muted";
+
+function tonePalette(tone: VisualTone) {
+  const map: Record<VisualTone, { border: string; bg: string; fg: string; glow: string }> = {
+    success: {
+      border: "rgba(52,211,153,0.34)",
+      bg: "linear-gradient(180deg, rgba(52,211,153,0.16), rgba(52,211,153,0.055))",
+      fg: "#a7f3d0",
+      glow: "rgba(52,211,153,0.18)",
+    },
+    warning: {
+      border: "rgba(255,159,26,0.38)",
+      bg: "linear-gradient(180deg, rgba(255,159,26,0.17), rgba(255,159,26,0.055))",
+      fg: "#ffcf8a",
+      glow: "rgba(255,159,26,0.18)",
+    },
+    danger: {
+      border: "rgba(251,113,133,0.34)",
+      bg: "linear-gradient(180deg, rgba(251,113,133,0.15), rgba(251,113,133,0.055))",
+      fg: "#fecdd3",
+      glow: "rgba(251,113,133,0.16)",
+    },
+    info: {
+      border: "rgba(56,189,248,0.32)",
+      bg: "linear-gradient(180deg, rgba(56,189,248,0.14), rgba(56,189,248,0.045))",
+      fg: "#bae6fd",
+      glow: "rgba(56,189,248,0.14)",
+    },
+    muted: {
+      border: "rgba(148,163,184,0.24)",
+      bg: "linear-gradient(180deg, rgba(148,163,184,0.11), rgba(148,163,184,0.035))",
+      fg: "#cbd5e1",
+      glow: "rgba(148,163,184,0.10)",
+    },
+  };
+  return map[tone];
+}
+
 export default function Dashboard() {
   const nav = useNavigate();
   const { token, loading: authLoading } = useAuth();
@@ -1009,6 +1047,114 @@ const EXPECTED_TON_H = metaHoraEsperada;
 
   const gaugeData = useMemo(() => [{ name: "meta", value: pctMetaGauge, fill: "#ff9f1a" }], [pctMetaGauge]);
 
+  const totalStopHours = useMemo(() => {
+    return (stops || []).reduce((acc: number, row: any) => {
+      const byHours = Number(row?.tempo_parada_h);
+      if (Number.isFinite(byHours) && byHours > 0) return acc + byHours;
+      const byMinutes = Number(row?.minutos ?? row?.minutes);
+      if (Number.isFinite(byMinutes) && byMinutes > 0) return acc + byMinutes / 60;
+      return acc;
+    }, 0);
+  }, [stops]);
+
+  const productiveHours = useMemo(() => {
+    return (hourlySeries || []).filter((r) => (Number(r.ton) || 0) > 0).length;
+  }, [hourlySeries]);
+
+  const lowPerformanceHours = useMemo(() => {
+    if (!EXPECTED_TON_H || EXPECTED_TON_H <= 0) return 0;
+    return (hourlySeries || []).filter((r) => {
+      const ton = Number(r.ton) || 0;
+      return ton > 0 && ton < EXPECTED_TON_H;
+    }).length;
+  }, [hourlySeries, EXPECTED_TON_H]);
+
+  const plantStatus = useMemo(() => {
+    if (loading) return { label: "Atualizando", tone: "info" as const, detail: "Buscando dados da API" };
+    if (err) return { label: "Atenção", tone: "danger" as const, detail: "Falha ao atualizar painel" };
+    if (!plantId) return { label: "Sem planta", tone: "muted" as const, detail: "Selecione uma planta" };
+    if (!rangeMode && productiveHours === 0 && totalStopHours > 0) {
+      return { label: "Parada", tone: "muted" as const, detail: `${fmtBR1(totalStopHours)}h registradas` };
+    }
+    if (pctMetaRaw >= 100) return { label: "Meta atendida", tone: "success" as const, detail: `${fmtBR1(pctMetaRaw)}% da meta` };
+    if (pctMetaRaw >= 80) return { label: "Acompanhando", tone: "warning" as const, detail: `${fmtBR1(pctMetaRaw)}% da meta` };
+    return { label: "Abaixo da meta", tone: "danger" as const, detail: `${fmtBR1(pctMetaRaw)}% da meta` };
+  }, [loading, err, plantId, rangeMode, productiveHours, totalStopHours, pctMetaRaw]);
+
+  const chartIssues = useMemo(() => {
+    if (rangeMode) return [] as { period: string; status: string; text: string; tone: "warning" | "muted" | "danger" }[];
+
+    return (hourlySeries || [])
+      .map((row) => {
+        const period = String(row.period || "");
+        const ton = Number(row.ton) || 0;
+        const items = stopsByPeriod?.[period] || [];
+        const hasStop = items.length > 0;
+        const reason = items
+          .slice(0, 2)
+          .map((it) => `${it.equipamento}: ${it.descricao}`)
+          .join(" • ");
+
+        if (hasStop && ton <= 0) {
+          return { period, status: "Parada", text: reason || "Parada registrada", tone: "muted" as const };
+        }
+        if (hasStop) {
+          return { period, status: "Interferência", text: reason || "Ocorrência registrada", tone: "warning" as const };
+        }
+        if (EXPECTED_TON_H > 0 && ton > 0 && ton < EXPECTED_TON_H) {
+          return {
+            period,
+            status: "Baixa performance",
+            text: `${fmtBR1(ton)} t/h abaixo da esperada de ${fmtBR0(EXPECTED_TON_H)} t/h`,
+            tone: "warning" as const,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean)
+      .slice(0, 10) as { period: string; status: string; text: string; tone: "warning" | "muted" | "danger" }[];
+  }, [rangeMode, hourlySeries, stopsByPeriod, EXPECTED_TON_H]);
+
+  const kpiCards = useMemo(() => {
+    return [
+      {
+        icon: "🏭",
+        title: rangeMode ? "Produção no período" : "Produção do dia",
+        value: `${fmtBR0(totalTonDay)} t`,
+        sub: rangeMode ? `${fmtBR0(rangeAvgDayTon)} t/dia em média` : `${fmtBR1(pctMetaRaw)}% da meta diária`,
+        tone: pctMetaRaw >= 100 ? "success" as const : pctMetaRaw >= 80 ? "warning" as const : "danger" as const,
+      },
+      {
+        icon: "🎯",
+        title: rangeMode ? "Meta média" : "Meta do dia",
+        value: `${fmtBR0(metaDia)} t`,
+        sub: `${fmtBR0(EXPECTED_TON_H)} t/h esperada`,
+        tone: "info" as const,
+      },
+      {
+        icon: projectionIsPositive ? "📈" : "📉",
+        title: "Projeção",
+        value: `${fmtBR0(projectionTon24)} t`,
+        sub: `${projectionDiffTon >= 0 ? "+" : ""}${fmtBR0(projectionDiffTon)} t vs meta`,
+        tone: projectionIsPositive ? "success" as const : "warning" as const,
+      },
+      {
+        icon: "⏸",
+        title: rangeMode ? "Horas produtivas" : "Paradas lançadas",
+        value: rangeMode ? `${productiveHours} h` : `${fmtBR1(totalStopHours)} h`,
+        sub: rangeMode ? "faixas com produção" : `${chartIssues.length} ocorrência(s) no gráfico`,
+        tone: totalStopHours > 0 ? "warning" as const : "muted" as const,
+      },
+      {
+        icon: "⚙️",
+        title: "Média real",
+        value: `${fmtBR1(avgTonPerHour)} t/h`,
+        sub: `${lowPerformanceHours} hora(s) abaixo da esperada`,
+        tone: lowPerformanceHours > 0 ? "warning" as const : "success" as const,
+      },
+    ];
+  }, [rangeMode, totalTonDay, rangeAvgDayTon, pctMetaRaw, metaDia, EXPECTED_TON_H, projectionIsPositive, projectionTon24, projectionDiffTon, productiveHours, totalStopHours, chartIssues.length, avgTonPerHour, lowPerformanceHours]);
+
   /* ===================== styles ===================== */
   const cardBase: React.CSSProperties = {
     borderRadius: 18,
@@ -1307,8 +1453,117 @@ const EXPECTED_TON_H = metaHoraEsperada;
         </div>
       </div>
 
-      <div style={{ marginTop: 8, color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 800 }}>
-        Dashboard • {selectedPlantName} • {rangeMode ? periodSummaryText : brDate(day)} {err ? `• ${err}` : plantId === "all" ? "• consolidado" : rangeMode ? "• média por período" : "• tempo real"}
+      <div
+        style={{
+          marginTop: 12,
+          borderRadius: 24,
+          border: "1px solid rgba(255,255,255,0.10)",
+          background:
+            "radial-gradient(900px 220px at 12% 0%, rgba(255,159,26,0.13), transparent 58%), linear-gradient(135deg, rgba(255,255,255,0.075), rgba(255,255,255,0.028))",
+          boxShadow: "0 22px 70px rgba(0,0,0,0.50)",
+          padding: mobile ? 14 : 18,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: mobile ? "flex-start" : "center",
+            gap: 14,
+            flexDirection: mobile ? "column" : "row",
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 16,
+                  display: "grid",
+                  placeItems: "center",
+                  border: "1px solid rgba(255,159,26,0.28)",
+                  background: "rgba(255,159,26,0.12)",
+                  boxShadow: "0 12px 34px rgba(255,159,26,0.10)",
+                  fontSize: 19,
+                }}
+              >
+                ⚡
+              </div>
+              <div>
+                <div style={{ fontSize: mobile ? 22 : 30, fontWeight: 980, letterSpacing: -0.7, color: "rgba(255,255,255,0.96)", lineHeight: 1.05 }}>
+                  Dashboard Operacional
+                </div>
+                <div style={{ marginTop: 5, color: "rgba(255,255,255,0.58)", fontSize: 12.5, fontWeight: 850 }}>
+                  {selectedPlantName} • {rangeMode ? periodSummaryText : brDate(day)} {plantId === "all" ? "• consolidado" : rangeMode ? "• média por período" : "• tempo real"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: mobile ? "1fr" : "auto auto",
+              gap: 10,
+              alignItems: "center",
+              width: mobile ? "100%" : undefined,
+            }}
+          >
+            <StatusPill label={plantStatus.label} detail={plantStatus.detail} tone={plantStatus.tone} />
+            <div
+              style={{
+                minHeight: 42,
+                borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(0,0,0,0.20)",
+                padding: "0 13px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                color: "rgba(255,255,255,0.76)",
+                fontSize: 12,
+                fontWeight: 900,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span style={{ opacity: 0.65 }}>Atualização:</span>
+              <span>{loading ? "em andamento" : prodDay?.updated_at ? "dados carregados" : "aguardando dados"}</span>
+            </div>
+          </div>
+        </div>
+
+        {err ? (
+          <div
+            style={{
+              marginTop: 14,
+              borderRadius: 16,
+              border: "1px solid rgba(251,113,133,0.25)",
+              background: "rgba(251,113,133,0.10)",
+              padding: "10px 12px",
+              color: "#fecdd3",
+              fontSize: 12.5,
+              fontWeight: 850,
+            }}
+          >
+            {err}
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        style={{
+          marginTop: 14,
+          display: "grid",
+          gridTemplateColumns: mobile ? "1fr" : "repeat(5, minmax(0, 1fr))",
+          gap: 12,
+        }}
+      >
+        {kpiCards.map((card) => (
+          <KpiCard key={card.title} {...card} />
+        ))}
       </div>
 
       {/* MODAL EXPORT */}
@@ -1950,9 +2205,9 @@ const EXPECTED_TON_H = metaHoraEsperada;
             </span>
           </div>
 
-          <div style={{ height: mobile ? 300 : 420 }}>
+          <div style={{ height: mobile ? 320 : 460, minHeight: mobile ? 300 : 430, minWidth: 0, width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={hourlySeries} margin={{ top: 16, right: 26, left: 0, bottom: 0 }}>
+              <ComposedChart data={hourlySeries} margin={{ top: 22, right: 28, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
                 <XAxis dataKey="period" interval={0} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
                 <YAxis
@@ -1995,6 +2250,54 @@ const EXPECTED_TON_H = metaHoraEsperada;
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+
+          {!rangeMode ? (
+            <div
+              style={{
+                marginTop: 12,
+                borderRadius: 18,
+                border: "1px solid rgba(255,255,255,0.09)",
+                background: "rgba(0,0,0,0.18)",
+                padding: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: chartIssues.length ? 10 : 0 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 950, color: "rgba(255,255,255,0.86)" }}>Ocorrências por faixa horária</div>
+                  <div style={{ marginTop: 2, fontSize: 11.5, fontWeight: 800, color: "rgba(255,255,255,0.46)" }}>Paradas, interferências e horas abaixo da esperada</div>
+                </div>
+                <span
+                  style={{
+                    height: 28,
+                    borderRadius: 999,
+                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "rgba(255,255,255,0.05)",
+                    padding: "0 10px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    color: "rgba(255,255,255,0.62)",
+                    fontSize: 11.5,
+                    fontWeight: 900,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {chartIssues.length ? `${chartIssues.length} destaque(s)` : "sem destaque"}
+                </span>
+              </div>
+
+              {chartIssues.length ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  {chartIssues.map((item) => (
+                    <IssueRow key={`${item.period}-${item.status}-${item.text}`} {...item} />
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, fontWeight: 820, color: "rgba(255,255,255,0.50)", lineHeight: 1.35 }}>
+                  Nenhuma parada ou baixa performance destacada para esta data.
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
 
         {/* TAXA (4 col) */}
@@ -2531,3 +2834,174 @@ function MiniStat({
     </div>
   );
 }
+
+function StatusPill({
+  label,
+  detail,
+  tone,
+}: {
+  label: string;
+  detail: string;
+  tone: VisualTone;
+}) {
+  const pal = tonePalette(tone);
+  return (
+    <div
+      style={{
+        minHeight: 46,
+        borderRadius: 999,
+        border: `1px solid ${pal.border}`,
+        background: pal.bg,
+        boxShadow: `0 16px 44px ${pal.glow}`,
+        padding: "6px 14px 6px 8px",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        color: pal.fg,
+        minWidth: 185,
+      }}
+    >
+      <span
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          display: "grid",
+          placeItems: "center",
+          background: "rgba(255,255,255,0.10)",
+          border: "1px solid rgba(255,255,255,0.13)",
+          boxShadow: `0 0 0 6px ${pal.glow}`,
+        }}
+      >
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: pal.fg, display: "block" }} />
+      </span>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 13, fontWeight: 980, color: "rgba(255,255,255,0.92)", lineHeight: 1.1 }}>{label}</span>
+        <span style={{ display: "block", marginTop: 2, fontSize: 11.5, fontWeight: 850, color: "rgba(255,255,255,0.56)", lineHeight: 1.1 }}>{detail}</span>
+      </span>
+    </div>
+  );
+}
+
+function KpiCard({
+  icon,
+  title,
+  value,
+  sub,
+  tone,
+}: {
+  icon: string;
+  title: string;
+  value: string;
+  sub: string;
+  tone: VisualTone;
+}) {
+  const pal = tonePalette(tone);
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        borderRadius: 20,
+        border: `1px solid ${pal.border}`,
+        background: `radial-gradient(220px 120px at 18% 0%, ${pal.glow}, transparent 70%), linear-gradient(180deg, rgba(255,255,255,0.065), rgba(255,255,255,0.026))`,
+        boxShadow: "0 18px 54px rgba(0,0,0,0.45)",
+        padding: 14,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+        <div
+          style={{
+            width: 38,
+            height: 38,
+            flex: "0 0 auto",
+            borderRadius: 15,
+            border: `1px solid ${pal.border}`,
+            background: pal.bg,
+            display: "grid",
+            placeItems: "center",
+            fontSize: 18,
+            boxShadow: `0 12px 32px ${pal.glow}`,
+          }}
+        >
+          {icon}
+        </div>
+        <div
+          style={{
+            width: 8,
+            height: 8,
+            marginTop: 5,
+            borderRadius: "50%",
+            background: pal.fg,
+            boxShadow: `0 0 0 5px ${pal.glow}`,
+          }}
+        />
+      </div>
+
+      <div style={{ marginTop: 12, fontSize: 12, fontWeight: 900, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: 0.45 }}>
+        {title}
+      </div>
+      <div style={{ marginTop: 5, fontSize: 25, fontWeight: 980, letterSpacing: -0.6, color: "rgba(255,255,255,0.96)", lineHeight: 1.05, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {value}
+      </div>
+      <div style={{ marginTop: 7, color: "rgba(255,255,255,0.58)", fontSize: 12, fontWeight: 820, lineHeight: 1.25 }}>
+        {sub}
+      </div>
+    </div>
+  );
+}
+
+function IssueRow({
+  period,
+  status,
+  text,
+  tone,
+}: {
+  period: string;
+  status: string;
+  text: string;
+  tone: "warning" | "muted" | "danger";
+}) {
+  const pal = tonePalette(tone);
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(70px, 86px) minmax(110px, 150px) minmax(0, 1fr)",
+        gap: 10,
+        alignItems: "center",
+        borderRadius: 14,
+        border: `1px solid ${pal.border}`,
+        background: "rgba(255,255,255,0.035)",
+        padding: "9px 10px",
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          height: 30,
+          borderRadius: 999,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px solid rgba(255,255,255,0.10)",
+          background: "rgba(0,0,0,0.22)",
+          color: "rgba(255,255,255,0.88)",
+          fontSize: 12,
+          fontWeight: 950,
+        }}
+      >
+        {period}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: pal.fg, boxShadow: `0 0 0 5px ${pal.glow}`, flex: "0 0 auto" }} />
+        <span style={{ color: pal.fg, fontSize: 12, fontWeight: 950, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{status}</span>
+      </div>
+      <div style={{ minWidth: 0, color: "rgba(255,255,255,0.66)", fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {text}
+      </div>
+    </div>
+  );
+}
+
