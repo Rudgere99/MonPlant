@@ -496,7 +496,7 @@ export default function LancamentoParadas() {
     const metaTon = parseBRNumber(goalDay?.meta_ton);
     const discountRaw = parseBRNumber(goalDay?.discount_hours);
     const discount = Number.isFinite(discountRaw) ? discountRaw : 2;
-    const productiveHours = Math.max(0, 22 - discount);
+    const productiveHours = Math.max(0, 24 - discount);
 
     const expected =
       Number.isFinite(metaTon) && metaTon > 0 && Number.isFinite(productiveHours) && productiveHours > 0

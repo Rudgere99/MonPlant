@@ -111,7 +111,7 @@ function sumPlantDayTon(payload?: PlantDayPayload | null) {
 }
 
 function calcMetaHora(meta: number, discountHours: number) {
-  const horas = Math.max(0, 22 - (Number(discountHours) || 0));
+  const horas = Math.max(0, 24 - (Number(discountHours) || 0));
   if (meta <= 0 || horas <= 0) return 0;
   return meta / horas;
 }

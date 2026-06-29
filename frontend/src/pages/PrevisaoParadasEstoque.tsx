@@ -109,7 +109,7 @@ type ResumoProducaoReal = {
 
 const API_BASE = String((import.meta as any)?.env?.VITE_API_BASE || "").replace(/\/+$/, "");
 
-const HORAS_BASE_PRODUCAO_DIA = 22;
+const HORAS_BASE_PRODUCAO_DIA = 24;
 
 const producaoHoraFallbackPorPlanta: Record<string, number> = {
   planta_01: 0,

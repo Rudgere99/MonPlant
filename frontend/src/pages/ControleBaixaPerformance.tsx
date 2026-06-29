@@ -366,7 +366,7 @@ export default function ControleBaixaPerformance() {
     const metaTon = parseBRNumber(goalDay?.meta_ton);
     const discountRaw = parseBRNumber(goalDay?.discount_hours);
     const discount = Number.isFinite(discountRaw) ? Number(discountRaw) : 2;
-    const productiveHours = Math.max(0, 22 - discount);
+    const productiveHours = Math.max(0, 24 - discount);
     if (metaTon && metaTon > 0 && productiveHours > 0) return metaTon / productiveHours;
     return DEFAULT_TARGET_TON_PER_HOUR;
   }, [goalDay]);
